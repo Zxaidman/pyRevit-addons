@@ -1,0 +1,18 @@
+title: OneFilterParameter
+author: Zaid Shaikh
+tooltip: |
+  Filter Revit elements, then batch-change a parameter on everything that passes. Native pyRevit script.
+
+  What it does
+    • Three tabs: Categories (what to include), OneFilter (narrow by parameter), OneEditing (change for each match).
+    • Scope: whole model, active view, or current selection.
+    • Category list is searchable, has All / None, shows live element count.
+    • Parameter lists unique parameter to keep large models responsive.
+    • Load Parameters → pick filter → confirm (✓) → Apply Filter. Use Select Elements to push IDs to Revit.
+
+  Before you run it
+    • Runs IronPython 2 (`#! python2`). Use pyRevit's IronPython 2 engine.
+    • Window title, labels, and size can be configured in pyRevit saved config. Remembers window size.
+
+  Version: 1.0.0
+  Author: Zaid Shaikh

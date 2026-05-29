@@ -1,0 +1,20 @@
+title: Export Schedule
+author: Zaid Shaikh
+tooltip: |
+  Export Revit schedules to a single Excel workbook (.xlsx) with borders, fonts, and header styling.
+
+  How to use
+    1. Run tool. Window lists all project schedules (all ticked by default).
+    2. Untick unwanted schedules, or use Select All / Clear All.
+    3. Click Export, choose save location. Filename includes date/time to avoid overwrites.
+    4. Excel opens automatically when done.
+
+  Before you run it
+    • Uses pyRevit Python 3 (CPython) engine. Requires openpyxl library. If missing, tool shows install instructions.
+
+  Notes
+    • Stops if project has no schedules.
+    • Nothing exports if you cancel the window or save dialog.
+
+  Version: 1.0.0
+  Author: Zaid Shaikh

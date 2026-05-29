@@ -1,0 +1,18 @@
+title: BIM Generation [Cursor AI]
+author: Zaid Shaikh
+tooltip: |
+  Build a structural Revit model from a PLANWIN / FRAMEWIN INP file (Dynamo graph: InpToBIM).
+
+  Reads column, beam, and slab data from the INP file. Creates/updates levels, structural columns, beams, floors (with auto-sized type duplicates), offsets slabs using nearby beams, and joins overlapping geometry.
+
+  Inputs (Dynamo)
+    • Input file — path to INP file (e.g. FRAME.inp).
+    • Prefix / Name / Suffix / Separator — for naming levels from storey elevations.
+    • Structural floor, framing, and column types — base families to duplicate for different sizes.
+
+  Requirements
+    • Open a project. Selected structural types must exist or be duplicatable.
+    • Uses CPython 3. Use a Dynamo build that supports CPython or align node engine.
+
+  Version: 1.0.0
+  Author: Zaid Shaikh
