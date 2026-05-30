@@ -22,7 +22,7 @@ clr.AddReference('System.Data')
 from System.Windows.Markup import XamlReader
 from System.Windows.Media import Brushes
 from System.Windows.Documents import TextRange, TextElement, LogicalDirection, TextPointerContext
-from System.Windows import FontWeights
+from System.Windows import FontWeights, Visibility
 from System.IO import FileStream, FileMode, FileAccess
 from System.Diagnostics import Process
 from System.Windows.Interop import WindowInteropHelper
@@ -32,7 +32,7 @@ from System.Windows.Data import CollectionViewSource
 from System.Windows.Input import Key
 from System.Data import DataTable
 
-# Safe Math Dictionary for eval() - Generated dynamically for case-insensitivity
+# Safe Math Dictionary for eval()
 base_math = {
     'abs': abs, 'round': round, 'min': min, 'max': max,
     'sin': math.sin, 'cos': math.cos, 'tan': math.tan,
@@ -108,11 +108,7 @@ def extract_parameter_value(parameter, document, requires_number):
     if storage_type == DB.StorageType.Integer: return str(parameter.AsInteger())
     return parameter.AsString() or ""
 
-# ====================================================================
-# EVALUATION LOGIC
-# ====================================================================
-
-def evaluate_parameter(element, document, target_name, expression, eval_math, mixed_mode):
+def evaluate_parameter(element, document, target_name, expression, eval_math):
     params_dict = get_element_parameters_dict(element, document)
     target_param = params_dict.get(target_name)
     
@@ -128,26 +124,20 @@ def evaluate_parameter(element, document, target_name, expression, eval_math, mi
         evaluated_expr = evaluated_expr.replace(f"{{{var_name}}}", str(val))
 
     try:
-        # Numeric Parameters ALWAYS Evaluate Math
         if is_numeric_target:
             calc_result = eval(evaluated_expr, {"__builtins__": None}, SAFE_MATH)
             if target_param.StorageType == DB.StorageType.Integer:
                 return True, int(round(calc_result))
             if target_param.StorageType == DB.StorageType.Double:
                 return True, float(calc_result)
-                
-        # Text Parameters Behaviors
         else:
-            if mixed_mode:
-                # Parse string by double-quotes
+            if eval_math:
                 parts = evaluated_expr.split('"')
                 result_str = ""
                 for i, part in enumerate(parts):
                     if i % 2 == 1:
-                        # Inside quotes: Literal Text
                         result_str += part
                     else:
-                        # Outside quotes: Math eval (preserves whitespace wrapping)
                         trimmed = part.strip()
                         if trimmed:
                             leading_ws = part[:len(part) - len(part.lstrip())]
@@ -159,26 +149,12 @@ def evaluate_parameter(element, document, target_name, expression, eval_math, mi
                                 elif isinstance(math_res, float):
                                     math_res = round(math_res, 6)
                                 result_str += f"{leading_ws}{math_res}{trailing_ws}"
-                            except Exception as e:
+                            except Exception:
                                 return False, f"Math error in: {trimmed}"
                         else:
-                            result_str += part # Just spaces
+                            result_str += part
                 return True, result_str
-                
-            elif eval_math:
-                # Force entire expression to be calculated
-                trimmed = evaluated_expr.strip()
-                if trimmed:
-                    calc_result = eval(trimmed, {"__builtins__": None}, SAFE_MATH)
-                    if isinstance(calc_result, float) and calc_result.is_integer():
-                        calc_result = int(calc_result)
-                    elif isinstance(calc_result, float):
-                        calc_result = round(calc_result, 6)
-                    return True, str(calc_result)
-                return True, ""
-                
             else:
-                # Default (No toggles): Standard string replacement
                 return True, evaluated_expr
                 
     except Exception as e:
@@ -193,30 +169,52 @@ class ParameterCombinerApp(object):
         self.elements = elements
         self.document = document
         self.is_updating = False
-        
         self.apply_changes = False
-        self.final_target = ""
-        self.final_formula = ""
-        self.final_eval_math = False
-        self.final_mixed_mode = False
-
+        
         stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
         self.window = XamlReader.Load(stream)
         stream.Close()
         WindowInteropHelper(self.window).Owner = Process.GetCurrentProcess().MainWindowHandle
 
+        # Global UI Mapping
         self.TargetParamCombo = self.window.FindName("TargetParamCombo")
+        self.TextCaseCombo = self.window.FindName("TextCaseCombo")
+        self.StatusBar = self.window.FindName("StatusBar")
+        self.ApplyBtn = self.window.FindName("ApplyBtn")
+        self.CancelBtn = self.window.FindName("CancelBtn")
+        self.ElementGrid = self.window.FindName("ElementGrid")
+        
+        # Grid Controls
+        self.FilterGridTextBox = self.window.FindName("FilterGridTextBox")
+        self.BtnSelectAll = self.window.FindName("BtnSelectAll")
+        self.BtnSelectNone = self.window.FindName("BtnSelectNone")
+
+        # Modes
+        self.ModeFormula = self.window.FindName("ModeFormula")
+        self.ModeReplace = self.window.FindName("ModeReplace")
+        self.ModeAffix = self.window.FindName("ModeAffix")
+        self.ModeSeq = self.window.FindName("ModeSeq")
+        
+        self.GridFormula = self.window.FindName("GridFormula")
+        self.GridReplace = self.window.FindName("GridReplace")
+        self.GridAffix = self.window.FindName("GridAffix")
+        self.GridSeq = self.window.FindName("GridSeq")
+        
+        # Mode 1: Formula
         self.FormulaRichTextBox = self.window.FindName("FormulaRichTextBox")
-        self.ToggleEvalMath = self.window.FindName("ToggleEvalMath")
-        self.ToggleMixedMode = self.window.FindName("ToggleMixedMode")
+        self.ToggleMath = self.window.FindName("ToggleMath")
         self.SuggestPopup = self.window.FindName("SuggestPopup")
         self.SuggestListBox = self.window.FindName("SuggestListBox")
         self.SourceParamCombo = self.window.FindName("SourceParamCombo")
         self.InsertParamBtn = self.window.FindName("InsertParamBtn")
-        self.ApplyBtn = self.window.FindName("ApplyBtn")
-        self.CancelBtn = self.window.FindName("CancelBtn")
-        self.StatusBar = self.window.FindName("StatusBar")
-        self.ElementGrid = self.window.FindName("ElementGrid")
+        
+        # Mode 2, 3, 4 Inputs
+        self.FindTextBox = self.window.FindName("FindTextBox")
+        self.ReplaceTextBox = self.window.FindName("ReplaceTextBox")
+        self.PrefixTextBox = self.window.FindName("PrefixTextBox")
+        self.SuffixTextBox = self.window.FindName("SuffixTextBox")
+        self.SeqStartTextBox = self.window.FindName("SeqStartTextBox")
+        self.SeqStepTextBox = self.window.FindName("SeqStepTextBox")
 
         self.setup_data_table()
         self.setup_ui_data()
@@ -271,27 +269,103 @@ class ParameterCombinerApp(object):
         if s_list.Count > 0: self.SourceParamCombo.SelectedIndex = 0
 
     def wire_events(self):
+        self.ModeFormula.Checked += self.on_mode_changed
+        self.ModeReplace.Checked += self.on_mode_changed
+        self.ModeAffix.Checked += self.on_mode_changed
+        self.ModeSeq.Checked += self.on_mode_changed
+
+        # Fixed "One step behind" bug by hooking SelectionChanged explicitly to SelectedItem
         self.TargetParamCombo.SelectionChanged += self.trigger_preview_update
-        self.ToggleEvalMath.Checked += self.trigger_preview_update
-        self.ToggleEvalMath.Unchecked += self.trigger_preview_update
-        self.ToggleMixedMode.Checked += self.trigger_preview_update
-        self.ToggleMixedMode.Unchecked += self.trigger_preview_update
+        self.TextCaseCombo.SelectionChanged += self.trigger_preview_update
         
+        self.ToggleMath.Checked += self.trigger_preview_update
+        self.ToggleMath.Unchecked += self.trigger_preview_update
+        
+        self.FindTextBox.TextChanged += self.trigger_preview_update
+        self.ReplaceTextBox.TextChanged += self.trigger_preview_update
+        self.PrefixTextBox.TextChanged += self.trigger_preview_update
+        self.SuffixTextBox.TextChanged += self.trigger_preview_update
+        self.SeqStartTextBox.TextChanged += self.trigger_preview_update
+        self.SeqStepTextBox.TextChanged += self.trigger_preview_update
+        
+        # Grid Actions
+        self.BtnSelectAll.Click += self.on_select_all
+        self.BtnSelectNone.Click += self.on_select_none
+        self.FilterGridTextBox.GotFocus += self.on_filter_focus
+        self.FilterGridTextBox.LostFocus += self.on_filter_lost_focus
+        self.FilterGridTextBox.TextChanged += self.on_filter_changed
+        self.ElementGrid.PreviewKeyDown += self.on_grid_keydown 
+        
+        # Formula RTB
         self.FormulaRichTextBox.TextChanged += self.on_rtb_text_changed
         self.FormulaRichTextBox.PreviewKeyDown += self.on_rtb_preview_keydown
         self.InsertParamBtn.Click += self.on_insert_click
+        self.SuggestListBox.MouseDoubleClick += self.on_suggest_doubleclick
+        
         self.ApplyBtn.Click += self.on_apply_click
         self.CancelBtn.Click += self.on_cancel_click
-        self.SuggestListBox.MouseDoubleClick += self.on_suggest_doubleclick
-
+        
         self.TargetParamCombo.GotKeyboardFocus += self.combo_got_focus
         self.TargetParamCombo.PreviewKeyUp += self.combo_key_up
         self.SourceParamCombo.GotKeyboardFocus += self.combo_got_focus
         self.SourceParamCombo.PreviewKeyUp += self.combo_key_up
 
+        # Hook row check changes to live preview refresh
+        self.dt.ColumnChanged += self.on_dt_column_changed
+
+    def on_dt_column_changed(self, sender, args):
+        if args.Column.ColumnName == "Apply":
+            self.update_previews()
+
     def show_error(self, message, is_error=True):
         self.StatusBar.Text = message
         self.StatusBar.Foreground = Brushes.Red if is_error else Brushes.Gray
+
+    # ====================================================================
+    # QOL GRID ACTIONS
+    # ====================================================================
+    def on_select_all(self, sender, args):
+        for row in self.dt.Rows: row["Apply"] = True
+        self.dt.AcceptChanges()
+        self.update_previews()
+
+    def on_select_none(self, sender, args):
+        for row in self.dt.Rows: row["Apply"] = False
+        self.dt.AcceptChanges()
+        self.update_previews()
+
+    def on_filter_focus(self, sender, args):
+        if self.FilterGridTextBox.Text == "Filter results...":
+            self.FilterGridTextBox.Text = ""
+            self.FilterGridTextBox.Foreground = Brushes.Black
+
+    def on_filter_lost_focus(self, sender, args):
+        if not self.FilterGridTextBox.Text:
+            self.FilterGridTextBox.Text = "Filter results..."
+            self.FilterGridTextBox.Foreground = Brushes.Gray
+
+    def on_filter_changed(self, sender, args):
+        search_text = self.FilterGridTextBox.Text.lower()
+        if search_text == "filter results...": return
+        
+        view = self.dt.DefaultView
+        if not search_text:
+            view.RowFilter = ""
+        else:
+            view.RowFilter = f"ID LIKE '%{search_text}%' OR Family LIKE '%{search_text}%' OR Type LIKE '%{search_text}%'"
+
+    def on_grid_keydown(self, sender, args):
+        # Spacebar Multi-Toggle!
+        if args.Key == Key.Space and self.ElementGrid.SelectedItems.Count > 0:
+            try:
+                first_row = self.ElementGrid.SelectedItems[0].Row
+                new_state = not first_row["Apply"]
+                for item in self.ElementGrid.SelectedItems:
+                    item.Row["Apply"] = new_state
+                self.dt.AcceptChanges()
+                self.update_previews()
+                args.Handled = True
+            except: pass
 
     def combo_got_focus(self, sender, args):
         sender.IsDropDownOpen = True
@@ -304,30 +378,99 @@ class ParameterCombinerApp(object):
         view.Filter = Predicate[Object](lambda item: not search_text or search_text in str(item).lower())
         sender.IsDropDownOpen = True
 
+    # ====================================================================
+    # MODE LOGIC
+    # ====================================================================
+    def on_mode_changed(self, sender, args):
+        self.GridFormula.Visibility = Visibility.Collapsed
+        self.GridReplace.Visibility = Visibility.Collapsed
+        self.GridAffix.Visibility = Visibility.Collapsed
+        self.GridSeq.Visibility = Visibility.Collapsed
+        
+        if self.ModeFormula.IsChecked: self.GridFormula.Visibility = Visibility.Visible
+        elif self.ModeReplace.IsChecked: self.GridReplace.Visibility = Visibility.Visible
+        elif self.ModeAffix.IsChecked: self.GridAffix.Visibility = Visibility.Visible
+        elif self.ModeSeq.IsChecked: self.GridSeq.Visibility = Visibility.Visible
+        
+        self.update_previews()
+
     def trigger_preview_update(self, sender, args):
         self.update_previews()
 
     def update_previews(self):
-        target = self.TargetParamCombo.Text
+        # Pull exact SelectedItem instead of .Text to fix scrolling bug
+        target = self.TargetParamCombo.SelectedItem
+        if not target: target = self.TargetParamCombo.Text
         if not target: return
+        
+        case_mode = self.TextCaseCombo.Text
+        
+        mode = 0
+        if self.ModeReplace.IsChecked: mode = 1
+        elif self.ModeAffix.IsChecked: mode = 2
+        elif self.ModeSeq.IsChecked: mode = 3
+        
         expr = self.get_rtb_text()
-        eval_math = self.ToggleEvalMath.IsChecked
-        mixed_mode = self.ToggleMixedMode.IsChecked
+        eval_math = self.ToggleMath.IsChecked
+        
+        find_text = self.FindTextBox.Text
+        repl_text = self.ReplaceTextBox.Text
+        pref_text = self.PrefixTextBox.Text
+        suff_text = self.SuffixTextBox.Text
+        seq_start = self.SeqStartTextBox.Text
+        try: seq_step = int(self.SeqStepTextBox.Text)
+        except: seq_step = 1
+        
+        seq_index = 0
         
         for i, el in enumerate(self.elements):
             row = self.dt.Rows[i]
-            if not expr:
-                row["Preview"] = ""
-                continue
-            success, result = evaluate_parameter(el, self.document, target, expr, eval_math, mixed_mode)
-            row["Preview"] = str(result)
             
+            params_dict = get_element_parameters_dict(el, self.document)
+            target_param = params_dict.get(target)
+            existing_val = str(extract_parameter_value(target_param, self.document, False)) if target_param else ""
+            
+            preview_val = existing_val
+            
+            if row["Apply"]:
+                if mode == 0:
+                    if expr:
+                        success, result = evaluate_parameter(el, self.document, target, expr, eval_math)
+                        preview_val = str(result)
+                elif mode == 1:
+                    if find_text:
+                        preview_val = existing_val.replace(find_text, repl_text)
+                elif mode == 2:
+                    if pref_text or suff_text:
+                        preview_val = pref_text + existing_val + suff_text
+                elif mode == 3:
+                    if seq_start:
+                        match = re.search(r'(\d+)$', seq_start)
+                        if match:
+                            num_str = match.group(1)
+                            prefix = seq_start[:-len(num_str)]
+                            num_len = len(num_str)
+                            new_num = int(num_str) + seq_index * seq_step
+                            preview_val = prefix + str(new_num).zfill(num_len)
+                        else:
+                            preview_val = seq_start + (str(seq_index * seq_step) if seq_index > 0 else "")
+                        seq_index += 1
+            
+            # Apply Global Case Conversion
+            if target_param and target_param.StorageType != DB.StorageType.Double and target_param.StorageType != DB.StorageType.Integer:
+                if case_mode == "UPPERCASE": preview_val = preview_val.upper()
+                elif case_mode == "lowercase": preview_val = preview_val.lower()
+                elif case_mode == "Title Case": preview_val = preview_val.title()
+
+            row["Preview"] = preview_val
+                    
         self.ElementGrid.Items.Refresh()
 
+    # ====================================================================
+    # FORMULA RTB LOGIC
+    # ====================================================================
     def highlight_syntax(self):
-        """Finds all {Parameters} in the document and colors them Blue automatically."""
         doc_range = TextRange(self.FormulaRichTextBox.Document.ContentStart, self.FormulaRichTextBox.Document.ContentEnd)
-        
         doc_range.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Black)
         doc_range.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal)
 
@@ -345,12 +488,11 @@ class ParameterCombinerApp(object):
             ptr = ptr.GetNextContextPosition(LogicalDirection.Forward)
 
         for tr in ranges_to_highlight:
-            tr.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Blue)
+            tr.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.DodgerBlue)
             tr.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold)
 
     def on_rtb_text_changed(self, sender, args):
         if self.is_updating: return
-        
         self.is_updating = True
         try:
             self.highlight_syntax()
@@ -404,7 +546,6 @@ class ParameterCombinerApp(object):
         self.is_updating = True
         try:
             caret = self.FormulaRichTextBox.CaretPosition
-
             if replace_partial:
                 tr_search = TextRange(self.FormulaRichTextBox.Document.ContentStart, caret)
                 match = re.search(r'\{([^}]*)$', tr_search.Text)
@@ -442,30 +583,35 @@ class ParameterCombinerApp(object):
     def on_cancel_click(self, sender, args):
         self.window.Close()
 
+    # ====================================================================
+    # APPLY LOGIC
+    # ====================================================================
     def on_apply_click(self, sender, args):
         target_name = self.TargetParamCombo.Text
         if not target_name:
             self.show_error("Please select a target parameter.")
             return
-            
-        expr = self.get_rtb_text()
-        if not expr:
-            self.show_error("Please write a formula.")
-            return
 
+        test_param = get_element_parameters_dict(self.elements[0], self.document).get(target_name)
+        
         for i, el in enumerate(self.elements):
             row = self.dt.Rows[i]
             if not row["Apply"]: continue 
             val_str = row["Preview"]
-            if "Math error" in val_str or "Missing" in val_str or "Syntax" in val_str or "Unsupported" in val_str:
+            
+            if "error" in val_str.lower() or "missing" in val_str.lower() or "unsupported" in val_str.lower():
                 self.show_error(f"Error on ID {el.Id}: Please fix formula before applying.")
                 return
+                
+            if test_param and test_param.StorageType in [DB.StorageType.Double, DB.StorageType.Integer]:
+                try:
+                    float(val_str)
+                except ValueError:
+                    self.show_error(f"Format Error: Tried to push text '{val_str}' into a numeric parameter.")
+                    return
 
         self.apply_changes = True
         self.final_target = target_name
-        self.final_formula = expr
-        self.final_eval_math = self.ToggleEvalMath.IsChecked
-        self.final_mixed_mode = self.ToggleMixedMode.IsChecked
         self.window.Close()
 
 
@@ -498,21 +644,22 @@ if __name__ == "__main__":
                 row = app.dt.Rows[i]
                 if not row["Apply"]: continue 
                 
-                success, result = evaluate_parameter(el, doc, app.final_target, app.final_formula, app.final_eval_math, app.final_mixed_mode)
-                if success:
-                    try:
-                        param = get_element_parameters_dict(el, doc).get(app.final_target)
-                        if param.StorageType == DB.StorageType.Double:
-                            param.Set(float(convert_to_internal_units(result, param, doc)))
-                        elif param.StorageType == DB.StorageType.Integer:
-                            param.Set(int(result))
-                        else:
-                            param.Set(str(result))
-                    except Exception as e:
-                        print(f"Failed to set ID {el.Id}: {e}")
-                        error_encountered = True
+                preview_val = row["Preview"]
+                try:
+                    param = get_element_parameters_dict(el, doc).get(app.final_target)
+                    
+                    if param.StorageType == DB.StorageType.Double:
+                        internal_num = convert_to_internal_units(float(preview_val), param, doc)
+                        param.Set(float(internal_num))
+                    elif param.StorageType == DB.StorageType.Integer:
+                        param.Set(int(float(preview_val)))
+                    else:
+                        param.Set(str(preview_val))
+                except Exception as e:
+                    print(f"Failed to set ID {el.Id}: {e}")
+                    error_encountered = True
 
             transaction.Commit()
             
             if error_encountered:
-                TaskDialog.Show("Warning", "Changes applied, but some elements failed. Check console for details.")
+                TaskDialog.Show("Warning", "Changes applied, but some elements failed. Check pyRevit console for details.")
