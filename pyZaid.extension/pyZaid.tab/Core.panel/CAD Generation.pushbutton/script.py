@@ -2,13 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 CAD to BIM Conversion Tool - Pure CPython3 Implementation
-Extracts CAD geometry and generates native Revit elements without using pyRevit wrapper modules.
+Extracts CAD geometry and generates native Revit elements.
 Target: CPython 3 / Revit 2025 / PythonNet
 """
 
 import clr
 import sys
-import math
 from collections import defaultdict
 from dataclasses import dataclass, field
 
@@ -17,6 +16,8 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 import Autodesk.Revit.DB as DB
 import Autodesk.Revit.UI as UI
+from Autodesk.Revit.UI.Selection import ObjectType
+import Autodesk.Revit.Exceptions as RevitExceptions
 
 clr.AddReference("PresentationFramework")
 clr.AddReference("PresentationCore")
@@ -24,6 +25,7 @@ import System.Windows
 import System.Windows.Controls
 from System.Windows.Markup import XamlReader
 from System.Collections.Generic import List
+from System.Collections import ArrayList
 
 # Constants
 KEYWORD_MAP = {
@@ -34,7 +36,7 @@ KEYWORD_MAP = {
 }
 
 UNIT_MM = DB.UnitTypeId.Millimeters
-MAX_WALL_THICKNESS_MM = 500.0  # Max distance to consider lines as parallel wall faces
+MAX_WALL_THICKNESS_MM = 500.0
 
 @dataclass
 class ConversionSettings:
@@ -59,32 +61,28 @@ class ConversionSettings:
     floor_level_id: DB.ElementId = None
     floor_structural: bool = False
     
-    tolerance_ft: float = 0.08  # ~25mm
-    min_length_ft: float = 0.33  # ~100mm
+    tolerance_ft: float = 0.08
+    min_length_ft: float = 0.33
     duplicate_check: bool = False
     preview_mode: bool = False
 
 # ── SECTION 2: HELPER UTILITIES ──────────────────────────────────────────────
 
 def convert_mm_to_ft(mm_value: float) -> float:
-    """Converts millimeters to Revit internal units (feet)."""
     return DB.UnitUtils.ConvertToInternalUnits(mm_value, UNIT_MM)
 
-def get_cad_instances(doc: DB.Document, view: DB.View):
-    """Retrieves all ImportInstance files in the given view."""
-    return DB.FilteredElementCollector(doc, view.Id).OfClass(DB.ImportInstance).ToElements()
+def get_all_cad_instances(doc: DB.Document):
+    """Retrieves all ImportInstance files in the entire project."""
+    return DB.FilteredElementCollector(doc).OfClass(DB.ImportInstance).WhereElementIsNotElementType().ToElements()
 
 def flatten_line_to_z(line: DB.Line, target_z: float) -> DB.Line:
-    """Projects a 3D line flat onto a specific Z-elevation."""
     pt1 = DB.XYZ(line.GetEndPoint(0).X, line.GetEndPoint(0).Y, target_z)
     pt2 = DB.XYZ(line.GetEndPoint(1).X, line.GetEndPoint(1).Y, target_z)
-    
     if pt1.DistanceTo(pt2) < convert_mm_to_ft(1.0):
-        return None  # Skip practically zero-length lines
+        return None
     return DB.Line.CreateBound(pt1, pt2)
 
 def extract_wall_centerlines(lines: list, max_thickness_ft: float) -> list:
-    """Finds parallel line pairs within max thickness and averages them to centerlines."""
     unprocessed = list(lines)
     centerlines = []
     
@@ -97,7 +95,7 @@ def extract_wall_centerlines(lines: list, max_thickness_ft: float) -> list:
         
         for candidate in unprocessed:
             cand_dir = candidate.Direction
-            if abs(base_dir.DotProduct(cand_dir)) > 0.98:  # Check if lines are parallel
+            if abs(base_dir.DotProduct(cand_dir)) > 0.98:
                 dist = candidate.Distance(base_mid)
                 if dist < best_dist:
                     best_dist = dist
@@ -105,14 +103,9 @@ def extract_wall_centerlines(lines: list, max_thickness_ft: float) -> list:
                     
         if best_match:
             unprocessed.remove(best_match)
-            # Average the closest endpoints
-            p1_base = base_line.GetEndPoint(0)
-            p2_base = base_line.GetEndPoint(1)
+            p1_base, p2_base = base_line.GetEndPoint(0), base_line.GetEndPoint(1)
             
-            d1 = p1_base.DistanceTo(best_match.GetEndPoint(0))
-            d2 = p1_base.DistanceTo(best_match.GetEndPoint(1))
-            
-            if d1 < d2:
+            if p1_base.DistanceTo(best_match.GetEndPoint(0)) < p1_base.DistanceTo(best_match.GetEndPoint(1)):
                 avg_p1 = (p1_base + best_match.GetEndPoint(0)) / 2.0
                 avg_p2 = (p2_base + best_match.GetEndPoint(1)) / 2.0
             else:
@@ -122,31 +115,35 @@ def extract_wall_centerlines(lines: list, max_thickness_ft: float) -> list:
             try:
                 centerlines.append(DB.Line.CreateBound(avg_p1, avg_p2))
             except Exception:
-                pass  # Ignore invalid lines generated from overlaps
+                pass
         else:
             centerlines.append(base_line)
             
     return centerlines
 
-def is_duplicate(doc: DB.Document, category_id: DB.BuiltInCategory, bbox: DB.BoundingBoxXYZ, tolerance_ft: float) -> bool:
-    """Checks if an element of the same category already exists in the same bounding box space."""
-    if not bbox: return False
+def is_duplicate(doc: DB.Document, category_id: DB.BuiltInCategory, points: list, height_ft: float, tolerance_ft: float) -> bool:
+    """Safely checks if an element exists within a bounding box derived from given points."""
+    xs = [p.X for p in points]
+    ys = [p.Y for p in points]
+    zs = [p.Z for p in points]
     
-    min_pt = bbox.Min - DB.XYZ(tolerance_ft, tolerance_ft, tolerance_ft)
-    max_pt = bbox.Max + DB.XYZ(tolerance_ft, tolerance_ft, tolerance_ft)
+    # Pad by at least 1.0 ft to ensure the Outline is never "empty" or flat
+    pad = max(tolerance_ft, 1.0)
+    
+    # Mathematically guarantees Max > Min in all dimensions
+    min_pt = DB.XYZ(min(xs) - pad, min(ys) - pad, min(zs) - pad)
+    max_pt = DB.XYZ(max(xs) + pad, max(ys) + pad, max(zs) + height_ft + pad)
+    
     outline = DB.Outline(min_pt, max_pt)
-    
     bbox_filter = DB.BoundingBoxIntersectsFilter(outline)
-    existing = DB.FilteredElementCollector(doc).OfCategory(category_id).WherePasses(bbox_filter).ToElements()
-    return any(existing)
+    
+    return any(DB.FilteredElementCollector(doc).OfCategory(category_id).WherePasses(bbox_filter).ToElements())
 
 # ── SECTION 3: CAD GEOMETRY PARSER ───────────────────────────────────────────
 
 def extract_cad_geometry_recursively(geometry_element, transform: DB.Transform, doc: DB.Document, result_dict: dict):
-    """Recursively drills down into nested CAD blocks and collects flattened geometry by layer."""
     if not geometry_element:
         return
-        
     for geom_obj in geometry_element:
         if isinstance(geom_obj, DB.GeometryInstance):
             inst_geom = geom_obj.GetInstanceGeometry()
@@ -164,90 +161,65 @@ def extract_cad_geometry_recursively(geometry_element, transform: DB.Transform, 
             result_dict[layer_name].append(transformed_curve)
 
 def parse_geometry_by_layer(cad_instance: DB.ImportInstance, doc: DB.Document) -> dict:
-    """Returns a dictionary grouping all extracted CAD curves by their layer name."""
     result_dict = defaultdict(list)
     geom_elem = cad_instance.get_Geometry(DB.Options())
-    
     extract_cad_geometry_recursively(geom_elem, DB.Transform.Identity, doc, result_dict)
     return result_dict
 
 # ── SECTION 4: ELEMENT CREATORS ──────────────────────────────────────────────
 
 def create_structural_column(doc: DB.Document, curve: DB.Curve, settings: ConversionSettings) -> tuple:
-    if not settings.col_type_id or not settings.col_base_level_id:
-        return False, "Missing Column settings."
-
+    if not settings.col_type_id or not settings.col_base_level_id: return False, "Missing Column settings."
     mid_point = curve.Evaluate(0.5, True)
     
     if settings.duplicate_check:
-        bbox = DB.BoundingBoxXYZ()
-        bbox.Min = mid_point - DB.XYZ(1, 1, 1)
-        bbox.Max = mid_point + DB.XYZ(1, 1, 1)
-        if is_duplicate(doc, DB.BuiltInCategory.OST_StructuralColumns, bbox, settings.tolerance_ft):
+        if is_duplicate(doc, DB.BuiltInCategory.OST_StructuralColumns, [mid_point], settings.col_top_offset_ft, settings.tolerance_ft):
             return False, "Duplicate detected."
 
     symbol = doc.GetElement(settings.col_type_id)
-    if not symbol.IsActive:
-        symbol.Activate()
-        
+    if not symbol.IsActive: symbol.Activate()
     level = doc.GetElement(settings.col_base_level_id)
     col = doc.Create.NewFamilyInstance(mid_point, symbol, level, DB.Structure.StructuralType.Column)
     
-    top_offset_param = col.get_Parameter(DB.BuiltInParameter.FAMILY_TOP_LEVEL_OFFSET_PARAM)
-    if top_offset_param:
-        top_offset_param.Set(settings.col_top_offset_ft)
-        
+    param = col.get_Parameter(DB.BuiltInParameter.FAMILY_TOP_LEVEL_OFFSET_PARAM)
+    if param: param.Set(settings.col_top_offset_ft)
     return True, "Success"
 
 def create_basic_wall(doc: DB.Document, line: DB.Line, settings: ConversionSettings) -> tuple:
-    if line.Length < settings.min_length_ft:
-        return False, "Line shorter than minimum length."
-    if not settings.wall_type_id or not settings.wall_base_level_id:
-        return False, "Missing Wall settings."
+    if line.Length < settings.min_length_ft: return False, "Short line."
+    if not settings.wall_type_id or not settings.wall_base_level_id: return False, "Missing settings."
 
     if settings.duplicate_check:
-        bbox = DB.BoundingBoxXYZ()
-        bbox.Min = line.GetEndPoint(0) - DB.XYZ(1, 1, 0)
-        bbox.Max = line.GetEndPoint(1) + DB.XYZ(1, 1, settings.wall_height_ft)
-        if is_duplicate(doc, DB.BuiltInCategory.OST_Walls, bbox, settings.tolerance_ft):
-            return False, "Duplicate detected."
+        pts = [line.GetEndPoint(0), line.GetEndPoint(1)]
+        if is_duplicate(doc, DB.BuiltInCategory.OST_Walls, pts, settings.wall_height_ft, settings.tolerance_ft):
+            return False, "Duplicate."
 
     DB.Wall.Create(doc, line, settings.wall_type_id, settings.wall_base_level_id, settings.wall_height_ft, 0.0, False, settings.wall_structural)
     return True, "Success"
 
 def create_structural_beam(doc: DB.Document, line: DB.Line, settings: ConversionSettings) -> tuple:
-    if line.Length < settings.min_length_ft:
-        return False, "Line shorter than minimum length."
-        
+    if line.Length < settings.min_length_ft: return False, "Short line."
     symbol = doc.GetElement(settings.beam_type_id)
-    if not symbol.IsActive:
-        symbol.Activate()
-        
+    if not symbol.IsActive: symbol.Activate()
     level = doc.GetElement(settings.beam_level_id)
     beam = doc.Create.NewFamilyInstance(line, symbol, level, DB.Structure.StructuralType.Beam)
     
-    z_offset_param = beam.get_Parameter(DB.BuiltInParameter.Z_OFFSET_VALUE)
-    if z_offset_param:
-        z_offset_param.Set(settings.beam_z_offset_ft)
-        
+    param = beam.get_Parameter(DB.BuiltInParameter.Z_OFFSET_VALUE)
+    if param: param.Set(settings.beam_z_offset_ft)
     return True, "Success"
 
 def create_architectural_floor(doc: DB.Document, curves: list, settings: ConversionSettings) -> tuple:
     try:
-        # Convert to strongly typed .NET Lists for CPython3 API calls
         dotnet_curves = List[DB.Curve]()
         for c in curves: dotnet_curves.Add(c)
-        
         curve_loop = DB.CurveLoop.Create(dotnet_curves)
         
         if not curve_loop.IsOpen():
             loop_list = List[DB.CurveLoop]()
             loop_list.Add(curve_loop)
-            
             DB.Floor.Create(doc, loop_list, settings.floor_type_id, settings.floor_level_id)
             return True, "Success"
-            
-        return False, "Curve loop is open."
+        return False, "Loop is open."
     except Exception as e:
         return False, str(e)
 
@@ -268,7 +240,14 @@ XAML_STRING = """
             <TabItem Header="1. CAD Source">
                 <StackPanel Margin="10">
                     <TextBlock Text="Select CAD Instance:" FontWeight="Bold" Margin="0,0,0,5" />
-                    <ComboBox x:Name="CadInstanceComboBox" DisplayMemberPath="Name" Height="25" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ComboBox x:Name="CadInstanceComboBox" Height="25" Grid.Column="0" Margin="0,0,5,0" />
+                        <Button x:Name="BtnPickCad" Content="Pick in View" Width="90" Height="25" Grid.Column="1"/>
+                    </Grid>
                 </StackPanel>
             </TabItem>
             
@@ -293,7 +272,6 @@ XAML_STRING = """
                 <ScrollViewer>
                     <StackPanel Margin="10">
                         <TextBlock Text="Please ensure target Families are already loaded." Foreground="Gray" Margin="0,0,0,10"/>
-                        
                         <GroupBox Header="Columns" Margin="0,0,0,10">
                             <UniformGrid Columns="2" Margin="5">
                                 <TextBlock Text="Column Type:" VerticalAlignment="Center"/>
@@ -360,26 +338,22 @@ class CadToBimForm:
     def __init__(self, doc, uidoc):
         self.doc = doc
         self.uidoc = uidoc
-        self.layer_combos = {}  # Map layer name to its UI ComboBox
+        self.layer_combos = {}  
+        self.cad_dict = {}
         
-        # FIX: Use XamlReader.Parse() which strictly accepts string in PythonNet
         self.window = XamlReader.Parse(XAML_STRING)
         
-        # Bind UI Elements
         self.CadInstanceComboBox = self.window.FindName("CadInstanceComboBox")
         self.LayerMapPanel = self.window.FindName("LayerMapPanel")
         
         self.ColTypeCombo = self.window.FindName("ColTypeCombo")
         self.ColLevelCombo = self.window.FindName("ColLevelCombo")
         self.ColTopOffset = self.window.FindName("ColTopOffset")
-        
         self.WallTypeCombo = self.window.FindName("WallTypeCombo")
         self.WallLevelCombo = self.window.FindName("WallLevelCombo")
         self.WallHeight = self.window.FindName("WallHeight")
-        
         self.BeamTypeCombo = self.window.FindName("BeamTypeCombo")
         self.BeamLevelCombo = self.window.FindName("BeamLevelCombo")
-        
         self.FloorTypeCombo = self.window.FindName("FloorTypeCombo")
         self.FloorLevelCombo = self.window.FindName("FloorLevelCombo")
         
@@ -389,50 +363,76 @@ class CadToBimForm:
         
         # Bind Events
         self.CadInstanceComboBox.SelectionChanged += self.OnCadSelected
+        self.window.FindName("BtnPickCad").Click += self.OnPickCadClick
         self.window.FindName("BtnCancel").Click += self.OnCancelClick
         self.window.FindName("BtnRun").Click += self.OnRunClick
         
         self.setup_ui()
 
+    def to_dotnet_array(self, py_list):
+        arr = ArrayList()
+        for item in py_list: arr.Add(item)
+        return arr
+
     def setup_ui(self):
-        # 1. Populate CAD Instances
-        cad_instances = get_cad_instances(self.doc, self.doc.ActiveView)
-        net_cad_list = List[DB.Element]()
-        for cad in cad_instances: 
-            net_cad_list.Add(cad)
-        self.CadInstanceComboBox.ItemsSource = net_cad_list
+        cad_instances = get_all_cad_instances(self.doc)
+        for cad in cad_instances:
+            name = cad.Category.Name if cad.Category else cad.Name
+            if not name: name = "Unknown CAD"
+            display_name = f"{name} [ID: {cad.Id.IntegerValue}]"
+            self.cad_dict[display_name] = cad
+            
+        self.CadInstanceComboBox.ItemsSource = self.to_dotnet_array(list(self.cad_dict.keys()))
+        if self.cad_dict: self.CadInstanceComboBox.SelectedIndex = 0
         
-        # 2. Populate Levels (sorted() returns a Python list, we convert it to .NET List)
-        levels = sorted(DB.FilteredElementCollector(self.doc).OfClass(DB.Level).ToElements(), key=lambda l: l.Elevation)
-        net_level_list = List[DB.Element]()
-        for lvl in levels: 
-            net_level_list.Add(lvl)
+        levels = list(DB.FilteredElementCollector(self.doc).OfClass(DB.Level).ToElements())
+        levels.sort(key=lambda l: l.Elevation)
+        dotnet_levels = self.to_dotnet_array(levels)
         
         for combo in [self.ColLevelCombo, self.WallLevelCombo, self.BeamLevelCombo, self.FloorLevelCombo]:
-            combo.ItemsSource = net_level_list
-            if net_level_list.Count > 0: 
-                combo.SelectedIndex = 0
+            combo.ItemsSource = dotnet_levels
+            if levels: combo.SelectedIndex = 0
 
-        # 3. Populate Types
         self.populate_type_dropdown(self.ColTypeCombo, DB.BuiltInCategory.OST_StructuralColumns, DB.FamilySymbol)
         self.populate_type_dropdown(self.WallTypeCombo, DB.BuiltInCategory.OST_Walls, DB.WallType)
         self.populate_type_dropdown(self.BeamTypeCombo, DB.BuiltInCategory.OST_StructuralFraming, DB.FamilySymbol)
         self.populate_type_dropdown(self.FloorTypeCombo, DB.BuiltInCategory.OST_Floors, DB.FloorType)
 
     def populate_type_dropdown(self, combobox, category, class_type):
-        types = DB.FilteredElementCollector(self.doc).OfClass(class_type).OfCategory(category).ToElements()
-        
-        # Convert to .NET List before assigning to WPF ItemsSource
-        net_type_list = List[DB.Element]()
-        for t in types: 
-            net_type_list.Add(t)
+        types = list(DB.FilteredElementCollector(self.doc).OfClass(class_type).OfCategory(category).ToElements())
+        combobox.ItemsSource = self.to_dotnet_array(types)
+        if types: combobox.SelectedIndex = 0
+
+    def OnPickCadClick(self, sender, e):
+        self.window.Visibility = System.Windows.Visibility.Hidden
+        try:
+            ref = self.uidoc.Selection.PickObject(ObjectType.Element, "Select a CAD File")
+            elem = self.doc.GetElement(ref)
             
-        combobox.ItemsSource = net_type_list
-        if net_type_list.Count > 0: 
-            combobox.SelectedIndex = 0
+            if isinstance(elem, DB.ImportInstance):
+                name = elem.Category.Name if elem.Category else elem.Name
+                if not name: name = "Unknown CAD"
+                display_name = f"{name} [ID: {elem.Id.IntegerValue}]"
+                
+                if display_name not in self.cad_dict:
+                    self.cad_dict[display_name] = elem
+                    self.CadInstanceComboBox.ItemsSource = self.to_dotnet_array(list(self.cad_dict.keys()))
+                    
+                self.CadInstanceComboBox.SelectedItem = display_name
+            else:
+                UI.TaskDialog.Show("Invalid Selection", "The selected element is not a CAD ImportInstance.")
+        except RevitExceptions.OperationCanceledException:
+            pass 
+        except Exception as ex:
+            UI.TaskDialog.Show("Error", str(ex))
+        finally:
+            self.window.Visibility = System.Windows.Visibility.Visible
 
     def OnCadSelected(self, sender, e):
-        selected_cad = self.CadInstanceComboBox.SelectedItem
+        selected_name = self.CadInstanceComboBox.SelectedItem
+        if not selected_name: return
+        
+        selected_cad = self.cad_dict.get(selected_name)
         if not selected_cad: return
         
         geometry_by_layer = parse_geometry_by_layer(selected_cad, self.doc)
@@ -440,7 +440,6 @@ class CadToBimForm:
         self.LayerMapPanel.Children.Clear()
         self.layer_combos.clear()
         
-        # Procedural UI Generation to bypass tricky PythonNet DataGrid bindings
         for layer_name in sorted(geometry_by_layer.keys()):
             hint = "Ignore"
             layer_lower = layer_name.lower()
@@ -449,9 +448,17 @@ class CadToBimForm:
                     hint = val
                     break
                     
-            panel = System.Windows.Controls.StackPanel(Orientation=System.Windows.Controls.Orientation.Horizontal, Margin=System.Windows.Thickness(0,2,0,2))
-            tb = System.Windows.Controls.TextBlock(Text=layer_name, Width=250, VerticalAlignment=System.Windows.VerticalAlignment.Center)
-            cb = System.Windows.Controls.ComboBox(Width=150)
+            panel = System.Windows.Controls.StackPanel()
+            panel.Orientation = System.Windows.Controls.Orientation.Horizontal
+            panel.Margin = System.Windows.Thickness(0, 2, 0, 2)
+            
+            tb = System.Windows.Controls.TextBlock()
+            tb.Text = layer_name
+            tb.Width = 250
+            tb.VerticalAlignment = System.Windows.VerticalAlignment.Center
+            
+            cb = System.Windows.Controls.ComboBox()
+            cb.Width = 150
             
             for opt in ["Ignore", "Column", "Wall", "Beam", "Slab"]:
                 cb.Items.Add(opt)
@@ -467,18 +474,20 @@ class CadToBimForm:
         self.window.Close()
 
     def OnRunClick(self, sender, e):
-        if not self.CadInstanceComboBox.SelectedItem:
+        selected_name = self.CadInstanceComboBox.SelectedItem
+        if not selected_name:
             UI.TaskDialog.Show("Error", "Please select a CAD Instance first.")
             return
 
-        # Extract mappings from dynamically generated UI
+        selected_cad = self.cad_dict.get(selected_name)
+        
         mapping = {}
         for layer_name, cb in self.layer_combos.items():
             if cb.SelectedItem != "Ignore":
                 mapping[layer_name] = cb.SelectedItem
 
         settings = ConversionSettings(
-            cad_instance=self.CadInstanceComboBox.SelectedItem,
+            cad_instance=selected_cad,
             layer_mapping=mapping,
             col_type_id=self.ColTypeCombo.SelectedItem.Id if self.ColTypeCombo.SelectedItem else None,
             col_base_level_id=self.ColLevelCombo.SelectedItem.Id if self.ColLevelCombo.SelectedItem else None,
@@ -571,7 +580,6 @@ def run_conversion(doc: DB.Document, settings: ConversionSettings):
         UI.TaskDialog.Show("Error", f"Fatal Error during transaction: {str(e)}")
         return
     
-    # ── REPORT RESULTS ────────────────────────────────────────────────────────
     report = []
     if settings.preview_mode:
         report.append("--- PREVIEW MODE: NO ELEMENTS CREATED ---\n")
@@ -583,10 +591,8 @@ def run_conversion(doc: DB.Document, settings: ConversionSettings):
         
     UI.TaskDialog.Show("CAD to BIM Results", "\n".join(report))
 
-
 # ── MAIN EXECUTION ───────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    # Using injected variables from pyRevit's host engine 
     try:
         active_uidoc = __revit__.ActiveUIDocument
         active_doc = active_uidoc.Document

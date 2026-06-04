@@ -9,8 +9,18 @@ import System
 # Standard Revit API imports
 clr.AddReference("RevitAPI")
 clr.AddReference("RevitAPIUI")
-from Autodesk.Revit.DB import *
-from Autodesk.Revit.UI import *
+# Python.NET 3.0+ requires explicit imports instead of wildcards (*)
+from Autodesk.Revit.DB import (
+    FilteredElementCollector,
+    BuiltInCategory,
+    ViewType,
+    View,
+    View3D,
+    Transaction,
+    ElementId
+)
+# Note: 'from Autodesk.Revit.UI import *' is safely removed since you 
+# are handling UI elements through __revit__.ActiveUIDocument
 
 # Bypassing 'from pyrevit import revit' to avoid CPython interface bugs in events.py
 doc = __revit__.ActiveUIDocument.Document
