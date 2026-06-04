@@ -1,0 +1,51 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- All geometry data extracted from Lucide Icons (MIT) -->
+
+    <!-- folder-open -->
+    <Geometry x:Key="IconFolderOpen">
+        M6 14l1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 4.63A2 2 0 0 1 18.45 19H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 2h5a2 2 0 0 1 2 2v3H6z
+    </Geometry>
+
+    <!-- download -->
+    <Geometry x:Key="IconDownload">
+        M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4 M7 10l5 5 5-5 M12 15V3
+    </Geometry>
+
+    <!-- play-circle -->
+    <Geometry x:Key="IconPlayCircle">
+        M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z M10 8l6 4-6 4V8z
+    </Geometry>
+
+    <!-- layers -->
+    <Geometry x:Key="IconLayers">
+        M12 2L2 7l10 5 10-5-10-5z M2 17l10 5 10-5 M2 12l10 5 10-5
+    </Geometry>
+
+    <!-- sliders -->
+    <Geometry x:Key="IconSliders">
+        M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6
+    </Geometry>
+
+    <!-- cpu -->
+    <Geometry x:Key="IconCpu">
+        M16 4h2a2 2 0 0 1 2 2v2 M20 16v2a2 2 0 0 1-2 2h-2 M8 20H6a2 2 0 0 1-2-2v-2 M4 8V6a2 2 0 0 1 2-2h2 M16 10v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2z
+    </Geometry>
+
+    <!-- zap (AI / lightning) -->
+    <Geometry x:Key="IconZap">
+        M13 2L3 14h9l-1 8 10-12h-9l1-8z
+    </Geometry>
+
+    <!-- alert-triangle -->
+    <Geometry x:Key="IconAlertTriangle">
+        M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z M12 9v4 M12 17h.01
+    </Geometry>
+
+    <!-- check-circle -->
+    <Geometry x:Key="IconCheckCircle">
+        M22 11.08V12a10 10 0 1 1-5.93-9.14 M22 4L12 14.01l-3-3
+    </Geometry>
+
+</ResourceDictionary>
