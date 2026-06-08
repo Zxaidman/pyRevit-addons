@@ -1,0 +1,83 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ========== Core Brand Colors ========== -->
+    <Color x:Key="ColorDeepSpace">#1A1F2E</Color>
+    <Color x:Key="ColorCloudWhite">#F5F7FA</Color>
+    <Color x:Key="ColorSlate">#8892A4</Color>
+    <Color x:Key="ColorBlueprintBlue">#3B7DD8</Color>
+    <Color x:Key="ColorSteelTeal">#2BBFA4</Color>
+    <Color x:Key="ColorAmberWarning">#F0A500</Color>
+    <Color x:Key="ColorErrorRed">#E05555</Color>
+
+    <!-- Neutrals -->
+    <Color x:Key="ColorNeutral900">#1A1F2E</Color>
+    <Color x:Key="ColorNeutral600">#4B5568</Color>
+    <Color x:Key="ColorNeutral400">#8892A4</Color>
+    <Color x:Key="ColorNeutral200">#D1D8E8</Color>
+    <Color x:Key="ColorNeutral100">#EEF1F7</Color>
+
+    <!-- ========== Derived Accent Variants (hover, pressed) ========== -->
+    <!-- Blueprint Blue -->
+    <Color x:Key="ColorBlueprintBlueHover">#2C6AC4</Color>
+    <Color x:Key="ColorBlueprintBluePressed">#205AA6</Color>
+
+    <!-- Error Red -->
+    <Color x:Key="ColorErrorRedHover">#C94F4F</Color>
+    <Color x:Key="ColorErrorRedPressed">#B33F3F</Color>
+
+    <!-- Secondary (blue border) subtle hover background -->
+    <Color x:Key="ColorBlueprintBlue10">#193B7DD8</Color> <!-- 10% opacity approximation -->
+
+    <!-- Ghost hover background -->
+    <Color x:Key="ColorNeutral100Hover">#DDE3ED</Color>
+
+    <!-- ========== SolidColorBrush Resources ========== -->
+    <!-- Primary surfaces & text -->
+    <SolidColorBrush x:Key="BrushBackgroundDark" Color="{StaticResource ColorDeepSpace}"/>
+    <SolidColorBrush x:Key="BrushBackgroundLight" Color="{StaticResource ColorCloudWhite}"/>
+    <SolidColorBrush x:Key="BrushTextPrimary" Color="{StaticResource ColorNeutral900}"/>
+    <SolidColorBrush x:Key="BrushTextBody" Color="{StaticResource ColorNeutral600}"/>
+    <SolidColorBrush x:Key="BrushTextMuted" Color="{StaticResource ColorSlate}"/>
+
+    <!-- Borders & surfaces -->
+    <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource ColorNeutral200}"/>
+    <SolidColorBrush x:Key="BrushSurface" Color="{StaticResource ColorNeutral100}"/>
+
+    <!-- Accents -->
+    <SolidColorBrush x:Key="BrushAccentBlue" Color="{StaticResource ColorBlueprintBlue}"/>
+    <SolidColorBrush x:Key="BrushAccentBlueHover" Color="{StaticResource ColorBlueprintBlueHover}"/>
+    <SolidColorBrush x:Key="BrushAccentBluePressed" Color="{StaticResource ColorBlueprintBluePressed}"/>
+    <SolidColorBrush x:Key="BrushAccentTeal" Color="{StaticResource ColorSteelTeal}"/>
+    <SolidColorBrush x:Key="BrushAccentAmber" Color="{StaticResource ColorAmberWarning}"/>
+    <SolidColorBrush x:Key="BrushAccentRed" Color="{StaticResource ColorErrorRed}"/>
+    <SolidColorBrush x:Key="BrushAccentRedHover" Color="{StaticResource ColorErrorRedHover}"/>
+    <SolidColorBrush x:Key="BrushAccentRedPressed" Color="{StaticResource ColorErrorRedPressed}"/>
+
+    <!-- Neutrals as brushes -->
+    <SolidColorBrush x:Key="BrushNeutral900" Color="{StaticResource ColorNeutral900}"/>
+    <SolidColorBrush x:Key="BrushNeutral600" Color="{StaticResource ColorNeutral600}"/>
+    <SolidColorBrush x:Key="BrushNeutral400" Color="{StaticResource ColorSlate}"/>
+    <SolidColorBrush x:Key="BrushNeutral200" Color="{StaticResource ColorNeutral200}"/>
+    <SolidColorBrush x:Key="BrushNeutral100" Color="{StaticResource ColorNeutral100}"/>
+
+    <!-- Disabled state (as per guide: Neutral200 bg + Slate fg) -->
+    <SolidColorBrush x:Key="BrushDisabledBackground" Color="{StaticResource ColorNeutral200}"/>
+    <SolidColorBrush x:Key="BrushDisabledForeground" Color="{StaticResource ColorSlate}"/>
+
+    <!-- Button-specific states -->
+    <SolidColorBrush x:Key="BrushPrimaryForeground" Color="White"/>
+    <SolidColorBrush x:Key="BrushSecondaryBackground" Color="Transparent"/>
+    <SolidColorBrush x:Key="BrushSecondaryBorder" Color="{StaticResource ColorBlueprintBlue}"/>
+    <SolidColorBrush x:Key="BrushSecondaryForeground" Color="{StaticResource ColorBlueprintBlue}"/>
+    <SolidColorBrush x:Key="BrushSecondaryHoverBackground" Color="{StaticResource ColorBlueprintBlue10}"/>
+    <SolidColorBrush x:Key="BrushDangerForeground" Color="White"/>
+    <SolidColorBrush x:Key="BrushGhostForeground" Color="{StaticResource ColorSlate}"/>
+    <SolidColorBrush x:Key="BrushGhostHoverBackground" Color="{StaticResource ColorNeutral100Hover}"/>
+
+    <!-- Input -->
+    <SolidColorBrush x:Key="BrushInputBackground" Color="White"/>
+    <SolidColorBrush x:Key="BrushInputBorder" Color="{StaticResource ColorNeutral200}"/>
+    <SolidColorBrush x:Key="BrushInputFocusBorder" Color="{StaticResource ColorBlueprintBlue}"/>
+
+</ResourceDictionary>

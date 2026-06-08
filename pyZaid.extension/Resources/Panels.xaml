@@ -1,108 +1,191 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
-    <!-- ==================== MAIN TOOL WINDOW TEMPLATE ==================== -->
-    <!-- Usage: Window template with dark header, accent bar, scrollable content, and optional footer. -->
+    <!-- ════════════════════════════════════════════════════════════════
+         AnonGee BIM Tools — Panels v2.0
+         Window templates, dockable panels, dialogs, group boxes
+         ════════════════════════════════════════════════════════════════ -->
+
+    <!-- ════════════════════════════════════════════════════════════════
+         STANDARD TOOL WINDOW TEMPLATE
+         Charcoal Black header, 3px Vivid Red accent rule, white content, Off White footer.
+         ════════════════════════════════════════════════════════════════ -->
     <ControlTemplate x:Key="AnonGeeWindowTemplate" TargetType="Window">
         <DockPanel LastChildFill="True">
-            <!-- Header -->
-            <Border DockPanel.Dock="Top" Background="{StaticResource BrushBackgroundDark}" Padding="16,12">
-                <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource TextH2}"
-                           Foreground="{StaticResource BrushBackgroundLight}"/>
+
+            <!-- ── Header ── -->
+            <Border DockPanel.Dock="Top"
+                    Background="{StaticResource BrushCharcoalBlack}"
+                    Padding="16,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0"
+                               x:Name="WindowTitle"
+                               Text="{TemplateBinding Title}"
+                               Style="{StaticResource TextH2OnDark}"/>
+                    <TextBlock Grid.Column="1"
+                               x:Name="WindowVersion"
+                               Text=""
+                               Style="{StaticResource TextCaption}"
+                               Foreground="{StaticResource BrushSilverSteel}"
+                               VerticalAlignment="Center"/>
+                </Grid>
             </Border>
 
-            <!-- Accent bar -->
-            <Rectangle DockPanel.Dock="Top" Height="3" Fill="{StaticResource BrushAccentBlue}"/>
+            <!-- ── Vivid Red accent rule ── -->
+            <Rectangle DockPanel.Dock="Top"
+                       Height="3"
+                       Fill="{StaticResource BrushVividRed}"/>
 
-            <!-- Scrollable content area -->
-            <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <!-- ── Footer / action bar ── -->
+            <Border DockPanel.Dock="Bottom"
+                    x:Name="FooterBar"
+                    Background="{StaticResource BrushOffWhite}"
+                    BorderBrush="{StaticResource BrushLightBorder}"
+                    BorderThickness="0,1,0,0"
+                    Padding="16,10"
+                    Height="52">
+                <ContentPresenter x:Name="FooterContent" VerticalAlignment="Center"/>
+            </Border>
+
+            <!-- ── Scrollable content area ── -->
+            <ScrollViewer Padding="20"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled">
                 <ContentPresenter/>
             </ScrollViewer>
 
-            <!-- Optional bottom action bar (can be populated via code if needed) -->
-            <Border DockPanel.Dock="Bottom" Background="{StaticResource BrushNeutral100}"
-                    Padding="12" Height="52">
-                <ContentPresenter x:Name="FooterContent" VerticalAlignment="Center"/>
-            </Border>
         </DockPanel>
     </ControlTemplate>
 
-    <!-- ==================== DIALOG TEMPLATE ==================== -->
-    <!-- Pre-built with Cancel (Ghost) and Confirm (Primary) buttons. Commands must be wired in code. -->
+    <!-- ════════════════════════════════════════════════════════════════
+         DIALOG / MODAL WINDOW TEMPLATE
+         Fixed-width, CenterOwner, with Cancel (Ghost) + Confirm (Primary) buttons.
+         ════════════════════════════════════════════════════════════════ -->
     <ControlTemplate x:Key="AnonGeeDialogTemplate" TargetType="Window">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- Header -->
-                <RowDefinition Height="3"/>      <!-- Accent bar -->
+                <RowDefinition Height="3"/>      <!-- Accent rule -->
                 <RowDefinition Height="*"/>      <!-- Content -->
                 <RowDefinition Height="Auto"/>   <!-- Action bar -->
             </Grid.RowDefinitions>
 
-            <!-- Header -->
-            <Border Grid.Row="0" Background="{StaticResource BrushBackgroundDark}" Padding="16,12">
-                <TextBlock Text="{TemplateBinding Title}" Style="{StaticResource TextH2}"
-                           Foreground="{StaticResource BrushBackgroundLight}"/>
+            <!-- ── Header ── -->
+            <Border Grid.Row="0"
+                    Background="{StaticResource BrushCharcoalBlack}"
+                    Padding="20,14">
+                <TextBlock Text="{TemplateBinding Title}"
+                           Style="{StaticResource TextH2OnDark}"/>
             </Border>
 
-            <!-- Accent bar -->
-            <Rectangle Grid.Row="1" Fill="{StaticResource BrushAccentBlue}"/>
+            <!-- ── Vivid Red accent rule ── -->
+            <Rectangle Grid.Row="1"
+                       Height="3"
+                       Fill="{StaticResource BrushVividRed}"/>
 
-            <!-- Content -->
-            <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                <ContentPresenter Margin="24"/>
+            <!-- ── Scrollable Content ── -->
+            <ScrollViewer Grid.Row="2"
+                          VerticalScrollBarVisibility="Auto"
+                          Padding="20,18,20,20">
+                <ContentPresenter/>
             </ScrollViewer>
 
-            <!-- Bottom buttons -->
-            <Border Grid.Row="3" Background="{StaticResource BrushNeutral100}" Padding="12">
+            <!-- ── Bottom action bar with Cancel (Ghost) + Confirm (Primary) ── -->
+            <Border Grid.Row="3"
+                    Background="{StaticResource BrushOffWhite}"
+                    BorderBrush="{StaticResource BrushLightBorder}"
+                    BorderThickness="0,1,0,0"
+                    Padding="20,12">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="CancelButton" Style="{StaticResource ButtonGhost}"
-                            Content="Cancel" Margin="0,0,8,0"/>
-                    <Button x:Name="ConfirmButton" Style="{StaticResource ButtonPrimary}"
-                            Content="Confirm"/>
+                    <Button x:Name="CancelButton"
+                            Style="{StaticResource ButtonGhost}"
+                            Content="Cancel"
+                            Margin="0,0,8,0"
+                            IsCancel="True"/>
+                    <Button x:Name="ConfirmButton"
+                            Style="{StaticResource ButtonPrimary}"
+                            Content="Confirm"
+                            IsDefault="True"/>
                 </StackPanel>
             </Border>
         </Grid>
     </ControlTemplate>
 
-    <!-- ==================== DOCKABLE PANEL TEMPLATE ==================== -->
-    <!-- Compact panel with header and single-column content. MinWidth=240. -->
+    <!-- ════════════════════════════════════════════════════════════════
+         DOCKABLE PANEL TEMPLATE (Revit IDockablePaneProvider)
+         Compact, single-column, MinWidth=240, MaxWidth=360.
+         ════════════════════════════════════════════════════════════════ -->
     <ControlTemplate x:Key="DockablePanelTemplate" TargetType="HeaderedContentControl">
-        <Border MinWidth="240" Padding="0" Background="White">
-            <StackPanel>
+        <Border MinWidth="240" MaxWidth="360" Padding="0"
+                Background="{StaticResource BrushPureWhite}">
+            <DockPanel LastChildFill="True">
+
                 <!-- Compact header -->
-                <Border Padding="12,8" Background="{StaticResource BrushNeutral100}">
-                    <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource TextH3}"/>
+                <Border DockPanel.Dock="Top"
+                        Background="{StaticResource BrushCharcoalBlack}"
+                        Padding="12,10">
+                    <TextBlock Text="{TemplateBinding Header}"
+                               Style="{StaticResource TextH3OnDark}"/>
                 </Border>
-                <!-- Content area: single-column StackPanel -->
-                <ContentPresenter Margin="12"/>
-            </StackPanel>
+
+                <!-- Accent rule -->
+                <Rectangle DockPanel.Dock="Top"
+                           Height="2"
+                           Fill="{StaticResource BrushVividRed}"/>
+
+                <!-- Content area — single column -->
+                <ScrollViewer Padding="12,14"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ContentPresenter/>
+                </ScrollViewer>
+
+            </DockPanel>
         </Border>
     </ControlTemplate>
 
-    <!-- ==================== SECTION GROUP BOX (GroupBox style) ==================== -->
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION GROUP BOX (GroupBox style)
+         ════════════════════════════════════════════════════════════════ -->
     <Style x:Key="SectionGroup" TargetType="GroupBox">
-        <Setter Property="BorderBrush" Value="{StaticResource BrushNeutral200}"/>
+        <Setter Property="BorderBrush"     Value="{StaticResource BrushLightBorder}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Padding" Value="12"/>
-        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Background"      Value="{StaticResource BrushPureWhite}"/>
+        <Setter Property="Padding"         Value="14,12"/>
+        <Setter Property="Margin"          Value="0,0,0,16"/>
+        <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="GroupBox">
                     <Border Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
-                            CornerRadius="10"
+                            CornerRadius="8"
                             Padding="{TemplateBinding Padding}">
                         <StackPanel>
                             <!-- Header using H3 style -->
-                            <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource TextH3}"
-                                       Margin="0,0,0,8"/>
+                            <TextBlock Text="{TemplateBinding Header}"
+                                       Style="{StaticResource TextH3}"
+                                       Margin="2,0,0,8"/>
                             <ContentPresenter/>
                         </StackPanel>
                     </Border>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SECTION DIVIDER
+         ════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="SectionDivider" TargetType="Rectangle">
+        <Setter Property="Height"  Value="1"/>
+        <Setter Property="Fill"    Value="{StaticResource BrushLightBorder}"/>
+        <Setter Property="Margin"  Value="0,16"/>
     </Style>
 
 </ResourceDictionary>

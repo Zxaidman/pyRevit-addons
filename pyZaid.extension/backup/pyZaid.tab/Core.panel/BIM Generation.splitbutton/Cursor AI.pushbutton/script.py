@@ -27,7 +27,7 @@ clr.AddReference('PresentationFramework')
 clr.AddReference('PresentationCore')
 clr.AddReference('WindowsBase')
 clr.AddReference('System.Xml')
-clr.AddReference('System.Windows.Forms')  # For UI DoEvents
+clr.AddReference('System.Windows.Forms')  # For OpenFileDialog
 
 import System
 import System.Windows.Forms
@@ -44,8 +44,9 @@ from System.Windows.Media import (
 from System.Windows.Media.Effects import DropShadowEffect
 from System.Windows.Input import Cursors
 from System.Windows.Markup import XamlReader
+from System.Windows.Threading import Dispatcher, DispatcherPriority
 
-from pyrevit import script, forms
+import sys
 doc = __revit__.ActiveUIDocument.Document
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -375,13 +376,13 @@ floor_types  = get_floor_types()
 
 if not col_symbols: 
     MessageBox.Show("No Structural Column families loaded.", "INP to BIM")
-    script.exit()
+    sys.exit()
 if not beam_symbols: 
     MessageBox.Show("No Structural Framing families loaded.", "INP to BIM")
-    script.exit()
+    sys.exit()
 if not floor_types: 
     MessageBox.Show("No Floor Types loaded.", "INP to BIM")
-    script.exit()
+    sys.exit()
 
 # ═══════════════════════════════════════════════════════════════════════════
 # INTELLIGENT MATCHING & SLAB LOGIC
@@ -793,10 +794,18 @@ class InpToBimDialog(Window):
         return b
 
     def update_progress(self, percent, message):
-        """ Update UI and forcefully flush the WPF event pump so window doesn't freeze """
+        """ Update UI safely with WPF Dispatcher """
         self.progress_bar.Value = percent
         self.status_text.Text = message
-        System.Windows.Forms.Application.DoEvents()
+        
+        # Safely flush the WPF task queue
+        def empty_delegate():
+            pass
+        
+        Dispatcher.CurrentDispatcher.Invoke(
+            DispatcherPriority.Background, 
+            System.Action(empty_delegate)
+        )
 
     def _browse(self, sender, args):
         dlg = System.Windows.Forms.OpenFileDialog()
