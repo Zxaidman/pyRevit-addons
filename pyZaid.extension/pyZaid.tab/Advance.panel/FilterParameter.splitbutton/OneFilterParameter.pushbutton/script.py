@@ -25,29 +25,119 @@ clr.AddReference("WindowsBase")
 clr.AddReference("System.Xaml")
 
 from System.Windows.Markup import XamlReader
+from System.Windows import UIElement, Visibility
+from System.Windows.Data import Binding, BindingMode
 from System.IO import MemoryStream, File, StreamReader, Path
 from System.Text import Encoding
-from System.Windows.Controls import ListBoxItem, CheckBox
+from System.Windows.Controls import ListBoxItem, CheckBox, ItemsControl, TextBox
 from System.Collections.Generic import List
+from System.ComponentModel import INotifyPropertyChanged, PropertyChangedEventArgs
+from System import String as NetString, TimeSpan
 
-# ----------------------------------------------------------------------
-# XAML loaded from external file
-# ----------------------------------------------------------------------
+# ======================================================================
+# PREVIEW DATA CLASS (observable for live binding)
+# ======================================================================
+class PreviewItem(INotifyPropertyChanged):
+    """A single row in the live preview table."""
+    def __init__(self, element_id, element, family_name, type_name):
+        self._element_id = str(element_id)
+        self._element = element
+        self._family_name = family_name
+        self._type_name = type_name
+        self._filter_value = ""
+        self._edit_preview = ""
+        self._is_selected = True
+        self.PropertyChanged = None
+
+    def add_PropertyChanged(self, value):
+        self.PropertyChanged = value
+    def remove_PropertyChanged(self, value):
+        self.PropertyChanged = None
+
+    def notify(self, prop_name):
+        if self.PropertyChanged is not None:
+            self.PropertyChanged(self, PropertyChangedEventArgs(prop_name))
+
+    @property
+    def ElementId(self):
+        return self._element_id
+
+    @property
+    def Element(self):
+        return self._element
+
+    @property
+    def FamilyName(self):
+        return self._family_name
+
+    @property
+    def TypeName(self):
+        return self._type_name
+
+    @property
+    def FilterValue(self):
+        return self._filter_value
+    @FilterValue.setter
+    def FilterValue(self, value):
+        self._filter_value = value
+        self.notify("FilterValue")
+
+    @property
+    def EditPreview(self):
+        return self._edit_preview
+    @EditPreview.setter
+    def EditPreview(self, value):
+        self._edit_preview = value
+        self.notify("EditPreview")
+
+    @property
+    def IsSelected(self):
+        return self._is_selected
+    @IsSelected.setter
+    def IsSelected(self, value):
+        self._is_selected = value
+        self.notify("IsSelected")
+
+# ======================================================================
+# LOAD XAML
+# ======================================================================
 def load_xaml_window():
-    """Load the Window XAML from the OneFilterParameter.xaml file."""
+    """Load the Window XAML from the ui.xaml file."""
     script_dir = Path.GetDirectoryName(Path.GetFullPath(__file__))
-    xaml_path = Path.Combine(script_dir, "OneFilterParameter.xaml")
+    xaml_path = Path.Combine(script_dir, "ui.xaml")
     if File.Exists(xaml_path):
         reader = StreamReader(xaml_path)
         xaml_content = reader.ReadToEnd()
         reader.Close()
         return xaml_content
     else:
-        raise Exception("OneFilterParameter.xaml not found at: " + xaml_path)
+        raise Exception("ui.xaml not found at: " + xaml_path)
 
-# ----------------------------------------------------------------------
-# Main UI logic
-# ----------------------------------------------------------------------
+# ======================================================================
+# DEBOUNCE TIMER HELPER
+# ======================================================================
+class DebounceTimer:
+    def __init__(self, callback, delay_ms=300):
+        from System.Windows.Threading import DispatcherTimer
+        self._timer = DispatcherTimer()
+        self._timer.Interval = TimeSpan.FromMilliseconds(delay_ms)
+        self._timer.Tick += self._on_tick
+        self._callback = callback
+
+    def _on_tick(self, sender, args):
+        self._timer.Stop()
+        self._callback()
+
+    def reset(self):
+        self._timer.Stop()
+        self._timer.Start()
+
+    def stop(self):
+        self._timer.Stop()
+
+# ======================================================================
+# MAIN UI LOGIC
+# ======================================================================
 def run_ui():
     # Load XAML from external file
     xaml = load_xaml_window()
@@ -90,12 +180,23 @@ def run_ui():
     error_text        = window.FindName("error_text")
     btn_close         = window.FindName("btn_close")
 
+    # Live preview controls
+    preview_list      = window.FindName("preview_list")
+    preview_info      = window.FindName("preview_info")
+    btn_select_all_rows  = window.FindName("btn_select_all_rows")
+    btn_deselect_all_rows = window.FindName("btn_deselect_all_rows")
+
     # State Variables
     state = {
         "filtered_ids": [],
         "filtered_elements": [],
         "all_params_cache": [],
-        "val_to_num": {}
+        "val_to_num": {},
+        "preview_items": [],       # List[PreviewItem]
+        "filter_param_name": "",   # Current filter parameter name
+        "edit_param_name": "",     # Current edit parameter name
+        "current_filter_param": None, # Parameter object for live preview
+        "current_edit_param": None,   # Parameter object for edit preview
     }
 
     # ------------------------------------------------------------------
@@ -336,123 +437,239 @@ def run_ui():
                 continue
         return filtered_ids
 
-    def modify_elements(elem_ids, param_name, operation, val1, val2):
+    def modify_elements(ids, param_name, operation, val1, val2):
         modified = 0
         errors = []
-        if not elem_ids:
+        if not ids:
             return 0, ["No elements selected."]
 
         t = Transaction(doc, "OneParameter Batch Edit")
         t.Start()
         try:
             processed_types = set()
-
-            for eid in elem_ids:
-                eid_val = getattr(eid, "Value", getattr(eid, "IntegerValue", str(eid)))
+            for e in ids:
                 try:
-                    elem = doc.GetElement(eid)
+                    elem = doc.GetElement(e)
                     if not elem: continue
-
-                    target_elem = elem
+                    target = elem
                     param = elem.LookupParameter(param_name)
-
                     if param is None:
                         tid = elem.GetTypeId()
                         if tid and tid != ElementId.InvalidElementId:
                             te = doc.GetElement(tid)
                             if te:
                                 param = te.LookupParameter(param_name)
-                                target_elem = te
-
+                                target = te
                     if param is None or param.IsReadOnly:
-                        errors.append("Param '{0}' not found or read-only on element {1}".format(param_name, eid_val))
+                        errors.append("Param '{0}' not found/read-only on {1}".format(param_name, str(e)))
                         continue
-
-                    if target_elem.Id != elem.Id:
-                        target_id_val = getattr(target_elem.Id, "Value", getattr(target_elem.Id, "IntegerValue", -1))
-                        if target_id_val in processed_types:
+                    if target.Id != elem.Id:
+                        tid_val = getattr(target.Id, "Value", -1)
+                        if tid_val in processed_types:
                             modified += 1
                             continue
-
                     st = param.StorageType
-
                     if operation == "Delete":
                         if st == StorageType.String: param.Set(System.String(""))
                         elif st == StorageType.Integer: param.Set(System.Int32(0))
                         elif st == StorageType.Double: param.Set(System.Double(0.0))
                         elif st == StorageType.ElementId: param.Set(ElementId.InvalidElementId)
-                        else:
-                            errors.append("Cannot delete parameter type on {0}".format(eid_val))
-                            continue
+                        else: errors.append("Cannot delete on {0}".format(str(e))); continue
                         modified += 1
-
                     elif operation in ("Prefix", "Suffix", "Replace"):
-                        if st != StorageType.String:
-                            errors.append("Operation '{0}' requires a text parameter on {1}".format(operation, eid_val))
-                            continue
-                        cur = param.AsString() if param.AsString() else ""
-                        if operation == "Prefix":
-                            param.Set(System.String(val1 + cur))
-                        elif operation == "Suffix":
-                            param.Set(System.String(cur + val1))
+                        if st != StorageType.String: errors.append("Operation '{0}' needs text param".format(operation)); continue
+                        cur = param.AsString() or ""
+                        if operation == "Prefix": param.Set(System.String(val1 + cur))
+                        elif operation == "Suffix": param.Set(System.String(cur + val1))
                         elif operation == "Replace":
-                            if not val1:
-                                errors.append("Empty search string on {0}".format(eid_val))
-                                continue
+                            if not val1: errors.append("Empty search string"); continue
                             param.Set(System.String(cur.replace(val1, val2)))
                         modified += 1
-
                     elif operation == "Set":
                         try:
-                            if st == StorageType.String:
-                                param.Set(System.String(val1))
+                            if st == StorageType.String: param.Set(System.String(val1))
                             elif st == StorageType.Integer:
-                                val_lower = str(val1).strip().lower()
-                                if val_lower in ("yes", "true", "1", "on"):
-                                    param.Set(System.Int32(1))
-                                elif val_lower in ("no", "false", "0", "off"):
-                                    param.Set(System.Int32(0))
+                                vl = str(val1).strip().lower()
+                                if vl in ("yes","true","1","on"): param.Set(System.Int32(1))
+                                elif vl in ("no","false","0","off"): param.Set(System.Int32(0))
                                 else:
-                                    if not param.SetValueString(System.String(val1)):
-                                        param.Set(System.Int32(int(float(val1))))
+                                    if not param.SetValueString(System.String(val1)): param.Set(System.Int32(int(float(val1))))
                             elif st == StorageType.Double:
-                                if not param.SetValueString(System.String(val1)):
-                                    param.Set(System.Double(float(val1)))
+                                if not param.SetValueString(System.String(val1)): param.Set(System.Double(float(val1)))
                             elif st == StorageType.ElementId:
-                                id_int = None
                                 m = re.match(r'^\[(-?\d+)\]', str(val1).strip())
-                                if m:
-                                    id_int = int(m.group(1))
-                                else:
-                                    try:
-                                        id_int = int(float(val1))
-                                    except:
-                                        errors.append("Requires ID (e.g. [4133] Mat), got '{1}' on {0}".format(eid_val, val1))
-                                        continue
-                                try:
-                                    new_id = ElementId(System.Int64(id_int))
-                                except:
-                                    new_id = ElementId(System.Int32(id_int))
+                                id_int = int(m.group(1)) if m else int(float(val1))
+                                new_id = ElementId(System.Int64(id_int))
                                 param.Set(new_id)
-                            else:
-                                param.Set(System.String(val1))
+                            else: param.Set(System.String(val1))
                             modified += 1
-                        except Exception as ex:
-                            errors.append("Set failed on {0}: {1}".format(eid_val, str(ex)))
-
-                    if target_elem.Id != elem.Id:
-                        target_id_val = getattr(target_elem.Id, "Value", getattr(target_elem.Id, "IntegerValue", -1))
-                        processed_types.add(target_id_val)
-
-                except Exception as ex:
-                    errors.append("Error on element {0}: {1}".format(eid_val, str(ex)))
+                        except Exception as ex: errors.append("Set failed: " + str(ex))
+                    if target.Id != elem.Id:
+                        tid_val = getattr(target.Id, "Value", -1)
+                        processed_types.add(tid_val)
+                except Exception as ex: errors.append("Error: " + str(ex))
             t.Commit()
-        except Exception as major_ex:
-            if t.HasStarted() and not t.HasEnded():
-                t.RollBack()
-            errors.append("Transaction failed & Rolled Back: " + str(major_ex))
-
+        except Exception as ex:
+            if t.HasStarted() and not t.HasEnded(): t.RollBack()
+            errors.append("Transaction failed: " + str(ex))
         return modified, errors
+
+    # ------------------------------------------------------------------
+    # LIVE PREVIEW FUNCTIONS
+    # ------------------------------------------------------------------
+    def get_element_family_name(elem):
+        """Get the family name of an element."""
+        try:
+            # Try symbol (family instance)
+            sym = elem.Symbol
+            if sym:
+                fam = sym.Family
+                if fam: return fam.Name
+        except:
+            pass
+        try:
+            # Try element type
+            tid = elem.GetTypeId()
+            if tid and tid != ElementId.InvalidElementId:
+                te = doc.GetElement(tid)
+                if te: return te.Name
+        except:
+            pass
+        # Try category
+        try:
+            if elem.Category: return elem.Category.Name
+        except:
+            pass
+        return "N/A"
+
+    def get_element_type_name(elem):
+        """Get the type name of an element."""
+        try:
+            tid = elem.GetTypeId()
+            if tid and tid != ElementId.InvalidElementId:
+                te = doc.GetElement(tid)
+                if te: return te.Name
+        except:
+            pass
+        return "N/A"
+
+    def build_preview_items(elements):
+        """Create PreviewItem list from Revit elements."""
+        items = []
+        for e in elements:
+            eid_val = getattr(e.Id, "Value", getattr(e.Id, "IntegerValue", -1))
+            fam_name = get_element_family_name(e)
+            type_name = get_element_type_name(e)
+            item = PreviewItem(eid_val, e, fam_name, type_name)
+            items.append(item)
+        return items
+
+    def refresh_preview_display():
+        """Refresh the live preview ItemsControl with current items."""
+        state["preview_items"] = state["preview_items"]
+        items_list = List[PreviewItem]()
+        for item in state["preview_items"]:
+            items_list.Add(item)
+        preview_list.ItemsSource = items_list
+        match_count = len([i for i in state["preview_items"] if i.IsSelected])
+        total = len(state["preview_items"])
+        preview_info.Text = "{0} matching / {1} total".format(match_count, total)
+
+    def update_live_filter_preview():
+        """Update FilterValue on all preview items based on current filter."""
+        param_name = filter_param.Text.strip()
+        state["filter_param_name"] = param_name
+        if not param_name or not state["preview_items"]:
+            return
+        # Get the parameter value for each element
+        for item in state["preview_items"]:
+            try:
+                param = item.Element.LookupParameter(param_name)
+                if param is None:
+                    tid = item.Element.GetTypeId()
+                    if tid and tid != ElementId.InvalidElementId:
+                        te = doc.GetElement(tid)
+                        if te: param = te.LookupParameter(param_name)
+                if param:
+                    val_str = get_param_val_str(param) or ""
+                    item.FilterValue = val_str
+                else:
+                    item.FilterValue = "-"
+            except:
+                item.FilterValue = "?"
+        refresh_preview_display()
+
+    def update_live_edit_preview():
+        """Update EditPreview on all preview items based on current edit settings."""
+        param_name = edit_param.Text.strip()
+        operation = str(edit_op.SelectedItem) if edit_op.SelectedItem else "Set"
+        val1 = edit_val1.Text
+        val2 = edit_val2.Text
+        state["edit_param_name"] = param_name
+
+        if not param_name or not state["preview_items"]:
+            return
+        for item in state["preview_items"]:
+            try:
+                param = item.Element.LookupParameter(param_name)
+                if param is None:
+                    tid = item.Element.GetTypeId()
+                    if tid and tid != ElementId.InvalidElementId:
+                        te = doc.GetElement(tid)
+                        if te: param = te.LookupParameter(param_name)
+                if param:
+                    cur_val = get_param_val_str(param) or ""
+                    # Compute preview
+                    st = param.StorageType
+                    if operation == "Delete":
+                        item.EditPreview = "(deleted)"
+                    elif operation == "Prefix":
+                        item.EditPreview = val1 + cur_val
+                    elif operation == "Suffix":
+                        item.EditPreview = cur_val + val1
+                    elif operation == "Replace":
+                        item.EditPreview = cur_val.replace(val1, val2) if val1 else cur_val
+                    elif operation == "Set":
+                        item.EditPreview = val1
+                    else:
+                        item.EditPreview = cur_val
+                else:
+                    item.EditPreview = "N/A"
+            except:
+                item.EditPreview = "?"
+        refresh_preview_display()
+
+    def realtime_filter_update():
+        """Called on debounced timer - applies filter and updates preview."""
+        if not state.get("filtered_elements"):
+            return
+        param_name = filter_param.Text.strip()
+        operator = str(filter_op.SelectedItem) if filter_op.SelectedItem else "contains"
+        value = filter_val.Text
+
+        if not param_name:
+            # Reset - show all
+            for item in state["preview_items"]:
+                item.IsSelected = True
+            refresh_preview_display()
+            return
+
+        filtered_ids_set = set(filter_elements(state["filtered_elements"], param_name, operator, value))
+        for item in state["preview_items"]:
+            eid_val = getattr(item.Element.Id, "Value", getattr(item.Element.Id, "IntegerValue", -1))
+            # Build element ID from preview item's stored element
+            eid_str = item.ElementId
+            # Find the actual element id
+            actual_id = item.Element.Id
+            item.IsSelected = actual_id in filtered_ids_set
+
+        refresh_preview_display()
+        # Update live count
+        match_count = len([i for i in state["preview_items"] if i.IsSelected])
+        live_count.Text = "{0} elements".format(match_count)
+
+    # Create debounced filter timer
+    filter_debounce = DebounceTimer(realtime_filter_update, 300)
 
     # ------------------------------------------------------------------
     # UI helpers
@@ -460,11 +677,11 @@ def run_ui():
     def set_status(message, is_error=False):
         status_textblock.Text = message
         if not is_error:
-            status_badge.Visibility = System.Windows.Visibility.Visible
-            error_badge.Visibility = System.Windows.Visibility.Collapsed
+            status_badge.Visibility = Visibility.Visible
+            error_badge.Visibility = Visibility.Collapsed
         else:
-            status_badge.Visibility = System.Windows.Visibility.Collapsed
-            error_badge.Visibility = System.Windows.Visibility.Visible
+            status_badge.Visibility = Visibility.Collapsed
+            error_badge.Visibility = Visibility.Visible
         error_text.Text = message if is_error else ""
 
     def update_element_count():
@@ -540,8 +757,7 @@ def run_ui():
                     tid = e.GetTypeId()
                     if tid and tid != ElementId.InvalidElementId:
                         te = doc.GetElement(tid)
-                        if te:
-                            param = te.LookupParameter(param_name)
+                        if te: param = te.LookupParameter(param_name)
                 if param:
                     st = param.StorageType
                     if st in (StorageType.Integer, StorageType.Double):
@@ -581,13 +797,11 @@ def run_ui():
             chk = item.Content
             chk.IsChecked = True
         update_element_count()
-
     def on_select_none(sender, args):
         for item in category_list.Items:
             chk = item.Content
             chk.IsChecked = False
         update_element_count()
-
     btn_all_cats.Click += on_select_all
     btn_none_cats.Click += on_select_none
 
@@ -596,7 +810,7 @@ def run_ui():
         if not cats:
             cat_status.Text = "Please select at least one category."
             return
-        cat_status.Text = "Loading parameters..."
+        cat_status.Text = "Loading elements..."
         scope = "whole" if rb_whole.IsChecked else "view" if rb_view.IsChecked else "selection"
         elements = get_elements_by_categories(cats, scope)
         if not elements:
@@ -609,17 +823,35 @@ def run_ui():
         for p in state["all_params_cache"]:
             filter_param.Items.Add(p)
         cat_status.Text = "Loaded {0} parameters from {1} elements.".format(len(state["all_params_cache"]), len(elements))
+
+        # Build preview items
+        preview_items = build_preview_items(elements)
+        state["preview_items"] = preview_items
+        refresh_preview_display()
+        live_count.Text = "{0} elements".format(len(elements))
+
     btn_load_params.Click += on_load_params
 
     def on_confirm_filter_param(sender, args):
         current_text = filter_param.Text.strip()
         if current_text and state["filtered_elements"] and current_text in state["all_params_cache"]:
             update_operators_and_values(current_text, state["filtered_elements"])
+            # Update live filter preview column
+            update_live_filter_preview()
     btn_confirm_param.Click += on_confirm_filter_param
+    filter_param.SelectionChanged += on_confirm_filter_param
 
-    def on_filter_param_selection_changed(sender, args):
-        on_confirm_filter_param(sender, args)
-    filter_param.SelectionChanged += on_filter_param_selection_changed
+    def on_filter_key_up(sender, args):
+        """Trigger debounced real-time filter on key input."""
+        filter_debounce.reset()
+
+    def on_filter_value_changed(sender, args):
+        """Trigger debounced real-time filter on value changes."""
+        filter_debounce.reset()
+
+    filter_param.KeyUp += on_filter_key_up
+    filter_op.SelectionChanged += on_filter_value_changed
+    filter_val.KeyUp += on_filter_key_up
 
     def on_apply_filter(sender, args):
         if not state["filtered_elements"]:
@@ -636,6 +868,12 @@ def run_ui():
 
         filtered_ids = filter_elements(state["filtered_elements"], param_name, operator, value)
         state["filtered_ids"] = filtered_ids
+
+        # Update preview selection
+        filtered_set = set(filtered_ids)
+        for item in state["preview_items"]:
+            item.IsSelected = item.Element.Id in filtered_set
+        refresh_preview_display()
 
         msg = "Filtered: {0} elements.".format(len(filtered_ids))
         filter_status.Text = msg
@@ -655,6 +893,8 @@ def run_ui():
             btn_select_elems.IsEnabled = False
             filter_status.Text = "No elements match the filter. Try different values."
             set_status("No Matches Filtered", is_error=True)
+        live_count.Text = "{0} elements".format(len(filtered_ids))
+
     btn_apply_filter.Click += on_apply_filter
 
     def on_select_elements(sender, args):
@@ -681,9 +921,18 @@ def run_ui():
                     edit_val1.Items.Add(v)
             except:
                 pass
+        # Update edit preview
+        update_live_edit_preview()
 
     btn_confirm_edit.Click += on_confirm_edit
     edit_param.SelectionChanged += on_confirm_edit
+
+    # Live edit preview on field changes
+    def on_edit_field_changed(sender, args):
+        update_live_edit_preview()
+    edit_op.SelectionChanged += on_edit_field_changed
+    edit_val1.KeyUp += on_edit_field_changed
+    edit_val2.TextChanged += on_edit_field_changed
 
     def on_execute(sender, args):
         if not state["filtered_ids"]:
@@ -705,7 +954,7 @@ def run_ui():
         if modified > 0:
             edit_status.Text = "Modified {0} elements.".format(modified)
             if errors:
-                edit_status.Text += " ({0} partial errors detected)".format(len(errors))
+                edit_status.Text += " ({0} partial errors)".format(len(errors))
             set_status("Modified {0} elements".format(modified))
         else:
             err_str = "; ".join(errors[:3]) if errors else "Unknown error"
@@ -720,6 +969,19 @@ def run_ui():
     edit_op.Items.Add("Set")
     edit_op.Items.Add("Delete")
     edit_op.SelectedIndex = 3
+
+    # Row selection buttons
+    def on_select_all_rows(sender, args):
+        for item in state["preview_items"]:
+            item.IsSelected = True
+        refresh_preview_display()
+    btn_select_all_rows.Click += on_select_all_rows
+
+    def on_deselect_all_rows(sender, args):
+        for item in state["preview_items"]:
+            item.IsSelected = False
+        refresh_preview_display()
+    btn_deselect_all_rows.Click += on_deselect_all_rows
 
     def on_close(sender, args):
         state["filtered_elements"] = []

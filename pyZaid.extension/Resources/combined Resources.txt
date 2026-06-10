@@ -44,7 +44,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Colors.xaml
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Colors v2.0
+         AnonGee BIM Tools — Colors v3.0
          Brand: Vivid Red (#E02020), Charcoal Black (#141414), Silver Steel (#C0C8D8)
          ════════════════════════════════════════════════════════════════ -->
 
@@ -200,7 +200,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Colors.xaml
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Colors v2.0
+         AnonGee BIM Tools — Colors v3.0
          Brand: Vivid Red (#E02020), Charcoal Black (#141414), Silver Steel (#C0C8D8)
          ════════════════════════════════════════════════════════════════ -->
 
@@ -314,7 +314,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Controls.xaml
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Controls v2.0
+         AnonGee BIM Tools — Controls v3.0
          Button, TextBox, ComboBox styles
          ════════════════════════════════════════════════════════════════ -->
 
@@ -747,7 +747,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Icons.xaml
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Icons v2.0
+         AnonGee BIM Tools — Icons v3.0
          Lucide Icons (MIT) — stroke width 1.5px
          ════════════════════════════════════════════════════════════════ -->
 
@@ -884,7 +884,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Panels.xaml
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Panels v2.0
+         AnonGee BIM Tools — Panels v3.0
          Window templates, dockable panels, dialogs, group boxes
          ════════════════════════════════════════════════════════════════ -->
 
@@ -1082,7 +1082,7 @@ FULL PATH: D:/ZAID/AI/pyRevit addons/pyZaid.extension/Resources\Typography.xaml
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Typography v2.0
+         AnonGee BIM Tools — Typography v3.0
          Fonts: Inter (Sans), JetBrains Mono (Code)
          ════════════════════════════════════════════════════════════════ -->
 

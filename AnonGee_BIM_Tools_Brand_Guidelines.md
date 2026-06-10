@@ -1,78 +1,121 @@
 # AnonGee BIM Tools
-## Brand & UI Guidelines
+## Brand & Design System
 
-> **Version 2.0** · June 2026 · Confidential — Internal Reference
+> **Version 3.0** · June 2026 · Confidential — Internal Reference
+> Supersedes v2.0. Palette unchanged; document restructured to design-system standard and reconciled with the shipping `pyZaid.extension` codebase.
+
+---
+
+## How to read this document
+
+This is a **design system specification**, not a style suggestion. It is the single source of truth for every interface, document, and message produced under the AnonGee BIM Tools name. It is organized in three layers, mirroring how the system is actually built in code:
+
+1. **Foundations** (§3–§7) — the primitives: color, type, space, motion, iconography, voice. These never change per-tool.
+2. **Components** (§8–§9) — the assembled controls and patterns built from foundations.
+3. **Delivery** (§10–§15) — how the system ships inside pyRevit, who it serves, and how it is governed.
+
+Every visual value in this document maps to a named token in `pyZaid.extension/Resources/`. **Tokens are authoritative; this prose describes them.** Where a number here and a number in code disagree, the code wins and this document is wrong — file it as a defect (§15.4).
 
 ---
 
 ## Table of Contents
 
+**Foundations**
 1. [Brand Identity](#1-brand-identity)
 2. [Logo & Wordmark](#2-logo--wordmark)
 3. [Color System](#3-color-system)
 4. [Typography](#4-typography)
-5. [Spacing & Layout](#5-spacing--layout)
-6. [Iconography](#6-iconography)
-7. [Voice & Tone](#7-voice--tone)
-8. [UI Component Guidelines](#8-ui-component-guidelines)
-9. [Document & Report Standards](#9-document--report-standards)
-10. [Brand Don'ts](#10-brand-donts)
-11. [WPF UI Template Guidelines](#11-wpf-ui-template-guidelines)
-12. [Appendix — Token References](#12-appendix--token-references)
+5. [Spacing, Layout & Density](#5-spacing-layout--density)
+6. [Motion & Interaction](#6-motion--interaction)
+7. [Iconography](#7-iconography)
+
+**Components & Voice**
+8. [Voice & Tone](#8-voice--tone)
+9. [UI Component Guidelines](#9-ui-component-guidelines)
+
+**Quality & Delivery**
+10. [Accessibility Standards](#10-accessibility-standards)
+11. [UX & Content Patterns](#11-ux--content-patterns)
+12. [pyRevit Delivery Standards](#12-pyrevit-delivery-standards)
+13. [Design Tokens & Theme Architecture](#13-design-tokens--theme-architecture)
+14. [Audience Profiles](#14-audience-profiles)
+15. [Governance & Contribution](#15-governance--contribution)
+16. [Document & Report Standards](#16-document--report-standards)
+17. [Brand Don'ts](#17-brand-donts)
+18. [Appendix — Token Reference](#18-appendix--token-reference)
 
 ---
 
 ## 1. Brand Identity
 
-**AnonGee BIM Tools** is a professional suite of structural and architectural BIM automation tools engineered for Autodesk Revit. The product line integrates AI-powered workflows, pyRevit scripting, and model context protocols to deliver precision tooling for the modern BIM professional.
+**AnonGee BIM Tools** is a professional suite of structural and architectural BIM automation tools engineered for Autodesk **Revit 2025**, delivered through **pyRevit 6.10.0**. The suite combines AI-assisted workflows, pyRevit scripting, and model-context tooling to give the modern BIM professional precision automation that behaves like native, engineered software — not a collection of macros.
 
-The brand is built on three core principles:
+### 1.1 Brand Principles
 
-**Precision.** Every output is exact, traceable, and repeatable. The brand never overpromises or speaks loosely about technical outcomes.
+These three principles govern *what the brand says*.
 
-**Authority.** AnonGee BIM Tools is the work of a practitioner. The visual language and tone reflect deep domain expertise — not generic software aesthetics.
+**Precision.** Every output is exact, traceable, and repeatable. The brand never overpromises or speaks loosely about technical outcomes. Counts are reported. Failures are named.
 
-**Clarity.** Complex workflows are made intelligible. The UI, documentation, and messaging strip away noise and surface what matters.
+**Authority.** AnonGee BIM Tools is the work of a practitioner. The visual language and tone reflect deep domain expertise — not generic SaaS aesthetics.
 
-### Brand Positioning Statement
+**Clarity.** Complex workflows are made intelligible. The UI, documentation, and messaging strip away noise and surface what matters first.
 
-> *Professional-grade BIM automation, engineered for structural precision.*
+### 1.2 Design Principles
 
-### Brand Hierarchy
+These four principles govern *how the product behaves*. They resolve disputes when guidelines conflict.
+
+| Principle | Meaning | In practice |
+|---|---|---|
+| **Native, not novel** | Tools should feel like a deliberate extension of Revit, not a foreign app. | Honor Revit's modal/docking conventions; never fight the host window manager. |
+| **Density with breathing room** | Engineers work with dense data; respect their screen but never crowd. | Default density is compact (§5.4); whitespace separates *regions*, not every row. |
+| **State is always visible** | The user must never wonder what the tool is doing. | Every long operation shows progress; disabled controls stay visible, never hidden. |
+| **Fail loud, fail useful** | Errors are surfaced immediately with a next action. | Error copy states what failed, why, and what to do (§8.2). |
+
+### 1.3 Brand Hierarchy
 
 | Level | Name | Description |
 |---|---|---|
 | Parent | **AnonGee** | The practitioner identity and studio name |
-| Suite | **AnonGee BIM Tools** | The full product suite |
-| Products | **AnonGee · [Product Name]** | Individual tools within the suite |
+| Suite | **AnonGee BIM Tools** | The full product suite (the Revit ribbon tab) |
+| Products | **AnonGee · [Tool Name]** | Individual tools (pyRevit pushbuttons) within the suite |
+
+> **Note — ribbon identifier.** The extension currently ships its ribbon tab as `pyZaid.tab` (folder `pyZaid.extension`). This is the legacy internal identifier. Public-facing surfaces — window titles, splash, documentation — use the **AnonGee BIM Tools** brand. Reconciling the ribbon tab label to the brand is tracked as a governance item (§15.4).
 
 ---
 
 ## 2. Logo & Wordmark
 
-### Primary Wordmark
+### 2.1 Primary Wordmark
 
 ```
 AnonGee BIM Tools
 ```
 
-### Construction Rules
+### 2.2 Construction Rules
 
 - **AnonGee** — Title case only. Never `ANONGEE`, `anongee`, or `Anon Gee`.
 - **BIM** — Always uppercase; it is an established industry acronym.
 - **Tools** — Title case.
-- The wordmark is always set in **Inter SemiBold** when rendered in digital contexts.
+- The wordmark is set in **Inter SemiBold** in all digital contexts.
 
-### Sub-Product Naming Convention
+### 2.3 Sub-Product Naming Convention
 
-The **·** (middle dot, U+00B7) is the canonical separator between the brand name and product name. It must be surrounded by a single space on each side.
+The **·** (middle dot, U+00B7) is the canonical separator between the brand name and tool name, with one space on each side.
 
-| Product | Full Display Name |
+| Tool (shipping) | Full Display Name |
 |---|---|
-| Revit MCP Bridge | AnonGee · Revit MCP Bridge |
-| Future products | AnonGee · [Product Name] |
+| BIM Generation | AnonGee · BIM Generation |
+| CAD Generation | AnonGee · CAD Generation |
+| Filter Parameter | AnonGee · Filter Parameter |
+| Parameter Combination | AnonGee · Parameter Combination |
+| Export Schedule | AnonGee · Export Schedule |
+| Obscured Rebar | AnonGee · Obscured Rebar |
+| Copy Rebar Visibility | AnonGee · Copy Rebar Visibility |
+| BBS Generator *(beta)* | AnonGee · BBS Generator |
 
-### Wordmark on Color
+A window's title bar shows the full display name; the header version badge shows the tool's semantic version (e.g. `v1.2`).
+
+### 2.4 Wordmark on Color
 
 | Background | Wordmark Color |
 |---|---|
@@ -85,51 +128,74 @@ The **·** (middle dot, U+00B7) is the canonical separator between the brand nam
 
 ## 3. Color System
 
-The AnonGee BIM Tools palette is built on three brand colors: **Vivid Red** as the primary action and identity color, **Charcoal Black** as the structural foundation, and **Silver Steel** as the precision complement. Supporting neutrals and semantic colors extend the system for UI state management.
+The palette is **unchanged from v2.0** and is fixed. It is built on three brand colors — **Vivid Red** (primary action/identity), **Charcoal Black** (structural foundation), **Silver Steel** (precision complement) — extended by neutrals, semantic states, and the interaction (hover/pressed) variants that the codebase already ships.
 
 ### 3.1 Brand Colors
 
-| Name | Hex | Role |
-|---|---|---|
-| **Vivid Red** | `#E02020` | Primary brand color. CTAs, active states, key highlights, accent bars. |
-| **Charcoal Black** | `#141414` | Structural foundation. Headers, dark surfaces, primary text. |
-| **Silver Steel** | `#C0C8D8` | Precision complement. Borders, dividers, secondary UI elements, icons on dark backgrounds. |
+| Name | Hex | Token | Role |
+|---|---|---|---|
+| **Vivid Red** | `#E02020` | `ColorVividRed` | Primary brand color. CTAs, active states, key highlights, accent rules. |
+| **Charcoal Black** | `#141414` | `ColorCharcoalBlack` | Structural foundation. Headers, dark surfaces, primary text. |
+| **Silver Steel** | `#C0C8D8` | `ColorSilverSteel` | Precision complement. Borders, dividers, secondary UI, icons on dark. |
 
-### 3.2 Extended Palette
+### 3.2 Surface & Text Neutrals
 
-| Name | Hex | Role |
-|---|---|---|
-| **Pure White** | `#FFFFFF` | Primary page canvas, card surfaces. |
-| **Off White** | `#F4F4F6` | Subtle background tinting, alternating rows. |
-| **Mid Grey** | `#6B7280` | Secondary body text, metadata, placeholders. |
-| **Light Border** | `#E2E4EA` | Dividers, input borders, card outlines on white. |
+| Name | Hex | Token | Role |
+|---|---|---|---|
+| **Pure White** | `#FFFFFF` | `ColorPureWhite` | Page canvas, card surfaces. |
+| **Off White** | `#F4F4F6` | `ColorOffWhite` | Subtle background tint, footers, alternating rows. |
+| **Mid Grey** | `#6B7280` | `ColorMidGrey` | Secondary/body text, metadata, placeholders. |
+| **Light Border** | `#E2E4EA` | `ColorLightBorder` | Dividers, input borders, card outlines on white. |
 
 ### 3.3 Semantic / State Colors
 
-These colors are reserved exclusively for system feedback. They are never used decoratively.
+Reserved exclusively for system feedback — never decorative.
 
-| Name | Hex | Use |
+| Name | Hex | Token | Use |
+|---|---|---|---|
+| **Success Green** | `#16A34A` | `ColorSuccessGreen` | Completed operations, valid states. |
+| **Caution Amber** | `#D97706` | `ColorCautionAmber` | Warnings, beta labels, non-critical notices. |
+| **Error Red** | `#DC2626` | `ColorErrorRed` | Failures, destructive actions, invalid input. **Distinct from Vivid Red — never substitute.** |
+| **Info Blue** | `#2563EB` | `ColorInfoBlue` | Informational notices only. |
+
+### 3.4 Interaction Variants
+
+These ship in `Colors.xaml` so hover/pressed/disabled states are never improvised. **Do not hand-mix new shades** — use these tokens.
+
+| Name | Hex | Token | Use |
+|---|---|---|---|
+| Vivid Red — Hover | `#C41A1A` | `ColorVividRedHover` | Primary button hover. |
+| Vivid Red — Pressed | `#A81515` | `ColorVividRedPressed` | Primary/danger pressed. |
+| Vivid Red — 10% | `#1AE02020` | `ColorVividRed10` | Secondary (outline) hover fill, very light red tint. |
+| Error Red — Hover | `#B91C1C` | `ColorErrorRedHover` | Danger button hover. |
+| Off White — Hover | `#E8E8EC` | `ColorOffWhiteHover` | Ghost/neutral hover fill. |
+
+### 3.5 Surface-Specific Tints
+
+Used in tables, badges, and selection states. These are intentionally not part of the core palette and appear only in the components that define them.
+
+| Context | Hex | Where |
 |---|---|---|
-| **Success Green** | `#16A34A` | Completed operations, valid states. |
-| **Caution Amber** | `#D97706` | Warnings, beta labels, non-critical notices. |
-| **Error Red** | `#DC2626` | Failures, destructive actions, invalid inputs. Note: distinct from Vivid Red — do not substitute. |
-| **Info Blue** | `#2563EB` | Informational notices only. |
+| Table row hover | `#FDECEA` | `BrushTableRowHover` |
+| Selected row / secondary surface | `#FEF2F2` | `BrushTableRowSelected` |
+| Success badge bg / text | `#DCFCE7` / `#15803D` | Status badges (§9.5) |
+| Warning badge bg / text | `#FEF9C3` / `#92400E` | Status badges |
+| Error badge bg / text | `#FEE2E2` / `#991B1B` | Status badges |
+| Info badge bg / text | `#DBEAFE` / `#1D4ED8` | Status badges |
 
-### 3.4 Color Hierarchy in Practice
+### 3.6 Color Hierarchy in Practice
 
-The three brand colors carry a deliberate hierarchy in every interface:
+1. **Vivid Red** carries the most visual weight. Reserve it for the single most important action or identity element per screen — the primary button, the active tab indicator, the accent rule. Do not scatter it.
+2. **Charcoal Black** grounds the layout: headers, window chrome, primary text. Authoritative, not oppressive — balance it with whitespace.
+3. **Silver Steel** operates quietly: borders, dividers, secondary icons, subtle surfaces. It defines structure without demanding attention.
 
-1. **Vivid Red** commands the most visual weight. Reserve it for the single most important action or identity element on a given screen — a primary button, an active tab indicator, or an accent bar. Do not scatter it.
-2. **Charcoal Black** grounds the layout. It is the color of headers, window chrome, and primary text. It should feel authoritative, not oppressive — use white space to balance it.
-3. **Silver Steel** operates quietly. It defines structure without demanding attention: borders, dividers, secondary icons, and subtle UI surfaces.
+### 3.7 Color Usage Rules
 
-### 3.5 Color Usage Rules
-
-- Never place Vivid Red text on Charcoal Black backgrounds — the contrast ratio is insufficient for body text (use white text instead).
-- Vivid Red may be used as a background only when paired with white text at sizes of 14px / 11pt or larger.
-- Silver Steel must never be used as text color on white backgrounds — it fails WCAG AA contrast requirements at small sizes.
-- Semantic colors (Success, Caution, Error, Info) are never substituted for brand colors in UI design.
-- No off-palette colors are permitted in any designed output without explicit approval.
+- Never set Vivid Red text on Charcoal Black — contrast is insufficient for body text; use white.
+- Vivid Red as a background requires white text at **≥14px / 11pt** (it passes WCAG AA for normal text at 4.78:1 — see §10).
+- **Silver Steel is never text on white** (1.68:1 — fails AA). It is a border / dark-surface color only.
+- Semantic colors are never substituted for brand colors, and the reverse.
+- No off-palette colors in any designed output without versioned approval (§15).
 
 ---
 
@@ -137,101 +203,165 @@ The three brand colors carry a deliberate hierarchy in every interface:
 
 ### 4.1 Typeface Stack
 
-| Role | Primary | WPF Fallback |
-|---|---|---|
-| UI & Body | **Inter** | Segoe UI → Arial → sans-serif |
-| Code & Technical Output | **JetBrains Mono** | Consolas → Courier New → monospace |
+| Role | Primary | WPF Fallback chain | Token |
+|---|---|---|---|
+| UI & Body | **Inter** | `Inter, Segoe UI, Arial` | `FontSans` |
+| Code & Technical Output | **JetBrains Mono** | `JetBrains Mono, Consolas, Courier New` | `FontMono` |
 
-Inter and JetBrains Mono are open-source typefaces available at [fonts.google.com](https://fonts.google.com). Both must be embedded or confirmed available in any distributed tool.
+Inter and JetBrains Mono are open-source ([fonts.google.com](https://fonts.google.com)). Because pyRevit tools run inside Revit's process, **do not assume the fonts are installed** — the fallback chain guarantees a graceful degrade to Segoe UI / Consolas, which are present on every Revit 2025 host. Embedding is optional; the fallback is mandatory.
 
 ### 4.2 Type Scale
 
-| Level | Size (Web) | WPF Units | Weight | Letter-spacing | Usage |
-|---|---|---|---|---|---|
-| Display | 36px | 27 | 700 Bold | −0.5px | Marketing headers, splash screens |
-| H1 | 28px | 21 | 700 Bold | −0.3px | Window titles, primary page headings |
-| H2 | 22px | 16.5 | 600 SemiBold | −0.2px | Section headings |
-| H3 | 16px | 12 | 600 SemiBold | 0 | Panel/group headings, card titles |
-| H4 | 14px | 10.5 | 500 Medium | 0 | Sub-section labels |
-| Body | 14px | 10.5 | 400 Regular | 0 | General prose, form labels |
-| Body Small | 12px | 9 | 400 Regular | 0 | Compact list items, secondary content |
-| Caption | 11px | 8.25 | 400 Regular | +0.1px | Metadata, footnotes, timestamps |
-| Code | 12px | 9 | 400 Regular | 0 | All code and technical output |
+WPF device-independent units are **authoritative** (this is a WPF toolkit). The px column is the web / design-tool equivalent.
+
+| Level | WPF | ≈ px | Weight | Letter-spacing | Token | Usage |
+|---|---|---|---|---|---|---|
+| Display | 27 | 36 | Bold | −0.5px | — | Splash / marketing only |
+| H1 | 21 | 28 | Bold | −0.3px | `FontSizeH1` | Window titles, primary headings |
+| H2 | 16.5 | 22 | SemiBold | −0.2px | `FontSizeH2` | Section headings |
+| H3 | 12 | 16 | SemiBold | 0 | `FontSizeH3` | Panel/group headings, card titles |
+| H4 | 10.5 | 14 | Medium | 0 | `FontSizeH4` | Sub-section labels |
+| Body | 10.5 | 14 | Regular | 0 | `FontSizeBody` | Prose, form labels |
+| Body Small | 9 | 12 | Regular | 0 | `FontSizeSmall` | Compact lists, secondary content |
+| Caption | 9 | 12 | Regular | +0.1px | `FontSizeCaption` | Metadata, footnotes, timestamps, badges |
+| Code | 9 | 12 | Regular | 0 | `FontSizeCode` | All code & technical output |
+
+> **Reconciliation note.** v2.0 prose listed Caption at 8.25 WPF; the shipping `Typography.xaml` uses **9**. Code is authoritative — Caption and Body Small are both `9`.
 
 ### 4.3 Line Heights
 
-| Context | Line Height |
+| Context | Line Height (WPF) |
 |---|---|
-| Display / H1 | 1.2 |
-| H2 / H3 | 1.3 |
-| Body | 1.65 |
-| Code | 1.55 |
-| Caption | 1.4 |
+| H1 | 26 |
+| H2 / H3 | auto |
+| Body | 17 |
+| Code | 14 |
 
-### 4.4 Typography Rules
+### 4.4 Named Text Styles
 
-- **Headings are always Charcoal Black** on light surfaces. Never use Vivid Red for heading text in UI.
-- **Body text is Mid Grey** (`#6B7280`) on white backgrounds — not pure black. Pure black body text reads as harsh on white.
-- **Code output is always monospace.** Never render API responses, element IDs, parameter names, or script output in a proportional font.
-- **All-caps is reserved for badge/label text** (e.g., `BETA`, `ERROR`, `v2.1`) set at Caption size with +0.08em letter-spacing. Never use all-caps for headings or prose.
+These `TextBlock` styles exist in `Typography.xaml`; reference them — do not set font properties inline.
+
+| Style key | Maps to | On-dark variant |
+|---|---|---|
+| `TextH1` | H1, Charcoal Black | — |
+| `TextH2` | H2, Charcoal Black | `TextH2OnDark` (white) |
+| `TextH3` | H3, Charcoal Black | `TextH3OnDark` (Silver Steel) |
+| `TextH4` | H4, Charcoal Black | — |
+| `TextBody` | Body, Mid Grey, wraps | `TextBodyOnDark` (Silver Steel) |
+| `TextSmall` | Body Small, Mid Grey | — |
+| `TextCaption` | Caption, Mid Grey | — |
+| `TextCode` | Mono on Charcoal Black, Silver Steel text | — |
+| `TextError` | Caption-size, Error Red, 4px top margin | — |
+
+### 4.5 Typography Rules
+
+- **Headings are Charcoal Black** on light surfaces — never Vivid Red.
+- **Body text is Mid Grey** (`#6B7280`) on white, not pure black.
+- **All technical output is monospace** — element IDs, parameter names, file paths, API responses, script logs. Never proportional.
+- **All-caps is reserved for badges** (`BETA`, `ERROR`, `v1.2`) at Caption size with positive letter-spacing. Never for headings or prose.
 
 ---
 
-## 5. Spacing & Layout
+## 5. Spacing, Layout & Density
 
 ### 5.1 Base Unit
 
-All spacing in AnonGee BIM Tools interfaces is derived from a **base unit of 8px** (WPF: 8 device-independent units). Every margin, padding, and gap value must be a whole multiple of 8.
+All spacing derives from an **8px base unit** (WPF: 8 units). Every margin, padding, and gap is a whole multiple of 8, with a single 4px half-step for tight inline pairs.
 
-| Token | Value | WPF | Typical Use |
+| Token | Value | WPF | Typical use |
 |---|---|---|---|
 | `space-xs` | 4px | 4 | Icon-to-label gap, tight inline pairs |
-| `space-sm` | 8px | 8 | Component internal padding (compact) |
+| `space-sm` | 8px | 8 | Compact internal padding |
 | `space-md` | 16px | 16 | Standard component padding |
-| `space-lg` | 24px | 24 | Between related sibling elements |
+| `space-lg` | 24px | 24 | Between related sibling groups |
 | `space-xl` | 32px | 32 | Between sections within a panel |
 | `space-2xl` | 48px | 48 | Between major layout regions |
-| `space-3xl` | 64px | 64 | Page-level top/bottom breathing room |
+| `space-3xl` | 64px | 64 | Page-level breathing room |
 
 ### 5.2 Border Radius
 
-| Context | Radius |
-|---|---|
-| Buttons | 5px |
-| Text inputs, ComboBoxes | 5px |
-| Cards, panels, GroupBoxes | 8px |
-| Badges, chips, status tags | 3px |
-| Dialogs, modal windows | 10px |
-| Tooltips | 4px |
+| Context | Radius | Token tier |
+|---|---|---|
+| Badges, chips, checkboxes | 3px | `radius-sm` |
+| Buttons, inputs, ComboBoxes, list items | 5px | `radius-md` |
+| Cards, panels, GroupBoxes (popups 6px) | 8px | `radius-lg` |
+| Dialogs, modal windows | 10px | `radius-xl` |
 
-### 5.3 Elevation (Shadow)
+### 5.3 Elevation
 
-Elevation is used sparingly to establish hierarchy, not decoration.
+Elevation establishes hierarchy, not decoration. Resources `ElevationLevel0`–`ElevationLevel3` ship in `Controls.xaml`.
 
 | Level | Usage | Shadow |
 |---|---|---|
-| 0 | Flat surfaces, inline elements | None |
-| 1 | Cards, panels sitting on the canvas | `0 1px 3px rgba(0,0,0,0.10)` |
-| 2 | Dropdowns, popovers | `0 4px 12px rgba(0,0,0,0.14)` |
-| 3 | Dialogs, modal windows | `0 8px 24px rgba(0,0,0,0.18)` |
+| 0 | Flat / inline | None |
+| 1 | Cards on canvas | `0 1px 3px rgba(0,0,0,0.10)` — **prefer a Light Border stroke over a shadow** |
+| 2 | Dropdowns, popovers, elevated cards | `0 4px 12px rgba(0,0,0,0.14)` |
+| 3 | Dialogs, modals | `0 8px 24px rgba(0,0,0,0.18)` |
 
-In WPF, use `DropShadowEffect` only at Levels 2 and 3. Level 1 should be simulated with a `Border` stroke in `Light Border` (`#E2E4EA`).
+In WPF, use `DropShadowEffect` only at Levels 2–3. Level 1 is simulated with a `BrushLightBorder` stroke (`CardBorder` style) for crisp rendering inside Revit.
+
+### 5.4 Density
+
+Revit users work on dense models; the default is **compact**. Density is expressed through control height and padding, never by shrinking the type scale below the §4.2 tokens.
+
+| Mode | Control height | Row padding | When |
+|---|---|---|---|
+| **Compact** *(default)* | 28px | `8,6` | Dockable panels, data lists, parameter tables |
+| **Comfortable** | 36px | `10,8` | Standard tool windows and dialogs |
+
+- Buttons and inputs default to **36px** (`Comfortable`) in dialogs; list items and checkboxes default to **28px** (`Compact`).
+- Never mix densities within one region. A dialog action bar is uniformly comfortable; a parameter grid is uniformly compact.
+
+### 5.5 Layout Constraints
+
+| Surface | Width rule | Resize |
+|---|---|---|
+| Standard tool window | Explicit `Width` (typ. 480–560), `SizeToContent="Height"` | `NoResize` unless content is variable-length |
+| Dialog / modal | Fixed `Width` 480, `SizeToContent="Height"` | `NoResize`, always `CenterOwner` |
+| Dockable panel | `MinWidth=240`, `MaxWidth=360`, single column | Host-managed |
 
 ---
 
-## 6. Iconography
+## 6. Motion & Interaction
 
-### 6.1 Icon Library
+Motion in AnonGee BIM Tools is **functional, not expressive**. It communicates state change and spatial relationship — nothing more. A structural engineer should never wait on an animation.
 
-**Lucide Icons** is the canonical icon library for all AnonGee BIM Tools interfaces. It is open-source (MIT licensed), consistent in geometry, and available as SVG paths suitable for WPF `Geometry` resources.
+### 6.1 Duration Tokens
 
-- Stroke weight: **1.5px** (do not deviate)
-- Default icon size: **16px / 12 WPF units** (inline/compact), **20px / 15 WPF units** (standard UI), **24px / 18 WPF units** (feature-level)
-- Icons must always be accompanied by a visible text label in interactive controls. Icon-only buttons require a `ToolTip`.
+| Token | Duration | Use |
+|---|---|---|
+| `motion-instant` | 0ms | Changes that must feel immediate (checkbox tick, selection) |
+| `motion-fast` | 120ms | Hover/pressed color transitions, button feedback |
+| `motion-standard` | 200ms | Popups, dropdown open/close, expander toggle |
+| `motion-slow` | 300ms | Dialog/window fade-in (use sparingly) |
 
-### 6.2 Icon Color Rules
+### 6.2 Easing
 
-| Surface | Icon Color |
+- **Standard easing:** `CubicEase, EaseOut` for entrances; `EaseInOut` for moves. In WPF: `<CubicEase EasingMode="EaseOut"/>`.
+- ComboBox popups use the built-in `PopupAnimation="Slide"` (already set in `InputComboBox`).
+- No bounce, no overshoot, no spin. Loading uses a determinate progress bar where possible (§11.3); an indeterminate bar only when total work is genuinely unknown.
+
+### 6.3 Rules
+
+- Color-only transitions (hover/press) may animate at `motion-fast`; everything structural stays ≤ `motion-standard`.
+- **Never animate** a value the user is reading (counts, results, table data) — it appears instantly.
+- Animations must never block the Revit UI thread. Long operations report via progress, not motion.
+
+---
+
+## 7. Iconography
+
+### 7.1 Icon Library
+
+**Lucide Icons** (MIT) is the canonical library. Icons ship as `Geometry` resources in `Icons.xaml` and are drawn with `Path`.
+
+- Stroke weight: **1.5px** (do not deviate).
+- Sizes: **16px / 12u** inline, **20px / 15u** standard, **24px / 18u** feature-level.
+- Icons in interactive controls always carry a visible text label; icon-only buttons require a `ToolTip`.
+
+### 7.2 Icon Color Rules
+
+| Surface | Icon color |
 |---|---|
 | White / light panel | Charcoal Black `#141414` |
 | Charcoal Black header | White `#FFFFFF` or Silver Steel `#C0C8D8` |
@@ -239,197 +369,343 @@ In WPF, use `DropShadowEffect` only at Levels 2 and 3. Level 1 should be simulat
 | Disabled state | Silver Steel `#C0C8D8` |
 | Active / selected state | Vivid Red `#E02020` |
 
-### 6.3 BIM & Revit Icon Mapping
+### 7.3 Shipping Icon Set
 
-| Action / Concept | Lucide Icon Key |
-|---|---|
-| Open Revit model | `folder-open` |
-| Export (IFC, DWG, PDF) | `download` |
-| Run pyRevit script | `play-circle` |
-| Structural element | `layers` |
-| Parameter / property | `sliders` |
-| AI / MCP connection | `zap` |
-| Grid / axis | `grid` |
-| View management | `layout` |
-| Warning / beta feature | `alert-triangle` |
-| Success / complete | `check-circle` |
-| Error / failure | `x-circle` |
-| Settings / configuration | `settings` |
-| Log / output | `terminal` |
+These geometry keys exist in `Icons.xaml`. Use them by key; add new icons only from Lucide and only via PR (§15).
+
+| Concept | Geometry key | Concept | Geometry key |
+|---|---|---|---|
+| Checkmark (inline) | `IconCheck` | Settings | `IconSettings` |
+| Success / complete | `IconCheckCircle` | Log / output / terminal | `IconTerminal` |
+| Error / failure | `IconXCircle` | Processing / analysis | `IconCpu` |
+| Warning / beta | `IconAlertTriangle` | Information | `IconInfo` |
+| Open Revit model | `IconFolderOpen` | Sync / reload | `IconRefresh` |
+| Export (IFC/DWG/PDF) | `IconDownload` | Find / search | `IconSearch` |
+| Run script | `IconPlayCircle` | Next / proceed | `IconArrowRight` |
+| Structural element | `IconLayers` | Dismiss / close | `IconClose` |
+| Parameter / property | `IconSliders` | Add | `IconPlus` |
+| AI / MCP connection | `IconZap` | Remove | `IconMinus` |
+| Grid / axis | `IconGrid` | Expand / dropdown | `IconChevronDown` |
+| View management | `IconLayout` | Copy to clipboard | `IconCopy` |
+
+### 7.4 Ribbon (PNG) Icons
+
+pyRevit ribbon buttons require raster `icon.png` (32×32 base; provide `icon.dark.png` if a dark-ribbon variant is needed). These are distinct from the in-window vector icons:
+
+- Drawn from the same Lucide geometry, exported at 32×32 and 64×64 (HiDPI).
+- Stroke-based, Charcoal Black on transparent; the active tool may use a single Vivid Red accent stroke.
+- No photographic content, no gradients, no drop shadows on ribbon icons.
 
 ---
 
-## 7. Voice & Tone
+## 8. Voice & Tone
 
-AnonGee BIM Tools communicates with the confidence of a senior BIM engineer: precise, direct, and technically fluent. The voice never hedges, never inflates, and never condescends.
+AnonGee BIM Tools communicates with the confidence of a senior BIM engineer: precise, direct, technically fluent. The voice never hedges, inflates, or condescends.
 
-### 7.1 Core Principles
+### 8.1 Core Principles
 
 | Principle | Correct | Incorrect |
 |---|---|---|
-| **Precision** | "Placed 14 structural columns on Grid A at levels 1–5." | "Added some columns to the model." |
-| **Directness** | "Export failed. Check that the target directory exists and is writable." | "Hmm, something went wrong with your export!" |
-| **Concision** | "Export complete. 3 files written to C:\Output." | "Your export has been completed successfully and your files have been saved!" |
-| **Authority** | "Running pyRevit script: PlaceColumns_v2.py" | "Trying to run the script now, please wait…" |
+| **Precision** | "Placed 14 structural columns on Grid A, levels 1–5." | "Added some columns to the model." |
+| **Directness** | "Export failed. Target directory does not exist." | "Hmm, something went wrong with your export!" |
+| **Concision** | "Export complete. 3 files written to C:\Output." | "Your export has been completed successfully!" |
+| **Authority** | "Running PlaceColumns_v2." | "Trying to run the script now, please wait…" |
 | **Neutrality** | "Warning: 2 elements skipped — unsupported type 'GenericModel'." | "Oops! We couldn't handle those elements." |
 
-### 7.2 Writing Standards
+### 8.2 The Error Message Contract
 
-- Use **active voice** in all UI copy, documentation, and error messages.
-- Industry terms — Revit, IFC, BIM, MCP, IDA, API — are always capitalized correctly. Never lowercase them.
-- Product names are always written in full on first reference: **AnonGee BIM Tools**, not "the tools" or "AGT".
-- Avoid filler qualifiers: *just*, *simply*, *easily*, *quickly*, *basically*, *kind of*.
-- **Error messages** must state: (1) what failed, (2) why it failed if determinable, (3) what the user should do next.
-- **Success messages** are brief and factual. They confirm the outcome; they do not celebrate it.
-- Never use exclamation marks in system messages, log output, or error dialogs.
+Every error message states three things, in order:
 
-### 7.3 Terminology Standards
+1. **What failed** — the operation, named.
+2. **Why** — the cause, if determinable.
+3. **What next** — the user's corrective action.
 
-| Use | Do Not Use |
+> *"Schedule export failed. The file `BBS_Level3.xlsx` is open in another application. Close it and run the export again."*
+
+### 8.3 Writing Standards
+
+- **Active voice** everywhere.
+- Industry terms — Revit, IFC, BIM, MCP, API, IronPython, CPython — are always capitalized correctly.
+- Tool names are written in full on first reference: **AnonGee · Export Schedule**, not "the export tool."
+- Avoid filler qualifiers: *just, simply, easily, quickly, basically*.
+- Success messages confirm; they do not celebrate. **No exclamation marks** in system messages, logs, or dialogs.
+
+### 8.4 Terminology
+
+| Use | Do not use |
 |---|---|
-| Revit model | "file", "project file" (in UI copy) |
+| Revit model | "file", "project file" |
 | Element | "object", "thing", "item" |
 | Parameter | "field", "property" (in Revit context) |
 | Export | "save as", "output to" |
-| Script | "macro", "program" |
-| AnonGee · Revit MCP Bridge | "the bridge", "MCP tool" |
+| Script / tool | "macro", "program" |
 
 ---
 
-## 8. UI Component Guidelines
+## 9. UI Component Guidelines
 
-### 8.1 Buttons
+Every component below is implemented as a named style in `Controls.xaml` / `Panels.xaml`. Each spec includes the **state matrix** — the system's contract for default → hover → pressed → focus → disabled.
 
-Buttons follow a strict visual hierarchy. Only one Primary button should appear per view or dialog.
+### 9.1 Buttons
 
-| Variant | Background | Text | Border | Use |
+Strict hierarchy. **One Primary button per view or dialog.**
+
+| Variant | Style key | Background | Text | Border |
 |---|---|---|---|---|
-| **Primary** | Vivid Red `#E02020` | White | None | Single dominant action per screen |
-| **Secondary** | White | Vivid Red `#E02020` | 1.5px Vivid Red | Supporting actions |
-| **Neutral** | Off White `#F4F4F6` | Charcoal Black | 1px Light Border | Non-critical actions |
-| **Danger** | `#DC2626` | White | None | Irreversible destructive actions only |
-| **Ghost** | Transparent | Mid Grey `#6B7280` | None | Tertiary, dismiss, cancel |
+| **Primary** | `ButtonPrimary` | Vivid Red | White | none |
+| **Secondary** | `ButtonSecondary` | White | Vivid Red | 1.5px Vivid Red |
+| **Neutral** | `ButtonNeutral` | Off White | Charcoal Black | 1px Light Border |
+| **Danger** | `ButtonDanger` | Error Red | White | none |
+| **Ghost** | `ButtonGhost` | Transparent | Mid Grey | none |
 
-Button sizing:
+All variants derive from `ButtonBaseStyle` (5px radius, 36px height, `FontSans` SemiBold Body, `Cursor=Hand`).
 
-| Size | Height | Padding H | Font Size | Use |
+**State matrix:**
+
+| State | Primary | Secondary | Danger | Ghost / Neutral |
 |---|---|---|---|---|
-| Large | 44px | 20px | 14px | Primary dialog actions |
-| Default | 36px | 16px | 13px | Standard toolbar and panel buttons |
-| Small | 28px | 12px | 12px | Compact controls, inline actions |
+| Hover | bg `ColorVividRedHover` | bg `ColorVividRed10` | bg `ColorErrorRedHover` | bg `ColorOffWhiteHover` / Light Border |
+| Pressed | bg `ColorVividRedPressed` | border + text Pressed | bg `ColorVividRedPressed` | — |
+| Disabled | bg Light Border, text Silver Steel | border + text disabled | bg Light Border | text Silver Steel |
 
-### 8.2 Form Inputs
+**Sizing:**
 
-All inputs share a consistent base style:
+| Size | Height | Padding H | Font | Use |
+|---|---|---|---|---|
+| Large | 44px | 20px | Body | Primary dialog action |
+| Default | 36px | 16px | Body | Standard |
+| Small | 28px | 12px | Body Small | Compact / inline |
 
-- Background: White
-- Border: 1px `#E2E4EA` (Light Border)
-- Border radius: 5px
-- Padding: 8px 10px
-- Font: Inter Regular, Body size
-- Focus border: 1.5px Vivid Red `#E02020`
-- Error border: 1.5px Error Red `#DC2626`
+### 9.2 Text Inputs
 
-Error messages appear as a Caption-size line in Error Red directly below the input. Do not use tooltips or dialog popups for inline validation.
+`InputTextBox` — White bg, 1px Light Border, 5px radius, `10,8` padding, 36px height.
 
-### 8.3 Code & Log Output Blocks
+| State | Border |
+|---|---|
+| Default | 1px Light Border |
+| Focus | 1.5px Vivid Red (`BrushInputFocusBorder`) |
+| Error (`Validation.HasError`) | 1.5px Error Red (`BrushInputErrorBorder`) |
+| Disabled | bg Light Border, text Silver Steel |
 
-All code output, pyRevit results, API responses, and element IDs are rendered in monospace blocks:
+Inline validation only: errors render as a `TextError` line directly below the field (§11.5). Never a `MessageBox` for field-level validation.
 
-- Background: Charcoal Black `#141414`
-- Text: Silver Steel `#C0C8D8`
-- Syntax highlights: Vivid Red (keywords), `#A8D8A8` soft green (strings/values)
-- Padding: 12px 16px
-- Border radius: 5px
-- Always include a language/context label (e.g., `python`, `revit-api`, `log`) above the block.
-- Include a copy-to-clipboard control in the top-right corner.
+### 9.3 ComboBox
 
-### 8.4 Status Badges & Tags
+`InputComboBox` — same base treatment as TextBox, with a custom chevron and a popup using `BrushLightBorder` (1px), 6px radius, white bg, `ElevationLevel2`, `PopupAnimation="Slide"`, `MaxHeight=200`. Focus border is Vivid Red 1.5px.
 
-| Status | Background | Text | Border |
+### 9.4 Selection Controls
+
+| Control | Style key | Selected indicator | Hit target |
 |---|---|---|---|
-| **Success** | `#DCFCE7` | `#15803D` | None |
-| **Warning** | `#FEF9C3` | `#92400E` | None |
-| **Error** | `#FEE2E2` | `#991B1B` | None |
-| **Info** | `#DBEAFE` | `#1D4ED8` | None |
-| **Beta** | Charcoal Black `#141414` | Silver Steel `#C0C8D8` | None |
-| **Active** | Vivid Red `#E02020` | White | None |
+| CheckBox | `InputCheckBox` | 16×16, 3px radius, Vivid Red fill + white tick | ≥28px row |
+| RadioButton | `InputRadioButton` | 16×16 ring, 8px Vivid Red dot | ≥28px row |
+| ListBox | `InputListBox` + `ListBoxItemBase` | hover `BrushTableRowHover`; selected `BrushTableRowSelected` + 3px left Vivid Red border | item padding `8,6` |
 
-Badge text is always set in **uppercase**, Caption size, with +0.04em letter-spacing.
+Hover border on checkboxes is Vivid Red. The whole row is the hit target, not just the box.
 
-### 8.5 Data Tables & Lists
+### 9.5 Status Badges & Tags
 
-- Header row: Charcoal Black background, white text, Inter SemiBold, 12px / 9 WPF units.
-- Alternating rows: White and Off White `#F4F4F6`.
-- Row hover: `#FDECEA` (very light red tint).
-- Selected row: left border 3px Vivid Red, background `#FEF2F2`.
-- Cell padding: 10px vertical, 14px horizontal.
-- Dividers: Light Border `#E2E4EA`, 1px.
+| Status | Background | Text | Token pair |
+|---|---|---|---|
+| Success | `#DCFCE7` | `#15803D` | `BrushSuccessBadge*` |
+| Warning | `#FEF9C3` | `#92400E` | `BrushWarningBadge*` |
+| Error | `#FEE2E2` | `#991B1B` | `BrushErrorBadge*` |
+| Info | `#DBEAFE` | `#1D4ED8` | `BrushInfoBadge*` |
+| Beta | Charcoal Black | Silver Steel | `BrushBetaBadge*` |
+| Active | Vivid Red | White | `BrushActiveBadge*` |
 
----
+Badge text is uppercase, Caption size, 3px radius, positive letter-spacing.
 
-## 9. Document & Report Standards
+### 9.6 Cards & Sections
 
-All AnonGee BIM Tools generated documents — export summaries, model reports, script logs — follow this layout:
+| Element | Style key | Treatment |
+|---|---|---|
+| Card | `CardBorder` | White, 1px Light Border, 8px radius, 16px padding |
+| Elevated card | `CardElevated` | Card + Level-2 shadow |
+| Section group | `SectionGroup` (GroupBox) | White, 1px border, 8px radius, H3 header, `14,12` padding |
+| Divider | `SectionDivider` | 1px Light Border, `0,16` margin |
 
-### Header
+### 9.7 Code & Log Output
 
-- Left: **AnonGee BIM Tools** wordmark in Inter SemiBold, Charcoal Black.
-- Right: Project name or document title in Inter Regular, Mid Grey.
-- Below: Full-width 3px rule in Vivid Red `#E02020`.
+All script output, API responses, and element IDs use the `TextCode` style: Charcoal Black background, Silver Steel text, JetBrains Mono, `16,12` padding, 5px radius. Syntax highlights: Vivid Red (keywords), `#A8D8A8` soft green (strings/values). Label the block with its context (`python`, `revit-api`, `log`) and provide a copy control (`IconCopy`) top-right.
 
-### Body
+### 9.8 Data Tables
 
-- Primary font: Inter Regular, 11pt, Mid Grey `#6B7280`.
-- Headings: Inter SemiBold / Bold, Charcoal Black.
-- Code/data output: JetBrains Mono, 10pt, on Charcoal Black background.
-- Tables follow the Data Tables spec (Section 8.5).
-
-### Footer
-
-- Left: Document classification (e.g., `Internal · Confidential`).
-- Center: Page number.
-- Right: Date generated in `DD MMM YYYY` format.
-- All footer text: Inter Regular, Caption size, Mid Grey.
+- Header row: Charcoal Black bg, white text, Inter SemiBold, `FontSizeH3`.
+- Rows: White / Off White alternating; hover `#FDECEA`; selected `#FEF2F2` with 3px left Vivid Red border.
+- Cell padding: `14,10` (comfortable) or `10,6` (compact, §5.4).
+- Dividers: 1px Light Border.
 
 ---
 
-## 10. Brand Don'ts
+## 10. Accessibility Standards
 
-These rules are non-negotiable across all touchpoints.
+Accessibility is a release gate, not a nicety. Target: **WCAG 2.1 AA** for all UI.
 
-- **Do not** render the wordmark in Vivid Red — it is reserved for accents and CTAs, not the brand name itself.
-- **Do not** use Vivid Red as a large background surface (e.g., full-window fills). It is an accent color; use Charcoal Black for dark surface backgrounds.
-- **Do not** apply more than one semantic state color (Success, Caution, Error, Info) in the same UI region.
-- **Do not** introduce off-palette colors — no blues, purples, or teals — in any tool UI or document without explicit versioned approval.
-- **Do not** use default system button chrome (`Windows`/`Aero` style) in any WPF window. All buttons must apply a named AnonGee style.
-- **Do not** abbreviate the brand to `AGT`, `AG`, or `ABIM` in any public-facing or client-visible material.
-- **Do not** use emoji in professional documentation, log output, dialog messages, or error states.
-- **Do not** set body text in pure black (`#000000`). Use Charcoal Black `#141414` for headings and Mid Grey `#6B7280` for body.
-- **Do not** use Silver Steel as body text on white — it fails WCAG AA at small sizes.
+### 10.1 Contrast Ratios (computed from the palette)
+
+| Foreground / Background | Ratio | AA Normal (4.5) | AA Large (3.0) | Verdict |
+|---|---|---|---|---|
+| Charcoal Black on White | **18.4:1** | ✅ | ✅ | Body & headings |
+| Charcoal Black on Off White | **16.8:1** | ✅ | ✅ | Body on tinted rows |
+| White on Charcoal Black | **18.4:1** | ✅ | ✅ | Header text |
+| Mid Grey on White | **4.83:1** | ✅ | ✅ | Body text (passes) |
+| White on Vivid Red | **4.78:1** | ✅ | ✅ | Primary button label |
+| Vivid Red on White | **4.78:1** | ✅ | ✅ | Secondary button label |
+| Silver Steel on Charcoal Black | **10.96:1** | ✅ | ✅ | Secondary text/icons on dark |
+| **Silver Steel on White** | **1.68:1** | ❌ | ❌ | **Borders/dividers only — never text** |
+
+Consequences baked into the system: Mid Grey (not Silver Steel) is the body-text color on white; white (not Vivid Red) is text on Charcoal; Vivid Red backgrounds require white text at ≥14px.
+
+### 10.2 Focus & Keyboard
+
+- Every interactive control has a **visible focus state** — the 1.5px Vivid Red border on inputs, and a focus visual on buttons. Never remove focus visuals.
+- Tab order follows reading order (top-to-bottom, left-to-right).
+- Dialogs set `IsDefault` on confirm and `IsCancel` on cancel, so Enter / Esc work.
+- Mnemonics: `RecognizesAccessKey="True"` is set on button/checkbox content — provide `_Underscore` access keys on primary actions.
+
+### 10.3 Hit Targets & Disabled States
+
+- Minimum interactive target: **28px** (compact) / **36px** (comfortable). Inline icon buttons get ≥24px padding to a 28px box.
+- Disabled controls stay **visible and non-interactive** (Light Border bg, Silver Steel text). Never use `Visibility="Collapsed"` to express disablement — a control that vanishes destroys spatial memory.
+
+### 10.4 Non-Color Signaling
+
+State is never communicated by color alone. Errors pair Error Red with a message and (where present) `IconAlertTriangle`/`IconXCircle`; success pairs Success Green with `IconCheckCircle`. A red border always accompanies an error message string.
 
 ---
 
-## 11. WPF UI Template Guidelines
+## 11. UX & Content Patterns
 
-All WPF interfaces within the AnonGee BIM Tools suite are styled through a shared `ResourceDictionary` (`AnonGeeTheme.xaml`). This ensures visual consistency across all windows, dockable panels, and dialogs, regardless of which tool they belong to.
+Reusable patterns for the situations every BIM tool hits. Consistency here is what makes the suite feel engineered.
+
+### 11.1 Empty States
+
+When a list or result region has nothing to show, render a centered block: a Silver Steel icon (24px), one H3 line stating the state, one `TextBody` line of guidance, and — if there is an action — a Secondary button.
+
+> *"No parameters selected. Choose one or more parameters above to begin filtering."*
+
+### 11.2 Loading & Long Operations
+
+Revit operations can run for minutes. Never leave the user guessing:
+
+- Operations < ~500ms: no indicator.
+- Operations with known size: **determinate** progress bar + `TextCaption` count ("Processing 142 / 980 elements").
+- Operations of unknown size: **indeterminate** bar + a status line naming the current phase.
+- Disable the triggering button and show its label as the running verb ("Exporting…").
+
+### 11.3 Progress Reporting
+
+Progress bars use Vivid Red on a Light Border track, 4px tall, 3px radius. Pair with a live count in `TextCaption`. Where the operation writes a log, stream meaningful milestones — not every iteration.
+
+### 11.4 Confirmation & Destructive Actions
+
+- Reversible actions: no confirmation.
+- **Irreversible/destructive** actions (delete elements, overwrite files): a dialog with a `ButtonDanger` confirm, a `ButtonGhost` cancel, and copy that names the exact consequence and count.
+- The danger button label is a verb, not "OK" — "Delete 38 elements".
+
+### 11.5 Inline Validation
+
+Validation is inline and immediate (§9.2). On error: set the input border to Error Red and render a `TextError` line beneath. Clear both the instant the input becomes valid. The primary action is disabled while any field is invalid.
+
+### 11.6 Notifications & Results
+
+- Terminal results (export complete, N elements modified) appear as a status line in the footer/action bar or as a result card — factual, with counts and output paths.
+- Use pyRevit's output window (`script.get_output()`) for long, scrollable logs; use in-window status for the one-line outcome.
+- Never use a blocking `TaskDialog` / `MessageBox` for routine success.
 
 ---
 
-### 11.1 ResourceDictionary Architecture
+## 12. pyRevit Delivery Standards
+
+This section is specific to shipping inside **pyRevit 6.10.0 on Revit 2025**. It is where the design system meets the host.
+
+### 12.1 Engine: CPython 3 default, IronPython 2 legacy
+
+- New scripts target **CPython 3** (`#! python3` shebang). Python.NET 3.0+ requires **explicit imports** — never `from Autodesk.Revit.DB import *`.
+- A minority of legacy tools run **IronPython 2**; these are slated for CPython migration. Until migrated, IronPython tools must still consume the same theme tokens.
+- WPF loading is consistent across both engines: add `PresentationFramework`, `PresentationCore`, `WindowsBase`, `System.Xaml`, then `XamlReader.Load()` from a `.xaml` file. This pattern works identically on IronPython 2 and CPython 3 and is the only supported way to build windows.
+
+### 12.2 XAML lives in files, not Python strings
+
+The legacy pattern embedded XAML as a raw string literal inside `script.py`. The standard is now a sibling **`ui.xaml`** file per pushbutton (see `OneFilterParameter`, `BIM Generation`). This gives syntax highlighting, designer preview, and clean diffs. New tools must use a separate `ui.xaml`; do not embed markup in Python.
+
+### 12.3 Theme distribution — the canonical rule
+
+The shared theme lives at `pyZaid.extension/Resources/AnonGeeTheme.xaml` (merging Colors, Typography, Controls, Panels, Icons). Two consumption strategies exist; pick by constraint:
+
+1. **Merge by absolute path (preferred)** — at load time, resolve the absolute path to `AnonGeeTheme.xaml` and add it to the window's `Resources.MergedDictionaries` in Python before `XamlReader.Load`. Single source of truth; tools inherit fixes automatically.
+2. **Inline copy (current fallback)** — some shipping tools (e.g. `BIM Generation/ui.xaml`) paste the full dictionary inline under a "COMBINED RESOURCE DICTIONARIES" banner, because `pack://application` URIs do not resolve reliably inside Revit's sandbox.
+
+> **Standard:** Prefer strategy 1. Where the sandbox forces strategy 2, the inline block must be a **verbatim, unmodified copy** of the shared dictionaries — never a hand-edited variant. Any divergence between an inline copy and `Resources/*.xaml` is a defect. A future task should add a build/sync check that fails when they drift (§15.4).
+
+Either way: **reference tokens by key** (`{DynamicResource BrushVividRed}`), never hardcode hex outside `Colors.xaml`.
+
+### 12.4 Window hosting rules
+
+- Always set `WindowStartupLocation="CenterOwner"` and assign the Revit main window as `Owner` (prevents the dialog appearing behind Revit).
+- Modeless tools that touch the model use a pyRevit `ExternalEvent` / handler — never mutate the document off the API context.
+- Wrap all model changes in a `Transaction` with a descriptive name matching the tool ("AnonGee · Obscured Rebar").
+- Dockable panels implement `IDockablePaneProvider`, stay single-column, and respect `MinWidth=240 / MaxWidth=360`.
+
+### 12.5 Bundle conventions
+
+Each tool is a `*.pushbutton` (or grouped in a `*.splitbutton`) with:
 
 ```
-AnonGeeBIMTools/
-├── Resources/
-│   ├── AnonGeeTheme.xaml        ← Master dictionary — merge all sub-dictionaries here
-│   ├── Colors.xaml              ← Brand color brushes
-│   ├── Typography.xaml          ← Font resources and named TextBlock styles
-│   ├── Controls.xaml            ← Button, TextBox, ComboBox, CheckBox, ListBox styles
-│   ├── Panels.xaml              ← Window chrome, DockablePane, GroupBox templates
-│   └── Icons.xaml               ← Path geometry for Lucide icons
+ToolName.pushbutton/
+├── bundle.yaml      # title, author, tooltip
+├── icon.png         # 32×32 ribbon icon (§7.4), icon.dark.png if needed
+├── ui.xaml          # WPF layout (no embedded markup in script.py)
+└── script.py        # #! python3 ; CPython 3 by default
 ```
 
-**`AnonGeeTheme.xaml` — Master merge file:**
+`bundle.yaml` `title` uses the tool's display name; `tooltip` is two to four factual lines (what it does, what it needs selected) — voice per §8.
+
+### 12.6 Window template controls
+
+Use the shipping `ControlTemplate` resources rather than hand-building chrome:
+
+| Template key | For |
+|---|---|
+| `AnonGeeWindowTemplate` | Standard tool window — Charcoal header, 3px Vivid Red rule, white scroll content, Off White footer |
+| `AnonGeeDialogTemplate` | Fixed-width modal — header, accent rule, content, Cancel(Ghost)/Confirm(Primary) action bar |
+| `DockablePanelTemplate` | `IDockablePaneProvider` compact panel, 2px accent rule, single column |
+
+---
+
+## 13. Design Tokens & Theme Architecture
+
+### 13.1 Token Tiers
+
+The system uses a three-tier token model. Higher tiers reference lower tiers; **components never reference primitives directly.**
+
+```
+Tier 1 — Primitive   ColorVividRed (#E02020), ColorCharcoalBlack, ColorMidGrey …
+   ↓ referenced by
+Tier 2 — Semantic     BrushInputFocusBorder, BrushDisabledForeground,
+                      BrushTableHeaderBackground, BrushActiveBadgeBackground …
+   ↓ referenced by
+Tier 3 — Component    ButtonPrimary, InputTextBox, SectionGroup, AnonGeeDialogTemplate …
+```
+
+This is why the palette can stay fixed while behavior evolves: a new component composes existing semantic tokens; it never invents a color.
+
+### 13.2 ResourceDictionary Architecture
+
+```
+pyZaid.extension/Resources/
+├── AnonGeeTheme.xaml     ← master merge (Colors→Typography→Controls→Panels→Icons)
+├── Colors.xaml           ← Tier 1 colors + Tier 2 semantic brushes
+├── Typography.xaml       ← font families, sizes, named TextBlock styles
+├── Controls.xaml         ← buttons, inputs, selection controls, cards, elevation
+├── Panels.xaml           ← window/dialog/dockable templates, GroupBox, divider
+└── Icons.xaml            ← Lucide Path geometries
+```
+
+**Merge order matters:** Colors and Typography must precede Controls and Panels, which reference them.
+
+### 13.3 Master merge file
 
 ```xml
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -444,568 +720,142 @@ AnonGeeBIMTools/
 </ResourceDictionary>
 ```
 
-**Consuming the theme in a Window or UserControl:**
+### 13.4 Enforcement Rules (PR-blocking)
 
-```xml
-<Window.Resources>
-    <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries>
-            <ResourceDictionary Source="/AnonGeeBIMTools;component/Resources/AnonGeeTheme.xaml"/>
-        </ResourceDictionary.MergedDictionaries>
-    </ResourceDictionary>
-</Window.Resources>
-```
-
----
-
-### 11.2 `Colors.xaml`
-
-All WPF brushes map directly to named brand tokens. Reference brushes by key throughout all other dictionaries and code-behind. Never hardcode a hex color value outside this file.
-
-```xml
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-
-    <!-- ═══ Brand Colors ═══ -->
-    <Color x:Key="ColorVividRed"       >#FFE02020</Color>
-    <Color x:Key="ColorCharcoalBlack"  >#FF141414</Color>
-    <Color x:Key="ColorSilverSteel"    >#FFC0C8D8</Color>
-
-    <!-- ═══ Surface & Text ═══ -->
-    <Color x:Key="ColorPureWhite"      >#FFFFFFFF</Color>
-    <Color x:Key="ColorOffWhite"       >#FFF4F4F6</Color>
-    <Color x:Key="ColorMidGrey"        >#FF6B7280</Color>
-    <Color x:Key="ColorLightBorder"    >#FFE2E4EA</Color>
-
-    <!-- ═══ Semantic ═══ -->
-    <Color x:Key="ColorSuccessGreen"   >#FF16A34A</Color>
-    <Color x:Key="ColorCautionAmber"   >#FFD97706</Color>
-    <Color x:Key="ColorErrorRed"       >#FFDC2626</Color>
-    <Color x:Key="ColorInfoBlue"       >#FF2563EB</Color>
-
-    <!-- ═══ SolidColorBrush Tokens ═══ -->
-    <SolidColorBrush x:Key="BrushVividRed"      Color="{StaticResource ColorVividRed}"/>
-    <SolidColorBrush x:Key="BrushCharcoalBlack" Color="{StaticResource ColorCharcoalBlack}"/>
-    <SolidColorBrush x:Key="BrushSilverSteel"   Color="{StaticResource ColorSilverSteel}"/>
-    <SolidColorBrush x:Key="BrushPureWhite"     Color="{StaticResource ColorPureWhite}"/>
-    <SolidColorBrush x:Key="BrushOffWhite"      Color="{StaticResource ColorOffWhite}"/>
-    <SolidColorBrush x:Key="BrushMidGrey"       Color="{StaticResource ColorMidGrey}"/>
-    <SolidColorBrush x:Key="BrushLightBorder"   Color="{StaticResource ColorLightBorder}"/>
-    <SolidColorBrush x:Key="BrushSuccessGreen"  Color="{StaticResource ColorSuccessGreen}"/>
-    <SolidColorBrush x:Key="BrushCautionAmber"  Color="{StaticResource ColorCautionAmber}"/>
-    <SolidColorBrush x:Key="BrushErrorRed"      Color="{StaticResource ColorErrorRed}"/>
-    <SolidColorBrush x:Key="BrushInfoBlue"      Color="{StaticResource ColorInfoBlue}"/>
-
-</ResourceDictionary>
-```
+- **No hardcoded colors.** Every color reference uses a `{StaticResource}` / `{DynamicResource}` brush key from `Colors.xaml`. Inline hex outside `Colors.xaml` is rejected.
+- **No inline font declarations.** Font family/size come only from `FontSans`/`FontMono` and the size tokens.
+- **No default WPF button chrome.** Every `Button` carries a named style.
+- **Dialogs are `CenterOwner`** with the Revit window as `Owner`.
+- **Dockable panels are single-column**, 240–360px.
+- **Inline validation only** — no `MessageBox` for field errors.
+- **Disabled states stay visible.**
+- **All technical output uses `TextCode`** (monospace), never proportional.
+- **Inline theme copies are verbatim** (§12.3) — divergence from `Resources/*.xaml` is a defect.
 
 ---
 
-### 11.3 `Typography.xaml`
+## 14. Audience Profiles
 
-```xml
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+The suite serves three professionals plus the wider modern audience. Design decisions are validated against their needs.
 
-    <!-- ═══ Font Families ═══ -->
-    <FontFamily x:Key="FontSans">pack://application:,,,/Resources/Fonts/#Inter, Segoe UI, Arial</FontFamily>
-    <FontFamily x:Key="FontMono">pack://application:,,,/Resources/Fonts/#JetBrains Mono, Consolas, Courier New</FontFamily>
+| Profile | What they value | Design implication |
+|---|---|---|
+| **Structural Engineer** | Correctness, traceable counts, repeatability | Show exact element counts; name grids/levels; precise error causes; compact data tables |
+| **Architect** | Clarity, visual order, fast iteration | Clean hierarchy, generous region spacing, obvious primary action, restrained color |
+| **BIM Modeler / Coordinator** | Speed, batch operations, status visibility | Keyboard flow, multi-select, progress on long ops, dockable persistent panels |
+| **Modern audience (broad)** | Polish, responsiveness, trust | Consistent components, smooth ≤200ms motion, no system-chrome leakage, professional copy |
 
-    <!-- ═══ Font Sizes (WPF device-independent units) ═══ -->
-    <sys:Double x:Key="FontSizeH1"      >21</sys:Double>
-    <sys:Double x:Key="FontSizeH2"      >16.5</sys:Double>
-    <sys:Double x:Key="FontSizeH3"      >12</sys:Double>
-    <sys:Double x:Key="FontSizeH4"      >10.5</sys:Double>
-    <sys:Double x:Key="FontSizeBody"    >10.5</sys:Double>
-    <sys:Double x:Key="FontSizeSmall"   >9</sys:Double>
-    <sys:Double x:Key="FontSizeCaption" >8.25</sys:Double>
-    <sys:Double x:Key="FontSizeCode"    >9</sys:Double>
-
-    <!-- ═══ Named TextBlock Styles ═══ -->
-
-    <Style x:Key="TextH1" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontSans}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeH1}"/>
-        <Setter Property="FontWeight"    Value="Bold"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushCharcoalBlack}"/>
-        <Setter Property="LineHeight"    Value="26"/>
-        <Setter Property="Margin"        Value="0,0,0,8"/>
-    </Style>
-
-    <Style x:Key="TextH2" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontSans}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeH2}"/>
-        <Setter Property="FontWeight"    Value="SemiBold"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushCharcoalBlack}"/>
-        <Setter Property="Margin"        Value="0,0,0,4"/>
-    </Style>
-
-    <Style x:Key="TextH3" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontSans}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeH3}"/>
-        <Setter Property="FontWeight"    Value="SemiBold"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushCharcoalBlack}"/>
-    </Style>
-
-    <Style x:Key="TextBody" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontSans}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeBody}"/>
-        <Setter Property="FontWeight"    Value="Normal"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushMidGrey}"/>
-        <Setter Property="TextWrapping"  Value="Wrap"/>
-        <Setter Property="LineHeight"    Value="17"/>
-    </Style>
-
-    <Style x:Key="TextCaption" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontSans}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeCaption}"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushMidGrey}"/>
-    </Style>
-
-    <Style x:Key="TextCode" TargetType="TextBlock">
-        <Setter Property="FontFamily"    Value="{StaticResource FontMono}"/>
-        <Setter Property="FontSize"      Value="{StaticResource FontSizeCode}"/>
-        <Setter Property="Foreground"    Value="{StaticResource BrushSilverSteel}"/>
-        <Setter Property="Background"    Value="{StaticResource BrushCharcoalBlack}"/>
-        <Setter Property="Padding"       Value="16,12"/>
-        <Setter Property="LineHeight"    Value="14"/>
-    </Style>
-
-    <!-- OnDark variant — for text inside Charcoal Black headers -->
-    <Style x:Key="TextH2OnDark" BasedOn="{StaticResource TextH2}" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource BrushPureWhite}"/>
-    </Style>
-
-    <Style x:Key="TextH3OnDark" BasedOn="{StaticResource TextH3}" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="{StaticResource BrushSilverSteel}"/>
-    </Style>
-
-</ResourceDictionary>
-```
+Shared truth across all four: **they will not trust a tool that hides what it is doing.** Visible state (§1.2, §11) is the through-line.
 
 ---
 
-### 11.4 `Controls.xaml`
+## 15. Governance & Contribution
 
-#### Buttons
+### 15.1 Versioning
 
-```xml
-<!-- ═══ PRIMARY BUTTON ═══ -->
-<Style x:Key="ButtonPrimary" TargetType="Button">
-    <Setter Property="Background"      Value="{StaticResource BrushVividRed}"/>
-    <Setter Property="Foreground"      Value="{StaticResource BrushPureWhite}"/>
-    <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="FontWeight"      Value="SemiBold"/>
-    <Setter Property="Padding"         Value="16,0"/>
-    <Setter Property="Height"          Value="36"/>
-    <Setter Property="Cursor"          Value="Hand"/>
-    <Setter Property="Template">
-        <Setter.Value>
-            <ControlTemplate TargetType="Button">
-                <Border x:Name="Root"
-                        Background="{TemplateBinding Background}"
-                        CornerRadius="5"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="Root" Property="Background" Value="#C41A1A"/>
-                    </Trigger>
-                    <Trigger Property="IsPressed" Value="True">
-                        <Setter TargetName="Root" Property="Background" Value="#A81515"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushLightBorder}"/>
-                        <Setter Property="Foreground" Value="{StaticResource BrushSilverSteel}"/>
-                    </Trigger>
-                </ControlTemplate.Triggers>
-            </ControlTemplate>
-        </Setter.Value>
-    </Setter>
-</Style>
+The design system is versioned with **semantic versioning**, independent of any single tool:
 
-<!-- ═══ SECONDARY BUTTON (outlined) ═══ -->
-<Style x:Key="ButtonSecondary" TargetType="Button">
-    <Setter Property="Background"      Value="{StaticResource BrushPureWhite}"/>
-    <Setter Property="Foreground"      Value="{StaticResource BrushVividRed}"/>
-    <Setter Property="BorderBrush"     Value="{StaticResource BrushVividRed}"/>
-    <Setter Property="BorderThickness" Value="1.5"/>
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="FontWeight"      Value="SemiBold"/>
-    <Setter Property="Padding"         Value="16,0"/>
-    <Setter Property="Height"          Value="36"/>
-    <Setter Property="Cursor"          Value="Hand"/>
-    <Setter Property="Template">
-        <Setter.Value>
-            <ControlTemplate TargetType="Button">
-                <Border x:Name="Root"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="5"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="Root" Property="Background" Value="#FEF2F2"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
-                        <Setter Property="Foreground" Value="{StaticResource BrushSilverSteel}"/>
-                    </Trigger>
-                </ControlTemplate.Triggers>
-            </ControlTemplate>
-        </Setter.Value>
-    </Setter>
-</Style>
+- **Major** — a breaking token rename/removal, or a palette change (palette changes require explicit sign-off and are not expected).
+- **Minor** — additive: new tokens, components, patterns.
+- **Patch** — fixes, doc corrections, value reconciliation.
 
-<!-- ═══ NEUTRAL BUTTON ═══ -->
-<Style x:Key="ButtonNeutral" TargetType="Button">
-    <Setter Property="Background"      Value="{StaticResource BrushOffWhite}"/>
-    <Setter Property="Foreground"      Value="{StaticResource BrushCharcoalBlack}"/>
-    <Setter Property="BorderBrush"     Value="{StaticResource BrushLightBorder}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="Padding"         Value="16,0"/>
-    <Setter Property="Height"          Value="36"/>
-    <Setter Property="Cursor"          Value="Hand"/>
-    <Setter Property="Template">
-        <Setter.Value>
-            <ControlTemplate TargetType="Button">
-                <Border x:Name="Root"
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        CornerRadius="5"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushLightBorder}"/>
-                    </Trigger>
-                </ControlTemplate.Triggers>
-            </ControlTemplate>
-        </Setter.Value>
-    </Setter>
-</Style>
+This document is **v3.0** (major restructure; palette unchanged). The shipping `Resources/*.xaml` headers are tagged `v3.0` to match, kept in lockstep with the system version on each edit.
 
-<!-- ═══ DANGER BUTTON ═══ -->
-<Style x:Key="ButtonDanger" BasedOn="{StaticResource ButtonPrimary}" TargetType="Button">
-    <Setter Property="Background" Value="{StaticResource BrushErrorRed}"/>
-    <Style.Triggers>
-        <Trigger Property="IsMouseOver" Value="True">
-            <Setter Property="Background" Value="#B91C1C"/>
-        </Trigger>
-    </Style.Triggers>
-</Style>
+### 15.2 Adding to the System
 
-<!-- ═══ GHOST BUTTON ═══ -->
-<Style x:Key="ButtonGhost" TargetType="Button">
-    <Setter Property="Background"      Value="Transparent"/>
-    <Setter Property="Foreground"      Value="{StaticResource BrushMidGrey}"/>
-    <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="Padding"         Value="12,0"/>
-    <Setter Property="Height"          Value="36"/>
-    <Setter Property="Cursor"          Value="Hand"/>
-    <Setter Property="Template">
-        <Setter.Value>
-            <ControlTemplate TargetType="Button">
-                <Border x:Name="Root"
-                        Background="{TemplateBinding Background}"
-                        CornerRadius="5"
-                        Padding="{TemplateBinding Padding}">
-                    <ContentPresenter HorizontalAlignment="Center"
-                                      VerticalAlignment="Center"/>
-                </Border>
-                <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushOffWhite}"/>
-                    </Trigger>
-                </ControlTemplate.Triggers>
-            </ControlTemplate>
-        </Setter.Value>
-    </Setter>
-</Style>
-```
+1. Check whether an existing token/component already solves it. Reuse beats addition.
+2. New colors are almost never the answer — compose existing semantic tokens.
+3. New components are defined in the appropriate `Resources/*.xaml`, documented here, and only then used by a tool.
+4. New icons come from Lucide, exported per §7, added to `Icons.xaml`.
 
-#### TextBox
+### 15.3 Contribution Checklist (PR)
 
-```xml
-<Style x:Key="InputTextBox" TargetType="TextBox">
-    <Setter Property="FontFamily"                Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"                  Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="Foreground"                Value="{StaticResource BrushCharcoalBlack}"/>
-    <Setter Property="Background"                Value="{StaticResource BrushPureWhite}"/>
-    <Setter Property="BorderBrush"               Value="{StaticResource BrushLightBorder}"/>
-    <Setter Property="BorderThickness"           Value="1"/>
-    <Setter Property="Padding"                   Value="10,8"/>
-    <Setter Property="Height"                    Value="36"/>
-    <Setter Property="VerticalContentAlignment"  Value="Center"/>
-    <Style.Triggers>
-        <Trigger Property="IsFocused" Value="True">
-            <Setter Property="BorderBrush"     Value="{StaticResource BrushVividRed}"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Trigger>
-        <Trigger Property="Validation.HasError" Value="True">
-            <Setter Property="BorderBrush"     Value="{StaticResource BrushErrorRed}"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Trigger>
-    </Style.Triggers>
-</Style>
-```
+- [ ] No hardcoded hex/font outside the token files.
+- [ ] Every control uses a named style/template.
+- [ ] Dialog is `CenterOwner` with Revit `Owner`; modal sizing per §5.5.
+- [ ] Inline validation, visible disabled states, monospace output.
+- [ ] Contrast verified for any new fg/bg pairing (§10).
+- [ ] Long operations show progress; destructive actions confirm.
+- [ ] If theme is inlined, the block is a verbatim copy of `Resources/*.xaml`.
+- [ ] `bundle.yaml` and `icon.png` present; voice per §8.
 
-#### ComboBox
+### 15.4 Open Reconciliation Items
 
-```xml
-<Style x:Key="InputComboBox" TargetType="ComboBox">
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-    <Setter Property="Foreground"      Value="{StaticResource BrushCharcoalBlack}"/>
-    <Setter Property="Background"      Value="{StaticResource BrushPureWhite}"/>
-    <Setter Property="BorderBrush"     Value="{StaticResource BrushLightBorder}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="Padding"         Value="10,8"/>
-    <Setter Property="Height"          Value="36"/>
-    <Style.Triggers>
-        <Trigger Property="IsFocused" Value="True">
-            <Setter Property="BorderBrush"     Value="{StaticResource BrushVividRed}"/>
-            <Setter Property="BorderThickness" Value="1.5"/>
-        </Trigger>
-    </Style.Triggers>
-</Style>
-```
+| Item | Status |
+|---|---|
+| Ribbon tab `pyZaid.tab` vs brand "AnonGee BIM Tools" | To reconcile (§1.3) |
+| Re-tag `Resources/*.xaml` headers `v2.0 → v3.0` | ✅ Done |
+| Build check: inline theme copies vs shared dictionaries | Proposed (§12.3) |
+| Caption size prose `8.25 → 9` | ✅ Fixed in this doc |
 
 ---
 
-### 11.5 `Panels.xaml`
+## 16. Document & Report Standards
 
-#### Standard Tool Window
+All generated documents — export summaries, model reports, script logs — follow this layout.
 
-The canonical layout for all AnonGee tool windows: Charcoal Black header, 3px Vivid Red accent rule, white content area, Off White footer.
+### Header
+- Left: **AnonGee BIM Tools** wordmark, Inter SemiBold, Charcoal Black.
+- Right: project/document title, Inter Regular, Mid Grey.
+- Below: full-width 3px Vivid Red rule.
 
-```xml
-<Window Background="{StaticResource BrushPureWhite}"
-        FontFamily="{StaticResource FontSans}"
-        WindowStartupLocation="CenterOwner">
+### Body
+- Primary font: Inter Regular, 11pt, Mid Grey.
+- Headings: Inter SemiBold/Bold, Charcoal Black.
+- Code/data: JetBrains Mono, 10pt, Charcoal Black background.
+- Tables per §9.8.
 
-    <DockPanel LastChildFill="True">
-
-        <!-- ── Header ── -->
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource BrushCharcoalBlack}"
-                Padding="16,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0"
-                           Text="AnonGee · Tool Name"
-                           Style="{StaticResource TextH2OnDark}"/>
-                <TextBlock Grid.Column="1"
-                           Text="v2.0"
-                           Style="{StaticResource TextCaption}"
-                           Foreground="{StaticResource BrushSilverSteel}"
-                           VerticalAlignment="Center"/>
-            </Grid>
-        </Border>
-
-        <!-- ── Vivid Red accent rule ── -->
-        <Border DockPanel.Dock="Top"
-                Height="3"
-                Background="{StaticResource BrushVividRed}"/>
-
-        <!-- ── Footer / action bar ── -->
-        <Border DockPanel.Dock="Bottom"
-                Background="{StaticResource BrushOffWhite}"
-                BorderBrush="{StaticResource BrushLightBorder}"
-                BorderThickness="0,1,0,0"
-                Padding="16,10">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right">
-                <Button Content="Cancel"
-                        Style="{StaticResource ButtonGhost}"
-                        Margin="0,0,8,0"
-                        IsCancel="True"/>
-                <Button Content="Run"
-                        Style="{StaticResource ButtonPrimary}"
-                        IsDefault="True"/>
-            </StackPanel>
-        </Border>
-
-        <!-- ── Scrollable content area ── -->
-        <ScrollViewer Padding="20"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <!-- Tool content here -->
-        </ScrollViewer>
-
-    </DockPanel>
-</Window>
-```
-
-#### Dockable Panel (Revit `IDockablePaneProvider`)
-
-Single-column, compact layout for panels hosted inside Revit's docking framework.
-
-```xml
-<UserControl Background="{StaticResource BrushPureWhite}"
-             FontFamily="{StaticResource FontSans}"
-             MinWidth="240"
-             MaxWidth="360">
-
-    <DockPanel LastChildFill="True">
-
-        <!-- Compact header -->
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource BrushCharcoalBlack}"
-                Padding="12,10">
-            <TextBlock Text="Panel Title"
-                       Style="{StaticResource TextH3OnDark}"/>
-        </Border>
-
-        <!-- Accent rule -->
-        <Border DockPanel.Dock="Top"
-                Height="2"
-                Background="{StaticResource BrushVividRed}"/>
-
-        <!-- Content -->
-        <ScrollViewer Padding="12,14"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled">
-            <StackPanel>
-                <!-- Panel content — single column only -->
-            </StackPanel>
-        </ScrollViewer>
-
-    </DockPanel>
-</UserControl>
-```
-
-#### Dialog / Modal Window
-
-Fixed-width, `NoResize`, always `CenterOwner`. Use for confirmations, configuration dialogs, and data entry.
-
-```xml
-<Window ResizeMode="NoResize"
-        WindowStartupLocation="CenterOwner"
-        Background="{StaticResource BrushPureWhite}"
-        FontFamily="{StaticResource FontSans}"
-        Width="480"
-        SizeToContent="Height">
-
-    <DockPanel LastChildFill="True">
-
-        <!-- Header -->
-        <Border DockPanel.Dock="Top"
-                Background="{StaticResource BrushCharcoalBlack}"
-                Padding="20,14">
-            <TextBlock Text="Dialog Title"
-                       Style="{StaticResource TextH2OnDark}"/>
-        </Border>
-
-        <!-- Accent rule -->
-        <Border DockPanel.Dock="Top"
-                Height="3"
-                Background="{StaticResource BrushVividRed}"/>
-
-        <!-- Action bar -->
-        <Border DockPanel.Dock="Bottom"
-                Background="{StaticResource BrushOffWhite}"
-                BorderBrush="{StaticResource BrushLightBorder}"
-                BorderThickness="0,1,0,0"
-                Padding="20,12">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right">
-                <Button Content="Cancel"
-                        Style="{StaticResource ButtonGhost}"
-                        Margin="0,0,8,0"
-                        IsCancel="True"/>
-                <Button Content="Confirm"
-                        Style="{StaticResource ButtonPrimary}"
-                        IsDefault="True"/>
-            </StackPanel>
-        </Border>
-
-        <!-- Body -->
-        <StackPanel Margin="20,18,20,20">
-            <!-- Dialog content here -->
-        </StackPanel>
-
-    </DockPanel>
-</Window>
-```
-
-#### GroupBox / Section Panel
-
-```xml
-<Style x:Key="SectionGroup" TargetType="GroupBox">
-    <Setter Property="BorderBrush"     Value="{StaticResource BrushLightBorder}"/>
-    <Setter Property="BorderThickness" Value="1"/>
-    <Setter Property="Padding"         Value="14,12"/>
-    <Setter Property="Margin"          Value="0,0,0,16"/>
-    <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-    <Setter Property="HeaderTemplate">
-        <Setter.Value>
-            <DataTemplate>
-                <TextBlock Text="{Binding}"
-                           Style="{StaticResource TextH3}"
-                           Margin="2,0"/>
-            </DataTemplate>
-        </Setter.Value>
-    </Setter>
-</Style>
-```
+### Footer
+- Left: classification (`Internal · Confidential`).
+- Center: page number.
+- Right: date in `DD MMM YYYY`.
+- All footer text: Inter Regular, Caption, Mid Grey.
 
 ---
 
-### 11.6 Spacing in WPF
+## 17. Brand Don'ts
 
-WPF uses device-independent units where 1 unit ≈ 1/96 inch (approximately 1px on a 96 DPI screen). Brand spacing tokens map directly:
+Non-negotiable across all touchpoints.
 
-| Token | Value | WPF | XAML Pattern |
-|---|---|---|---|
-| `space-xs` | 4px | 4 | `Margin="4"` or `Spacing="4"` |
-| `space-sm` | 8px | 8 | Component internal padding |
-| `space-md` | 16px | 16 | Standard element padding |
-| `space-lg` | 24px | 24 | Between sibling groups |
-| `space-xl` | 32px | 32 | Between panel sections |
-
-Use `StackPanel Spacing="8"` (available in .NET 6+ WPF) for consistent item gaps. For earlier runtimes, apply `Margin="0,0,0,8"` on each child element.
-
----
-
-### 11.7 WPF Enforcement Rules
-
-These rules are mandatory for all WPF code within the AnonGee BIM Tools suite.
-
-- **No hardcoded colors.** Every color reference must use a named `{StaticResource BrushXxx}` key from `Colors.xaml`. Pull requests with inline hex values will be rejected.
-- **No inline font declarations.** Font family and font size are set only via `{StaticResource FontSans}` / `{StaticResource FontMono}` and the named size tokens.
-- **No default WPF button chrome.** Every `Button` must carry a named style (`ButtonPrimary`, `ButtonSecondary`, `ButtonNeutral`, `ButtonDanger`, or `ButtonGhost`). Unstyled buttons are off-brand and will be flagged in review.
-- **Dialogs must be `CenterOwner`.** Always set `WindowStartupLocation="CenterOwner"` and pass the Revit main window as `Owner` to prevent dialog placement behind the host application.
-- **Dockable panels must be single-column.** Do not use `Grid` with multiple columns or horizontal `StackPanel` layouts inside `IDockablePaneProvider` controls. The minimum width is `240`; the maximum is `360`.
-- **Input validation is inline.** Validation errors render as a `TextBlock` in `BrushErrorRed` directly below the offending field. Do not use `MessageBox` for field-level validation.
-- **Disabled states are visible.** Disabled controls use `BrushLightBorder` background and `BrushSilverSteel` foreground. Never use `Visibility="Collapsed"` to suppress a disabled state — keep it visible and non-interactive.
-- **All code output is `TextCode` style.** Element IDs, parameter values, file paths, API responses, and script output are always rendered in `{StaticResource TextCode}` or an equivalent monospace style. They are never displayed in a proportional font.
+- **Do not** render the wordmark in Vivid Red — it is for accents/CTAs, not the name.
+- **Do not** use Vivid Red as a large background fill. It is an accent; use Charcoal Black for dark surfaces.
+- **Do not** apply more than one semantic state color in the same UI region.
+- **Do not** introduce off-palette colors without versioned approval.
+- **Do not** use default system/Aero button chrome — every `Button` carries a named style.
+- **Do not** abbreviate the brand to `AGT`, `AG`, or `ABIM`.
+- **Do not** use emoji in documentation, logs, dialogs, or error states.
+- **Do not** set body text in pure black — Charcoal Black for headings, Mid Grey for body.
+- **Do not** use Silver Steel as text on white (1.68:1 — fails AA).
+- **Do not** hide a disabled control with `Collapsed` — keep it visible and inert.
+- **Do not** embed XAML as a Python string in new tools — use a `ui.xaml` file.
+- **Do not** block the Revit UI thread for model work — use `Transaction` + `ExternalEvent`.
 
 ---
 
-## 12. Appendix — Token References
+## 18. Appendix — Token Reference
 
-### CSS Custom Properties (Web / Artifact Use)
+### 18.1 WPF Brush Quick Reference
+
+| Key | Hex | Role |
+|---|---|---|
+| `BrushVividRed` | `#E02020` | Primary brand / CTA |
+| `BrushCharcoalBlack` | `#141414` | Headers, dark surfaces, primary text |
+| `BrushSilverSteel` | `#C0C8D8` | Borders, secondary icons, dividers |
+| `BrushPureWhite` | `#FFFFFF` | Canvas, card backgrounds |
+| `BrushOffWhite` | `#F4F4F6` | Subtle backgrounds, footers |
+| `BrushMidGrey` | `#6B7280` | Body text, captions |
+| `BrushLightBorder` | `#E2E4EA` | Input borders, card outlines, dividers |
+| `BrushSuccessGreen` | `#16A34A` | Success states |
+| `BrushCautionAmber` | `#D97706` | Warning states |
+| `BrushErrorRed` | `#DC2626` | Error states (not a Vivid Red substitute) |
+| `BrushInfoBlue` | `#2563EB` | Informational notices |
+| `BrushVividRedHover` / `…Pressed` | `#C41A1A` / `#A81515` | Primary interaction |
+| `BrushErrorRedHover` | `#B91C1C` | Danger hover |
+| `BrushSecondaryHover` | `#1AE02020` | Outline-button hover fill |
+| `BrushGhostHover` | `#E8E8EC` | Ghost/neutral hover |
+| `BrushDisabledBackground` / `…Foreground` | `#E2E4EA` / `#C0C8D8` | Disabled controls |
+
+### 18.2 CSS Custom Properties (web / artifact use)
 
 ```css
 :root {
@@ -1026,51 +876,37 @@ These rules are mandatory for all WPF code within the AnonGee BIM Tools suite.
   --color-error:           #DC2626;
   --color-info:            #2563EB;
 
+  /* ── Interaction variants ── */
+  --color-vivid-red-hover:    #C41A1A;
+  --color-vivid-red-pressed:  #A81515;
+  --color-error-red-hover:    #B91C1C;
+  --color-vivid-red-10:       rgba(224,32,32,0.10);
+  --color-off-white-hover:    #E8E8EC;
+
   /* ── Typography ── */
   --font-sans:  'Inter', 'Segoe UI', Arial, sans-serif;
   --font-mono:  'JetBrains Mono', Consolas, 'Courier New', monospace;
-
-  --text-h1:       1.75rem;   /* 28px */
-  --text-h2:       1.375rem;  /* 22px */
-  --text-h3:       1rem;      /* 16px */
-  --text-body:     0.875rem;  /* 14px */
-  --text-caption:  0.6875rem; /* 11px */
-  --text-code:     0.75rem;   /* 12px */
+  --text-h1:    1.75rem;   /* 28px */
+  --text-h2:    1.375rem;  /* 22px */
+  --text-h3:    1rem;      /* 16px */
+  --text-body:  0.875rem;  /* 14px */
+  --text-small: 0.75rem;   /* 12px */
+  --text-code:  0.75rem;   /* 12px */
 
   /* ── Spacing ── */
-  --space-xs:   4px;
-  --space-sm:   8px;
-  --space-md:   16px;
-  --space-lg:   24px;
-  --space-xl:   32px;
-  --space-2xl:  48px;
-  --space-3xl:  64px;
+  --space-xs: 4px;   --space-sm: 8px;   --space-md: 16px;
+  --space-lg: 24px;  --space-xl: 32px;  --space-2xl: 48px; --space-3xl: 64px;
 
   /* ── Radius ── */
-  --radius-sm:   3px;
-  --radius-md:   5px;
-  --radius-lg:   8px;
-  --radius-xl:   10px;
+  --radius-sm: 3px;  --radius-md: 5px;  --radius-lg: 8px;  --radius-xl: 10px;
+
+  /* ── Motion ── */
+  --motion-fast: 120ms; --motion-standard: 200ms; --motion-slow: 300ms;
+  --ease-standard: cubic-bezier(0.33, 0, 0.2, 1);
 }
 ```
 
-### WPF Brush Key Quick Reference
-
-| Key | Hex | Role |
-|---|---|---|
-| `BrushVividRed` | `#E02020` | Primary brand / CTA |
-| `BrushCharcoalBlack` | `#141414` | Headers, dark surfaces, primary text |
-| `BrushSilverSteel` | `#C0C8D8` | Borders, secondary icons, dividers |
-| `BrushPureWhite` | `#FFFFFF` | Page canvas, card backgrounds |
-| `BrushOffWhite` | `#F4F4F6` | Subtle backgrounds, footers |
-| `BrushMidGrey` | `#6B7280` | Body text, captions |
-| `BrushLightBorder` | `#E2E4EA` | Input borders, card outlines, dividers |
-| `BrushSuccessGreen` | `#16A34A` | Success states |
-| `BrushCautionAmber` | `#D97706` | Warning states |
-| `BrushErrorRed` | `#DC2626` | Error states (not a substitute for Vivid Red) |
-| `BrushInfoBlue` | `#2563EB` | Informational notices |
-
 ---
 
-*AnonGee BIM Tools · Internal Brand Reference · Version 2.0 · June 2026*
-*This document is confidential. Do not distribute outside the AnonGee product team.*
+*AnonGee BIM Tools · Brand & Design System · Version 3.0 · June 2026*
+*Confidential. Do not distribute outside the AnonGee product team.*

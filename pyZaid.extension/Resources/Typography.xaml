@@ -3,7 +3,7 @@
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
 
     <!-- ════════════════════════════════════════════════════════════════
-         AnonGee BIM Tools — Typography v2.0
+         AnonGee BIM Tools — Typography v3.0
          Fonts: Inter (Sans), JetBrains Mono (Code)
          ════════════════════════════════════════════════════════════════ -->
 
@@ -18,7 +18,7 @@
     <sys:Double x:Key="FontSizeH4">10.5</sys:Double>
     <sys:Double x:Key="FontSizeBody">10.5</sys:Double>
     <sys:Double x:Key="FontSizeSmall">9</sys:Double>
-    <sys:Double x:Key="FontSizeCaption">8.25</sys:Double>
+    <sys:Double x:Key="FontSizeCaption">9</sys:Double>
     <sys:Double x:Key="FontSizeCode">9</sys:Double>
 
     <!-- ═══ Named TextBlock Styles ═══ -->

@@ -1,0 +1,632 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        Title="OneFilterParameter"
+        Height="750" Width="1100"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        Background="White"
+        FontFamily="Inter, Segoe UI, Arial"
+        UseLayoutRounding="True">
+
+    <Window.Resources>
+        <!-- ═══ GLOBAL FONT SIZE TOKENS (match Typography.xaml) ═══ -->
+        <sys:Double x:Key="FontSizeH1">21</sys:Double>
+        <sys:Double x:Key="FontSizeH2">16.5</sys:Double>
+        <sys:Double x:Key="FontSizeH3">12</sys:Double>
+        <sys:Double x:Key="FontSizeH4">10.5</sys:Double>
+        <sys:Double x:Key="FontSizeBody">10.5</sys:Double>
+        <sys:Double x:Key="FontSizeSmall">9</sys:Double>
+        <sys:Double x:Key="FontSizeCaption">9</sys:Double>
+        <sys:Double x:Key="FontSizeCode">9</sys:Double>
+
+        <!-- ═══ BRAND COLORS ═══ -->
+        <Color x:Key="ColorVividRed">#FFE02020</Color>
+        <Color x:Key="ColorCharcoalBlack">#FF141414</Color>
+        <Color x:Key="ColorSilverSteel">#FFC0C8D8</Color>
+        <Color x:Key="ColorPureWhite">#FFFFFFFF</Color>
+        <Color x:Key="ColorOffWhite">#FFF4F4F6</Color>
+        <Color x:Key="ColorMidGrey">#FF6B7280</Color>
+        <Color x:Key="ColorLightBorder">#FFE2E4EA</Color>
+        <Color x:Key="ColorSuccessGreen">#FF16A34A</Color>
+        <Color x:Key="ColorErrorRed">#FFDC2626</Color>
+        <Color x:Key="ColorVividRedHover">#FFC41A1A</Color>
+        <Color x:Key="ColorVividRedPressed">#FFA81515</Color>
+
+        <SolidColorBrush x:Key="BrushVividRed" Color="{StaticResource ColorVividRed}"/>
+        <SolidColorBrush x:Key="BrushCharcoalBlack" Color="{StaticResource ColorCharcoalBlack}"/>
+        <SolidColorBrush x:Key="BrushSilverSteel" Color="{StaticResource ColorSilverSteel}"/>
+        <SolidColorBrush x:Key="BrushPureWhite" Color="{StaticResource ColorPureWhite}"/>
+        <SolidColorBrush x:Key="BrushOffWhite" Color="{StaticResource ColorOffWhite}"/>
+        <SolidColorBrush x:Key="BrushMidGrey" Color="{StaticResource ColorMidGrey}"/>
+        <SolidColorBrush x:Key="BrushLightBorder" Color="{StaticResource ColorLightBorder}"/>
+        <SolidColorBrush x:Key="BrushSuccessGreen" Color="{StaticResource ColorSuccessGreen}"/>
+        <SolidColorBrush x:Key="BrushErrorRed" Color="{StaticResource ColorErrorRed}"/>
+        <SolidColorBrush x:Key="BrushVividRedHover" Color="{StaticResource ColorVividRedHover}"/>
+        <SolidColorBrush x:Key="BrushVividRedPressed" Color="{StaticResource ColorVividRedPressed}"/>
+        <SolidColorBrush x:Key="BrushDisabledBackground" Color="{StaticResource ColorLightBorder}"/>
+        <SolidColorBrush x:Key="BrushDisabledForeground" Color="{StaticResource ColorSilverSteel}"/>
+        <SolidColorBrush x:Key="BrushPrimaryForeground" Color="{StaticResource ColorPureWhite}"/>
+        <SolidColorBrush x:Key="BrushSecondaryHover" Color="#1AE02020"/>
+        <SolidColorBrush x:Key="BrushSuccessBadgeBackground" Color="#DCFCE7"/>
+        <SolidColorBrush x:Key="BrushSuccessBadgeText" Color="#15803D"/>
+        <SolidColorBrush x:Key="BrushErrorBadgeBackground" Color="#FEE2E2"/>
+        <SolidColorBrush x:Key="BrushErrorBadgeText" Color="#991B1B"/>
+        <SolidColorBrush x:Key="BrushGhostHover" Color="{StaticResource ColorOffWhite}"/>
+        <SolidColorBrush x:Key="BrushTableHeaderBackground" Color="{StaticResource ColorCharcoalBlack}"/>
+        <SolidColorBrush x:Key="BrushTableRowHover" Color="#FDECEA"/>
+        <SolidColorBrush x:Key="BrushTableRowSelected" Color="#FEF2F2"/>
+
+        <!-- ═══ BUTTON STYLES (font sizes via global tokens) ═══ -->
+
+        <Style x:Key="ButtonPrimary" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BrushVividRed}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushPrimaryForeground}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushVividRedHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushVividRedPressed}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushDisabledBackground}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ButtonSecondary" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BrushPureWhite}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushVividRed}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="16,0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSecondaryHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Root" Property="BorderBrush" Value="{StaticResource BrushDisabledBackground}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ButtonGhost" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushMidGrey}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushGhostHover}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="ButtonSmall" TargetType="Button">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Height" Value="28"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Root" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Root" Property="Background" Value="{StaticResource BrushSecondaryHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ INPUT STYLES (font sizes via global tokens) ═══ -->
+
+        <Style x:Key="InputTextBox" TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="Background" Value="{StaticResource BrushPureWhite}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="RootBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5" Padding="{TemplateBinding Padding}">
+                            <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                <Setter TargetName="RootBorder" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="RootBorder" Property="Background" Value="{StaticResource BrushDisabledBackground}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="InputComboBox" TargetType="ComboBox">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="Background" Value="{StaticResource BrushPureWhite}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <Border x:Name="RootBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="5">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="PART_EditableTextBox" Grid.Column="0" Style="{x:Null}" Background="Transparent" BorderThickness="0" Padding="{TemplateBinding Padding}" VerticalAlignment="Center" VerticalContentAlignment="Center" FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}" Foreground="{TemplateBinding Foreground}" IsReadOnly="{TemplateBinding IsReadOnly}" Visibility="Collapsed"/>
+                                    <ContentPresenter x:Name="ContentSite" Grid.Column="0" IsHitTestVisible="False" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
+                                    <ContentPresenter x:Name="SelectionBoxItem" Grid.Column="0" IsHitTestVisible="False" Margin="{TemplateBinding Padding}" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" Visibility="Collapsed"/>
+                                    <ToggleButton x:Name="ToggleButton" Grid.Column="0" Grid.ColumnSpan="2" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}" ClickMode="Press" Background="Transparent">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Grid Background="Transparent">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="24"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <ContentPresenter Grid.Column="0" Margin="9,0,0,0" VerticalAlignment="Center" Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ComboBox}}" ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ComboBox}}" TextElement.Foreground="{Binding Foreground, RelativeSource={RelativeSource Mode=FindAncestor, AncestorType=ComboBox}}"/>
+                                                    <Path Grid.Column="1" Data="M0,0 L4,4 L8,0" Fill="{StaticResource BrushMidGrey}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
+                            <Popup x:Name="Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Slide" Width="{TemplateBinding ActualWidth}">
+                                <Border BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1" CornerRadius="6" Background="{StaticResource BrushPureWhite}">
+                                    <ScrollViewer MaxHeight="200" Margin="4" Foreground="{StaticResource BrushCharcoalBlack}">
+                                        <ItemsPresenter/>
+                                    </ScrollViewer>
+                                </Border>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEditable" Value="True">
+                                <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="ContentSite" Property="Visibility" Value="Collapsed"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                <Setter TargetName="RootBorder" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsDropDownOpen" Value="True">
+                                <Setter TargetName="RootBorder" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                <Setter TargetName="RootBorder" Property="BorderThickness" Value="1.5"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="RootBorder" Property="Background" Value="{StaticResource BrushDisabledBackground}"/>
+                                <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="InputRadioButton" TargetType="RadioButton">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid Background="Transparent">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Ellipse Grid.Column="0" Width="14" Height="14" Stroke="{StaticResource BrushLightBorder}" StrokeThickness="1" Fill="{StaticResource BrushPureWhite}" VerticalAlignment="Center"/>
+                            <Ellipse x:Name="RadioDot" Grid.Column="0" Width="6" Height="6" Fill="{StaticResource BrushVividRed}" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="4,0,0,0"/>
+                            <ContentPresenter Grid.Column="1" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="RadioDot" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="InputListBox" TargetType="ListBox">
+            <Setter Property="Background" Value="{StaticResource BrushPureWhite}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="4"/>
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
+        </Style>
+
+        <Style x:Key="ListBoxItemBase" TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FDECEA"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#FEF2F2"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                <Setter TargetName="Bd" Property="BorderThickness" Value="3,0,0,0"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ═══ SCRIPT-SPECIFIC STYLES (font sizes via global tokens) ═══ -->
+
+        <Style x:Key="SectionLabel" TargetType="Label">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeH3}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+            <Setter Property="Padding" Value="0,0,0,4"/>
+            <Setter Property="Margin" Value="0,6,0,6"/>
+        </Style>
+
+        <Style x:Key="StatusText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushMidGrey}"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,4,0,0"/>
+        </Style>
+
+        <Style x:Key="CardBorder" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BrushPureWhite}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="12"/>
+        </Style>
+
+        <Style x:Key="DividerRule" TargetType="Rectangle">
+            <Setter Property="Height" Value="1"/>
+            <Setter Property="Fill" Value="{StaticResource BrushLightBorder}"/>
+            <Setter Property="Margin" Value="0,8"/>
+        </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="TableHeaderText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Inter, Segoe UI, Arial"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Padding" Value="8,6"/>
+        </Style>
+
+        <Style x:Key="TableCellText" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="JetBrains Mono, Consolas, Courier New"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="TableCellTextMono" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="JetBrains Mono, Consolas, Courier New"/>
+            <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushMidGrey}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="RowCheckBox" TargetType="CheckBox">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="IsChecked" Value="True"/>
+            <Setter Property="MinWidth" Value="16"/>
+            <Setter Property="MinHeight" Value="16"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12,8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- HEADER -->
+        <Border Grid.Row="0" Background="{StaticResource BrushCharcoalBlack}"
+                Padding="16,10" Margin="0,0,0,8" CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="header_title" Text="OneFilterParameter"
+                           FontSize="{StaticResource FontSizeH2}" FontWeight="SemiBold"
+                           Foreground="{StaticResource BrushPrimaryForeground}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" x:Name="live_count" Text="0 Elements"
+                           FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource BrushSilverSteel}"
+                           VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- BODY -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" MinWidth="340" MaxWidth="380" />
+                <ColumnDefinition Width="Auto" MaxWidth="10" />
+                <ColumnDefinition Width="*" MinWidth="400" />
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT PANEL -->
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="0,0,8,0">
+                    <Label Content="Scope:" Style="{StaticResource SectionLabel}" />
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <RadioButton x:Name="rb_whole" Content="Whole Model" GroupName="scope" IsChecked="True" Margin="0,0,12,0" Style="{StaticResource InputRadioButton}"/>
+                        <RadioButton x:Name="rb_view" Content="Active View" GroupName="scope" Margin="0,0,12,0" Style="{StaticResource InputRadioButton}"/>
+                        <RadioButton x:Name="rb_selection" Content="Selection" GroupName="scope" Style="{StaticResource InputRadioButton}"/>
+                    </StackPanel>
+
+                    <Label Content="Categories:" Style="{StaticResource SectionLabel}" />
+                    <ListBox x:Name="category_list" Style="{StaticResource InputListBox}" Height="100" Margin="0,0,0,8" Padding="2">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem" BasedOn="{StaticResource ListBoxItemBase}">
+                                <Setter Property="Padding" Value="4,2"/>
+                                <Setter Property="Margin" Value="1"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+
+                    <Grid Margin="0,0,0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <Button x:Name="btn_all_cats" Content="All" Style="{StaticResource ButtonGhost}" Width="50" ToolTip="Select all" />
+                            <Button x:Name="btn_none_cats" Content="None" Style="{StaticResource ButtonGhost}" Width="55" Margin="4,0,0,0" ToolTip="Clear all" />
+                        </StackPanel>
+                        <Button Grid.Column="2" x:Name="btn_load_params" Content="Load Parameters" Style="{StaticResource ButtonPrimary}" Width="150" ToolTip="Load parameters" />
+                    </Grid>
+                    <TextBlock x:Name="cat_status" Text="Select scope and categories, then click Load Parameters." Style="{StaticResource StatusText}" />
+
+                    <Rectangle Style="{StaticResource DividerRule}" />
+
+                    <Label Content="Filter by Parameter:" Style="{StaticResource SectionLabel}" />
+                    <Grid Margin="0,0,0,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80" /><ColumnDefinition Width="*" /><ColumnDefinition Width="28" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Parameter:" Style="{StaticResource FieldLabel}" Margin="0,0,4,4" />
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="filter_param" Style="{StaticResource InputComboBox}" IsEditable="True" Margin="0,0,4,4" />
+                        <Button Grid.Row="0" Grid.Column="2" x:Name="btn_confirm_param" Content="&#x2713;" Style="{StaticResource ButtonGhost}" FontSize="{StaticResource FontSizeH4}" Padding="0" Margin="0,0,0,4" ToolTip="Load operators" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Operator:" Style="{StaticResource FieldLabel}" Margin="0,0,4,4" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" x:Name="filter_op" Style="{StaticResource InputComboBox}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Value:" Style="{StaticResource FieldLabel}" Margin="0,0,4,0" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="filter_val" Style="{StaticResource InputComboBox}" IsEditable="True" />
+                    </Grid>
+                    <TextBlock x:Name="filter_status" Text="Choose parameter, operator, and value." Style="{StaticResource StatusText}" Margin="0,0,0,4" />
+
+                    <Rectangle Style="{StaticResource DividerRule}" />
+
+                    <Label Content="Edit Parameters:" Style="{StaticResource SectionLabel}" />
+                    <Grid Margin="0,0,0,8">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80" /><ColumnDefinition Width="*" /><ColumnDefinition Width="28" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Parameter:" Style="{StaticResource FieldLabel}" Margin="0,0,4,4" />
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="edit_param" Style="{StaticResource InputComboBox}" IsEditable="True" Margin="0,0,4,4" />
+                        <Button Grid.Row="0" Grid.Column="2" x:Name="btn_confirm_edit" Content="&#x2713;" Style="{StaticResource ButtonGhost}" FontSize="{StaticResource FontSizeH4}" Padding="0" Margin="0,0,0,4" ToolTip="Confirm edit parameter" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Operation:" Style="{StaticResource FieldLabel}" Margin="0,0,4,4" />
+                        <ComboBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" x:Name="edit_op" Style="{StaticResource InputComboBox}" Margin="0,0,0,4" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Value:" Style="{StaticResource FieldLabel}" Margin="0,0,4,4" />
+                        <ComboBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="edit_val1" Style="{StaticResource InputComboBox}" IsEditable="True" Margin="0,0,0,4" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Replace:" Style="{StaticResource FieldLabel}" Margin="0,0,4,0" />
+                        <TextBox Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" x:Name="edit_val2" Style="{StaticResource InputTextBox}" />
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,4">
+                        <Button x:Name="btn_apply_filter" Content="Apply Filter" Style="{StaticResource ButtonPrimary}" Width="130" ToolTip="Filter elements" />
+                        <Button x:Name="btn_execute" Content="Execute" Style="{StaticResource ButtonPrimary}" Width="100" Margin="8,0,0,0" ToolTip="Execute edit on filtered elements" />
+                    </StackPanel>
+                    <TextBlock x:Name="edit_status" Text="Apply filter first, then edit." Style="{StaticResource StatusText}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Center" VerticalAlignment="Stretch"
+                          Background="{StaticResource BrushLightBorder}" ResizeBehavior="BasedOnAlignment" />
+
+            <!-- RIGHT PANEL: Live Preview Table -->
+            <Border Grid.Column="2" Style="{StaticResource CardBorder}" VerticalAlignment="Stretch" Padding="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Background="{StaticResource BrushTableHeaderBackground}" CornerRadius="5,5,0,0" Padding="0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="36" /><ColumnDefinition Width="80" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="" Style="{StaticResource TableHeaderText}" HorizontalAlignment="Center" Padding="4,6"/>
+                            <TextBlock Grid.Column="1" Text="Element ID" Style="{StaticResource TableHeaderText}"/>
+                            <TextBlock Grid.Column="2" Text="Family Name" Style="{StaticResource TableHeaderText}"/>
+                            <TextBlock Grid.Column="3" Text="Type Name" Style="{StaticResource TableHeaderText}"/>
+                            <TextBlock Grid.Column="4" Text="Filter Param" Style="{StaticResource TableHeaderText}"/>
+                            <TextBlock Grid.Column="5" Text="Edit Preview" Style="{StaticResource TableHeaderText}"/>
+                        </Grid>
+                    </Border>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="preview_list">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="0,0,0,1" Padding="0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="36" /><ColumnDefinition Width="80" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <CheckBox Grid.Column="0" x:Name="row_check" Style="{StaticResource RowCheckBox}" IsChecked="{Binding IsSelected}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding ElementId}" Style="{StaticResource TableCellTextMono}" />
+                                            <TextBlock Grid.Column="2" Text="{Binding FamilyName}" Style="{StaticResource TableCellText}"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding TypeName}" Style="{StaticResource TableCellText}"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding FilterValue}" Style="{StaticResource TableCellText}" Foreground="{StaticResource BrushVividRed}" />
+                                            <TextBlock Grid.Column="5" Text="{Binding EditPreview}" Style="{StaticResource TableCellText}" Foreground="{StaticResource BrushCharcoalBlack}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                    <Border Grid.Row="2" Background="{StaticResource BrushOffWhite}" BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="0,1,0,0" CornerRadius="0,0,5,5" Padding="8,4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" x:Name="preview_info" Text="0 elements loaded"
+                                       FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource BrushMidGrey}" VerticalAlignment="Center" />
+                            <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                <Button x:Name="btn_select_all_rows" Content="Select All" Style="{StaticResource ButtonGhost}" Height="24" FontSize="{StaticResource FontSizeCaption}" Padding="8,0"/>
+                                <Button x:Name="btn_deselect_all_rows" Content="Clear" Style="{StaticResource ButtonGhost}" Height="24" FontSize="{StaticResource FontSizeCaption}" Padding="8,0"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- STATUS BAR -->
+        <Border Grid.Row="2" Background="{StaticResource BrushOffWhite}"
+                BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1"
+                Padding="12,8" Margin="0,8,0,8" CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Border x:Name="status_badge" Background="{StaticResource BrushSuccessBadgeBackground}"
+                        BorderBrush="{StaticResource BrushSuccessGreen}" BorderThickness="1" CornerRadius="3" Padding="10,2" Margin="0">
+                    <TextBlock x:Name="status_textblock" Text="Ready"
+                               FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource BrushSuccessBadgeText}" FontWeight="SemiBold" />
+                </Border>
+                <Border x:Name="error_badge" Background="{StaticResource BrushErrorBadgeBackground}"
+                        BorderBrush="{StaticResource BrushErrorRed}" BorderThickness="1" CornerRadius="3" Padding="10,2" Margin="0" Visibility="Collapsed">
+                    <TextBlock x:Name="error_text" Text="Error"
+                               FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource BrushErrorBadgeText}" FontWeight="SemiBold" />
+                </Border>
+                <TextBlock Grid.Column="2" Text="OneFilterParameter v3.0 | AnonGee BIM Tools"
+                           FontSize="{StaticResource FontSizeCaption}" Foreground="{StaticResource BrushMidGrey}" VerticalAlignment="Center" />
+            </Grid>
+        </Border>
+
+        <!-- BUTTON BAR -->
+        <Border Grid.Row="3" Background="{StaticResource BrushOffWhite}" Padding="12,8">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Button Grid.Column="0" x:Name="btn_select_elems" Content="Select in Revit" Style="{StaticResource ButtonSecondary}" Width="140" HorizontalAlignment="Right" ToolTip="Select filtered elements and close window" IsEnabled="False" />
+                <Button Grid.Column="1" x:Name="btn_close" Content="Close" Style="{StaticResource ButtonGhost}" Width="100" HorizontalAlignment="Right" ToolTip="Close the tool without selecting" Margin="10,0,0,0" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
