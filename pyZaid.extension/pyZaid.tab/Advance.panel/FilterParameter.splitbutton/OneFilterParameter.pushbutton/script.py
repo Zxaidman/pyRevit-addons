@@ -1,7 +1,7 @@
 #! python3
 # -*- coding: utf-8 -*-
 # pyRevit script - OneFilterParameter (CPython 3)
-# AnonGee BIM Tools v2.0 — Brand Theme Applied
+# AnonGee BIM Tools v3.0 — theme loaded from shared Resources/
 
 import sys
 import re
@@ -29,6 +29,7 @@ from System.Windows import UIElement, Visibility
 from System.Windows.Data import Binding, BindingMode
 from System.IO import MemoryStream, File, StreamReader, Path
 from System.Text import Encoding
+from System.Windows.Interop import WindowInteropHelper
 from System.Windows.Controls import ListBoxItem, CheckBox, ItemsControl, TextBox
 from System.Collections.Generic import List
 from System.ComponentModel import INotifyPropertyChanged, PropertyChangedEventArgs
@@ -102,16 +103,15 @@ class PreviewItem(INotifyPropertyChanged):
 # LOAD XAML
 # ======================================================================
 def load_xaml_window():
-    """Load the Window XAML from the ui.xaml file."""
+    """Read ui.xaml — fully self-contained inline theme, no runtime injection needed."""
     script_dir = Path.GetDirectoryName(Path.GetFullPath(__file__))
     xaml_path = Path.Combine(script_dir, "ui.xaml")
-    if File.Exists(xaml_path):
-        reader = StreamReader(xaml_path)
-        xaml_content = reader.ReadToEnd()
-        reader.Close()
-        return xaml_content
-    else:
+    if not File.Exists(xaml_path):
         raise Exception("ui.xaml not found at: " + xaml_path)
+    reader = StreamReader(xaml_path, Encoding.UTF8)
+    content = reader.ReadToEnd()
+    reader.Close()
+    return content
 
 # ======================================================================
 # DEBOUNCE TIMER HELPER
@@ -993,6 +993,13 @@ def run_ui():
     # Initial load
     refresh_category_list()
     set_status("Ready")
+
+    # Anchor to Revit main window (CenterOwner + prevents dialog behind Revit)
+    try:
+        helper = WindowInteropHelper(window)
+        helper.Owner = __revit__.MainWindowHandle
+    except Exception:
+        pass
 
     # Show dialog
     window.ShowDialog()
