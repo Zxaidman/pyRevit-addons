@@ -46,7 +46,7 @@ PARAM_EDITOR_XAML = r'''
 MAIN_XAML = r'''
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="BBS Generator"
+        Title="AnonGee · BBS Generator"
         Height="740" Width="1100"
         MinHeight="750" MinWidth="1000"
         WindowStartupLocation="CenterScreen"
@@ -57,15 +57,15 @@ MAIN_XAML = r'''
         UseLayoutRounding="True">
 
   <Window.Resources>
-    <SolidColorBrush x:Key="AccentBrush"    Color="#3498DB"/>
+    <SolidColorBrush x:Key="AccentBrush"    Color="#E02020"/>
     <SolidColorBrush x:Key="SuccessBrush"   Color="#27AE60"/>
     <SolidColorBrush x:Key="DangerBrush"    Color="#E74C3C"/>
-    <SolidColorBrush x:Key="DarkTextBrush"  Color="#2C3E50"/>
+    <SolidColorBrush x:Key="DarkTextBrush"  Color="#141414"/>
     <SolidColorBrush x:Key="GrayTextBrush"  Color="#7F8C8D"/>
     <SolidColorBrush x:Key="WhiteBrush"     Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="LightBgBrush"   Color="#F5F5F5"/>
-    <SolidColorBrush x:Key="BorderBrush"    Color="#BDC3C7"/>
-    <SolidColorBrush x:Key="DividerBrush"   Color="#D5D8DC"/>
+    <SolidColorBrush x:Key="LightBgBrush"   Color="#F4F4F6"/>
+    <SolidColorBrush x:Key="BorderBrush"    Color="#E2E4EA"/>
+    <SolidColorBrush x:Key="DividerBrush"   Color="#E2E4EA"/>
 
     <Style x:Key="SectionLabel" TargetType="Label">
       <Setter Property="FontSize" Value="12"/>
@@ -98,7 +98,7 @@ MAIN_XAML = r'''
     </Style>
 
     <Style x:Key="ActionButton" TargetType="Button">
-      <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="Background" Value="#E02020"/>
       <Setter Property="Foreground" Value="{StaticResource WhiteBrush}"/>
       <Setter Property="FontSize" Value="12"/>
       <Setter Property="FontWeight" Value="SemiBold"/>
@@ -114,7 +114,7 @@ MAIN_XAML = r'''
             </Border>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="#2980B9"/>
+                <Setter Property="Background" Value="#C41A1A"/>
               </Trigger>
             </ControlTemplate.Triggers>
           </ControlTemplate>
@@ -176,7 +176,7 @@ MAIN_XAML = r'''
           <ColumnDefinition Width="Auto"/>
           <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
-        <TextBlock Grid.Column="0" Text="BBS Generator" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="0" Text="AnonGee · BBS Generator" FontSize="16" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
         <TextBlock Grid.Column="2" x:Name="lbl_bar_count" Text="0 bars loaded" FontSize="12" Foreground="#BDC3C7" VerticalAlignment="Center" Margin="0,0,16,0"/>
         <TextBlock Grid.Column="3" x:Name="lbl_standard_badge" Text="IS 2502:2019" FontSize="11" Foreground="#3498DB" FontWeight="SemiBold" VerticalAlignment="Center" Background="#1A2A3A" Padding="8,2" />
       </Grid>
@@ -319,17 +319,35 @@ MAIN_XAML = r'''
             </StackPanel>
 
             <Label Grid.Row="2" Content="Filter by Level:" Style="{StaticResource SectionLabel}"/>
-            <ScrollViewer Grid.Row="3" Height="100" Margin="0,0,0,8" VerticalScrollBarVisibility="Auto" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-              <WrapPanel x:Name="level_filter_panel" Orientation="Horizontal" Margin="4"/>
-            </ScrollViewer>
+            <StackPanel Grid.Row="3" Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,3">
+                <Button x:Name="btn_select_all_levels"   Content="All"  Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10" Margin="0,0,3,0"/>
+                <Button x:Name="btn_deselect_all_levels" Content="None" Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10"/>
+              </StackPanel>
+              <ScrollViewer Height="100" Margin="0,0,0,8" VerticalScrollBarVisibility="Auto" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <WrapPanel x:Name="level_filter_panel" Orientation="Horizontal" Margin="4"/>
+              </ScrollViewer>
+            </StackPanel>
 
             <Label Grid.Row="4" Content="Filter by Member Type:" Style="{StaticResource SectionLabel}"/>
-            <ScrollViewer Grid.Row="5" Height="80" Margin="0,0,0,8" VerticalScrollBarVisibility="Auto" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-              <WrapPanel x:Name="member_filter_panel" Orientation="Horizontal" Margin="4"/>
-            </ScrollViewer>
+            <StackPanel Grid.Row="5" Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,3">
+                <Button x:Name="btn_select_all_members"   Content="All"  Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10" Margin="0,0,3,0"/>
+                <Button x:Name="btn_deselect_all_members" Content="None" Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10"/>
+              </StackPanel>
+              <ScrollViewer Height="80" Margin="0,0,0,8" VerticalScrollBarVisibility="Auto" Background="White" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                <WrapPanel x:Name="member_filter_panel" Orientation="Horizontal" Margin="4"/>
+              </ScrollViewer>
+            </StackPanel>
 
             <Label Grid.Row="6" Content="Filter by Diameter:" Style="{StaticResource SectionLabel}"/>
-            <WrapPanel Grid.Row="7" x:Name="dia_filter_panel" Orientation="Horizontal" Margin="0,0,0,8"/>
+            <StackPanel Grid.Row="7" Margin="0,0,0,8">
+              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,0,3">
+                <Button x:Name="btn_select_all_dia"   Content="All"  Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10" Margin="0,0,3,0"/>
+                <Button x:Name="btn_deselect_all_dia" Content="None" Style="{StaticResource SecondaryBtn}" Width="40" Height="20" FontSize="10"/>
+              </StackPanel>
+              <WrapPanel x:Name="dia_filter_panel" Orientation="Horizontal" Margin="0,0,0,8"/>
+            </StackPanel>
           </Grid>
         </TabItem>
 
@@ -459,7 +477,7 @@ MAIN_XAML = r'''
         <Border x:Name="error_badge" Grid.Column="0" Background="#FADBD8" BorderBrush="#E74C3C" BorderThickness="1" CornerRadius="4" Padding="10,2" Visibility="Collapsed">
           <TextBlock x:Name="error_text" Text="" FontSize="11" Foreground="#C0392B" FontWeight="SemiBold"/>
         </Border>
-        <TextBlock Grid.Column="2" Text="pyZaid | BBS Generator v1.0" Style="{StaticResource StatusText}" VerticalAlignment="Center"/>
+        <TextBlock Grid.Column="2" Text="AnonGee BIM Tools · BBS Generator β1.0" Style="{StaticResource StatusText}" VerticalAlignment="Center"/>
       </Grid>
     </Border>
 

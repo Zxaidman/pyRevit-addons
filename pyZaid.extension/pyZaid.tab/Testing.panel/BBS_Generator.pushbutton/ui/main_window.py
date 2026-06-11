@@ -410,8 +410,8 @@ def run_ui(doc, uidoc):
             records = read_bars(
                 doc=doc, uidoc=uidoc, standard_module=std_mod, scope=scope,
                 level_filter=levels, member_filter=members, diameter_filter=dias, 
-                progress_callback=progress_cb, params_config=get_params_config()
-            )
+                progress_callback=progress_cb, params_config=get_params_config(),
+                sample_size=int(cfg_get('param_sample_size', 100)))
 
             for r in records:
                 if r.shape_code == "??": warnings.append(f"⚠ {r.bar_mark} ({r.member_name}): shape unresolved")
@@ -423,8 +423,10 @@ def run_ui(doc, uidoc):
             if chk_revision.IsChecked and prev_path:
                 prev_data = load_previous_revision(prev_path)
                 if prev_data:
-                    state["changes"] = compare_revisions(records, prev_data)
-                    diff = build_diff_summary(state["changes"])
+                    full_chg, simple_chg     = compare_revisions(records, prev_data)
+                    state["changes"]         = full_chg
+                    state["changes_simple"]  = simple_chg
+                    diff = build_diff_summary(full_chg)
                     lbl_diff_new.Text     = f"New bars:     {diff['new']}"
                     lbl_diff_changed.Text = f"Changed bars: {diff['changed']}"
                     lbl_diff_deleted.Text = f"Deleted bars: {diff['deleted']}"
@@ -580,6 +582,17 @@ def run_ui(doc, uidoc):
         if not filename.endswith(".xlsx"): filename += ".xlsx"
         xlsx_path = os.path.join(out_folder, filename)
 
+
+        if os.path.exists(xlsx_path):
+            confirm = System.Windows.MessageBox.Show(
+                "File already exists:\n" + filename + "\n\nOverwrite it?",
+                "Overwrite Confirmation",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Warning)
+            if str(confirm) != "Yes":
+                set_status("Export cancelled.")
+                return
+            log("Overwriting: " + filename)
         project_info = {
             "project_name": tb_project_name.Text.strip(),
             "drawing_no":   tb_drawing_no.Text.strip(),
@@ -595,8 +608,10 @@ def run_ui(doc, uidoc):
         set_progress(0, "Preparing export…")
 
         try:
-            std_mod = _current_standard_module()
-            changes = state["changes"] if chk_revision.IsChecked else None
+            std_mod  = _current_standard_module()
+            changes  = state.get("changes_simple") if chk_revision.IsChecked else None
+            org_mode = ("floor"  if rb_org_floor.IsChecked else
+                        "member" if rb_org_elem.IsChecked  else "both")
 
             log(f"Export started: {xlsx_path}")
             log(f"Standard: {std_mod.STANDARD_NAME}")
@@ -649,6 +664,25 @@ def run_ui(doc, uidoc):
     rb_scope_model.Checked     += on_scope_changed
     rb_scope_view.Checked      += on_scope_changed
     rb_scope_selection.Checked += on_scope_changed
+
+    # ── Filter bulk select/deselect ─────────────────────────────────
+    def _set_all_checkboxes(panel, checked):
+        for child in panel.Children:
+            try: child.IsChecked = checked
+            except Exception: pass
+
+    def _set_all_levels(checked):
+        if checked: lst_levels.SelectAll()
+        else:        lst_levels.UnselectAll()
+
+    try:
+        W('btn_select_all_levels').Click   += lambda s,a: _set_all_levels(True)
+        W('btn_deselect_all_levels').Click += lambda s,a: _set_all_levels(False)
+        W('btn_select_all_members').Click   += lambda s,a: _set_all_checkboxes(member_filter_panel, True)
+        W('btn_deselect_all_members').Click += lambda s,a: _set_all_checkboxes(member_filter_panel, False)
+        W('btn_select_all_dia').Click   += lambda s,a: _set_all_checkboxes(dia_filter_panel, True)
+        W('btn_deselect_all_dia').Click += lambda s,a: _set_all_checkboxes(dia_filter_panel, False)
+    except Exception: pass
 
     btn_load_bars.Click       += lambda s, a: load_bars()
     btn_refresh_preview.Click += lambda s, a: load_bars(refresh_only=True)

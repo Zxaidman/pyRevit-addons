@@ -1,5 +1,6 @@
-layout:
+ layout:
   - Export Schedule
   - Obscured Rebar
   - Copy Rebar Visibility
-  - WPFChecker
+  - Bulk Rename
+  - Bulk Delete

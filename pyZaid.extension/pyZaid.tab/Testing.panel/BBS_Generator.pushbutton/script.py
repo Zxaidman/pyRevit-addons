@@ -9,13 +9,13 @@ import sys
 import os
 import clr
 
-# ── Native Revit TaskDialog for CPython alerts ────────────────────────────────
-clr.AddReference("RevitAPIUI")
-from Autodesk.Revit.UI import TaskDialog
+# ── pyrevit.forms for all dialogs (works in CPython and IronPython) ────────────
+# TaskDialog import via Autodesk.Revit.UI fails in CPython (stub shadowing).
+from pyrevit import forms as _pf
 
-def show_alert(message, title="BBS Generator"):
-    """Shows a Revit message box."""
-    TaskDialog.Show(title, message)
+def show_alert(message, title="AnonGee BIM Tools"):
+    """Shows a pyRevit alert dialog."""
+    _pf.alert(message, title=title)
 
 def main():
     # ── Ensure all sub-packages are importable ────────────────────────────────

@@ -62,7 +62,22 @@ class AutoMarkGenerator:
         self._cache.clear()
 
 def _member_prefix(member_name):
-    m = re.search(r'\b([BCWSFbcwsf]\d+)\b', member_name)
-    if m: return m.group(1).upper()
+    """
+    Extracts a short prefix from a structural member name.
+    Pass 1: single letter + digits (B3, C1, S2, F1, W4)
+    Pass 2: multi-char + digits  (BM-1, CB-2, SB-3, RB-4)
+    Pass 3: any letters + digits anywhere in string
+    Fallback: first 5 uppercase alphanumeric chars
+    """
+    m = re.search(r'\b([BCWSFVRbcwsfvr]\d+)\b', member_name)
+    if m:
+        return m.group(1).upper()
+    m2 = re.search(r'\b(BM|CB|SB|WB|FB|RB|PL|RC|SC|FC)-?\s*(\d+)\b',
+                   member_name, re.IGNORECASE)
+    if m2:
+        return (m2.group(1) + m2.group(2)).upper()
+    m3 = re.search(r'([A-Za-z]{1,3})(\d{1,3})', member_name)
+    if m3:
+        return (m3.group(1) + m3.group(2)).upper()
     clean = re.sub(r'[^A-Za-z0-9]', '', member_name)
-    return clean[:4].upper() if clean else "XX"
+    return clean[:5].upper() if clean else "XX"

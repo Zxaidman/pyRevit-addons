@@ -122,7 +122,7 @@ def _collect_rebars(doc, uidoc, scope):
         elements = [doc.GetElement(eid) for eid in uidoc.Selection.GetElementIds() if doc.GetElement(eid)]
     return [e for e in elements if e.GetType().Name == "Rebar"]
 
-def _determine_best_param(rebars, param_names, doc, ptype="string"):
+def _determine_best_param(rebars, param_names, doc, ptype="string", sample_size=100):
     """
     Pre-scans a SAMPLE of rebars (max 50) to find the most consistent
     parameter name. Scanning all bars is too expensive for large models.
@@ -133,7 +133,7 @@ def _determine_best_param(rebars, param_names, doc, ptype="string"):
     if not param_names:
         return []
     # Cap sample size — 50 bars is enough to determine consistency
-    sample = rebars[:50]
+    sample = rebars[:sample_size]
     best_param = param_names[0]
     best_count = -1
     for pname in param_names:
@@ -266,9 +266,40 @@ def read_bars(
     return records
 
 def _estimate_bend_deduction(rebar, shape_code, diameter_mm, standard_module):
-    _BEND_90_COUNT = {"00":0, "11":1, "13":2, "21":2, "51":4, "41":2, "44":2, "77":2}
-    try: return _BEND_90_COUNT.get(str(shape_code), 0) * standard_module.bend_deduction_per_bend(diameter_mm, 90)
-    except Exception: return 0
+    """
+    Estimates total bend deduction covering all shape codes 00-98 and 99xx custom.
+    99xx shapes return 0 (custom — deduction unknown).
+    """
+    sc = str(shape_code)
+    if sc.startswith("99"):
+        return 0
+    _SHAPE_BENDS = {
+        "00":[], "01":[(180,1)],
+        "11":[(90,1)], "12":[(90,1)], "13":[(90,1)],
+        "14":[(45,2)], "15":[(30,2)],
+        "21":[(90,2)], "22":[(90,2)], "23":[(90,2)], "24":[(90,2)],
+        "25":[(90,2)], "26":[(90,2),(180,1)], "27":[(45,4)],
+        "28":[(90,3)], "29":[(90,2)],
+        "31":[(90,2)], "32":[(90,2)], "33":[(90,2)],
+        "34":[(90,2),(180,1)], "35":[(90,2)], "36":[(90,2)],
+        "41":[(45,2)], "44":[(90,2)], "46":[(90,4)],
+        "47":[(90,4),(45,2)],
+        "51":[(90,2),(135,2)], "56":[(90,2),(135,2)],
+        "60":[(180,1)], "61":[(90,4),(135,2)],
+        "63":[(60,3)], "64":[(90,4)], "67":[(90,5)],
+        "75":[(180,1)], "77":[], "80":[],
+        "98":[],
+    }
+    if sc in ("77","80"):
+        return 0
+    bends = _SHAPE_BENDS.get(sc, [(90,2)])
+    total = 0
+    try:
+        for angle, count in bends:
+            total += standard_module.bend_deduction_per_bend(diameter_mm, angle) * count
+    except Exception:
+        pass
+    return total
 
 def get_all_levels(doc, params_config=None):
     p_level = params_config.get("level", ["SCHEDULE_LEVEL_PARAM"]) if params_config else ["SCHEDULE_LEVEL_PARAM"]
@@ -307,3 +338,14 @@ def get_rebar_diameters(doc):
             d = int(round(p.AsDouble() * FT_TO_MM))
             if d > 0: dias.add(d)
     return sorted(dias)
+
+def _ensure_unit_weight(standard_module, diameter_mm):
+    """
+    Returns unit weight (kg/m). Falls back to density formula for non-standard diameters.
+    w = (pi/4) * (d/1000)^2 * 7850  kg/m
+    """
+    import math
+    wt = standard_module.UNIT_WEIGHTS.get(diameter_mm)
+    if wt:
+        return wt
+    return round((math.pi / 4) * ((diameter_mm / 1000.0) ** 2) * 7850.0, 3)

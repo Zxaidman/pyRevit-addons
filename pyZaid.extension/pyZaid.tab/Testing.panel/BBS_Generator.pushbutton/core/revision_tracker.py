@@ -77,48 +77,57 @@ def load_previous_revision(prev_xlsx_path: str) -> Optional[dict]:
         return None
 
 
-def compare_revisions(
-    current_records,
-    prev_data: Optional[dict]
-) -> Dict[str, str]:
+def compare_revisions(current_records, prev_data):
     """
-    Compares current BarRecord list against previous JSON data.
-
-    Returns a dict:
-      { "bar_mark|member_name|floor_level": change_state, ... }
-
-    Also returns a separate dict of deleted bars (only in previous).
+    Returns (full_changes, simple_lookup).
+    full_changes  — composite key incl element_id (collision-proof, deleted detection)
+    simple_lookup — "bar_mark|member_name|floor_level" key (used by Excel row highlighting)
     """
     if not prev_data:
-        # No previous — everything is "new"
-        return {
+        full = {
             f"{r.floor_level}|{r.member_type}|{r.member_name}|{r.bar_mark}|{r.revit_element_id}": CHANGE_NEW
             for r in current_records
         }
+        simple = {
+            f"{r.bar_mark}|{r.member_name}|{r.floor_level}": CHANGE_NEW
+            for r in current_records
+        }
+        return full, simple
 
-    prev_bars = prev_data.get("bars", {})
+    prev_bars    = prev_data.get("bars", {})
     current_keys = set()
-    changes = {}
+    full, simple = {}, {}
 
     for r in current_records:
-        # Key includes element_id to guarantee uniqueness even when
-        # the same bar mark appears in multiple members on the same floor.
-        key = f"{r.floor_level}|{r.member_type}|{r.member_name}|{r.bar_mark}|{r.revit_element_id}"
-        current_keys.add(key)
-        if key not in prev_bars:
-            changes[key] = CHANGE_NEW
-        elif r.revision_hash != prev_bars[key].get("hash", ""):
-            changes[key] = CHANGE_CHANGED
-        else:
-            changes[key] = CHANGE_SAME
+        fk = f"{r.floor_level}|{r.member_type}|{r.member_name}|{r.bar_mark}|{r.revit_element_id}"
+        sk = f"{r.bar_mark}|{r.member_name}|{r.floor_level}"
+        current_keys.add(fk)
+        state = (CHANGE_NEW if fk not in prev_bars
+                 else CHANGE_CHANGED if r.revision_hash != prev_bars[fk].get("hash","")
+                 else CHANGE_SAME)
+        full[fk] = state
+        if sk not in simple or state != CHANGE_SAME:
+            simple[sk] = state
 
-    # Deleted bars
     for key in prev_bars:
         if key not in current_keys:
-            changes[key] = CHANGE_DELETED
+            full[key] = CHANGE_DELETED
+            parts = key.split("|")
+            if len(parts) >= 4:
+                simple[f"{parts[3]}|{parts[2]}|{parts[0]}"] = CHANGE_DELETED
 
-    return changes
+    return full, simple
 
+
+def load_previous_revision_from_sidecar(sidecar_path):
+    """Loads a .bbs_rev sidecar directly by path."""
+    if not sidecar_path or not os.path.exists(sidecar_path):
+        return None
+    try:
+        with open(sidecar_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 def build_diff_summary(changes: Dict[str, str]) -> dict:
     """Returns count summary of each change type."""

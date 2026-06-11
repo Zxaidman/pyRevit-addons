@@ -16,24 +16,24 @@ try:
 except ImportError:
     pass
 
-C_HEADER_BG   = "2C3E50"
+C_HEADER_BG   = "141414"
 C_HEADER_FG   = "FFFFFF"
-C_FLOOR_BG    = "2980B9"
+C_FLOOR_BG    = "E02020"
 C_FLOOR_FG    = "FFFFFF"
-C_MEMBER_BG   = "EBF5FB"
-C_MEMBER_FG   = "1A5276"
-C_COL_HEAD_BG = "3498DB"
+C_MEMBER_BG   = "F4F4F6"
+C_MEMBER_FG   = "141414"
+C_COL_HEAD_BG = "141414"
 C_COL_HEAD_FG = "FFFFFF"
-C_SUBTOTAL_BG = "D5D8DC"
-C_GRAND_BG    = "BDC3C7"
-C_ROW_ALT     = "F5F5F5"
+C_SUBTOTAL_BG = "E2E4EA"
+C_GRAND_BG    = "C0C8D8"
+C_ROW_ALT     = "F4F4F6"
 C_ROW_PLAIN   = "FFFFFF"
-C_NEW         = "D5F5E3"
-C_CHANGED     = "FDEBD0"
-C_DELETED     = "FADBD8"
-C_CALC_BG     = "F0F3F4"
+C_NEW         = "DCFCE7"
+C_CHANGED     = "FEF3C7"
+C_DELETED     = "FEE2E2"
+C_CALC_BG     = "F4F4F6"
 
-_thin  = Side(style="thin",   color="BDC3C7")
+_thin  = Side(style="thin",   color="C0C8D8")
 _thick = Side(style="medium", color="7F8C8D")
 BORDER_THIN  = Border(left=_thin,  right=_thin,  top=_thin,  bottom=_thin)
 BORDER_THICK = Border(left=_thick, right=_thick, top=_thick, bottom=_thick)
@@ -110,14 +110,40 @@ def _set_row_heights(ws, default_height=20):
         ws.row_dimensions[i].height = default_height
 
 
-def write_bbs_workbook(records, output_path, project_info, show_unit_weight=True, include_calc_sheet=True, include_summary_sheet=True, revision_changes=None, standard_module=None, progress_callback=None):
+def _reorganize_records(records, mode="both"):
+    """
+    Groups BarRecord list by organization mode.
+    Returns nested dict:
+      "both"   -> {floor_level: {member_name: [records]}}
+      "floor"  -> {floor_level: {"_all": [records]}}
+      "member" -> {"_all": {member_name: [records]}}
+    """
+    from collections import defaultdict
+    groups = defaultdict(lambda: defaultdict(list))
+    if mode == "floor":
+        for r in records:
+            groups[r.floor_level]["_all"].append(r)
+    elif mode == "member":
+        for r in records:
+            groups["_all"][r.member_name].append(r)
+    else:
+        for r in records:
+            groups[r.floor_level][r.member_name].append(r)
+    return groups
+
+
+def write_bbs_workbook(records, output_path, project_info,
+                       show_unit_weight=True, include_calc_sheet=True,
+                       include_summary_sheet=True, revision_changes=None,
+                       standard_module=None, progress_callback=None,
+                       organization="both"):
     wb = Workbook()
     if "Sheet" in wb.sheetnames: del wb["Sheet"]
     cols = BBS_COLUMNS if show_unit_weight else BBS_COLUMNS_NO_UW
 
     if progress_callback: progress_callback(0, 3, "Writing BBS sheet…")
     ws_bbs = wb.create_sheet("BBS")
-    _write_bbs_sheet(ws_bbs, records, project_info, cols, revision_changes, show_unit_weight)
+    _write_bbs_sheet(ws_bbs, records, project_info, cols, revision_changes, show_unit_weight, organization)
     _auto_fit_columns(ws_bbs)
     _set_row_heights(ws_bbs, 20)
 
@@ -139,7 +165,7 @@ def write_bbs_workbook(records, output_path, project_info, show_unit_weight=True
     if progress_callback: progress_callback(3, 3, "Saved ✓")
     return output_path
 
-def _write_bbs_sheet(ws, records, project_info, cols, revision_changes, show_unit_weight):
+def _write_bbs_sheet(ws, records, project_info, cols, revision_changes, show_unit_weight, organization="both"):
     n_cols = len(cols)
     row = 1
     ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=n_cols)
@@ -175,8 +201,8 @@ def _write_bbs_sheet(ws, records, project_info, cols, revision_changes, show_uni
     ws.row_dimensions[4].height = 18
     ws.freeze_panes = ws.cell(row=5, column=1)
 
-    grouped = defaultdict(lambda: defaultdict(list))
-    for r in records: grouped[r.floor_level][r.member_name].append(r)
+    grouped = _reorganize_records(records, organization)
+
 
     data_row = 5
     serial = 0
@@ -195,7 +221,7 @@ def _write_bbs_sheet(ws, records, project_info, cols, revision_changes, show_uni
             member_records = grouped[floor_level][member_name]
             ws.merge_cells(start_row=data_row, start_column=1, end_row=data_row, end_column=n_cols)
             mtype = member_records[0].member_type if member_records else ""
-            c = ws.cell(row=data_row, column=1, value=f"    {mtype}: {member_name}")
+            c = ws.cell(row=data_row, column=1, value="" if member_name == "_all" else f"    {mtype}: {member_name}")
             c.font, c.fill, c.alignment = _font(bold=True, size=10, color=C_MEMBER_FG), _fill(C_MEMBER_BG), _align("left")
             data_row += 1
 
@@ -226,8 +252,8 @@ def _write_bbs_sheet(ws, records, project_info, cols, revision_changes, show_uni
         floor_end = data_row - 1
         gt_vals = [""] * n_cols
         gt_vals[0] = f"Floor Total — {floor_level}"
-        gt_vals[n_cols - (3 if show_unit_weight else 2)] = f"=SUM({len_col_let}{floor_start}:{len_col_let}{floor_end})/2"
-        gt_vals[n_cols - 1] = f"=SUM({wt_col_let}{floor_start}:{wt_col_let}{floor_end})/2"
+        gt_vals[n_cols - (3 if show_unit_weight else 2)] = f"=SUM({len_col_let}{floor_start}:{len_col_let}{floor_end}"
+        gt_vals[n_cols - 1] = f"=SUM({wt_col_let}{floor_start}:{wt_col_let}{floor_end}"
         _set_row(ws, data_row, gt_vals, bold=True, bg=C_GRAND_BG, number_formats=[None] * (n_cols - 2) + ["#,##0.00", "#,##0.000"])
         data_row += 2
 
