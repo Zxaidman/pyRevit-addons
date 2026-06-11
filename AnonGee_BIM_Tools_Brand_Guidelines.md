@@ -37,7 +37,8 @@ Every visual value in this document maps to a named token in `pyZaid.extension/R
 10. [Accessibility Standards](#10-accessibility-standards)
 11. [UX & Content Patterns](#11-ux--content-patterns)
 12. [pyRevit Delivery Standards](#12-pyrevit-delivery-standards)
-    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–M (13 validated rules)
+    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–N (14 validated rules)
+    - [12.8 Modeless Window Architecture](#128-modeless-non-blocking-window-architecture) — IExternalEventHandler, thread bridging, CPython 3 rules
 13. [Design Tokens & Theme Architecture](#13-design-tokens--theme-architecture)
 14. [Audience Profiles](#14-audience-profiles)
 15. [Governance & Contribution](#15-governance--contribution)
@@ -934,6 +935,68 @@ def on_apply_filter(...):
 
 After the first Apply, subsequent edits to the value field trigger live re-filtering — which is good UX since the user has already configured the filter parameter and operator.
 
+#### N. Custom title-bar chrome — `WindowStyle="None"` pattern
+
+When a tool needs a fully branded Charcoal Black title bar (no native Windows chrome), use `WindowStyle="None"` with `ResizeMode="CanResizeWithGrip"`.
+
+**Required Window attributes (all literals — see §A):**
+```xml
+<Window WindowStyle="None"
+        ResizeMode="CanResizeWithGrip"
+        Background="#FF141414"   <!-- prevents white bleed behind DockPanel header -->
+        ...>
+```
+
+**Header layout — separate drag zone from chrome buttons:**
+```xml
+<!-- Outer Grid: Col 0 = drag area (*), Col 1 = chrome buttons (Auto) -->
+<Grid DockPanel.Dock="Top" Background="{StaticResource BrushCharcoalBlack}">
+    <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*"/>
+        <ColumnDefinition Width="Auto"/>
+    </Grid.ColumnDefinitions>
+    <!-- x:Name="HeaderDrag" — MouseLeftButtonDown → window.DragMove() wired in script.py -->
+    <Grid Grid.Column="0" x:Name="HeaderDrag" Margin="16,13,8,13">
+        <!-- title + live count TextBlocks here -->
+    </Grid>
+    <!-- Chrome buttons StackPanel — separate subtree, events do NOT bubble to HeaderDrag -->
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Stretch">
+        <Button x:Name="BtnMinimize" Style="{StaticResource ButtonChrome}" VerticalAlignment="Stretch"/>
+        <Button x:Name="BtnMaximize" Style="{StaticResource ButtonChrome}" VerticalAlignment="Stretch"/>
+        <Button x:Name="BtnHeaderClose" Style="{StaticResource ButtonChromeClose}" VerticalAlignment="Stretch"/>
+    </StackPanel>
+</Grid>
+```
+
+**Why separate subtrees?** `DragMove()` is a blocking call — it does not return until the mouse button is released. If `HeaderDrag.MouseLeftButtonDown` were wired on the *outer* Grid, a click on a chrome button would trigger `DragMove()` before the button's `Click` event, blocking it. Placing the drag handler only on the left column (Col 0) means chrome button clicks stay in Col 1 and never reach the drag handler.
+
+**`ButtonChrome` / `ButtonChromeClose` style specs:**
+- Independent styles (no `BasedOn=ButtonBaseStyle`) to avoid inheriting `Height="28"`
+- `Width="46"`, no explicit Height (stretch to fill header)
+- `Background="Transparent"`, hover: `#26FFFFFF` (subtle white at 15% opacity)
+- `ButtonChromeClose` hover: `BrushVividRed` (red close affordance, consistent with macOS/VS Code)
+- Path icons: minimize `M0,5 L10,5`, maximize/restore `M0.5,0.5 L9.5,0.5 L9.5,9.5 L0.5,9.5 Z`, close `M0,0 L10,10 M10,0 L0,10` — all wrapped in `<Viewbox Width="10" Height="10">`, Stroke `#FFFFFFFF`, StrokeThickness `1.5–1.8`
+
+**Minimize — use Win32, not `WindowState.Minimized`:**
+```python
+import ctypes
+from System.Windows.Interop import WindowInteropHelper
+
+def _on_minimize(self, sender, args):
+    hwnd = int(WindowInteropHelper(self.window).Handle)
+    ctypes.windll.user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE = 6
+```
+`WindowState = Minimized` propagates to Revit's host window in pyRevit's `ShowDialog()` execution context because WPF inherits the minimize from its process-level window management. Win32 `ShowWindow` on the window's own HWND minimizes only that specific window.
+
+**Maximize/restore toggle (safe via WPF):**
+```python
+def _on_maximize(self, sender, args):
+    if self.window.WindowState == WindowState.Maximized:
+        self.window.WindowState = WindowState.Normal
+    else:
+        self.window.WindowState = WindowState.Maximized
+```
+
 #### M. OneFilterParameter — validated feature state (June 2026)
 
 | Feature | Status |
@@ -951,6 +1014,120 @@ After the first Apply, subsequent edits to the value field trigger live re-filte
 | Row selection (brand red `#FECACA`, dark text) | ✅ |
 | Custom 8 px thin scrollbar | ✅ |
 | Tick-box: unchecked = white border box; checked = red box + white ✓ | ✅ |
+
+---
+
+## 12.8 Modeless (Non-Blocking) Window Architecture
+
+A **modeless** tool opens with `window.Show()` — Revit remains interactive while the window is visible. Use this pattern for tools where the user needs to navigate the model, select elements, or inspect views while the UI is open.
+
+> **Default is modal (`ShowDialog()`).** Only upgrade to modeless when the workflow genuinely requires Revit to remain interactive. Modeless adds complexity (thread bridging, state management) that modal tools avoid entirely.
+
+### 12.8.1 When to use each mode
+
+| Mode | Call | Revit interactive? | Use when |
+|---|---|---|---|
+| **Modal** | `window.ShowDialog()` | No | Self-contained action — no Revit navigation needed |
+| **Modeless** | `window.Show()` | Yes | User must navigate views, pick elements, or inspect model while UI is open |
+
+### 12.8.2 Mandatory thread-bridging via `IExternalEventHandler`
+
+`window.Show()` runs WPF on a **separate thread**. All Revit API calls (reads and writes) must occur on Revit's primary thread. Calling the Revit API directly from a WPF event handler crashes Revit.
+
+**Architecture (CPython 3):**
+
+```python
+#! python3
+from Autodesk.Revit.DB import Transaction
+from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
+
+class ApplyHandler(IExternalEventHandler):
+    def __init__(self):
+        self.data = {}          # shared state: set from WPF thread, read on Revit thread
+
+    def Execute(self, app):
+        doc = app.ActiveUIDocument.Document
+        # All DB reads/writes here — runs on Revit's primary thread
+        t = Transaction(doc, "AnonGee · My Tool")
+        t.Start()
+        try:
+            # ... use self.data set by WPF button handler ...
+            t.Commit()
+        except Exception:
+            t.RollBack()
+
+    def GetName(self):
+        return "AnonGee_ApplyHandler"
+
+# --- entry point ---
+handler   = ApplyHandler()
+ext_event = ExternalEvent.Create(handler)
+
+dialog = MyDialog(ext_event, handler)
+dialog.show()   # calls window.Show(), not ShowDialog()
+```
+
+**WPF button handler (on WPF thread):**
+```python
+def _on_apply(self, sender, args):
+    self._handler.data["source_view"] = self._source_combo.SelectedItem
+    self._handler.data["targets"]     = self._get_checked_views()
+    self._ext_event.Raise()    # queues Execute() onto Revit's event loop
+```
+
+### 12.8.3 `WindowInteropHelper` anchoring
+
+Anchor the modeless window to Revit's main window so it stays on top without blocking:
+
+```python
+from System.Windows.Interop import WindowInteropHelper
+import ctypes
+
+class MyDialog(object):
+    def __init__(self, ext_event, handler):
+        ...
+        self._ext_event = ext_event
+        self._handler   = handler
+
+    def show(self):
+        self.window.Show()
+        # Anchor to Revit main window AFTER Show()
+        helper = WindowInteropHelper(self.window)
+        helper.Owner = __revit__.MainWindowHandle
+```
+
+### 12.8.4 CPython 3 import restrictions (modeless)
+
+**NEVER import pyRevit modules** in a modeless CPython 3 script:
+
+| Forbidden import | Reason |
+|---|---|
+| `from pyrevit import revit` | IronPython dependency — crashes CPython 3 engine |
+| `from pyrevit import forms` | Same |
+| `from pyrevit.revit import events` | Same |
+
+Use only:
+- `Autodesk.Revit.DB.*`, `Autodesk.Revit.UI.*`
+- `System.*`, `System.Windows.*`
+- Standard Python stdlib (`os`, `ctypes`, `threading`, etc.)
+
+### 12.8.5 State management — shared data dict
+
+Pass data between the WPF thread and the Revit thread via a mutable dict on the handler:
+
+```python
+# WPF thread (button click):
+self._handler.data["view_id"] = selected_view.Id
+
+# Revit thread (Execute):
+view = doc.GetElement(self.data["view_id"])
+```
+
+Avoid complex locks for simple scalar/list assignments — Python's GIL protects basic dict writes. For large state mutations, set a single "ready" flag last.
+
+### 12.8.6 Validated rollout strategy
+
+> Test modeless on ONE tool first. If the `IExternalEventHandler` bridge works correctly in the target Revit + pyRevit version, port remaining tools. If it fails (e.g., `ExternalEvent.Create()` returns null or `Raise()` is silently dropped), fall back to modal (`ShowDialog()`).
 
 ---
 

@@ -1,0 +1,12 @@
+title: Copy Rebar Visibility
+author: AnonGee
+tooltip: |
+  Copy rebar visibility settings from one view to multiple target views.
+
+  Copies hidden/unhide status, Unobscured flag, and (for 3D→3D pairs)
+  the Solid flag for every rebar in the document.
+
+  Select a source view in the dropdown, check the target views,
+  then click Apply.
+
+  Version: 1.0.0
