@@ -26,78 +26,33 @@ clr.AddReference("System.Xaml")
 
 from System.Windows.Markup import XamlReader
 from System.Windows import UIElement, Visibility
-from System.Windows.Data import Binding, BindingMode
+from System.Windows.Media import VisualTreeHelper
 from System.IO import MemoryStream, File, StreamReader, Path
 from System.Text import Encoding
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Controls import ListBoxItem, CheckBox, ItemsControl, TextBox
+from System.Windows.Controls import ListBoxItem, CheckBox, DataGridRow as WpfDataGridRow
 from System.Collections.Generic import List
-from System.ComponentModel import INotifyPropertyChanged, PropertyChangedEventArgs
+from System.Collections import ArrayList
 from System import String as NetString, TimeSpan
 
 # ======================================================================
-# PREVIEW DATA CLASS (observable for live binding)
+# PREVIEW DATA CLASS — simple __slots__ for reliable WPF DataGrid binding
 # ======================================================================
-class PreviewItem(INotifyPropertyChanged):
-    """A single row in the live preview table."""
+class PreviewItem:
+    """One row in the live preview DataGrid. __slots__ is required for
+    Python.NET 3 to expose attributes as bindable properties."""
+    __slots__ = ['ElementId', 'FamilyName', 'TypeName',
+                 'FilterValue', 'EditPreview', 'IsSelected', 'InFilter', 'Element']
+
     def __init__(self, element_id, element, family_name, type_name):
-        self._element_id = str(element_id)
-        self._element = element
-        self._family_name = family_name
-        self._type_name = type_name
-        self._filter_value = ""
-        self._edit_preview = ""
-        self._is_selected = True
-        self.PropertyChanged = None
-
-    def add_PropertyChanged(self, value):
-        self.PropertyChanged = value
-    def remove_PropertyChanged(self, value):
-        self.PropertyChanged = None
-
-    def notify(self, prop_name):
-        if self.PropertyChanged is not None:
-            self.PropertyChanged(self, PropertyChangedEventArgs(prop_name))
-
-    @property
-    def ElementId(self):
-        return self._element_id
-
-    @property
-    def Element(self):
-        return self._element
-
-    @property
-    def FamilyName(self):
-        return self._family_name
-
-    @property
-    def TypeName(self):
-        return self._type_name
-
-    @property
-    def FilterValue(self):
-        return self._filter_value
-    @FilterValue.setter
-    def FilterValue(self, value):
-        self._filter_value = value
-        self.notify("FilterValue")
-
-    @property
-    def EditPreview(self):
-        return self._edit_preview
-    @EditPreview.setter
-    def EditPreview(self, value):
-        self._edit_preview = value
-        self.notify("EditPreview")
-
-    @property
-    def IsSelected(self):
-        return self._is_selected
-    @IsSelected.setter
-    def IsSelected(self, value):
-        self._is_selected = value
-        self.notify("IsSelected")
+        self.ElementId   = str(element_id)
+        self.Element     = element
+        self.FamilyName  = family_name or "N/A"
+        self.TypeName    = type_name   or "N/A"
+        self.FilterValue = ""
+        self.EditPreview = ""
+        self.IsSelected  = True
+        self.InFilter    = True
 
 # ======================================================================
 # LOAD XAML
@@ -197,6 +152,9 @@ def run_ui():
         "edit_param_name": "",     # Current edit parameter name
         "current_filter_param": None, # Parameter object for live preview
         "current_edit_param": None,   # Parameter object for edit preview
+        "filter_applied_once": False, # Gate: realtime filter only runs after Apply Filter clicked
+        "_refreshing": False,         # Guard against reentrant events during refresh
+        "last_click_index": -1,       # Tracks last clicked row for Shift+click range selection
     }
 
     # ------------------------------------------------------------------
@@ -565,15 +523,25 @@ def run_ui():
         return items
 
     def refresh_preview_display():
-        """Refresh the live preview ItemsControl with current items."""
-        state["preview_items"] = state["preview_items"]
-        items_list = List[PreviewItem]()
-        for item in state["preview_items"]:
-            items_list.Add(item)
-        preview_list.ItemsSource = items_list
-        match_count = len([i for i in state["preview_items"] if i.IsSelected])
-        total = len(state["preview_items"])
-        preview_info.Text = "{0} matching / {1} total".format(match_count, total)
+        """Populate the DataGrid — only rows where InFilter=True are shown.
+        Sets ItemsSource=None first to force WPF to recreate all row containers
+        so TwoWay checkbox bindings re-read updated IsSelected values."""
+        state["_refreshing"] = True
+        try:
+            items = ArrayList()
+            for item in state["preview_items"]:
+                if item.InFilter:
+                    items.Add(item)
+            preview_list.ItemsSource = None
+            preview_list.ItemsSource = items
+            visible = len([i for i in state["preview_items"] if i.InFilter])
+            total   = len(state["preview_items"])
+            if visible == total:
+                preview_info.Text = "{0} elements loaded".format(total)
+            else:
+                preview_info.Text = "{0} / {1} elements matched".format(visible, total)
+        finally:
+            state["_refreshing"] = False
 
     def update_live_filter_preview():
         """Update FilterValue on all preview items based on current filter."""
@@ -640,32 +608,31 @@ def run_ui():
         refresh_preview_display()
 
     def realtime_filter_update():
-        """Called on debounced timer - applies filter and updates preview."""
+        """Called on debounced timer - only runs after Apply Filter has been clicked once,
+        so changing the parameter dropdown doesn't wipe the preview before the user is ready."""
         if not state.get("filtered_elements"):
+            return
+        if not state.get("filter_applied_once"):
             return
         param_name = filter_param.Text.strip()
         operator = str(filter_op.SelectedItem) if filter_op.SelectedItem else "contains"
         value = filter_val.Text
 
         if not param_name:
-            # Reset - show all
             for item in state["preview_items"]:
+                item.InFilter   = True
                 item.IsSelected = True
             refresh_preview_display()
             return
 
         filtered_ids_set = set(filter_elements(state["filtered_elements"], param_name, operator, value))
         for item in state["preview_items"]:
-            eid_val = getattr(item.Element.Id, "Value", getattr(item.Element.Id, "IntegerValue", -1))
-            # Build element ID from preview item's stored element
-            eid_str = item.ElementId
-            # Find the actual element id
-            actual_id = item.Element.Id
-            item.IsSelected = actual_id in filtered_ids_set
+            matched = item.Element.Id in filtered_ids_set
+            item.InFilter   = matched
+            item.IsSelected = matched
 
         refresh_preview_display()
-        # Update live count
-        match_count = len([i for i in state["preview_items"] if i.IsSelected])
+        match_count = len([i for i in state["preview_items"] if i.InFilter])
         live_count.Text = "{0} elements".format(match_count)
 
     # Create debounced filter timer
@@ -824,7 +791,8 @@ def run_ui():
             filter_param.Items.Add(p)
         cat_status.Text = "Loaded {0} parameters from {1} elements.".format(len(state["all_params_cache"]), len(elements))
 
-        # Build preview items
+        # Build preview items (reset filter gate so realtime doesn't fire on fresh load)
+        state["filter_applied_once"] = False
         preview_items = build_preview_items(elements)
         state["preview_items"] = preview_items
         refresh_preview_display()
@@ -865,20 +833,24 @@ def run_ui():
         operator = str(filter_op.SelectedItem) if filter_op.SelectedItem else "contains"
         value = filter_val.Text
         filter_status.Text = "Applying filter..."
+        state["filter_applied_once"] = True
 
         filtered_ids = filter_elements(state["filtered_elements"], param_name, operator, value)
         state["filtered_ids"] = filtered_ids
 
-        # Update preview selection
+        # InFilter controls table visibility; IsSelected marks the checkbox
         filtered_set = set(filtered_ids)
         for item in state["preview_items"]:
-            item.IsSelected = item.Element.Id in filtered_set
+            matched = item.Element.Id in filtered_set
+            item.InFilter   = matched
+            item.IsSelected = matched
         refresh_preview_display()
 
         msg = "Filtered: {0} elements.".format(len(filtered_ids))
         filter_status.Text = msg
         if filtered_ids:
-            edit_params = get_common_params(state["filtered_elements"], writable_only=True)
+            filtered_elems = [item.Element for item in state["preview_items"] if item.InFilter]
+            edit_params = get_common_params(filtered_elems, writable_only=True)
             edit_param.Items.Clear()
             for p in edit_params:
                 edit_param.Items.Add(p)
@@ -970,16 +942,51 @@ def run_ui():
     edit_op.Items.Add("Delete")
     edit_op.SelectedIndex = 3
 
+    # Row click → toggle IsSelected; Shift+click → range-select.
+    # MouseLeftButtonUp fires after DataGrid processes the click so Shift modifier is readable.
+    def on_preview_list_click(sender, args):
+        if state.get("_refreshing"):
+            return
+        try:
+            from System.Windows.Input import Keyboard, ModifierKeys
+            dep_obj = args.OriginalSource
+            while dep_obj is not None:
+                if isinstance(dep_obj, WpfDataGridRow):
+                    item = dep_obj.Item
+                    if not (hasattr(item, 'InFilter') and item.InFilter):
+                        return
+                    visible = [i for i in state["preview_items"] if i.InFilter]
+                    if item not in visible:
+                        return
+                    idx = visible.index(item)
+                    shift_down = bool(Keyboard.Modifiers & ModifierKeys.Shift)
+                    last_idx = state.get("last_click_index", -1)
+                    if shift_down and last_idx >= 0:
+                        lo, hi = min(last_idx, idx), max(last_idx, idx)
+                        for i in range(lo, hi + 1):
+                            visible[i].IsSelected = True
+                    else:
+                        item.IsSelected = not bool(item.IsSelected)
+                        state["last_click_index"] = idx
+                    refresh_preview_display()
+                    return
+                dep_obj = VisualTreeHelper.GetParent(dep_obj)
+        except Exception:
+            pass
+    preview_list.MouseLeftButtonUp += on_preview_list_click
+
     # Row selection buttons
     def on_select_all_rows(sender, args):
         for item in state["preview_items"]:
-            item.IsSelected = True
+            if item.InFilter:
+                item.IsSelected = True
         refresh_preview_display()
     btn_select_all_rows.Click += on_select_all_rows
 
     def on_deselect_all_rows(sender, args):
         for item in state["preview_items"]:
-            item.IsSelected = False
+            if item.InFilter:
+                item.IsSelected = False
         refresh_preview_display()
     btn_deselect_all_rows.Click += on_deselect_all_rows
 

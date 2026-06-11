@@ -37,6 +37,7 @@ Every visual value in this document maps to a named token in `pyZaid.extension/R
 10. [Accessibility Standards](#10-accessibility-standards)
 11. [UX & Content Patterns](#11-ux--content-patterns)
 12. [pyRevit Delivery Standards](#12-pyrevit-delivery-standards)
+    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–M (13 validated rules)
 13. [Design Tokens & Theme Architecture](#13-design-tokens--theme-architecture)
 14. [Audience Profiles](#14-audience-profiles)
 15. [Governance & Contribution](#15-governance--contribution)
@@ -671,6 +672,285 @@ Use the shipping `ControlTemplate` resources rather than hand-building chrome:
 | `AnonGeeWindowTemplate` | Standard tool window — Charcoal header, 3px Vivid Red rule, white scroll content, Off White footer |
 | `AnonGeeDialogTemplate` | Fixed-width modal — header, accent rule, content, Cancel(Ghost)/Confirm(Primary) action bar |
 | `DockablePanelTemplate` | `IDockablePaneProvider` compact panel, 2px accent rule, single column |
+
+### 12.7 WPF ControlTemplate Constraints
+
+Validated constraints discovered during **OneFilterParameter v3.0** development (June 2026). These are hard rules, not preferences.
+
+#### A. Never use StaticResource on root Window attributes
+
+```xml
+<!-- WRONG — XamlReader resolves Window attributes BEFORE Window.Resources is parsed -->
+<Window Background="{StaticResource BrushPureWhite}" ...>
+    <Window.Resources>...</Window.Resources>
+
+<!-- CORRECT — use literal values on the root element -->
+<Window Background="White" FontFamily="Inter, Segoe UI, Arial" ...>
+    <Window.Resources>...</Window.Resources>
+```
+
+`XamlReader.Load()` resolves root `<Window>` attribute expressions before the `Window.Resources` block is parsed. Any `{StaticResource}` or `{DynamicResource}` reference on a `Window` attribute (Background, FontFamily, Foreground, etc.) throws at parse time. Use literal values only on the `<Window>` element itself; all child elements inside `Window.Resources` can use resource references freely.
+
+#### B. Always use the inline theme strategy
+
+Runtime injection (`window.Resources.MergedDictionaries.Add(...)` after `XamlReader.Load()`) does not cause `DynamicResource` references in Style Setters to resolve inside Revit's pyRevit WPF sandbox. The only reliable strategy is to inline all theme content directly under `<Window.Resources>` before loading. The inline copy must be verbatim — paste from `Resources/*.xaml` in merge order: Colors → Typography → Controls → Panels → Icons.
+
+#### C. ComboBox editable mode requires PART_EditableTextBox in the ControlTemplate
+
+If `IsEditable="True"` is set on a ComboBox but the ControlTemplate does not contain a `TextBox x:Name="PART_EditableTextBox"`, the editable mode silently fails — the control renders but users cannot type. The standard InputComboBox ControlTemplate must include both parts:
+
+```xml
+<!-- Required named parts for editable ComboBox -->
+<ContentPresenter x:Name="ContentSite" .../>       <!-- shows selection in read-only mode -->
+<TextBox x:Name="PART_EditableTextBox" .../>        <!-- activated when IsEditable=True -->
+
+<!-- IsEditable trigger swaps them -->
+<Trigger Property="IsEditable" Value="True">
+    <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+    <Setter TargetName="ContentSite"          Property="Visibility" Value="Hidden"/>
+</Trigger>
+```
+
+Also name the Popup `PART_Popup` (not `Popup`) to match WPF's expected part name.
+
+#### D. Always add an implicit ComboBoxItem style
+
+Without an implicit `<Style TargetType="ComboBoxItem">` (no `x:Key`), dropdown items inherit the ambient Foreground from the system theme — which can be white-on-white inside Revit's dark shell. Add a keyless ComboBoxItem style after InputComboBox:
+
+```xml
+<Style TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
+    <Setter Property="Padding"    Value="8,5"/>
+    <Setter Property="MinHeight"  Value="28"/>
+</Style>
+```
+
+#### E. TextBox ControlTemplate — never use Margin="{TemplateBinding Padding}" vertically
+
+A pattern like:
+
+```xml
+<Border Height="36">
+    <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
+</Border>
+```
+
+…with `Padding="10,8"` leaves the ScrollViewer only 20px tall (36 − 16), clipping the rendered text. Fix: use a fixed horizontal margin only and let the ScrollViewer center vertically.
+
+```xml
+<!-- CORRECT -->
+<Border>  <!-- no fixed Height; use MinHeight on the Style -->
+    <ScrollViewer x:Name="PART_ContentHost"
+                  Margin="8,0"
+                  VerticalAlignment="Center"/>
+</Border>
+```
+
+Set `MinHeight="32"` on the Style instead of a fixed `Height`. The ScrollViewer's `VerticalAlignment="Center"` positions text correctly inside the Border regardless of its actual height.
+
+#### F. Use focus trigger IsKeyboardFocusWithin, not IsFocused
+
+`IsFocused` on a ComboBox does not fire when a child TextBox has keyboard focus. Use `IsKeyboardFocusWithin` for all focus-state border color triggers on container controls (ComboBox, ListBox, GroupBox). `IsFocused` is correct only for leaf controls like a standalone TextBox.
+
+#### G. DataGrid data binding — use `__slots__` + ArrayList + ItemsSource (not INPC)
+
+DataTemplate bindings to Python `@property` objects on classes that implement `INotifyPropertyChanged` fail silently in CPython 3 / Python.NET 3 — bindings return empty strings or the template instantiates without errors but with blank cells. The reliable pattern uses a plain `__slots__` class with no INPC, a `System.Collections.ArrayList`, and `DataGrid.ItemsSource`:
+
+```python
+from System.Collections import ArrayList
+
+class PreviewItem:
+    __slots__ = ['ElementId', 'FamilyName', 'TypeName',
+                 'FilterValue', 'EditPreview', 'IsSelected', 'InFilter', 'Element']
+    def __init__(self, ...):
+        self.IsSelected = True   # Python bool works with DataTrigger (see §L)
+        self.InFilter   = True   # internal visibility flag; not bound to any column
+
+def refresh():
+    items = ArrayList()
+    for item in state["preview_items"]:
+        if item.InFilter:          # only show rows that passed the filter
+            items.Add(item)
+    preview_list.ItemsSource = None  # force WPF to flush all row containers
+    preview_list.ItemsSource = items # recreate rows so updated IsSelected is re-read
+```
+
+**Why `ItemsSource = None` first?** WPF DataGrid may reuse existing row containers when the same Python objects appear in a new collection. Setting `ItemsSource = None` forces the DataGrid to destroy and recreate all rows, ensuring `DataTrigger` bindings re-read fresh values.
+
+**Slot names must exactly match XAML binding paths.** `{Binding FamilyName}` requires a slot (or property) named `FamilyName`. Python attribute names are case-sensitive.
+
+#### H. DataGrid selection colors — override `SystemColors` keys in `DataGrid.Resources`
+
+WPF DataGrid uses `SystemColors.HighlightBrush` (system blue) and `SystemColors.HighlightTextBrush` (white) for selected rows. These are applied by the DataGrid's visual state manager at a level that overrides `RowStyle` trigger backgrounds. Override them at the DataGrid scope by redefining the system color keys inside `DataGrid.Resources`:
+
+```xml
+<DataGrid ...>
+    <DataGrid.Resources>
+        <!-- Scoped override — only affects this DataGrid, not the rest of the window -->
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"                      Color="#FECACA"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"                  Color="#141414"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}"     Color="#FECACA"/>
+        <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#141414"/>
+    </DataGrid.Resources>
+    ...
+</DataGrid>
+```
+
+This is the only mechanism that reliably prevents white text on selection without a full DataGrid ControlTemplate override. Also set `Foreground=BrushCharcoalBlack` on `DataGrid.CellStyle` as a default to ensure text stays dark even in partially themed scenarios.
+
+#### I. `InputCheckBox` ControlTemplate — always target named inner elements in triggers
+
+The `CheckBox.Background` dependency property is **not** the background of the inner `Border` inside a custom ControlTemplate. They are separate objects. An `IsChecked=True` trigger with no `TargetName` sets `CheckBox.Background`, which has no visual effect if the template's `Border` has a hardcoded `Background` attribute.
+
+**Incorrect (invisible tick, border stays white):**
+```xml
+<Trigger Property="IsChecked" Value="True">
+    <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+    <Setter Property="Background">          <!-- sets CheckBox.Background — does nothing visible -->
+        <Setter.Value><SolidColorBrush Color="{StaticResource ColorVividRed}"/></Setter.Value>
+    </Setter>
+</Trigger>
+```
+
+**Correct (red box, white tick visible):**
+```xml
+<!-- Border must carry x:Name="CheckBoxBorder" -->
+<Trigger Property="IsChecked" Value="True">
+    <Setter TargetName="CheckMark"      Property="Visibility" Value="Visible"/>
+    <Setter TargetName="CheckBoxBorder"  Property="Background" Value="{StaticResource BrushVividRed}"/>
+</Trigger>
+<Trigger Property="IsMouseOver" Value="True">
+    <Setter TargetName="CheckBoxBorder"  Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+</Trigger>
+```
+
+The same rule applies to ALL named child elements in a ControlTemplate: any property you want to change in a trigger must be targeted by `TargetName`.
+
+#### J. Prefer `DataTrigger` over `ControlTemplate.Trigger` for Python data bindings
+
+`ControlTemplate.Trigger Property="IsChecked"` watches the `CheckBox.IsChecked` dependency property (`Nullable<bool>`). Python `bool` (`True`/`False`) is not reliably converted to `Nullable<bool>` through the Python.NET 3 TypeDescriptor binding path — the trigger may never fire even when the bound source is `True`.
+
+`DataTrigger Binding="{Binding IsSelected}" Value="True"` bypasses the control property entirely and reads the data item's Python attribute directly. WPF converts `Value="True"` (string) to the bound type via `TypeConverter`, which correctly handles Python.NET 3 `bool` → `System.Boolean` comparison.
+
+**Preferred pattern for a visual indicator column (tick-box display):**
+
+```xml
+<DataGridTemplateColumn Header="" Width="36">
+    <DataGridTemplateColumn.CellTemplate>
+        <DataTemplate>
+            <Border Width="16" Height="16" CornerRadius="3"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" BorderThickness="1">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background"  Value="White"/>
+                        <Setter Property="BorderBrush" Value="#E2E4EA"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="Background"  Value="#E02020"/>
+                                <Setter Property="BorderBrush" Value="#E02020"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Path Data="M2,7 L5,10 L11,3" Stroke="White" StrokeThickness="1.5"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Path.Style>
+                        <Style TargetType="Path">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Path.Style>
+                </Path>
+            </Border>
+        </DataTemplate>
+    </DataGridTemplateColumn.CellTemplate>
+</DataGridTemplateColumn>
+```
+
+This avoids `DataGridCheckBoxColumn` (poor Python.NET 3 compatibility) and `InputCheckBox` style (IsChecked trigger issues) entirely.
+
+#### K. DataGrid row click / Shift+click selection via MouseLeftButtonUp
+
+Because `refresh_preview_display()` resets `ItemsSource` (which clears DataGrid row selection), `SelectionChanged` cannot be used as a toggle mechanism — it creates a feedback loop where a selection triggers a refresh that clears the selection, breaking range selection anchors.
+
+Use `DataGrid.MouseLeftButtonUp` instead: it fires **after** the DataGrid processes the click, so the Shift modifier state is readable. Walk the visual tree upward from `args.OriginalSource` to find the `DataGridRow`, then toggle `item.IsSelected` directly in Python:
+
+```python
+from System.Windows.Media import VisualTreeHelper          # PresentationCore — NOT System.Windows
+from System.Windows.Controls import DataGridRow as WpfDataGridRow
+
+def on_row_click(sender, args):
+    if state.get("_refreshing"):
+        return
+    try:
+        from System.Windows.Input import Keyboard, ModifierKeys
+        dep_obj = args.OriginalSource
+        while dep_obj is not None:
+            if isinstance(dep_obj, WpfDataGridRow):
+                item = dep_obj.Item
+                if hasattr(item, 'InFilter') and item.InFilter:
+                    visible = [i for i in state["preview_items"] if i.InFilter]
+                    idx = visible.index(item)
+                    if bool(Keyboard.Modifiers & ModifierKeys.Shift) and state["last_idx"] >= 0:
+                        lo, hi = min(state["last_idx"], idx), max(state["last_idx"], idx)
+                        for i in range(lo, hi + 1):
+                            visible[i].IsSelected = True
+                    else:
+                        item.IsSelected = not bool(item.IsSelected)
+                        state["last_idx"] = idx
+                    refresh_preview_display()
+                return
+            dep_obj = VisualTreeHelper.GetParent(dep_obj)
+    except Exception:
+        pass
+
+preview_list.MouseLeftButtonUp += on_row_click
+```
+
+The `_refreshing` guard (set in `refresh_preview_display()`) prevents this handler from firing during the `ItemsSource = None → items` reset cycle.
+
+#### L. Real-time filter gate — always require explicit Apply before debounced updates
+
+Without a gate, the debounced filter callback fires as soon as the user changes the filter parameter dropdown. At that point the value field is still empty, so the filter matches nothing and the preview goes blank — confusing UX.
+
+Gate the callback with a `filter_applied_once` flag:
+
+```python
+state["filter_applied_once"] = False   # reset on Load Parameters
+
+def realtime_filter_update():
+    if not state.get("filter_applied_once"):
+        return   # wait for explicit Apply
+    # ... run filter ...
+
+def on_apply_filter(...):
+    state["filter_applied_once"] = True
+    # ... run filter ...
+```
+
+After the first Apply, subsequent edits to the value field trigger live re-filtering — which is good UX since the user has already configured the filter parameter and operator.
+
+#### M. OneFilterParameter — validated feature state (June 2026)
+
+| Feature | Status |
+|---|---|
+| Window opens in Revit, inline theme loads | ✅ |
+| Load Parameters → DataGrid populates | ✅ |
+| Filter Param column updates on Confirm | ✅ |
+| Edit Preview column updates on Confirm | ✅ |
+| Apply Filter → hides non-matching rows | ✅ |
+| Apply Filter → narrows Edit Param dropdown to filtered elements | ✅ |
+| Real-time filter after Apply Filter clicked | ✅ |
+| Row click toggles tick-box; Shift+click range-selects | ✅ |
+| Select All / Clear buttons toggle visible rows only | ✅ |
+| Row hover (light pink `#FDECEA`) | ✅ |
+| Row selection (brand red `#FECACA`, dark text) | ✅ |
+| Custom 8 px thin scrollbar | ✅ |
+| Tick-box: unchecked = white border box; checked = red box + white ✓ | ✅ |
 
 ---
 

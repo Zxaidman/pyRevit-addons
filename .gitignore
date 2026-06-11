@@ -1,7 +1,5 @@
 pyZaid.extension/lib/
 .claude
 .env
-tools
-UI_Templates
 __pycache__
 bin

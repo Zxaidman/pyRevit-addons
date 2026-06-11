@@ -271,7 +271,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <Border Grid.Column="0" Width="16" Height="16" CornerRadius="3"
+                        <Border x:Name="CheckBoxBorder" Grid.Column="0" Width="16" Height="16" CornerRadius="3"
                                 BorderBrush="{StaticResource BrushLightBorder}"
                                 BorderThickness="1"
                                 Background="{StaticResource BrushPureWhite}"
@@ -287,15 +287,11 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
-                            <Setter Property="Background">
-                                <Setter.Value>
-                                    <SolidColorBrush Color="{StaticResource ColorVividRed}"/>
-                                </Setter.Value>
-                            </Setter>
+                            <Setter TargetName="CheckMark"      Property="Visibility" Value="Visible"/>
+                            <Setter TargetName="CheckBoxBorder"  Property="Background" Value="{StaticResource BrushVividRed}"/>
                         </Trigger>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                            <Setter TargetName="CheckBoxBorder"  Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -423,5 +419,112 @@
     <DropShadowEffect x:Key="ElevationLevel1" Color="#000000" Opacity="0.10" BlurRadius="3" ShadowDepth="1" Direction="270"/>
     <DropShadowEffect x:Key="ElevationLevel2" Color="#000000" Opacity="0.14" BlurRadius="12" ShadowDepth="4" Direction="270"/>
     <DropShadowEffect x:Key="ElevationLevel3" Color="#000000" Opacity="0.18" BlurRadius="24" ShadowDepth="8" Direction="270"/>
+
+    <!-- ════════════════════════════════════════════════════════════════
+         SCROLLBAR — 8px, no arrows, rounded thumb, brand palette
+         SilverSteel → CharcoalBlack (hover) → VividRed (drag)
+         ════════════════════════════════════════════════════════════════ -->
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Width"      Value="8"/>
+        <Setter Property="MinWidth"   Value="8"/>
+        <!-- Vertical template (default) -->
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ScrollBar">
+                    <Grid Background="Transparent">
+                        <Border Background="{StaticResource BrushOffWhite}"
+                                CornerRadius="4" Margin="2,0"/>
+                        <Track x:Name="PART_Track" IsDirectionReversed="True">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageUpCommand"
+                                              Focusable="False" Opacity="0"
+                                              Background="Transparent" BorderThickness="0"/>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="ScrollBar.PageDownCommand"
+                                              Focusable="False" Opacity="0"
+                                              Background="Transparent" BorderThickness="0"/>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb>
+                                    <Thumb.Template>
+                                        <ControlTemplate TargetType="Thumb">
+                                            <Border x:Name="ThumbBd"
+                                                    CornerRadius="3" Margin="2,0"
+                                                    Background="{StaticResource BrushSilverSteel}"/>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ThumbBd" Property="Background"
+                                                            Value="{StaticResource BrushCharcoalBlack}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="ThumbBd" Property="Background"
+                                                            Value="{StaticResource BrushVividRed}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Thumb.Template>
+                                </Thumb>
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <!-- Horizontal orientation override -->
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Width"     Value="Auto"/>
+                <Setter Property="MinWidth"  Value="0"/>
+                <Setter Property="Height"    Value="8"/>
+                <Setter Property="MinHeight" Value="8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Grid Background="Transparent">
+                                <Border Background="{StaticResource BrushOffWhite}"
+                                        CornerRadius="4" Margin="0,2"/>
+                                <Track x:Name="PART_Track" IsDirectionReversed="False">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageLeftCommand"
+                                                      Focusable="False" Opacity="0"
+                                                      Background="Transparent" BorderThickness="0"/>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageRightCommand"
+                                                      Focusable="False" Opacity="0"
+                                                      Background="Transparent" BorderThickness="0"/>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb>
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border x:Name="ThumbBd"
+                                                            CornerRadius="3" Margin="0,2"
+                                                            Background="{StaticResource BrushSilverSteel}"/>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="ThumbBd" Property="Background"
+                                                                    Value="{StaticResource BrushCharcoalBlack}"/>
+                                                        </Trigger>
+                                                        <Trigger Property="IsDragging" Value="True">
+                                                            <Setter TargetName="ThumbBd" Property="Background"
+                                                                    Value="{StaticResource BrushVividRed}"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
 
 </ResourceDictionary>
