@@ -1,5 +1,24 @@
-pyZaid.extension/lib/
+# --- Your Existing Rules ---
+AnonGee.extension/lib/
 .claude
 .env
 __pycache__
 bin
+
+# --- Extended Python & Caching ---
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+
+# --- Extended AI Assistant Workspaces & Logs ---
+.cline/
+.roo/
+.cursor/
+*.log
+
+# --- System & Environment Files ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -37,12 +37,14 @@ Every visual value in this document maps to a named token in `pyZaid.extension/R
 10. [Accessibility Standards](#10-accessibility-standards)
 11. [UX & Content Patterns](#11-ux--content-patterns)
 12. [pyRevit Delivery Standards](#12-pyrevit-delivery-standards)
-    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–N (14 validated rules)
+    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–P (16 validated rules)
     - [12.8 Modeless Window Architecture](#128-modeless-non-blocking-window-architecture) — IExternalEventHandler, thread bridging, CPython 3 rules
+    - [12.9 CPython 3 Engine Stability](#129-cpython-3-engine-stability) — persistent engine, handler/GC crash traps, stripped stdlib, native-fault truth
 13. [Design Tokens & Theme Architecture](#13-design-tokens--theme-architecture)
 14. [Audience Profiles](#14-audience-profiles)
 15. [Governance & Contribution](#15-governance--contribution)
 16. [Document & Report Standards](#16-document--report-standards)
+    - [16.1 Spreadsheet / Schedule Export (Excel)](#161-spreadsheet--schedule-export-excel) — brand colors, fonts, alignment & AutoFit rules for .xlsx output
 17. [Brand Don'ts](#17-brand-donts)
 18. [Appendix — Token Reference](#18-appendix--token-reference)
 
@@ -98,7 +100,7 @@ AnonGee BIM Tools
 - **AnonGee** — Title case only. Never `ANONGEE`, `anongee`, or `Anon Gee`.
 - **BIM** — Always uppercase; it is an established industry acronym.
 - **Tools** — Title case.
-- The wordmark is set in **Inter SemiBold** in all digital contexts.
+- The wordmark is set in **Source Serif 4 SemiBold** in all digital contexts.
 
 ### 2.3 Sub-Product Naming Convention
 
@@ -207,10 +209,12 @@ Used in tables, badges, and selection states. These are intentionally not part o
 
 | Role | Primary | WPF Fallback chain | Token |
 |---|---|---|---|
-| UI & Body | **Inter** | `Inter, Segoe UI, Arial` | `FontSans` |
-| Code & Technical Output | **JetBrains Mono** | `JetBrains Mono, Consolas, Courier New` | `FontMono` |
+| UI, Body & Headings | **JetBrains Mono** | `JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri` | `FontSans` |
+| Code, Technical Output & Status | **JetBrains Mono** | `JetBrains Mono, Consolas, Courier New` | `FontMono` |
 
-Inter and JetBrains Mono are open-source ([fonts.google.com](https://fonts.google.com)). Because pyRevit tools run inside Revit's process, **do not assume the fonts are installed** — the fallback chain guarantees a graceful degrade to Segoe UI / Consolas, which are present on every Revit 2025 host. Embedding is optional; the fallback is mandatory.
+JetBrains Mono and Source Serif 4 are open-source ([fonts.google.com](https://fonts.google.com)). Because pyRevit tools run inside Revit's process, **do not assume the fonts are installed** — the fallback chain guarantees a graceful degrade to **Segoe UI / Calibri / Consolas**, which are present on every Revit 2025 host. Embedding is optional; the fallback is mandatory.
+
+> **Token-name note.** The primary face is now **monospace** (JetBrains Mono), with Source Serif 4 as the first fallback. The token is still named `FontSans` for backward compatibility with shipped XAML — do **not** rename it. Treat `FontSans` as "the primary UI typeface". (Migration history: Inter → Source Serif 4 (v3.1) → JetBrains Mono-led (v3.2).)
 
 ### 4.2 Type Scale
 
@@ -259,7 +263,8 @@ These `TextBlock` styles exist in `Typography.xaml`; reference them — do not s
 
 - **Headings are Charcoal Black** on light surfaces — never Vivid Red.
 - **Body text is Mid Grey** (`#6B7280`) on white, not pure black.
-- **All technical output is monospace** — element IDs, parameter names, file paths, API responses, script logs. Never proportional.
+- **All technical output is monospace** (JetBrains Mono) — element IDs, parameter names, file paths, API responses, script logs. Never proportional.
+- **Status badges and all-caps state labels use JetBrains Mono** at Caption size (`READY`, `BETA`, `ERROR`, `v1.2`, success/error footer text). Mono = status + code; the serif `FontSans` is for everything else.
 - **All-caps is reserved for badges** (`BETA`, `ERROR`, `v1.2`) at Caption size with positive letter-spacing. Never for headings or prose.
 
 ---
@@ -503,7 +508,9 @@ Inline validation only: errors render as a `TextError` line directly below the f
 | RadioButton | `InputRadioButton` | 16×16 ring, 8px Vivid Red dot | ≥28px row |
 | ListBox | `InputListBox` + `ListBoxItemBase` | hover `BrushTableRowHover`; selected `BrushTableRowSelected` + 3px left Vivid Red border | item padding `8,6` |
 
-Hover border on checkboxes is Vivid Red. The whole row is the hit target, not just the box.
+Hover border on checkboxes is Vivid Red. The whole row is the hit target, not just the box. **Use the checkbox for list selection only** — for a binary on/off setting use the **Toggle Switch (§9.9)**.
+
+> **`InputListBox` must be re-templated for a rounded container.** WPF's default `ListBox` template draws **square** corners — setting `BorderBrush`/`BorderThickness` alone is not enough. Re-template at 5px (`radius-md`, §5.2) to match TextBox/ComboBox, using the **fill / content / stroke-on-top** structure (§12.7.O) so all four edges stay uniform. The same pattern applies to TextBox and any bordered scroller.
 
 ### 9.5 Status Badges & Tags
 
@@ -533,10 +540,24 @@ All script output, API responses, and element IDs use the `TextCode` style: Char
 
 ### 9.8 Data Tables
 
-- Header row: Charcoal Black bg, white text, Inter SemiBold, `FontSizeH3`.
+- Header row: Charcoal Black bg, white text, `FontSans` SemiBold, `FontSizeH3`.
 - Rows: White / Off White alternating; hover `#FDECEA`; selected `#FEF2F2` with 3px left Vivid Red border.
 - Cell padding: `14,10` (comfortable) or `10,6` (compact, §5.4).
 - Dividers: 1px Light Border.
+
+### 9.9 Toggle Switch
+
+The **toggle switch is the required control for a binary on/off option** (Android-style). Use it instead of a checkbox whenever the choice is a self-contained setting that takes effect immediately or on submit (export options, feature flags). Reserve the **checkbox** (§9.4) for *list selection* — picking items from a set (e.g. which schedules to export).
+
+| Part | Spec |
+|---|---|
+| Track | 38 × 20, fully rounded (`CornerRadius=10`). **Off:** Silver Steel `#C0C8D8`. **On:** Vivid Red `#E02020`. |
+| Thumb | 16 × 16 white ellipse, 2px inset; slides left↔right (`TranslateTransform` X 0 → 18) over **150 ms**. |
+| Label | Primary UI font (`FontSans`), Body size, Charcoal Black, **left of the track** (track right-aligned in its cell). |
+| States | Hover: track 0.85 opacity. Disabled: track `BrushDisabledBackground`, label `BrushDisabledForeground`. |
+| Hit target | ≥24px row; the whole label+track row toggles. |
+
+**Implementation.** Style **targets `CheckBox`** (keyed `ToggleSwitch`) so existing `IsChecked` script logic is unchanged — only the `ControlTemplate` differs. The slide is a `DoubleAnimation` on the thumb's `TranslateTransform` in `IsChecked` Enter/Exit actions (works under `XamlReader.Load`, no code-behind). Reference implementation: Export Schedule `ui.xaml`.
 
 ---
 
@@ -674,6 +695,10 @@ Use the shipping `ControlTemplate` resources rather than hand-building chrome:
 | `AnonGeeDialogTemplate` | Fixed-width modal — header, accent rule, content, Cancel(Ghost)/Confirm(Primary) action bar |
 | `DockablePanelTemplate` | `IDockablePaneProvider` compact panel, 2px accent rule, single column |
 
+**Header & footer layout.**
+- The **header** carries only the tool title (`TextH2OnDark`) on the Charcoal band — keep it clean, no metadata.
+- The **live count / status metadata** (`x:Name="LiveCount"`) lives in the **footer status row**, right of the badges and left of the Close button (`TextCaption`, Mid Grey). Do **not** place the count in the header. The status badge (Info/Success/Error) and live count sit together so all transient state is in one place.
+
 ### 12.7 WPF ControlTemplate Constraints
 
 Validated constraints discovered during **OneFilterParameter v3.0** development (June 2026). These are hard rules, not preferences.
@@ -686,7 +711,7 @@ Validated constraints discovered during **OneFilterParameter v3.0** development 
     <Window.Resources>...</Window.Resources>
 
 <!-- CORRECT — use literal values on the root element -->
-<Window Background="White" FontFamily="Inter, Segoe UI, Arial" ...>
+<Window Background="White" FontFamily="JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri" ...>
     <Window.Resources>...</Window.Resources>
 ```
 
@@ -1015,6 +1040,36 @@ def _on_maximize(self, sender, args):
 | Custom 8 px thin scrollbar | ✅ |
 | Tick-box: unchecked = white border box; checked = red box + white ✓ | ✅ |
 
+#### O. Rounded borders on content-hosting controls — draw the stroke on top
+
+A single rounded `Border` that both *fills* and *strokes* **and** hosts a `ScrollViewer` (TextBox `PART_ContentHost`, ListBox items) renders an **uneven border** — the bottom edge looks thinner/flatter — because the scroller's rectangular content area ignores `CornerRadius` and rides over the inner edge where the corner curve gives least clearance. Buttons/ComboBoxes are unaffected because their content is inset by `Padding` and never touches the stroke.
+
+**Rule:** for `InputTextBox` and `InputListBox` (and any bordered scroller), split the template into three layers inside a `Grid`:
+
+```xml
+<Grid SnapsToDevicePixels="True">
+    <Border x:Name="Bg" Background="{TemplateBinding Background}" CornerRadius="5"/>
+    <!-- content: ScrollViewer / PART_ContentHost / ItemsPresenter -->
+    <Border x:Name="Stroke" CornerRadius="5"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            IsHitTestVisible="False"/>   <!-- drawn last → uniform on all 4 edges -->
+</Grid>
+```
+
+Focus/disabled triggers target `Stroke` (border color/thickness) and `Bg` (fill), not the old single `Root` border. The TextBox **must** still keep its `ScrollViewer x:Name="PART_ContentHost"`. ListBox content gets `Margin="{TemplateBinding BorderThickness}"` so it sits inside the stroke. This is the reference pattern shipped in every tool and in Dev → Brand Guidelines.
+
+#### P. ScrollBar — style BOTH orientations, and editable ComboBox needs `PART_EditableTextBox`
+
+Two separate traps that surface together on a populated dropdown:
+
+- **The implicit `ScrollBar` style must define both orientations.** A style that only templates the vertical bar (fixed `Width=8`, vertical `Track`) makes a **horizontal** scrollbar render as a broken thin strip that still reacts to hover/drag. Drive the template from a `Style.Triggers` block keyed on `Orientation`: *Vertical* → `Width=8`, vertical `Track` (`IsDirectionReversed=True`, `PageUp/PageDownCommand`); *Horizontal* → `Height=8`, horizontal `Track` (`PageLeft/PageRightCommand`), thumb `Margin="0,2"`. Same thin 8px Silver-Steel thumb (Charcoal hover, Vivid Red drag) for both.
+- **ComboBox dropdown sizes to its content (min = combo width).** Do **not** pin the popup to `Width="{TemplateBinding ActualWidth}"` — that clips long items. Instead put `MinWidth="{TemplateBinding ActualWidth}"` + a `MaxWidth` cap (≈520) on the popup's content `Border`, and `HorizontalScrollBarVisibility="Hidden"` on its `ScrollViewer`. **Hidden** lets the items measure wide so the popup grows to the widest item; **Disabled** would clamp them back to the combo width (and re-introduce the broken horizontal bar). Net: the dropdown is never narrower than the combo and never spawns a horizontal scrollbar.
+- **Editable ComboBox (`IsEditable=True`) requires a `TextBox x:Name="PART_EditableTextBox"` in the template** (§12.7.C). A full-area `ToggleButton` (bound to `IsDropDownOpen`) under the content opens the list; an `IsEditable` trigger swaps the `PART_EditableTextBox` (visible) for the `ContentSite` `ContentPresenter` (collapsed). Reference implementation: Advance → Multi Filter Parameter `ui.xaml`.
+- **To load dependent fields off a ComboBox selection, handle `DropDownClosed` (+ `LostFocus`), never `SelectionChanged`.** `SelectionChanged` fires for every item you arrow-/scroll-past while the dropdown is open, so dependent fields get loaded for a half-highlighted, un-committed item (values bleed across selections). `DropDownClosed` fires once on commit; add `LostFocus` so a typed/autocompleted value also commits when focus leaves. **Guard the handler to no-op when the value is unchanged** (track the last-applied text per control) — otherwise the second trigger (`DropDownClosed` then `LostFocus`) wipes the dependent fields the user just set. Programmatic `Items.Clear()/Add()` must not fire these (they don't open/close the dropdown or move focus). Reference: Multi Filter Parameter `confirm_filter_row` / `confirm_edit_row`.
+
+> **Marshalling note (not a template rule, but it bites here):** build `List[ElementId]` for `Selection.SetElementIds` with `.Add()` in a loop — `List[ElementId](python_list)` throws *"No method matches given arguments for List\`1..ctor"* in CPython 3/pythonnet (§12.9.4).
+
 ---
 
 ## 12.8 Modeless (Non-Blocking) Window Architecture
@@ -1128,6 +1183,48 @@ Avoid complex locks for simple scalar/list assignments — Python's GIL protects
 ### 12.8.6 Validated rollout strategy
 
 > Test modeless on ONE tool first. If the `IExternalEventHandler` bridge works correctly in the target Revit + pyRevit version, port remaining tools. If it fails (e.g., `ExternalEvent.Create()` returns null or `Raise()` is silently dropped), fall back to modal (`ShowDialog()`).
+
+---
+
+## 12.9 CPython 3 Engine Stability
+
+> A circulating "best practices" list is **mostly correct but has one misleading item and omits the single biggest cause of CPython3 crashes.** This section is the corrected, authoritative version. A genuine engine crash forces a full Revit restart, so prevention is the whole game.
+
+### 12.9.1 The hard truth: you cannot catch a native crash
+
+A real engine crash is a **`System.AccessViolationException` / Corrupted-State Exception (CSE)**. By default in .NET 4+, CSEs **bypass every managed handler** — no `except Exception:`, no `except System.Exception:`, and no `try/finally` will catch them. Therefore:
+
+- `try/except` protects you from **Python and .NET *logic* errors** (and keeps tracebacks clean so the engine stays usable). It does **NOT** protect against the hard faults that restart Revit.
+- The only defense against native faults is to **never trigger one**: correct marshaling, valid element references, no stale transactions, no use-after-free of .NET objects.
+- **Misleading claim to reject:** "catch `System.Exception` explicitly for extra safety." pythonnet already surfaces .NET exceptions as ordinary Python exceptions, so `except Exception:` already catches them. Adding `except System.Exception:` is *redundant*, not a crash shield. (It is still fine to split them when you want to report *which side* failed — see the engine health-check tool.)
+
+### 12.9.2 The persistent engine — the real crash source
+
+The CPython 3 engine is **reused across every button click in a session.** Module globals, `sys.modules`, and `+=` event subscriptions all persist. This is the omission in most guides and the cause of most real crashes:
+
+| Trap | Mechanism | Rule |
+|------|-----------|------|
+| **Handler accumulation** | Each runtime `btn.Click += self._h` *adds another* subscription. Click N times → handler fires N× against possibly-dead objects → crash | Build a fresh dialog object per run inside `run()`/`main()` (never subscribe at module scope) |
+| **Delegate / window GC** | If the only reference to a window or `+=` delegate is a local that falls out of scope, Python GCs it while .NET still calls it → callback into freed memory → crash | Keep window + handlers on `self`; **for modeless windows hold a module-level reference** or it dies the instant `run()` returns (see §12.8) |
+| **Stale module cache** | `sys.modules` persists — edited `lib\` modules don't reload between runs | Reload the engine during dev; version-bump shared modules |
+| **Global state leak** | Module-level globals survive across runs | Put all state in `run()`/`main()` — for correctness, not just style |
+
+### 12.9.3 Stripped stdlib
+
+This engine ships a **partial stdlib path** — confirmed *missing*: `csv`, `re` (present: `os`, `traceback`, `tempfile`, `zipfile`, `json`, numpy, openpyxl). Never assume a pure-Python stdlib module exists. Either probe with the engine health-check tool, or write an inline fallback (see Export Schedule's `_parse_tsv_row()` and `_strip_unit()`). Third-party modules require the extension's own `lib\` + `path_resolver.update_paths()`.
+
+### 12.9.4 Confirmed-good practices (keep these)
+
+- **Marshal Python lists to `List[T]`** before passing to Revit API methods — raw `[]` is a fatal marshaling fault across the pythonnet bridge.
+- **Build .NET `Object[]` with `System.Array.CreateInstance(System.Object, n)`, not `System.Array[object]`.** The Python builtin `object` is not reliably accepted as a generic type argument in this engine and raises `TypeError: type expected` (hit during COM `InvokeMember` calls for Excel→PDF). Use a small `_obj_arr(*items)` helper.
+- **`try/finally` around every Transaction**, gated: `if t.HasStarted() and not t.HasEnded(): t.RollBack()`. Never leave a transaction orphaned.
+- **All logic inside `main()`/`run()`** — never heavy work at module scope (it runs at load and leaks into the persistent engine).
+- **Module-level guard** at the entry point so a logic error reports cleanly instead of leaving the engine in a half-state.
+- **Do not import pyRevit IronPython modules** (`pyrevit.revit`, `pyrevit.forms`, …) in CPython 3 (see §12.8.4).
+
+### 12.9.5 Engine health-check tool
+
+`AnonGee.tab\dev.panel\CPython3 engine.pushbutton` is the canonical diagnostic: it reports **fresh-vs-reused** engine (a counter stashed on `sys` survives across runs, resets on engine restart), lib + stdlib availability, and a live Revit-bridge probe. If you see *any* output the engine is alive; a high reuse count when a tool misbehaves points at accumulated state — reload the engine.
 
 ---
 
@@ -1252,13 +1349,13 @@ This document is **v3.0** (major restructure; palette unchanged). The shipping `
 All generated documents — export summaries, model reports, script logs — follow this layout.
 
 ### Header
-- Left: **AnonGee BIM Tools** wordmark, Inter SemiBold, Charcoal Black.
-- Right: project/document title, Inter Regular, Mid Grey.
+- Left: **AnonGee BIM Tools** wordmark, Source Serif 4 SemiBold, Charcoal Black.
+- Right: project/document title, Source Serif 4 Regular, Mid Grey.
 - Below: full-width 3px Vivid Red rule.
 
 ### Body
-- Primary font: Inter Regular, 11pt, Mid Grey.
-- Headings: Inter SemiBold/Bold, Charcoal Black.
+- Primary font: Source Serif 4 Regular, 11pt, Mid Grey.
+- Headings: Source Serif 4 SemiBold/Bold, Charcoal Black.
 - Code/data: JetBrains Mono, 10pt, Charcoal Black background.
 - Tables per §9.8.
 
@@ -1266,7 +1363,46 @@ All generated documents — export summaries, model reports, script logs — fol
 - Left: classification (`Internal · Confidential`).
 - Center: page number.
 - Right: date in `DD MMM YYYY`.
-- All footer text: Inter Regular, Caption, Mid Grey.
+- All footer text: Source Serif 4 Regular, Caption, Mid Grey.
+
+### 16.1 Spreadsheet / Schedule Export (Excel)
+
+Applies to any tool that writes `.xlsx` (e.g. Export Schedule). Excel cannot resolve WPF font-fallback chains and is not a layout engine, so the brand maps to fixed values plus a true-AutoFit pass.
+
+**Typeface.** Data cells, headers and title use the primary brand face **Source Serif 4**. Excel cannot resolve fallback chains and substitutes silently if a font is absent, so **install Source Serif 4 on export hosts**; the documented Excel fallback is **Georgia** (the brand's guaranteed serif, always present on Windows). Any genuinely code/ID-like column may use **JetBrains Mono** (→ Consolas fallback), consistent with the "mono = status/code" rule (§4.5).
+
+**Cell styling**
+
+| Band | Rows | Fill | Font | Size / weight | Text color |
+|---|---|---|---|---|---|
+| **Title** | row 1 (merged across all columns) | Charcoal Black `#141414` | Source Serif 4 | 13pt Bold | White `#FFFFFF` |
+| **Column headers** | the single header row (row 2, or row 3 when Revit emits a blank gap row) | Vivid Red `#E02020` | Source Serif 4 | 10pt Bold | White `#FFFFFF` |
+| **Body — odd rows** | data | Pure White `#FFFFFF` | Source Serif 4 | 10pt | Charcoal Black `#141414` |
+| **Body — even rows (zebra)** | data | Off White `#F4F4F6` | Source Serif 4 | 10pt | Charcoal Black `#141414` |
+
+- **Borders:** thin, **Silver Steel `#C0C8D8`**, all four sides, every cell.
+- **Zebra shading** uses **Off White `#F4F4F6`** (§3.2) — never a red tint. Toggle via the tool's "Zebra Shading" option.
+
+**Alignment**
+
+- **Vertical:** centre — *every* cell, all bands.
+- **Horizontal — headers & title:** centre.
+- **Horizontal — body:** **numbers (int/float) right-aligned; text/strings left-aligned.** Determine by the cell's stored type *after* unit-stripping, so a value like `"12.5 m³"` becomes the number `12.5` and right-aligns; a type/mark string stays left.
+
+**Number formats** (apply after unit-stripping, to numeric cells only; both right-aligned)
+
+- **Integers:** `#,##,##0` → e.g. `1,00,000`.
+- **Floats:** `#,##,##0.000` (3-decimal precision) → e.g. `1,00,000.000`.
+- Grouping is **Indian (lakh/crore)** — Excel repeats the leftmost 2-digit group, so the single code `#,##,##0` yields `1,00,000` and `1,00,00,000`. Text cells carry no number format.
+
+**Layout & output**
+
+- **Column widths:** apply *true* Excel `Columns.AutoFit()` (matches double-clicking the column border) — never hand-pad. When Excel is unavailable, fall back to a tight estimate (no `+N` padding; exclude the merged title row; scale ~0.92 for the 10pt body vs Excel's 11pt width unit).
+- **Row heights:** **minimum 20 ruler units** for every row (title/headers taller as needed). Do **not** run Excel `Rows.AutoFit()` — it shrinks rows below the 20 minimum; set fixed heights in openpyxl instead.
+- **Freeze panes** immediately below the column-header row.
+- **Page setup (also governs PDF export):** **Landscape**, **fit all columns to one page wide** (`FitToPagesWide = 1`, `FitToPagesTall = auto`, `Zoom = off`).
+
+**Implementation note.** Build the workbook with **openpyxl** (no Excel needed for the styled `.xlsx`), then run a single Excel-COM "polish" pass for true Auto­Fit + page setup + optional PDF (`ExportAsFixedFormat`). Build COM argument arrays with `System.Array.CreateInstance(System.Object, n)` (§12.9.4).
 
 ---
 
@@ -1341,7 +1477,7 @@ Non-negotiable across all touchpoints.
   --color-off-white-hover:    #E8E8EC;
 
   /* ── Typography ── */
-  --font-sans:  'Inter', 'Segoe UI', Arial, sans-serif;
+  --font-sans:  'JetBrains Mono', 'Source Serif 4', 'Inter', 'Segoe UI', Calibri, monospace;
   --font-mono:  'JetBrains Mono', Consolas, 'Courier New', monospace;
   --text-h1:    1.75rem;   /* 28px */
   --text-h2:    1.375rem;  /* 22px */

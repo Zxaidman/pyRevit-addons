@@ -1,0 +1,15 @@
+title: Fill Patterns
+author: AnonGee
+tooltip: |
+  Bulk delete Fill Patterns from the model.
+
+  How to use
+    1. Search and tick the fill patterns to remove (All / None help).
+    2. The footer shows a live "selected of total" count.
+    3. Click Delete Selected and confirm — all ticked patterns are removed in one transaction.
+
+  Notes
+    • Destructive: deletions are only reversible with Ctrl+Z.
+    • System-locked or in-use patterns are skipped and reported.
+
+  Version: 1.0.0

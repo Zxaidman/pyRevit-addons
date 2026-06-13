@@ -8,7 +8,7 @@
          ════════════════════════════════════════════════════════════════ -->
 
     <!-- ═══ Font Families ═══ -->
-    <FontFamily x:Key="FontSans">Inter, Segoe UI, Arial</FontFamily>
+    <FontFamily x:Key="FontSans">JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri</FontFamily>
     <FontFamily x:Key="FontMono">JetBrains Mono, Consolas, Courier New</FontFamily>
 
     <!-- ═══ Font Sizes (WPF device-independent units) ═══ -->
