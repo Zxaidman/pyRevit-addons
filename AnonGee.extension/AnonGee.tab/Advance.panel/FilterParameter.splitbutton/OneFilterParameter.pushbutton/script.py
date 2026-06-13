@@ -38,12 +38,12 @@ clr.AddReference("WindowsBase")
 clr.AddReference("System.Xaml")
 
 from System.Windows.Markup import XamlReader
-from System.Windows import UIElement, Visibility
+from System.Windows import UIElement, Visibility, RoutedEventHandler
 from System.Windows.Media import VisualTreeHelper
 from System.IO import MemoryStream, File, StreamReader, Path
 from System.Text import Encoding
 from System.Windows.Interop import WindowInteropHelper
-from System.Windows.Controls import ListBoxItem, CheckBox, DataGridRow as WpfDataGridRow
+from System.Windows.Controls import ListBoxItem, CheckBox, DataGridCell, DataGridRow as WpfDataGridRow
 from System.Collections.Generic import List
 from System.Collections import ArrayList
 from System import String as NetString, TimeSpan
@@ -120,7 +120,6 @@ def run_ui():
     btn_all_cats      = window.FindName("btn_all_cats")
     btn_none_cats     = window.FindName("btn_none_cats")
     btn_load_params   = window.FindName("btn_load_params")
-    cat_status        = window.FindName("cat_status")
 
     rb_whole          = window.FindName("rb_whole")
     rb_view           = window.FindName("rb_view")
@@ -131,14 +130,13 @@ def run_ui():
     filter_val        = window.FindName("filter_val")
     btn_apply_filter  = window.FindName("btn_apply_filter")
     btn_select_elems  = window.FindName("btn_select_elems")
-    filter_status     = window.FindName("filter_status")
 
     edit_param        = window.FindName("edit_param")
     edit_op           = window.FindName("edit_op")
     edit_val1         = window.FindName("edit_val1")
     edit_val2         = window.FindName("edit_val2")
+    lbl_replace       = window.FindName("lbl_replace")
     btn_execute       = window.FindName("btn_execute")
-    edit_status       = window.FindName("edit_status")
 
     status_badge      = window.FindName("status_badge")
     status_textblock  = window.FindName("status_textblock")
@@ -542,10 +540,16 @@ def run_ui():
             items.append(item)
         return items
 
+    def update_preview_info():
+        total   = len(state["preview_items"])
+        visible = len([i for i in state["preview_items"] if i.InFilter])
+        checked = len([i for i in state["preview_items"] if i.InFilter and i.IsSelected])
+        base = "{0} elements".format(total) if visible == total \
+            else "{0} / {1} matched".format(visible, total)
+        preview_info.Text = "{0}  -  {1} checked".format(base, checked)
+
     def refresh_preview_display():
-        """Populate the DataGrid — only rows where InFilter=True are shown.
-        Sets ItemsSource=None first to force WPF to recreate all row containers
-        so TwoWay checkbox bindings re-read updated IsSelected values."""
+        """Populate the DataGrid — only rows where InFilter=True are shown."""
         state["_refreshing"] = True
         try:
             items = ArrayList()
@@ -554,12 +558,13 @@ def run_ui():
                     items.Add(item)
             preview_list.ItemsSource = None
             preview_list.ItemsSource = items
-            visible = len([i for i in state["preview_items"] if i.InFilter])
-            total   = len(state["preview_items"])
-            if visible == total:
-                preview_info.Text = "{0} elements loaded".format(total)
-            else:
-                preview_info.Text = "{0} / {1} elements matched".format(visible, total)
+            # Re-apply the native row selection (= the checkbox state) from each
+            # item's IsSelected, which survives the rebuild on the Python side.
+            preview_list.SelectedItems.Clear()
+            for item in state["preview_items"]:
+                if item.InFilter and item.IsSelected:
+                    preview_list.SelectedItems.Add(item)
+            update_preview_info()
         finally:
             state["_refreshing"] = False
 
@@ -672,6 +677,23 @@ def run_ui():
             error_badge.Visibility = Visibility.Visible
         error_text.Text = message if is_error else ""
 
+    # The three section statuses now live in the footer status bar: assigning
+    # `.Text` on these proxies routes the message to set_status().
+    class _StatusLine(object):
+        __slots__ = ['_t']
+        def __init__(self):
+            self._t = ""
+        def _get(self):
+            return self._t
+        def _set(self, v):
+            self._t = v
+            set_status(v)
+        Text = property(_get, _set)
+
+    cat_status    = _StatusLine()
+    filter_status = _StatusLine()
+    edit_status   = _StatusLine()
+
     def refresh_category_list():
         category_list.Items.Clear()
         cats = get_categories_by_scope()
@@ -684,18 +706,29 @@ def run_ui():
             item.Tag = cat_name
             category_list.Items.Add(item)
 
+    def _repopulate_values(combo, values):
+        """Refresh the dropdown options without touching the current input."""
+        prev = combo.Text
+        combo.Items.Clear()
+        for v in values:
+            combo.Items.Add(v)
+        combo.Text = prev
+
     def refresh_params(sender=None, args=None):
-        """Header Refresh — reload the filter operators/values and edit values
-        for the current parameters. Skips the heavy category scan once params
-        are loaded (Load Parameters does that)."""
+        """Header Refresh — re-scan the available filter/edit VALUE options for
+        the current parameters. Deliberately does NOT touch the chosen operator,
+        the typed values, the filter result, or the row checks."""
         if not state.get("filtered_elements"):
             set_status("Load parameters first.", is_error=True)
             return
-        state["_last_filter_param"] = None   # force reload past the change-guard
-        state["_last_edit_param"]   = None
-        on_confirm_filter_param(None, None)
-        on_confirm_edit(None, None)
-        set_status("Refreshed operators & values")
+        fp = filter_param.Text.strip()
+        if fp:
+            _repopulate_values(filter_val, get_param_values(state["filtered_elements"], fp))
+        ep = edit_param.Text.strip()
+        if ep and state.get("filtered_ids"):
+            elems = [doc.GetElement(eid) for eid in state["filtered_ids"] if doc.GetElement(eid)]
+            _repopulate_values(edit_val1, get_param_values(elems, ep))
+        set_status("Value lists refreshed")
 
     def get_selected_categories():
         selected = []
@@ -861,15 +894,20 @@ def run_ui():
     btn_apply_filter.Click += on_apply_filter
 
     def on_select_elements(sender, args):
-        if state["filtered_ids"]:
-            try:
-                net_list = List[ElementId]()
-                for eid in state["filtered_ids"]:
-                    net_list.Add(eid)
-                uidoc.Selection.SetElementIds(net_list)
-                set_status("Selected {0} elements in Revit".format(len(state["filtered_ids"])))
-            except Exception as ex:
-                set_status("Selection failed: " + str(ex), is_error=True)
+        # Only the checked rows, matching what Execute would edit.
+        target_ids = [item.Element.Id for item in state["preview_items"]
+                      if item.InFilter and item.IsSelected]
+        if not target_ids:
+            set_status("No rows are checked.", is_error=True)
+            return
+        try:
+            net_list = List[ElementId]()
+            for eid in target_ids:
+                net_list.Add(eid)
+            uidoc.Selection.SetElementIds(net_list)
+            set_status("Selected {0} checked element(s) in Revit".format(len(target_ids)))
+        except Exception as ex:
+            set_status("Selection failed: " + str(ex), is_error=True)
     btn_select_elems.Click += on_select_elements
 
     def on_confirm_edit(sender, args):
@@ -894,7 +932,19 @@ def run_ui():
     # Live edit preview on field changes
     def on_edit_field_changed(sender, args):
         update_live_edit_preview()
-    edit_op.SelectionChanged += on_edit_field_changed
+
+    def on_edit_op_changed(sender, args):
+        """Replace → reveal the replace field; Delete → disable the value combo."""
+        op = str(edit_op.SelectedItem) if edit_op.SelectedItem else ""
+        is_replace = (op == "Replace")
+        is_delete  = (op == "Delete")
+        vis = Visibility.Visible if is_replace else Visibility.Collapsed
+        lbl_replace.Visibility = vis
+        edit_val2.Visibility   = vis
+        edit_val1.IsEnabled    = not is_delete
+        update_live_edit_preview()
+
+    edit_op.SelectionChanged += on_edit_op_changed
     edit_val1.KeyUp += on_edit_field_changed
     edit_val2.TextChanged += on_edit_field_changed
 
@@ -942,38 +992,57 @@ def run_ui():
     edit_op.Items.Add("Delete")
     edit_op.SelectedIndex = 3
 
-    # Row click → toggle IsSelected; Shift+click → range-select.
-    # MouseLeftButtonUp fires after DataGrid processes the click so Shift modifier is readable.
-    def on_preview_list_click(sender, args):
+    # The select column's CheckBox is bound to the DataGridRow's native
+    # .IsSelected (a real .NET bool — reliable, unlike binding a Python bool).
+    # Grid selection is the source of truth; mirror it into each PreviewItem.
+    def on_grid_selection_changed(sender, args):
         if state.get("_refreshing"):
             return
-        try:
-            from System.Windows.Input import Keyboard, ModifierKeys
-            dep_obj = args.OriginalSource
-            while dep_obj is not None:
-                if isinstance(dep_obj, WpfDataGridRow):
-                    item = dep_obj.Item
-                    if not (hasattr(item, 'InFilter') and item.InFilter):
-                        return
-                    visible = [i for i in state["preview_items"] if i.InFilter]
-                    if item not in visible:
-                        return
-                    idx = visible.index(item)
-                    shift_down = bool(Keyboard.Modifiers & ModifierKeys.Shift)
-                    last_idx = state.get("last_click_index", -1)
-                    if shift_down and last_idx >= 0:
-                        lo, hi = min(last_idx, idx), max(last_idx, idx)
-                        for i in range(lo, hi + 1):
-                            visible[i].IsSelected = True
-                    else:
-                        item.IsSelected = not bool(item.IsSelected)
-                        state["last_click_index"] = idx
-                    refresh_preview_display()
-                    return
-                dep_obj = VisualTreeHelper.GetParent(dep_obj)
-        except Exception:
-            pass
-    preview_list.MouseLeftButtonUp += on_preview_list_click
+        sel = set()
+        for it in preview_list.SelectedItems:
+            sel.add(it)
+        for item in state["preview_items"]:
+            if item.InFilter:
+                item.IsSelected = item in sel
+        update_preview_info()
+    preview_list.SelectionChanged += on_grid_selection_changed
+
+    # Checkbox click → toggle THAT row's membership ourselves and mark handled,
+    # so the DataGrid's default (replace-)select gesture never runs and clears
+    # the other checks. Row-body clicks are swallowed entirely.
+    def on_grid_mousedown(sender, args):
+        dep = args.OriginalSource
+        chk = None
+        while dep is not None:
+            if isinstance(dep, CheckBox):
+                chk = dep
+                break
+            if isinstance(dep, DataGridCell):
+                break
+            try:
+                dep = VisualTreeHelper.GetParent(dep)
+            except Exception:
+                break
+        if chk is not None:
+            item = chk.DataContext
+            if item is not None:
+                if preview_list.SelectedItems.Contains(item):
+                    preview_list.SelectedItems.Remove(item)
+                else:
+                    preview_list.SelectedItems.Add(item)
+            args.Handled = True             # suppress the grid's replace-select
+            return
+        # plain click on a data cell → no selection change
+        dep = args.OriginalSource
+        while dep is not None:
+            if isinstance(dep, DataGridCell):
+                args.Handled = True
+                return
+            try:
+                dep = VisualTreeHelper.GetParent(dep)
+            except Exception:
+                break
+    preview_list.PreviewMouseLeftButtonDown += on_grid_mousedown
 
     # Row selection buttons
     def on_select_all_rows(sender, args):

@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         Title="One Filter Parameter"
-        Height="800" Width="1100"
+        Height="800" Width="900"
         MinHeight="680" MinWidth="900"
         WindowStartupLocation="CenterOwner"
         ResizeMode="CanResize"
@@ -479,6 +479,41 @@
                 </Setter>
             </Style>
 
+            <!-- ── Grid checkbox (DataGrid select column) — real interactive
+                 CheckBox; the Trigger keys off its own bool IsChecked, so the
+                 tick renders reliably (a DataTrigger on the Python bool did not). -->
+            <Style x:Key="GridCheckBox" TargetType="CheckBox">
+                <Setter Property="Cursor"              Value="Hand"/>
+                <Setter Property="HorizontalAlignment" Value="Center"/>
+                <Setter Property="VerticalAlignment"   Value="Center"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CheckBox">
+                            <Border x:Name="Box" Width="16" Height="16" CornerRadius="3"
+                                    BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1"
+                                    Background="{StaticResource BrushPureWhite}">
+                                <Viewbox x:Name="CheckMark" Margin="3" Visibility="Collapsed">
+                                    <Path Data="M0,3.5 L3.5,7 L9,0"
+                                          Stroke="{StaticResource BrushPureWhite}" StrokeThickness="1.8"
+                                          StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                          Fill="Transparent"/>
+                                </Viewbox>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                    <Setter TargetName="Box" Property="Background"  Value="{StaticResource BrushVividRed}"/>
+                                    <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                </Trigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Box" Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- ── ScrollBar (both orientations) ── -->
             <Style TargetType="ScrollBar">
                 <Setter Property="Background" Value="Transparent"/>
@@ -627,8 +662,8 @@
 
                     <Label Content="Scope" Style="{StaticResource SectionLabel}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                        <RadioButton x:Name="rb_whole"     Content="Whole Model" GroupName="scope" IsChecked="True" Margin="0,0,14,0"/>
-                        <RadioButton x:Name="rb_view"      Content="Active View"  GroupName="scope" Margin="0,0,14,0"/>
+                        <RadioButton x:Name="rb_whole"     Content="Whole Model" GroupName="scope" IsChecked="True" Margin="0,0,16,0"/>
+                        <RadioButton x:Name="rb_view"      Content="Active View"  GroupName="scope" Margin="0,0,16,0"/>
                         <RadioButton x:Name="rb_selection" Content="Selection"    GroupName="scope"/>
                     </StackPanel>
 
@@ -648,9 +683,6 @@
                         <Button Grid.Column="2" x:Name="btn_load_params" Content="Load Parameters"
                                 Style="{StaticResource ButtonPrimary}" Width="150" ToolTip="Load common parameters"/>
                     </Grid>
-                    <TextBlock x:Name="cat_status" Text="Select scope and categories, then click Load Parameters."
-                               Style="{StaticResource StatusText}"/>
-
                     <Rectangle Style="{StaticResource DividerRule}"/>
 
                     <!-- Filter -->
@@ -672,7 +704,6 @@
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Value" Style="{StaticResource FieldLabel}"/>
                         <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="filter_val" Style="{StaticResource InputComboBox}" IsEditable="True"/>
                     </Grid>
-                    <TextBlock x:Name="filter_status" Text="Choose parameter, operator, and value." Style="{StaticResource StatusText}"/>
                     <Button x:Name="btn_apply_filter" Content="Apply Filter" Style="{StaticResource ButtonPrimary}"
                             Width="140" HorizontalAlignment="Right" Margin="0,8,0,0"
                             ToolTip="Filter elements and preview matches"/>
@@ -704,7 +735,6 @@
                     <Button x:Name="btn_execute" Content="Execute Changes" Style="{StaticResource ButtonPrimary}"
                             Width="140" HorizontalAlignment="Right" Margin="0,2,0,0"
                             ToolTip="Apply the edit to the checked elements"/>
-                    <TextBlock x:Name="edit_status" Text="Apply filter first, then edit." Style="{StaticResource StatusText}"/>
 
                 </StackPanel>
             </ScrollViewer>
@@ -748,9 +778,9 @@
                             </Style>
                         </DataGrid.ColumnHeaderStyle>
                         <DataGrid.Resources>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"                      Color="#FECACA"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}"                      Color="#FEF2F2"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}"                  Color="#141414"/>
-                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}"     Color="#FECACA"/>
+                            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}"     Color="#FEF2F2"/>
                             <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="#141414"/>
                         </DataGrid.Resources>
                         <DataGrid.RowStyle>
@@ -760,7 +790,7 @@
                                         <Setter Property="Background" Value="{StaticResource BrushTableRowHover}"/>
                                     </Trigger>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#FECACA"/>
+                                        <Setter Property="Background" Value="#FEF2F2"/>
                                     </Trigger>
                                 </Style.Triggers>
                             </Style>
@@ -780,41 +810,14 @@
                         </DataGrid.CellStyle>
                         <DataGrid.Columns>
                             <!-- ✓ column — brand checkbox look, driven by IsSelected (toggle via row click) -->
-                            <DataGridTemplateColumn Header="" Width="36" CanUserSort="False" CanUserResize="False">
+            <DataGridTemplateColumn Header="" Width="40" CanUserSort="False" CanUserResize="False">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <Border Width="16" Height="16" CornerRadius="3"
-                                                HorizontalAlignment="Center" VerticalAlignment="Center" BorderThickness="1">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background"  Value="{StaticResource BrushPureWhite}"/>
-                                                    <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="Background"  Value="{StaticResource BrushVividRed}"/>
-                                                            <Setter Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Viewbox Margin="3">
-                                                <Path Data="M0,3.5 L3.5,7 L9,0"
-                                                      Stroke="{StaticResource BrushPureWhite}" StrokeThickness="1.8"
-                                                      StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                                                      Fill="Transparent">
-                                                    <Path.Style>
-                                                        <Style TargetType="Path">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Path.Style>
-                                                </Path>
-                                            </Viewbox>
-                                        </Border>
+                                        <!-- real interactive checkbox: own IsChecked drives the
+                                             visual (TwoWay-bound to the row's IsSelected) -->
+                                        <CheckBox Style="{StaticResource GridCheckBox}"
+                                                  IsChecked="{Binding IsSelected, Mode=TwoWay,
+                                                              RelativeSource={RelativeSource AncestorType=DataGridRow}}"/>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
@@ -877,7 +880,7 @@
                             <TextBlock Grid.Column="0" x:Name="preview_info" Text="0 elements loaded"
                                        Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                             <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                <Button x:Name="btn_select_all_rows" Content="Check All"
+                                <Button x:Name="btn_select_all_rows" Content="Select All"
                                         Style="{StaticResource ButtonGhost}" Height="24" Padding="10,0"/>
                                 <Button x:Name="btn_deselect_all_rows" Content="Clear"
                                         Style="{StaticResource ButtonGhost}" Height="24" Padding="10,0" Margin="4,0,0,0"/>
