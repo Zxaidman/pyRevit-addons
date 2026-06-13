@@ -1,0 +1,16 @@
+title: Multi Filter Parameter
+author: AnonGee
+tooltip: |
+  Filter Revit elements by multiple parameter conditions, then batch-edit a
+  parameter on everything that matches.
+
+  Three tabs
+    • Categories — choose scope (whole model / active view / selection), tick categories, see a live element count, then Load Parameters.
+    • Multi Filter — add parameter conditions (All/Any), pick operator + value, Apply Filter.
+    • Multi Editing — add edit rows (Set / Prefix / Suffix / Replace / Delete), Execute Changes.
+
+  Notes
+    • Use Select in Revit to push the matched element IDs to the Revit selection.
+    • Runs on the CPython 3 engine; all edits happen in a single transaction.
+
+  Version: 1.0.0

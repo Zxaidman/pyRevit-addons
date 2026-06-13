@@ -1,0 +1,12 @@
+title: Brand Guidelines
+author: AnonGee
+tooltip: |
+  Living component gallery for the AnonGee BIM Tools design system.
+
+  Shows the canonical brand colors, typography, buttons, inputs, selection
+  controls (checkbox + toggle switch), list, and status badges exactly as the
+  shipping WPF tools render them.
+
+  Keep in sync with AnonGee_BIM_Tools_Brand_Guidelines.md when the system changes.
+
+  Version: 3.2.0

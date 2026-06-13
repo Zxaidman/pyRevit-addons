@@ -1,0 +1,23 @@
+title: Export Schedule
+author: AnonGee
+tooltip: |
+  Export Revit schedules to a single Excel workbook (.xlsx) with borders, fonts, and header styling.
+
+  How to use
+    1. Run tool. Window lists all project schedules with checkboxes.
+    2. Untick unwanted schedules, or use All / None buttons.
+    3. Set export options (Strip Units, Zebra Shading, etc.).
+    4. Click Export, choose save location.
+    5. Excel opens automatically on completion.
+
+  Options
+    Strip Units   — removes unit suffixes (mm, m, kg, etc.) and converts to numbers.
+    Include Hidden — temporarily unhides hidden schedule columns during export.
+    Zebra Shading — alternating row background for readability.
+    Save PDF      — generates a PDF alongside the Excel file.
+
+  Notes
+    • Requires Microsoft Excel installed (uses COM Interop).
+    • Filters out schedule templates and schedules with ≤ 3 data rows.
+
+  Version: 1.0.0

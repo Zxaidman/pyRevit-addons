@@ -1,0 +1,16 @@
+title: One Filter Parameter
+author: AnonGee
+tooltip: |
+  Filter Revit elements by a single parameter condition, preview the matches in
+  a table, then batch-change a parameter on everything that passes.
+
+  Three tabs
+    • Categories — choose scope (whole model / active view / selection), tick categories, then Load Parameters.
+    • One Filter — narrow by one parameter (operator + value), Apply Filter; matches preview in the grid.
+    • One Editing — change a parameter on the matched elements (Set / Prefix / Suffix / Replace / Delete).
+
+  Notes
+    • Runs on the CPython 3 engine; all edits happen in a single transaction.
+    • Use Select in Revit to push the matched element IDs to the Revit selection.
+
+  Version: 1.0.0

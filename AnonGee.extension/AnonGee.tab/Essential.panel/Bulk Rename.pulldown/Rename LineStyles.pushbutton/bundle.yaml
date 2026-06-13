@@ -1,0 +1,16 @@
+title: Line Styles
+author: AnonGee
+tooltip: |
+  Bulk find-and-replace across all Line Style (Lines subcategory) names.
+
+  How to use
+    1. Enter the text to find and the replacement text.
+    2. Toggle Match case if the search should be case-sensitive.
+    3. The footer shows a live match count as you type.
+    4. Click Rename — every matching line style is renamed in one transaction.
+
+  Notes
+    • Leave Replace empty to delete the found text from names.
+    • Built-in / system line styles that cannot be renamed are skipped and reported.
+
+  Version: 1.0.0
