@@ -1,0 +1,7 @@
+title: CAD to BIM
+tooltip: >
+  Read a linked CAD (DWG), classify its curves by layer
+  (grid / column / beam / slab-edge), and create Revit grids from
+  the grid lines. Columns / beams / slabs are later passes.
+author: RCC BIM Tools
+min_revit_version: 2022

@@ -40,7 +40,7 @@ def generate_structure():
         else:
             level = relative_path.count(os.sep) + 1
             
-        indent = '    ' * level
+        indent = '     ' * level
         folder_name = os.path.basename(current_root)
         
         if level == 0:
@@ -50,7 +50,7 @@ def generate_structure():
             report_lines.append(f"{indent}└── 📁 [{folder_name}]")
         
         # List files contained in the folder directory
-        file_indent = '    ' * (level + 1)
+        file_indent = '     ' * (level + 1)
         for file_name in files:
             report_lines.append(f"{file_indent}├── 📄 {file_name}")
 

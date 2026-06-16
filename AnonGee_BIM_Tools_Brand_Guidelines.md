@@ -37,7 +37,7 @@ Every visual value in this document maps to a named token in `pyZaid.extension/R
 10. [Accessibility Standards](#10-accessibility-standards)
 11. [UX & Content Patterns](#11-ux--content-patterns)
 12. [pyRevit Delivery Standards](#12-pyrevit-delivery-standards)
-    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–P (16 validated rules)
+    - [12.7 WPF ControlTemplate Constraints](#127-wpf-controltemplate-constraints) — A–R (18 validated rules)
     - [12.8 Modeless Window Architecture](#128-modeless-non-blocking-window-architecture) — IExternalEventHandler, thread bridging, CPython 3 rules
     - [12.9 CPython 3 Engine Stability](#129-cpython-3-engine-stability) — persistent engine, handler/GC crash traps, stripped stdlib, native-fault truth
 13. [Design Tokens & Theme Architecture](#13-design-tokens--theme-architecture)
@@ -504,11 +504,11 @@ Inline validation only: errors render as a `TextError` line directly below the f
 
 | Control | Style key | Selected indicator | Hit target |
 |---|---|---|---|
-| CheckBox | `InputCheckBox` | 16×16, 3px radius, Vivid Red fill + white tick | ≥28px row |
-| RadioButton | `InputRadioButton` | 16×16 ring, 8px Vivid Red dot | ≥28px row |
+| CheckBox | `InputCheckBox` | 16×16 Vivid Red Border, 3px radius, Vivid Red tick | ≥28px row |
+| RadioButton | `InputRadioButton` | 16×16 Vivid Red ring, 8px Vivid Red dot | ≥28px row |
 | ListBox | `InputListBox` + `ListBoxItemBase` | hover `BrushTableRowHover`; selected `BrushTableRowSelected` + 3px left Vivid Red border | item padding `8,6` |
 
-Hover border on checkboxes is Vivid Red. The whole row is the hit target, not just the box. **Use the checkbox for list selection only** — for a binary on/off setting use the **Toggle Switch (§9.9)**.
+Hover Border on checkboxes is ColorVividRed10. The whole row is the hit target, not just the box. **Use the checkbox for list selection only** — for a binary on/off setting use the **Toggle Switch (§9.9)**.
 
 > **`InputListBox` must be re-templated for a rounded container.** WPF's default `ListBox` template draws **square** corners — setting `BorderBrush`/`BorderThickness` alone is not enough. Re-template at 5px (`radius-md`, §5.2) to match TextBox/ComboBox, using the **fill / content / stroke-on-top** structure (§12.7.O) so all four edges stay uniform. The same pattern applies to TextBox and any bordered scroller.
 
@@ -1070,6 +1070,23 @@ Two separate traps that surface together on a populated dropdown:
 
 > **Marshalling note (not a template rule, but it bites here):** build `List[ElementId]` for `Selection.SetElementIds` with `.Add()` in a loop — `List[ElementId](python_list)` throws *"No method matches given arguments for List\`1..ctor"* in CPython 3/pythonnet (§12.9.4).
 
+#### Q. DataGrid row checkbox — drive it off native `DataGridRow.IsSelected`, never a Python bool
+
+A per-row "select for action" checkbox in a DataGrid bound to a **Python attribute** does **not** work in this CPython 3/pythonnet engine: text-column bindings read fine, but a `bool` does not coerce — a `DataTrigger Binding="{Binding IsSelected}" Value="True"` never fires (checkbox looks permanently *disabled/unchecked*), and TwoWay write-back to a `__slots__` bool is unreliable (toggling has no effect on the data, and a rebuild resets it). Discovered in **One Filter Parameter** development.
+
+The working pattern (reference: One Filter Parameter):
+
+- **Bind the cell `CheckBox` to the row's own `IsSelected`** — a real .NET `bool`:
+  `IsChecked="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=DataGridRow}, Mode=TwoWay}"`. The brand `GridCheckBox` style's own `IsChecked` `Trigger` (not a DataTrigger) draws the tick — reliable. Make it visually identical to the implicit list checkbox (16×16, Viewbox tick).
+- **`SelectedItems` is the source of truth.** Mirror it into the Python objects on `SelectionChanged` (`item.IsSelected = item in SelectedItems`) so Execute/Select-in-Revit can read it.
+- **Manual toggle + `Handled`.** In `SelectionMode="Extended"`, a plain click on a row runs a *replace*-select that clears every other check. Handle `PreviewMouseLeftButtonDown`: if the click is inside a `CheckBox`, toggle just that row's `SelectedItems` membership (`Contains`→`Remove`/`Add`) and set `args.Handled = True`; if it's inside a `DataGridCell` (not a checkbox), set `Handled = True` to swallow row-body selection entirely. So only checkboxes toggle, independently.
+- **Re-apply after every rebuild.** Python objects have no `INotifyPropertyChanged`, so updating preview columns means re-assigning `ItemsSource`, which clears selection — re-add the still-checked items to `SelectedItems` (guarded by a `_refreshing` flag so the sync handler doesn't clobber). Keep the strong selection highlight subtle (`#FEF2F2`) since rows are checked by default.
+
+#### R. Status lines and value refresh (One Filter Parameter)
+
+- **Consolidate per-section status into the footer.** Rather than a status `TextBlock` under each section, route messages to the one footer badge via `set_status()` (a tiny `_StatusLine` proxy whose `.Text` setter calls it keeps call-sites unchanged).
+- **A "refresh values" action repopulates dropdown *options* without touching the input.** Save `combo.Text`, `Items.Clear()`/re-add, restore `combo.Text` — and do **not** reset the operator, re-run the filter, or rebuild the preview (any of which would reset the user's row checks).
+
 ---
 
 ## 12.8 Modeless (Non-Blocking) Window Architecture
@@ -1470,7 +1487,17 @@ Non-negotiable across all touchpoints.
   --color-info:            #2563EB;
 
   /* ── Interaction variants ── */
-  --color-vivid-red-hover:    #C41A1A;
+  --color-vivid-red-hover:    #C41A1A;16px;
+  --space-lg: 24px;  --space-xl: 32px;  --space-2xl: 48px; --space-3xl: 64px;
+
+  /* ── Radius ── */
+  --radius-sm: 3px;  --radius-md: 5px;  --radius-lg: 8px;  --radius-xl: 10px;
+
+  /* ── Motion ── */
+  --motion-fast: 120ms; --motion-standard: 200ms; --motion-slow: 300ms;
+  --ease-standard: cubic-bezier(0.33, 0, 0.2, 1);
+}
+```
   --color-vivid-red-pressed:  #A81515;
   --color-error-red-hover:    #B91C1C;
   --color-vivid-red-10:       rgba(224,32,32,0.10);
@@ -1487,17 +1514,7 @@ Non-negotiable across all touchpoints.
   --text-code:  0.75rem;   /* 12px */
 
   /* ── Spacing ── */
-  --space-xs: 4px;   --space-sm: 8px;   --space-md: 16px;
-  --space-lg: 24px;  --space-xl: 32px;  --space-2xl: 48px; --space-3xl: 64px;
-
-  /* ── Radius ── */
-  --radius-sm: 3px;  --radius-md: 5px;  --radius-lg: 8px;  --radius-xl: 10px;
-
-  /* ── Motion ── */
-  --motion-fast: 120ms; --motion-standard: 200ms; --motion-slow: 300ms;
-  --ease-standard: cubic-bezier(0.33, 0, 0.2, 1);
-}
-```
+  --space-xs: 4px;   --space-sm: 8px;   --space-md: 
 
 ---
 

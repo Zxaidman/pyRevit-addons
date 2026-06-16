@@ -1,5 +1,4 @@
 # --- Your Existing Rules ---
-AnonGee.extension/lib/
 .claude
 .env
 __pycache__

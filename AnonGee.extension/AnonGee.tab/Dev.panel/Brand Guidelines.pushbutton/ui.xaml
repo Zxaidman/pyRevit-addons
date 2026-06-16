@@ -348,6 +348,7 @@
                 <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
                 <Setter Property="Cursor"     Value="Hand"/>
                 <Setter Property="MinHeight"  Value="22"/>
+                <Setter Property="BorderThickness"   Value="2"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="CheckBox">
@@ -359,13 +360,13 @@
                                 <Border x:Name="CheckBoxBorder" Grid.Column="0"
                                         Width="16" Height="16" CornerRadius="3"
                                         BorderBrush="{StaticResource BrushLightBorder}"
-                                        BorderThickness="1"
+                                        BorderThickness="1.4"
                                         Background="{StaticResource BrushPureWhite}"
                                         VerticalAlignment="Center">
-                                    <Viewbox x:Name="CheckMark" Margin="3" Visibility="Collapsed">
-                                        <Path Data="M0,3.5 L3.5,7 L9,0"
+                                    <Viewbox x:Name="CheckMark" Margin="2" Visibility="Collapsed">
+                                        <Path Data="M0,3 L3,6 L8,0"
                                               Stroke="{StaticResource BrushPureWhite}"
-                                              StrokeThickness="1.8"
+                                              StrokeThickness="2"
                                               StrokeLineJoin="Round"
                                               StrokeStartLineCap="Round"
                                               StrokeEndLineCap="Round"
