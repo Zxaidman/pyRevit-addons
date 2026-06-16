@@ -10,7 +10,7 @@ PY2_DEPENDENCIES = "openpyxl"
 
 # 2. Setup folder pathways relative to this script
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
-LIB_DIR = os.path.normpath(os.path.join(TOOLS_DIR, "..", "pyZaid.extension", "lib"))
+LIB_DIR = os.path.normpath(os.path.join(TOOLS_DIR, "..", "AnonGee.extension", "lib"))
 
 def deploy_libraries(dependencies_string, subfolder):
     # Split the string into a clean Python list of packages
