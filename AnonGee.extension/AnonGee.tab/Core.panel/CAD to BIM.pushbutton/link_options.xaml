@@ -13,11 +13,16 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" Text="Link a DXF" FontSize="15" FontWeight="Bold" Margin="0,0,0,12"/>
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
+            <TextBlock Text="Link a DXF" FontSize="15" FontWeight="Bold"/>
+            <TextBlock Text="  -  active view: " VerticalAlignment="Bottom"/>
+            <TextBlock x:Name="tb_active_view" Text="-" FontWeight="Bold" VerticalAlignment="Bottom"/>
+        </StackPanel>
 
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
@@ -48,7 +53,10 @@
             <ComboBox  Grid.Column="1" x:Name="cb_placement" Height="24"/>
         </Grid>
 
-        <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Right">
+        <CheckBox Grid.Row="4" x:Name="chk_view_only" Margin="0,4,0,0"
+                  Content="Load in the active view only (otherwise all views)"/>
+
+        <StackPanel Grid.Row="6" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button x:Name="btn_link"   Content="Link" Width="110" Height="26"/>
             <Button x:Name="btn_cancel" Content="Cancel" Width="84" Height="26" Margin="8,0,0,0"/>
         </StackPanel>

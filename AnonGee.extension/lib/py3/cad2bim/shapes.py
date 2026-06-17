@@ -24,7 +24,9 @@ Decomposition method: grid-partition + greedy maximal-rectangle merge.
 
 import math
 
-_TOL = 1.0e-4   # feet (~0.03 mm): collinear / axis-alignment tolerance
+from cad2bim import config as _cfg
+
+_TOL = 1.0e-4   # feet (~0.03 mm): collinear / axis-alignment tolerance (numerical)
 
 
 class Rectangle(object):
@@ -387,10 +389,11 @@ def _consistent_edge(edges, line_coord):
     return sum(cluster) / len(cluster)
 
 
-# Circular-column detection tolerances (feet).
+# Circular-column detection tolerances (feet). Min/max diameter are user knobs
+# (config); the cluster epsilon is numerical and stays here.
 _CIRCLE_TOL_FT = 2.0 / 304.8         # arcs within ~2 mm centre+radius are one circle
-_CIRCLE_MIN_DIA_FT = 150.0 / 304.8   # ignore tiny arc noise below ~150 mm dia
-_CIRCLE_MAX_DIA_FT = 2000.0 / 304.8  # ignore huge arcs above ~2 m dia
+_CIRCLE_MIN_DIA_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["circle_min_dia_mm"])
+_CIRCLE_MAX_DIA_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["circle_max_dia_mm"])
 
 
 class Circle(object):
@@ -431,14 +434,16 @@ def circle_from_three_points(p1, p2, p3):
     return ux, uy, radius
 
 
-def build_circular_columns(arc_records):
+def build_circular_columns(arc_records, min_dia_ft=None, max_dia_ft=None):
     """Recover circular columns from arc records on the column layer.
 
     Each arc stores start/mid/end, so a 3-point circumcircle gives its exact
     centre+radius; arcs sharing a centre+radius (a circle drawn as several
-    segments) collapse to one Circle. Diameters outside a plausible column range
-    are dropped as annotation/noise.
+    segments) collapse to one Circle. Diameters outside the plausible column
+    range (config, overridable) are dropped as annotation/noise.
     """
+    min_dia_ft = _CIRCLE_MIN_DIA_FT if min_dia_ft is None else min_dia_ft
+    max_dia_ft = _CIRCLE_MAX_DIA_FT if max_dia_ft is None else max_dia_ft
     clusters = []   # [cx, cy, r, count]
     z_value = 0.0
     for record in arc_records:
@@ -467,7 +472,7 @@ def build_circular_columns(arc_records):
     circles = []
     for cx, cy, radius, _count in clusters:
         diameter = 2.0 * radius
-        if _CIRCLE_MIN_DIA_FT <= diameter <= _CIRCLE_MAX_DIA_FT:
+        if min_dia_ft <= diameter <= max_dia_ft:
             circles.append(Circle(cx, cy, diameter, z_value))
     return circles
 
@@ -506,10 +511,11 @@ def beam_centerline_from_rect(rect):
 
 
 # Parallel-pair tolerances (a beam/member drawn as its two long edges).
-_PARALLEL_SIN_TOL = math.sin(math.radians(3.0))   # edges within ~3 deg are parallel
-_PAIR_MIN_WIDTH_FT = 80.0 / 304.8                  # ignore gaps below ~80 mm
-_PAIR_MAX_WIDTH_FT = 700.0 / 304.8                 # members up to ~700 mm wide
-_PAIR_MIN_OVERLAP_FT = 150.0 / 304.8               # need a real shared length
+# All four are user knobs (config), overridable per run.
+_PARALLEL_SIN_TOL = math.sin(math.radians(_cfg.DEFAULTS["parallel_angle_deg"]))
+_PAIR_MIN_WIDTH_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_min_width_mm"])
+_PAIR_MAX_WIDTH_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_max_width_mm"])
+_PAIR_MIN_OVERLAP_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_min_overlap_mm"])
 
 
 def _vsub(a, b):
@@ -529,7 +535,8 @@ def _vunit(v):
     return (v[0] / length, v[1] / length) if length > 1e-12 else (0.0, 0.0)
 
 
-def pair_parallel_lines(lines):
+def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
+                        min_overlap_ft=None, sin_tol=None):
     """Pair near-parallel lines ~one width apart into straight members.
 
     `lines`: list of (p0, p1, z) with p0/p1 = (x, y) in feet. Returns
@@ -537,8 +544,14 @@ def pair_parallel_lines(lines):
     centerline lies on the midline over the shared overlap and whose width is the
     measured perpendicular gap. Greedy and order-independent: each line is used at
     most once, paired with the partner giving the largest genuine overlap. Lines
-    with no parallel partner (junction fragments) are returned as leftover.
+    with no parallel partner (junction fragments) are returned as leftover. The
+    width band / overlap / parallel-angle tolerances default to config but can be
+    overridden per run.
     """
+    min_width_ft = _PAIR_MIN_WIDTH_FT if min_width_ft is None else min_width_ft
+    max_width_ft = _PAIR_MAX_WIDTH_FT if max_width_ft is None else max_width_ft
+    min_overlap_ft = _PAIR_MIN_OVERLAP_FT if min_overlap_ft is None else min_overlap_ft
+    sin_tol = _PARALLEL_SIN_TOL if sin_tol is None else sin_tol
     count = len(lines)
     used = [False] * count
     segments = []
@@ -556,11 +569,11 @@ def pair_parallel_lines(lines):
                 continue
             b0, b1, _bz = lines[j]
             other = _vunit(_vsub(b1, b0))
-            if abs(_vcross(direction, other)) > _PARALLEL_SIN_TOL:
+            if abs(_vcross(direction, other)) > sin_tol:
                 continue
             signed_gap = _vdot(_vsub(b0, a0), normal)
             gap = abs(signed_gap)
-            if gap < _PAIR_MIN_WIDTH_FT or gap > _PAIR_MAX_WIDTH_FT:
+            if gap < min_width_ft or gap > max_width_ft:
                 continue
             ta = sorted([0.0, _vdot(_vsub(a1, a0), direction)])
             tb = sorted([_vdot(_vsub(b0, a0), direction),
@@ -568,7 +581,7 @@ def pair_parallel_lines(lines):
             lo = max(ta[0], tb[0])
             hi = min(ta[1], tb[1])
             overlap = hi - lo
-            if overlap < _PAIR_MIN_OVERLAP_FT:
+            if overlap < min_overlap_ft:
                 continue
             if best is None or overlap > best["overlap"]:
                 best = {"j": j, "signed_gap": signed_gap, "lo": lo, "hi": hi,

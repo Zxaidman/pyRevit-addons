@@ -85,7 +85,7 @@ _bootstrap_lib_path()
 import cad2bim
 from cad2bim import (compat, geometry_reader, layers, report, grids,
                      transactions, columns, beams, dxf_linker, dxf_reader,
-                     transform, compare, marks)
+                     transform, compare, marks, config)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
@@ -142,13 +142,15 @@ def _save_json(default_name):
 class LinkOptionsDialog(object):
     """Small modal that mirrors Revit's Link CAD dialog: pick file + unit + placement."""
 
-    def __init__(self):
+    def __init__(self, active_view_name="-"):
         self.result = None
         self.window = _load_window(_LINK_XAML)
         find = self.window.FindName
         self.tb_path = find("tb_path")
         self.cb_unit = find("cb_unit")
         self.cb_placement = find("cb_placement")
+        self.chk_view_only = find("chk_view_only")
+        find("tb_active_view").Text = active_view_name
         for label, _value in dxf_linker.UNIT_CHOICES:
             self.cb_unit.Items.Add(label)
         for label, _value in dxf_linker.PLACEMENT_CHOICES:
@@ -176,7 +178,8 @@ class LinkOptionsDialog(object):
             return
         self.result = {"path": path,
                        "unit": self.cb_unit.SelectedItem,
-                       "placement": self.cb_placement.SelectedItem}
+                       "placement": self.cb_placement.SelectedItem,
+                       "this_view_only": bool(self.chk_view_only.IsChecked)}
         self.window.Close()
 
     def _on_cancel(self, sender, args):
@@ -240,7 +243,16 @@ class CadToBimWindow(object):
         self.sl_colh_max = find("sl_colh_max")
         self.tb_std_columns = find("tb_std_columns")
         self.tb_std_beams = find("tb_std_beams")
+        self.tb_snap = find("tb_snap")
+        self.tb_markrad = find("tb_markrad")
+        self.tb_compare = find("tb_compare")
+        self.tb_region = find("tb_region")
+        self.tb_circ_min = find("tb_circ_min")
+        self.tb_circ_max = find("tb_circ_max")
+        self.tb_pair_min = find("tb_pair_min")
+        self.tb_pair_max = find("tb_pair_max")
         self._init_sizing()
+        self._init_tolerances()
 
         if not column_symbols:
             self.chk_columns.IsChecked = False
@@ -328,11 +340,42 @@ class CadToBimWindow(object):
         slider.ValueChanged += on_slider
         textbox.LostFocus += on_text
 
+    def _init_tolerances(self):
+        """Seed the Units & Tolerances fields from config defaults (mm)."""
+        d = config.DEFAULTS
+        self.tb_snap.Text = str(int(d["snap_tol_mm"]))
+        self.tb_markrad.Text = str(int(d["mark_radius_mm"]))
+        self.tb_compare.Text = str(int(d["compare_tol_mm"]))
+        self.tb_region.Text = str(int(d["col_region_max_side_mm"]))
+        self.tb_circ_min.Text = str(int(d["circle_min_dia_mm"]))
+        self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
+        self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
+        self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+
     def _read_int(self, textbox, fallback):
         try:
             return int(round(float(textbox.Text)))
         except (ValueError, TypeError):
             return fallback
+
+    def _read_float(self, textbox, fallback):
+        try:
+            return float(textbox.Text)
+        except (ValueError, TypeError):
+            return fallback
+
+    def _read_tolerances(self):
+        d = config.DEFAULTS
+        return {
+            "snap_tol_mm": self._read_float(self.tb_snap, d["snap_tol_mm"]),
+            "mark_radius_mm": self._read_float(self.tb_markrad, d["mark_radius_mm"]),
+            "compare_tol_mm": self._read_float(self.tb_compare, d["compare_tol_mm"]),
+            "col_region_max_side_mm": self._read_float(self.tb_region, d["col_region_max_side_mm"]),
+            "circle_min_dia_mm": self._read_float(self.tb_circ_min, d["circle_min_dia_mm"]),
+            "circle_max_dia_mm": self._read_float(self.tb_circ_max, d["circle_max_dia_mm"]),
+            "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
+            "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
+        }
 
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
@@ -361,6 +404,7 @@ class CadToBimWindow(object):
             "top_level_id": self._level_ids.get(self.cb_top_level.SelectedItem),
             "export": bool(self.chk_export.IsChecked),
             "limits": self._read_limits(),
+            "tolerances": self._read_tolerances(),
             "standards": {
                 "column": report.parse_standard_sizes(self.tb_std_columns.Text),
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
@@ -405,14 +449,16 @@ def main():
         return
 
     # 1. Pick the DXF + its unit + positioning, then link it (own transaction).
-    options = LinkOptionsDialog()
+    active_view_name = getattr(getattr(doc, "ActiveView", None), "Name", "-")
+    options = LinkOptionsDialog(active_view_name)
     options.show()
     if not options.result:
         return
     path = options.result["path"]
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
-                                       options.result["placement"])
+                                       options.result["placement"],
+                                       this_view_only=options.result["this_view_only"])
     except Exception:
         _error("Link failed", "Could not link the DXF.", traceback.format_exc())
         return
@@ -435,10 +481,6 @@ def main():
     transform.apply_to_texts(affine, dxf_result.texts)
     marks.parse_texts(dxf_result.texts)
 
-    # 3. Compare Revit-link vs DXF geometry to surface problem geometry.
-    comparison = compare.diff(revit_result.records, dxf_result.records, _COMPARE_TOL_FT)
-    comparison["transform"] = transform_diag
-
     # Build the window from the DXF records (the authoritative source); no API calls.
     layer_counts = report.build_layer_counts(dxf_result.records)
     names = _layer_names(dxf_result.records)
@@ -459,12 +501,23 @@ def main():
     layers.apply_mapping(dxf_result.records, selections["mapping"])
     limits = selections.get("limits")
     standards = selections.get("standards")
+    tolerances = selections.get("tolerances") or {}
+
+    # Compare Revit-link vs DXF geometry to surface problem geometry, using the
+    # user's compare radius (this is diagnostic; we build from the DXF either way).
+    compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
+                                                    config.DEFAULTS["compare_tol_mm"]))
+    comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
+    comparison["transform"] = transform_diag
+
     sections = report.build_column_sections(dxf_result.records, limits, standards,
-                                            texts=dxf_result.texts)
+                                            texts=dxf_result.texts,
+                                            tolerances=tolerances)
     beam_segments = report.build_beam_segments(dxf_result.records,
                                                sections.get("circles"),
                                                limits, standards,
-                                               texts=dxf_result.texts)
+                                               texts=dxf_result.texts,
+                                               tolerances=tolerances)
 
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
@@ -539,11 +592,13 @@ def _create_columns(doc, sections, selections):
 
     group = TransactionGroup(doc, "CAD to BIM: Columns")
     transaction = Transaction(doc, "Create columns")
+    region_max = (selections.get("tolerances") or {}).get("col_region_max_side_mm")
     group.Start()
     transaction.Start()
     try:
         transactions.attach_warning_swallower(transaction)
-        result = columns.place_columns(doc, sections, family_id, base_id, top_id)
+        result = columns.place_columns(doc, sections, family_id, base_id, top_id,
+                                       region_max_side_mm=region_max)
         circles = sections.get("circles", [])
         circular_id = selections.get("circular_family_id")
         circular = {"created": [], "errors": []}

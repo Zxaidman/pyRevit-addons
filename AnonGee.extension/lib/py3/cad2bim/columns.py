@@ -26,14 +26,15 @@ from Autodesk.Revit.DB.Structure import StructuralType
 
 from cad2bim.units import mm_to_internal
 from cad2bim.compat import get_element_name
+from cad2bim import config
 
 _B_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _H_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
 _DIA_PARAM_NAMES = ("d", "diameter", "Diameter", "D", "dia", "Dia", "b", "width")
 
 # A rectangle whose SMALLER side exceeds this is treated as a lift/stair region,
-# not a column, and skipped (e.g. 2700x3300, 5700x3300). Tunable.
-_MAX_COLUMN_MIN_SIDE_MM = 1500
+# not a column, and skipped (e.g. 2700x3300, 5700x3300). Tunable (config / UI).
+_MAX_COLUMN_MIN_SIDE_MM = config.DEFAULTS["col_region_max_side_mm"]
 
 
 def structural_column_symbols(doc):
@@ -57,7 +58,8 @@ def levels(doc):
     return [(get_element_name(level), level.Id) for level in items]
 
 
-def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id):
+def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id,
+                  region_max_side_mm=None):
     """Place a rectangular column for every section rectangle.
 
     Conventions (per the project): the type is named/sized smaller-side b x
@@ -73,6 +75,8 @@ def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id):
     if base_symbol is None or base_level is None or top_level is None:
         raise ValueError("column family or levels could not be resolved")
 
+    region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
+                  else region_max_side_mm)
     base_elevation = base_level.Elevation
     cache = {}
     result = {"created": [], "skipped": [], "errors": []}
@@ -84,10 +88,10 @@ def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id):
                 height_mm = int(round(rectangle["height_mm"]))
                 small = min(width_mm, height_mm)
                 big = max(width_mm, height_mm)
-                if small > _MAX_COLUMN_MIN_SIDE_MM:
+                if small > region_max:
                     result["skipped"].append(
                         "region {0}x{1} mm (>{2} min side)".format(
-                            width_mm, height_mm, _MAX_COLUMN_MIN_SIDE_MM))
+                            width_mm, height_mm, region_max))
                     continue
 
                 symbol = _resolve_symbol(doc, base_symbol, small, big, cache)

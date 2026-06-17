@@ -46,11 +46,13 @@ _UNIT_BY_LABEL = dict(UNIT_CHOICES)
 _PLACEMENT_BY_LABEL = dict(PLACEMENT_CHOICES)
 
 
-def link_dxf(doc, path, unit_label, placement_label, view=None):
+def link_dxf(doc, path, unit_label, placement_label, view=None,
+             this_view_only=False):
     """Link `path` into doc with the chosen unit + placement; return ImportInstance.
 
-    Owns a Transaction. Fail-loud if the unit/placement are unknown, the link call
-    fails, or the result is not an ImportInstance.
+    `this_view_only` mirrors the Link CAD "Current view only" checkbox. Owns a
+    Transaction. Fail-loud if the unit/placement are unknown, the link call fails,
+    or the result is not an ImportInstance.
     """
     if doc is None or not path:
         raise ValueError("link_dxf requires a document and a DXF path")
@@ -64,7 +66,7 @@ def link_dxf(doc, path, unit_label, placement_label, view=None):
     options = DWGImportOptions()
     options.Unit = unit
     options.Placement = placement
-    options.ThisViewOnly = False        # model-wide, so geometry reads everywhere
+    options.ThisViewOnly = bool(this_view_only)
 
     transaction = Transaction(doc, "Link DXF")
     transaction.Start()
