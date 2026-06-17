@@ -502,8 +502,8 @@ def _create_grids(doc, records):
     transaction = Transaction(doc, "Create grids")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
+        transactions.attach_warning_swallower(transaction)
         result = grids.create_grids(doc, grid_records, namer)
         transaction.Commit()
         group.Assimilate()
@@ -540,8 +540,8 @@ def _create_columns(doc, sections, selections):
     transaction = Transaction(doc, "Create columns")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
+        transactions.attach_warning_swallower(transaction)
         result = columns.place_columns(doc, sections, family_id, base_id, top_id)
         circles = sections.get("circles", [])
         circular_id = selections.get("circular_family_id")
@@ -588,8 +588,8 @@ def _create_beams(doc, beam_segments, selections):
     transaction = Transaction(doc, "Create beams")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
+        transactions.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
         transaction.Commit()
         group.Assimilate()

@@ -29,8 +29,16 @@ class WarningSwallower(IFailuresPreprocessor):
 
 
 def attach_warning_swallower(transaction):
-    """Attach the warning swallower to an already-created (not yet started) or
-    started transaction's failure-handling options."""
-    options = transaction.GetFailureHandlingOptions()
-    options.SetFailuresPreprocessor(WarningSwallower())
-    transaction.SetFailureHandlingOptions(options)
+    """Attach the warning swallower to a started transaction's failure options.
+
+    Degrades gracefully: if this engine cannot build the preprocessor, the batch
+    still runs (Revit may surface warning dialogs) -- this never crashes the run.
+    Returns True if the swallower was attached.
+    """
+    try:
+        options = transaction.GetFailureHandlingOptions()
+        options.SetFailuresPreprocessor(WarningSwallower())
+        transaction.SetFailureHandlingOptions(options)
+        return True
+    except Exception:
+        return False
