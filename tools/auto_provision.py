@@ -5,12 +5,15 @@ import sys
 # 1. DEFINE YOUR MANUALLY CONTROLLED DEPENDENCIES HERE
 # Simply list package names as space-separated strings.
 # You can also add specific versions if needed (e.g., "openpyxl==3.1.5")
-PY3_DEPENDENCIES = "numpy openpyxl pythonnet"
+# ezdxf pulls pyparsing / numpy / fontTools / typing_extensions automatically and
+# powers the CAD to BIM button's DXF parsing (run this with a CPython matching the
+# pyRevit CPython3 engine, e.g. 3.12 win-amd64, so the numpy/ezdxf binaries match).
+PY3_DEPENDENCIES = "numpy openpyxl pythonnet ezdxf"
 PY2_DEPENDENCIES = "openpyxl"
 
 # 2. Setup folder pathways relative to this script
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))
-LIB_DIR = os.path.normpath(os.path.join(TOOLS_DIR, "..", "pyZaid.extension", "lib"))
+LIB_DIR = os.path.normpath(os.path.join(TOOLS_DIR, "..", "AnonGee.extension", "lib"))
 
 def deploy_libraries(dependencies_string, subfolder):
     # Split the string into a clean Python list of packages

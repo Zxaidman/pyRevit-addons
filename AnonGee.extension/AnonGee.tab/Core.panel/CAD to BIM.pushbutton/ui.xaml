@@ -1,287 +1,44 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:sys="clr-namespace:System;assembly=mscorlib"
-        Title="AnonGee · CAD to BIM"
+        Title="CAD to BIM"
         Height="800" Width="580"
         MinHeight="620" MinWidth="500"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
-        UseLayoutRounding="True"
-        FontFamily="JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri">
+        UseLayoutRounding="True">
 
-    <Window.Resources>
-        <ResourceDictionary>
-
-            <!-- AnonGee BIM Tools theme (brand tokens, §3 / §18) -->
-
-            <!-- Colors -->
-            <Color x:Key="ColorVividRed">#FFE02020</Color>
-            <Color x:Key="ColorCharcoalBlack">#FF141414</Color>
-            <Color x:Key="ColorSilverSteel">#FFC0C8D8</Color>
-            <Color x:Key="ColorPureWhite">#FFFFFFFF</Color>
-            <Color x:Key="ColorOffWhite">#FFF4F4F6</Color>
-            <Color x:Key="ColorMidGrey">#FF6B7280</Color>
-            <Color x:Key="ColorLightBorder">#FFE2E4EA</Color>
-            <Color x:Key="ColorVividRedHover">#FFC41A1A</Color>
-            <Color x:Key="ColorVividRedPressed">#FFA81515</Color>
-            <Color x:Key="ColorVividRed10">#1AE02020</Color>
-            <Color x:Key="ColorOffWhiteHover">#FFE8E8EC</Color>
-
-            <!-- Brushes -->
-            <SolidColorBrush x:Key="BrushVividRed"            Color="{StaticResource ColorVividRed}"/>
-            <SolidColorBrush x:Key="BrushCharcoalBlack"       Color="{StaticResource ColorCharcoalBlack}"/>
-            <SolidColorBrush x:Key="BrushSilverSteel"         Color="{StaticResource ColorSilverSteel}"/>
-            <SolidColorBrush x:Key="BrushPureWhite"           Color="{StaticResource ColorPureWhite}"/>
-            <SolidColorBrush x:Key="BrushOffWhite"            Color="{StaticResource ColorOffWhite}"/>
-            <SolidColorBrush x:Key="BrushMidGrey"             Color="{StaticResource ColorMidGrey}"/>
-            <SolidColorBrush x:Key="BrushLightBorder"         Color="{StaticResource ColorLightBorder}"/>
-            <SolidColorBrush x:Key="BrushVividRedHover"       Color="{StaticResource ColorVividRedHover}"/>
-            <SolidColorBrush x:Key="BrushVividRedPressed"     Color="{StaticResource ColorVividRedPressed}"/>
-            <SolidColorBrush x:Key="BrushPrimaryForeground"   Color="{StaticResource ColorPureWhite}"/>
-            <SolidColorBrush x:Key="BrushSecondaryHover"      Color="{StaticResource ColorVividRed10}"/>
-            <SolidColorBrush x:Key="BrushGhostHover"          Color="{StaticResource ColorOffWhiteHover}"/>
-            <SolidColorBrush x:Key="BrushDisabledBackground"  Color="{StaticResource ColorLightBorder}"/>
-            <SolidColorBrush x:Key="BrushDisabledForeground"  Color="{StaticResource ColorSilverSteel}"/>
-            <SolidColorBrush x:Key="BrushInfoBadgeBackground" Color="#DBEAFE"/>
-            <SolidColorBrush x:Key="BrushInfoBadgeText"       Color="#1D4ED8"/>
-
-            <!-- Typography -->
-            <FontFamily x:Key="FontSans">JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri</FontFamily>
-            <FontFamily x:Key="FontMono">JetBrains Mono, Consolas, Courier New</FontFamily>
-            <sys:Double x:Key="FontSizeH2">16.5</sys:Double>
-            <sys:Double x:Key="FontSizeH3">11</sys:Double>
-            <sys:Double x:Key="FontSizeBody">9.5</sys:Double>
-            <sys:Double x:Key="FontSizeCaption">8.5</sys:Double>
-
-            <Style x:Key="TextH2OnDark" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeH2}"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushPureWhite}"/>
-            </Style>
-            <Style x:Key="TextH3" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeH3}"/>
-                <Setter Property="FontWeight" Value="SemiBold"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
-            </Style>
-            <Style x:Key="TextCaption" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeCaption}"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushMidGrey}"/>
-            </Style>
-            <Style x:Key="TextMono" TargetType="TextBlock">
-                <Setter Property="FontFamily" Value="{StaticResource FontMono}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="VerticalAlignment" Value="Center"/>
-            </Style>
-
-            <!-- Buttons -->
-            <Style x:Key="ButtonBaseStyle" TargetType="Button">
-                <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Padding"         Value="10,0"/>
-                <Setter Property="Height"          Value="28"/>
-                <Setter Property="FontFamily"      Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"        Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="FontWeight"      Value="SemiBold"/>
-                <Setter Property="Background"      Value="Transparent"/>
-                <Setter Property="Foreground"      Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="BorderBrush"     Value="Transparent"/>
-                <Setter Property="Cursor"          Value="Hand"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Button">
-                            <Border x:Name="Root"
-                                    Background="{TemplateBinding Background}"
-                                    BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}"
-                                    CornerRadius="5"
-                                    Padding="{TemplateBinding Padding}">
-                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                  RecognizesAccessKey="True"/>
-                            </Border>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="ButtonPrimary" TargetType="Button" BasedOn="{StaticResource ButtonBaseStyle}">
-                <Setter Property="Background"      Value="{StaticResource BrushVividRed}"/>
-                <Setter Property="Foreground"      Value="{StaticResource BrushPrimaryForeground}"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{StaticResource BrushVividRedHover}"/>
-                    </Trigger>
-                    <Trigger Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="{StaticResource BrushVividRedPressed}"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="Background" Value="{StaticResource BrushDisabledBackground}"/>
-                        <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-
-            <Style x:Key="ButtonSecondary" TargetType="Button" BasedOn="{StaticResource ButtonBaseStyle}">
-                <Setter Property="Background"      Value="{StaticResource BrushPureWhite}"/>
-                <Setter Property="Foreground"      Value="{StaticResource BrushVividRed}"/>
-                <Setter Property="BorderBrush"     Value="{StaticResource BrushVividRed}"/>
-                <Setter Property="BorderThickness" Value="1.5"/>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{StaticResource BrushSecondaryHover}"/>
-                    </Trigger>
-                    <Trigger Property="IsEnabled" Value="False">
-                        <Setter Property="BorderBrush" Value="{StaticResource BrushDisabledBackground}"/>
-                        <Setter Property="Foreground"  Value="{StaticResource BrushDisabledForeground}"/>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-
-            <Style x:Key="ButtonGhost" TargetType="Button" BasedOn="{StaticResource ButtonBaseStyle}">
-                <Setter Property="Background"      Value="Transparent"/>
-                <Setter Property="Foreground"      Value="{StaticResource BrushMidGrey}"/>
-                <Setter Property="BorderThickness" Value="0"/>
-                <Style.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="{StaticResource BrushGhostHover}"/>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
-
-            <Style x:Key="InputTextBox" TargetType="TextBox">
-                <Setter Property="FontFamily"  Value="{StaticResource FontMono}"/>
-                <Setter Property="FontSize"    Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="Foreground"  Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="Background"  Value="{StaticResource BrushPureWhite}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
-                <Setter Property="Height"      Value="24"/>
-                <Setter Property="Padding"     Value="6,3"/>
-                <Setter Property="VerticalContentAlignment" Value="Center"/>
-            </Style>
-
-            <!-- ComboBox (used per layer row for category mapping) -->
-            <Style x:Key="InputComboBox" TargetType="ComboBox">
-                <Setter Property="FontFamily"  Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"    Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="Foreground"  Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="Background"  Value="{StaticResource BrushPureWhite}"/>
-                <Setter Property="BorderBrush" Value="{StaticResource BrushLightBorder}"/>
-                <Setter Property="Height"      Value="24"/>
-                <Setter Property="Padding"     Value="6,0"/>
-            </Style>
-            <Style TargetType="ComboBoxItem">
-                <Setter Property="FontFamily" Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="Padding"    Value="8,4"/>
-            </Style>
-
-            <!-- CheckBox (brand red tick) -->
-            <Style TargetType="CheckBox">
-                <Setter Property="FontFamily" Value="{StaticResource FontSans}"/>
-                <Setter Property="FontSize"   Value="{StaticResource FontSizeBody}"/>
-                <Setter Property="Foreground" Value="{StaticResource BrushCharcoalBlack}"/>
-                <Setter Property="Cursor"     Value="Hand"/>
-                <Setter Property="MinHeight"  Value="24"/>
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="CheckBox">
-                            <Grid Background="Transparent">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Border x:Name="Box" Grid.Column="0"
-                                        Width="16" Height="16" CornerRadius="3"
-                                        BorderBrush="{StaticResource BrushLightBorder}"
-                                        BorderThickness="1"
-                                        Background="{StaticResource BrushPureWhite}"
-                                        VerticalAlignment="Center">
-                                    <Viewbox x:Name="Tick" Margin="3" Visibility="Collapsed">
-                                        <Path Data="M0,3.5 L3.5,7 L9,0"
-                                              Stroke="{StaticResource BrushPureWhite}"
-                                              StrokeThickness="1.8"
-                                              StrokeLineJoin="Round"
-                                              StrokeStartLineCap="Round"
-                                              StrokeEndLineCap="Round"/>
-                                    </Viewbox>
-                                </Border>
-                                <ContentPresenter Grid.Column="1" Margin="7,0,0,0"
-                                                  VerticalAlignment="Center" RecognizesAccessKey="True"/>
-                            </Grid>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="Tick" Property="Visibility" Value="Visible"/>
-                                    <Setter TargetName="Box"  Property="Background"  Value="{StaticResource BrushVividRed}"/>
-                                    <Setter TargetName="Box"  Property="BorderBrush" Value="{StaticResource BrushVividRed}"/>
-                                </Trigger>
-                                <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Foreground" Value="{StaticResource BrushDisabledForeground}"/>
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-        </ResourceDictionary>
-    </Window.Resources>
-
-    <DockPanel LastChildFill="True" Background="{StaticResource BrushPureWhite}">
+    <DockPanel LastChildFill="True">
 
         <!-- Header -->
-        <Border DockPanel.Dock="Top" Background="{StaticResource BrushCharcoalBlack}" Padding="16,14">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="AnonGee · CAD to BIM"
-                           Style="{StaticResource TextH2OnDark}" VerticalAlignment="Center"/>
-                <Border Grid.Column="1" Background="{StaticResource BrushVividRed}"
-                        CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
-                    <TextBlock x:Name="version_text" Text="v0.5"
-                               FontFamily="{StaticResource FontMono}"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource BrushPureWhite}"/>
-                </Border>
-            </Grid>
-        </Border>
-        <Rectangle DockPanel.Dock="Top" Height="3" Fill="{StaticResource BrushVividRed}"/>
+        <Grid DockPanel.Dock="Top" Margin="16,12,16,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="CAD to BIM" FontSize="16" FontWeight="Bold"
+                       VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" x:Name="version_text" Text="v0.13"
+                       VerticalAlignment="Center"/>
+        </Grid>
+        <Separator DockPanel.Dock="Top"/>
 
         <!-- Footer -->
-        <Border DockPanel.Dock="Bottom"
-                Background="{StaticResource BrushOffWhite}"
-                BorderBrush="{StaticResource BrushLightBorder}"
-                BorderThickness="0,1,0,0" Padding="16,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" Background="{StaticResource BrushInfoBadgeBackground}"
-                        CornerRadius="4" Padding="10,3" HorizontalAlignment="Left" VerticalAlignment="Center">
-                    <TextBlock x:Name="status_text" Text="Ready"
-                               FontFamily="{StaticResource FontMono}"
-                               FontSize="{StaticResource FontSizeCaption}"
-                               FontWeight="SemiBold"
-                               Foreground="{StaticResource BrushInfoBadgeText}"/>
-                </Border>
-                <Button Grid.Column="1" x:Name="btn_run" Content="Run"
-                        Style="{StaticResource ButtonPrimary}" Width="130"
-                        ToolTip="Apply the layer mapping and build the selected elements"/>
-                <Button Grid.Column="2" x:Name="btn_cancel" Content="Cancel"
-                        Style="{StaticResource ButtonGhost}" Width="84" Margin="8,0,0,0"/>
-            </Grid>
-        </Border>
+        <Grid DockPanel.Dock="Bottom" Margin="16,8,16,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" x:Name="status_text" Text="Ready"
+                       VerticalAlignment="Center"/>
+            <Button Grid.Column="1" x:Name="btn_run" Content="Run" Width="130" Height="26"
+                    ToolTip="Apply the layer mapping and build the selected elements"/>
+            <Button Grid.Column="2" x:Name="btn_cancel" Content="Cancel" Width="84" Height="26"
+                    Margin="8,0,0,0"/>
+        </Grid>
 
         <!-- Body -->
-        <Grid Margin="20,16,20,12">
+        <Grid Margin="16,8,16,8">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>   <!-- source -->
                 <RowDefinition Height="Auto"/>   <!-- layers header -->
@@ -291,35 +48,32 @@
                 <RowDefinition Height="Auto"/>   <!-- options -->
             </Grid.RowDefinitions>
 
-            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,14">
-                <TextBlock Text="Source: " Style="{StaticResource TextH3}"/>
-                <TextBlock x:Name="source_text" Text="-" Style="{StaticResource TextMono}" Margin="4,0,0,0"/>
+            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
+                <TextBlock Text="Source: " FontWeight="Bold"/>
+                <TextBlock x:Name="source_text" Text="-" Margin="4,0,0,0"/>
             </StackPanel>
 
-            <TextBlock Grid.Row="1" Text="Layer mapping"
-                       Style="{StaticResource TextH3}" Margin="0,0,0,2"/>
+            <TextBlock Grid.Row="1" Text="Layer mapping" FontWeight="Bold" Margin="0,0,0,2"/>
             <Grid Grid.Row="2" Margin="0,4,0,4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="70"/>
                     <ColumnDefinition Width="150"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock Grid.Column="0" Text="Layer"    Style="{StaticResource TextCaption}"/>
-                <TextBlock Grid.Column="1" Text="Curves"   Style="{StaticResource TextCaption}"/>
-                <TextBlock Grid.Column="2" Text="Category" Style="{StaticResource TextCaption}"/>
+                <TextBlock Grid.Column="0" Text="Layer"/>
+                <TextBlock Grid.Column="1" Text="Curves"/>
+                <TextBlock Grid.Column="2" Text="Category"/>
             </Grid>
-            <Border Grid.Row="3" BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1"
-                    CornerRadius="5" Padding="6">
+            <Border Grid.Row="3" BorderBrush="Gray" BorderThickness="1" Padding="6">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel x:Name="layer_rows" Orientation="Vertical"/>
                 </ScrollViewer>
             </Border>
 
-            <TextBlock Grid.Row="4" Text="Build"
-                       Style="{StaticResource TextH3}" Margin="0,14,0,6"/>
+            <TextBlock Grid.Row="4" Text="Build" FontWeight="Bold" Margin="0,12,0,6"/>
             <StackPanel Grid.Row="5" Orientation="Vertical">
                 <CheckBox x:Name="chk_grids"   Content="Create grids from grid lines" IsChecked="True"/>
-                <CheckBox x:Name="chk_columns" Content="Create columns (rectangular sections)" IsChecked="True"/>
+                <CheckBox x:Name="chk_columns" Content="Create columns (rectangular sections)" IsChecked="True" Margin="0,4,0,0"/>
                 <Grid Margin="23,4,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="92"/>
@@ -331,16 +85,16 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Family / Type" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Style="{StaticResource InputComboBox}" Margin="0,2"/>
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Circular family" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Style="{StaticResource InputComboBox}" Margin="0,2"/>
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Base level" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Style="{StaticResource InputComboBox}" Margin="0,2"/>
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Style="{StaticResource InputComboBox}" Margin="0,2"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Family / Type" VerticalAlignment="Center"/>
+                    <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Height="24" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Circular family" VerticalAlignment="Center"/>
+                    <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Height="24" Margin="0,2"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Base level" VerticalAlignment="Center"/>
+                    <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Height="24" Margin="0,2"/>
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
+                    <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="24" Margin="0,2"/>
                 </Grid>
-                <CheckBox x:Name="chk_beams"   Content="Create beams (from S-BEAM outlines)" IsChecked="True"/>
+                <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,4,0,0"/>
                 <Grid Margin="23,4,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="92"/>
@@ -350,15 +104,15 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Beam family" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_beam_family" Style="{StaticResource InputComboBox}" Margin="0,2"/>
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level, no offset. Depth comes from the chosen type."
-                               Style="{StaticResource TextCaption}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Beam family" VerticalAlignment="Center"/>
+                    <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_beam_family" Height="24" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level, no offset. Depth comes from text marks where found, else from the chosen type."
+                               TextWrapping="Wrap" Margin="0,2,0,0"/>
                 </Grid>
-                <CheckBox x:Name="chk_slabs"   Content="Create slabs (coming soon)"   IsEnabled="False"/>
-                <CheckBox x:Name="chk_export"  Content="Export parsed curves to JSON" Margin="0,6,0,0"/>
+                <CheckBox x:Name="chk_slabs"   Content="Create slabs (coming soon)" IsEnabled="False" Margin="0,4,0,0"/>
+                <CheckBox x:Name="chk_export"  Content="Export parsed curves to JSON" Margin="0,4,0,0"/>
 
-                <TextBlock Text="Sizing limits &amp; standards (mm)" Style="{StaticResource TextH3}" Margin="0,12,0,4"/>
+                <TextBlock Text="Sizing limits &amp; standards (mm)" FontWeight="Bold" Margin="0,12,0,4"/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="86"/>
@@ -377,32 +131,32 @@
                         <RowDefinition Height="28"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="min" Style="{StaticResource TextCaption}" HorizontalAlignment="Center"/>
-                    <TextBlock Grid.Row="0" Grid.Column="3" Text="max" Style="{StaticResource TextCaption}" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="min" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Row="0" Grid.Column="3" Text="max" HorizontalAlignment="Center"/>
 
-                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Beam width" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_beam_min" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Beam width" VerticalAlignment="Center"/>
+                    <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_beam_min" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="1" Grid.Column="2" x:Name="sl_beam_min" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_beam_max" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_beam_max" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="1" Grid.Column="4" x:Name="sl_beam_max" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
 
-                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Column b" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_colb_min" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Column b" VerticalAlignment="Center"/>
+                    <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_colb_min" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="2" Grid.Column="2" x:Name="sl_colb_min" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_colb_max" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_colb_max" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="2" Grid.Column="4" x:Name="sl_colb_max" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
 
-                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Column h" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_colh_min" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Column h" VerticalAlignment="Center"/>
+                    <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_colh_min" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="3" Grid.Column="2" x:Name="sl_colh_min" Minimum="0" Maximum="20000" Margin="6,0" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_colh_max" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_colh_max" Height="24" Margin="0,2"/>
                     <Slider    Grid.Row="3" Grid.Column="4" x:Name="sl_colh_max" Minimum="0" Maximum="20000" Margin="6,0" VerticalAlignment="Center"/>
 
-                    <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5" Text="Standard sizes (b x h, comma-separated)" Style="{StaticResource TextCaption}" Margin="0,8,0,2"/>
-                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Columns" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="4" x:Name="tb_std_columns" Style="{StaticResource InputTextBox}" Margin="0,2"/>
-                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Beam widths" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
-                    <TextBox   Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" x:Name="tb_std_beams" Style="{StaticResource InputTextBox}" Margin="0,2"/>
+                    <TextBlock Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="5" Text="Standard sizes (b x h, comma-separated)" Margin="0,8,0,2"/>
+                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Columns" VerticalAlignment="Center"/>
+                    <TextBox   Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="4" x:Name="tb_std_columns" Height="24" Margin="0,2"/>
+                    <TextBlock Grid.Row="6" Grid.Column="0" Text="Beam widths" VerticalAlignment="Center"/>
+                    <TextBox   Grid.Row="6" Grid.Column="1" Grid.ColumnSpan="4" x:Name="tb_std_beams" Height="24" Margin="0,2"/>
                 </Grid>
             </StackPanel>
         </Grid>

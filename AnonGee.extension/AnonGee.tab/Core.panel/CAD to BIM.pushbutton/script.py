@@ -1,21 +1,26 @@
+#! python3
 # -*- coding: utf-8 -*-
-"""CAD to BIM -- linked-DWG reader + grids pass.
+"""CAD to BIM -- pick a DXF, link it, and build Revit structure from it.
 
-Reads a linked CAD, classifies its curves by layer (convention + optional
-override), reports the parse, optionally exports the intermediate JSON, and
-creates Revit GRIDS from the classified grid lines.
+Workflow (CAD-free model is the normal case):
+  1. Pick a .dxf, choose its drawing unit and positioning.
+  2. Link it programmatically (like Revit's Link CAD dialog).
+  3. Hybrid extraction: read the Revit link's geometry (internal feet) AND read the
+     same DXF with ezdxf for geometry + TEXT; align them with the link transform.
+  4. Compare the two to find problem geometry (Revit clips/merges at junctions) and
+     build from the cleaner ezdxf geometry.
+  5. Classify layers, refine sizes from text marks ("C1 400x400"), and create grids,
+     columns and beams in a TransactionGroup with warning suppression.
 
-Grids are created inside a TransactionGroup with warning suppression. Columns,
-beams and slabs remain later passes and are deliberately absent (not stubbed).
-
-The cad2bim package lives in `lib/py2/`. pyRevit puts `lib/` on sys.path (so
-`path_resolver` imports), but NOT the py2/py3 subfolders -- so we call the repo's
-`path_resolver.update_paths()` first to inject `lib/py2` before importing cad2bim.
+Runs on the pyRevit CPython3 engine (#! python3) so ezdxf (CPython >=3.10) imports
+in-process from lib/py3. The cad2bim package lives in lib/py3; path_resolver injects
+it. If the banner's version/path is not what you expect, a stale shadow copy is on
+sys.path -- remove it and reload.
 """
 
 __title__ = "CAD to BIM"
-__doc__ = ("Read a linked CAD (DWG), classify its curves by layer, and create "
-           "Revit grids from the grid lines. Columns/beams/slabs are later passes.")
+__doc__ = ("Pick a DXF, link it, and build Revit grids/columns/beams from its "
+           "geometry and text marks (hybrid ezdxf + linked-CAD extraction).")
 __author__ = "AnonGee"
 __min_revit_ver__ = 2022
 
@@ -64,13 +69,18 @@ from System.Windows.Controls import Grid as WpfGrid, ColumnDefinition, TextBlock
 from System.Windows import Thickness, GridLength, GridUnitType, VerticalAlignment
 
 import cad2bim
-from cad2bim import (compat, cad_links, geometry_reader, layers, ui, report,
-                     grids, transactions, columns, beams)
+from cad2bim import (compat, geometry_reader, layers, ui, report, grids,
+                     transactions, columns, beams, dxf_linker, dxf_reader,
+                     transform, compare, marks)
 
 logger = script.get_logger()
 output = script.get_output()
 
 _XAML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui.xaml")
+
+# A size label within this distance of a member refines it; also the match radius
+# the comparison uses for "is this the same member" (~half a column).
+_COMPARE_TOL_FT = 300.0 / 304.8
 
 
 class CadToBimWindow(forms.WPFWindow):
@@ -78,7 +88,7 @@ class CadToBimWindow(forms.WPFWindow):
 
     Holds no Revit API references and performs no model writes -- it only gathers
     the user's choices into self.result and closes. All model work happens after
-    show_dialog() returns, on the Revit API thread (the brand's no-blocking rule).
+    show_dialog() returns, on the Revit API thread.
     """
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
@@ -118,9 +128,7 @@ class CadToBimWindow(forms.WPFWindow):
         return mapping
 
     def _build_rows(self, layer_rows, categories, default_mapping):
-        combo_style = self.Resources["InputComboBox"]
-        mono_font = self.Resources["FontMono"]
-        body_size = self.Resources["FontSizeBody"]
+        """One row per CAD layer: name, curve count, category combo (stock styling)."""
         for layer, count in layer_rows:
             row = WpfGrid()
             row.Margin = Thickness(0, 2, 0, 2)
@@ -132,19 +140,15 @@ class CadToBimWindow(forms.WPFWindow):
 
             name_block = TextBlock()
             name_block.Text = layer
-            name_block.FontFamily = mono_font
-            name_block.FontSize = body_size
             name_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(name_block, 0)
 
             count_block = TextBlock()
             count_block.Text = str(count)
-            count_block.FontSize = body_size
             count_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(count_block, 1)
 
             combo = ComboBox()
-            combo.Style = combo_style
             for category in categories:
                 combo.Items.Add(category)
             combo.SelectedItem = default_mapping.get(layer, layers.CATEGORY_UNMAPPED)
@@ -232,6 +236,11 @@ class CadToBimWindow(forms.WPFWindow):
         self.Close()
 
 
+def _layer_names(records):
+    """Distinct layer keys present in a record list, sorted for stable display."""
+    return sorted(set(r.layer_key for r in records))
+
+
 def main():
     doc = revit.doc
     if doc is None:
@@ -240,82 +249,115 @@ def main():
 
     # Version banner: confirms WHICH cad2bim actually loaded. If the version or
     # path below is not what you expect, a stale or shadowing copy is on sys.path
-    # (e.g. a leftover lib/cad2bim hijacking lib/py2/cad2bim) -- reload pyRevit
-    # and remove the stray copy.
+    # -- reload pyRevit and remove the stray copy.
     module_dir = os.path.dirname(os.path.abspath(report.__file__))
     output.print_md("**cad2bim {0}** loaded from `{1}`".format(cad2bim.__version__, module_dir))
     logger.info("cad2bim {0} from {1}".format(cad2bim.__version__, module_dir))
-
-    # Startup self-check: surfaces the runtime/host so the Revit-2025 IronPython
-    # loader situation (a pyRevit 5.1-line issue, reworked in the 6.x line) is
-    # visible in the log if anything ever misbehaves.
     logger.info(compat.runtime_summary())
     logger.info("Host: Revit {0}".format(HOST_APP.version))
 
-    links = cad_links.find_cad_links(doc)
-    if not links:
-        forms.alert("No linked CAD (DWG) found. Link a DWG, then re-run.",
-                    exitscript=True)
+    if not dxf_reader.ezdxf_available():
+        forms.alert("ezdxf is not available on this engine.\n\nRun this button on the "
+                    "pyRevit CPython3 engine and provision ezdxf into lib/py3 "
+                    "(tools/auto_provision.py).", exitscript=True)
         return
 
-    chosen_link = ui.pick_link(doc, links)   # stock picker only when >1 link
-    if chosen_link is None:
-        forms.alert("No link selected -- nothing to read.", exitscript=True)
+    # 1. Pick a DXF + its unit + positioning.
+    path = ui.pick_dxf_file()
+    if not path:
+        forms.alert("No DXF picked -- nothing to do.", exitscript=True)
+        return
+    unit = ui.pick_import_unit([label for label, _ in dxf_linker.UNIT_CHOICES])
+    if not unit:
+        forms.alert("No unit chosen -- cannot link the DXF.", exitscript=True)
+        return
+    placement = ui.pick_import_placement([label for label, _ in dxf_linker.PLACEMENT_CHOICES])
+    if not placement:
+        forms.alert("No positioning chosen -- cannot link the DXF.", exitscript=True)
         return
 
-    read_result = geometry_reader.read_link(doc, chosen_link)
-    if read_result.is_empty():
-        forms.alert("'{0}' contained no readable curves.".format(read_result.source_name),
-                    exitscript=True)
+    # 2. Link it (own transaction) and read the Revit link geometry.
+    try:
+        instance = dxf_linker.link_dxf(doc, path, unit, placement)
+    except Exception as link_error:
+        logger.error("DXF link failed: {0}".format(link_error))
+        forms.alert("Could not link the DXF:\n{0}".format(link_error), exitscript=True)
+        return
+    revit_result = geometry_reader.read_link(doc, instance)
+
+    # 3. Read the same DXF with ezdxf (geometry + text), then align to the link.
+    try:
+        dxf_result = dxf_reader.read_dxf(path)
+    except Exception as read_error:
+        logger.error("DXF read failed: {0}".format(read_error))
+        forms.alert("Could not read the DXF:\n{0}".format(read_error), exitscript=True)
+        return
+    if dxf_result.is_empty():
+        forms.alert("'{0}' contained no readable geometry or text.".format(
+            dxf_result.source_name), exitscript=True)
         return
 
-    # Build the window from already-read data; the window touches no Revit API.
-    layer_counts = report.build_layer_counts(read_result.records)
-    layer_rows = [(name, layer_counts.get(name, {}).get("count", 0))
-                  for name in read_result.layer_names]
-    default_mapping = layers.build_default_mapping(read_result.layer_names)
+    affine, transform_diag = transform.build_dxf_to_internal(
+        instance, dxf_result.records, revit_result.records, logger)
+    transform.apply_to_records(affine, dxf_result.records)
+    transform.apply_to_texts(affine, dxf_result.texts)
+    marks.parse_texts(dxf_result.texts)
+
+    # 4. Compare Revit-link vs DXF geometry to surface problem geometry.
+    comparison = compare.diff(revit_result.records, dxf_result.records, _COMPARE_TOL_FT)
+    comparison["transform"] = transform_diag
+
+    # Build the window from the DXF records (the authoritative source); no API calls.
+    layer_counts = report.build_layer_counts(dxf_result.records)
+    names = _layer_names(dxf_result.records)
+    layer_rows = [(name, layer_counts.get(name, {}).get("count", 0)) for name in names]
+    default_mapping = layers.build_default_mapping(names)
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
 
-    window = CadToBimWindow(read_result.source_name, layer_rows,
+    window = CadToBimWindow(dxf_result.source_name, layer_rows,
                             list(layers.ALL_CATEGORIES), default_mapping,
                             column_symbols, level_options, beam_symbols)
     window.show_dialog()
     if not window.result:
-        return  # cancelled -- nothing read or written
+        return  # cancelled
 
     selections = window.result
-    layers.apply_mapping(read_result.records, selections["mapping"])
+    layers.apply_mapping(dxf_result.records, selections["mapping"])
     limits = selections.get("limits")
     standards = selections.get("standards")
-    sections = report.build_column_sections(read_result.records, limits, standards)
-    beam_segments = report.build_beam_segments(read_result.records,
+    sections = report.build_column_sections(dxf_result.records, limits, standards,
+                                            texts=dxf_result.texts)
+    beam_segments = report.build_beam_segments(dxf_result.records,
                                                sections.get("circles"),
-                                               limits, standards)
+                                               limits, standards,
+                                               texts=dxf_result.texts)
 
     output.print_md("### CAD to BIM {0}".format(cad2bim.__version__))
-    for line in report.format_console(read_result, selections["mapping"],
+    for line in compare.format_console(comparison):
+        output.print_md("`{0}`".format(line))
+    for line in report.format_console(dxf_result, selections["mapping"],
                                       sections, beam_segments):
         output.print_md("`{0}`".format(line))
 
     outcomes = {}
     if selections["create_grids"]:
-        outcomes["grids"] = _create_grids(doc, read_result.records)
+        outcomes["grids"] = _create_grids(doc, dxf_result.records)
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     if selections["export"]:
-        _export(read_result, selections["mapping"], sections, beam_segments, outcomes)
+        _export(dxf_result, selections["mapping"], sections, beam_segments,
+                outcomes, dxf_result.texts, comparison)
 
 
 def _create_grids(doc, records):
     """Create grids from classified grid lines, inside a transaction group.
 
-    Called only when the user ticked "Create grids". All Revit writes happen here
-    on the Revit API thread after the window has closed -- never in a UI handler.
-    Both the inner transaction and the group roll back on any failure.
+    All Revit writes happen here on the Revit API thread after the window has
+    closed. Both the inner transaction and the group roll back on any failure.
     """
     grid_records = [r for r in records
                     if r.category == layers.CATEGORY_GRID and r.kind in ("line", "arc")]
@@ -351,11 +393,7 @@ def _create_grids(doc, records):
 
 
 def _create_columns(doc, sections, selections):
-    """Place rectangular columns from the decomposed sections, in a group.
-
-    Validates the family/level choices first (fail loud), then writes inside a
-    TransactionGroup + Transaction with warning suppression and rollback.
-    """
+    """Place rectangular + circular columns from the decomposed sections, in a group."""
     family_id = selections.get("column_family_id")
     base_id = selections.get("base_level_id")
     top_id = selections.get("top_level_id")
@@ -440,14 +478,14 @@ def _create_beams(doc, beam_segments, selections):
             "errors": len(result["errors"])}
 
 
-def _export(read_result, mapping, sections, beam_segments, outcomes):
-    """Write the intermediate JSON (the user already opted in via the window)."""
+def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):
+    """Write the intermediate JSON (the user opted in via the window)."""
     target = forms.save_file(file_ext="json", default_name="cad_to_bim_read")
     if not target:
         return
     try:
-        report.export_json(target, read_result, mapping, sections,
-                           beam_segments, outcomes)
+        report.export_json(target, read_result, mapping, sections, beam_segments,
+                           outcomes, texts=texts, comparison=comparison)
         output.print_md("`Exported JSON (with report) -> {0}`".format(target))
     except (IOError, OSError) as write_error:
         logger.error("JSON export failed: {0}".format(write_error))

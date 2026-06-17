@@ -12,6 +12,28 @@ from cad2bim.cad_links import describe_link
 from cad2bim.layers import ALL_CATEGORIES
 
 
+def pick_dxf_file():
+    """Open a file picker for a .dxf; return the path or None if cancelled."""
+    return forms.pick_file(file_ext="dxf", multi_file=False,
+                           title="Pick a DXF to link and convert")
+
+
+def pick_import_unit(unit_labels):
+    """Pick the DXF drawing unit from the given labels; return it or None."""
+    if not unit_labels:
+        return None
+    return forms.CommandSwitchWindow.show(
+        list(unit_labels), message="DXF drawing unit:")
+
+
+def pick_import_placement(placement_labels):
+    """Pick the DXF positioning from the given labels; return it or None."""
+    if not placement_labels:
+        return None
+    return forms.CommandSwitchWindow.show(
+        list(placement_labels), message="DXF positioning:")
+
+
 def pick_link(doc, links):
     """Let the user pick one linked CAD when several exist. Returns it or None."""
     if not links:

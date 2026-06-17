@@ -10,10 +10,12 @@ import json
 from collections import defaultdict, Counter
 
 from cad2bim import shapes
+from cad2bim import marks
 from cad2bim.layers import CATEGORY_COLUMN, CATEGORY_BEAM
 
 _MM = 304.8
 _SNAP_TOL_MM = 60.0   # snap a measurement to a standard within this tolerance
+_MARK_RADIUS_FT = 1000.0 / _MM   # a size label within ~1 m of a member refines it
 
 # Acceptance limits (mm). The short side / beam width is the discriminating one:
 # region blocks and clipped-junction shapes fall outside it. h_max is generous so
@@ -109,9 +111,13 @@ def format_summary(result, mapping):
     return lines
 
 
-def build_column_sections(records, limits=None, standards=None):
+def build_column_sections(records, limits=None, standards=None, texts=None):
     """Decompose every column-category polyline into rectangular sections, and
     derive spine rectangles from bare column-layer lines.
+
+    When `texts` (sized DXF marks, internal feet) are given, each rectangle is
+    refined to the size of the nearest mark (e.g. "C1 400x400"), overriding the
+    geometry-derived dimensions before limit/standard filtering.
 
     Line-drawn members (e.g. a lift spine) carry no width on their own; where two
     or more legs meet such a line, a spine rectangle is derived (width = measured
@@ -180,6 +186,10 @@ def build_column_sections(records, limits=None, standards=None):
         })
     status_counts["line_member"] += len(line_members)
     status_counts["circle"] += len(circles)
+
+    refined = _apply_column_marks(entries, texts)
+    if refined:
+        status_counts["text_sized"] += refined
 
     dropped = _filter_column_entries(entries, limits or DEFAULT_LIMITS, standards or {})
     if dropped:
@@ -290,8 +300,13 @@ _JUNCTION_TOL_FT = 200.0 / 304.8     # an arc centred this close to a round colu
 _CONCENTRIC_TOL_FT = 60.0 / 304.8    # two arcs sharing a centre this closely are concentric
 
 
-def build_beam_segments(records, circles=None, limits=None, standards=None):
+def build_beam_segments(records, circles=None, limits=None, standards=None,
+                        texts=None):
     """Derive straight beam centerlines from beam-category geometry.
+
+    When `texts` (sized DXF marks, internal feet) are given, each segment is
+    refined from the nearest mark (e.g. "B1 230x500"): width = the smaller value,
+    DEPTH = the larger -- the depth a 2D outline cannot provide on its own.
 
     Three sources: (1) closed thin outlines -> one centerline along the long axis;
     multi-segment rectilinear outlines decompose into straight beams. (2) PAIRS of
@@ -391,12 +406,65 @@ def build_beam_segments(records, circles=None, limits=None, standards=None):
     if lone:
         status["arc_lone"] += lone
 
+    refined = _apply_beam_marks(segments, texts)
+    if refined:
+        status["text_sized"] = refined
+
     segments, dropped = _filter_beam_segments(segments, limits or DEFAULT_LIMITS,
                                               standards or {})
     if dropped:
         status["width_out_of_range"] = dropped
 
     return {"segments": segments, "status_counts": dict(status), "review": review}
+
+
+def _apply_column_marks(entries, texts):
+    """Refine each column rectangle from the nearest sized DXF mark, in place.
+
+    Adopts the mark's magnitudes but preserves the geometry's orientation (which
+    side is short vs long), so placement rotation stays correct. Returns the count
+    refined.
+    """
+    candidates = marks.sized_texts(texts or [])
+    if not candidates:
+        return 0
+    count = 0
+    for entry in entries:
+        for rect in entry["rectangles"]:
+            cx, cy, _cz = rect["center"]
+            hit = marks.nearest_sized_text(cx, cy, candidates, _MARK_RADIUS_FT)
+            if hit is None:
+                continue
+            small_t, big_t = min(hit.b_mm, hit.h_mm), max(hit.b_mm, hit.h_mm)
+            if rect["width_mm"] <= rect["height_mm"]:
+                rect["width_mm"], rect["height_mm"] = small_t, big_t
+            else:
+                rect["width_mm"], rect["height_mm"] = big_t, small_t
+            rect["mark"] = hit.mark
+            count += 1
+    return count
+
+
+def _apply_beam_marks(segments, texts):
+    """Refine each beam segment from the nearest sized DXF mark, in place.
+
+    width = smaller mark value, depth = larger. Returns the count refined.
+    """
+    candidates = marks.sized_texts(texts or [])
+    if not candidates:
+        return 0
+    count = 0
+    for segment in segments:
+        cx = (segment["start"][0] + segment["end"][0]) / 2.0
+        cy = (segment["start"][1] + segment["end"][1]) / 2.0
+        hit = marks.nearest_sized_text(cx, cy, candidates, _MARK_RADIUS_FT)
+        if hit is None:
+            continue
+        segment["width_mm"] = min(hit.b_mm, hit.h_mm)
+        segment["depth_mm"] = max(hit.b_mm, hit.h_mm)
+        segment["mark"] = hit.mark
+        count += 1
+    return count
 
 
 def _filter_beam_segments(segments, limits, standards):
@@ -481,7 +549,8 @@ def format_console(result, mapping, sections, beams):
     ]
 
 
-def build_report_payload(result, mapping, sections, beams, outcomes=None):
+def build_report_payload(result, mapping, sections, beams, outcomes=None,
+                         texts=None, comparison=None):
     """The full run report, embedded in the JSON so the console can stay short."""
     layer_counts = build_layer_counts(result.records)
     layer_rows = []
@@ -493,6 +562,7 @@ def build_report_payload(result, mapping, sections, beams, outcomes=None):
             "kinds": dict(layer_counts[layer]["kinds"]),
         })
     beam_widths = Counter(int(round(s["width_mm"])) for s in beams.get("segments", []))
+    sized_marks = [t.to_dict() for t in (texts or []) if t.b_mm is not None]
     return {
         "source": result.source_name,
         "curves": len(result.records),
@@ -512,11 +582,14 @@ def build_report_payload(result, mapping, sections, beams, outcomes=None):
             "widths_mm": dict(beam_widths),
         },
         "outcomes": outcomes or {},
+        "texts": {"sized_count": len(sized_marks), "marks": sized_marks},
+        "comparison": comparison or {},
         "console": format_console(result, mapping, sections, beams),
     }
 
 
-def export_json(path, result, mapping, sections=None, beams=None, outcomes=None):
+def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
+                texts=None, comparison=None):
     """Write the intermediate JSON consumed by the future ezdxf validator.
 
     Includes a 'report' block (the same summary shown in the console plus the run
@@ -530,12 +603,17 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None)
         "mapping": dict(mapping),
         "curves": [record.to_dict() for record in result.records],
         "report": build_report_payload(result, mapping, sections or {},
-                                       beams or empty_beams, outcomes),
+                                       beams or empty_beams, outcomes,
+                                       texts, comparison),
     }
     if sections is not None:
         payload["column_sections"] = sections
     if beams is not None:
         payload["beam_segments"] = beams
+    if texts is not None:
+        payload["texts"] = [t.to_dict() for t in texts]
+    if comparison is not None:
+        payload["comparison"] = comparison
     with open(path, "w") as handle:
         json.dump(payload, handle, indent=2, sort_keys=True)
     return path

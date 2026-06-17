@@ -19,6 +19,7 @@ from cad2bim.units import mm_to_internal
 from cad2bim.compat import get_element_name
 
 _WIDTH_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
+_DEPTH_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
 _MIN_BEAM_LENGTH_MM = 50.0   # ignore slivers shorter than this
 
 
@@ -57,7 +58,10 @@ def place_beams(doc, segments, base_symbol_id, level_id):
                     "tiny beam {0:.0f} mm".format(segment["length_mm"]))
                 continue
             width_mm = int(round(segment["width_mm"]))
-            symbol = _resolve_beam_symbol(doc, base_symbol, width_mm, cache)
+            depth_mm = segment.get("depth_mm")
+            if depth_mm is not None:
+                depth_mm = int(round(depth_mm))
+            symbol = _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache)
             if not symbol.IsActive:
                 symbol.Activate()
                 doc.Regenerate()
@@ -72,18 +76,27 @@ def place_beams(doc, segments, base_symbol_id, level_id):
     return result
 
 
-def _resolve_beam_symbol(doc, base_symbol, width_mm, cache):
-    """Return a framing FamilySymbol of the given width, duplicating+caching."""
-    if width_mm in cache:
-        return cache[width_mm]
-    type_name = "{0} wide".format(width_mm)
+def _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache):
+    """Return a framing FamilySymbol of the given size, duplicating+caching.
+
+    With a text-derived depth the type is sized "{w} x {h}" and BOTH width and
+    depth are set; without one it stays "{w} wide" and depth is inherited from the
+    base type (a 2D outline carries no depth).
+    """
+    key = (width_mm, depth_mm)
+    if key in cache:
+        return cache[key]
+    type_name = ("{0} x {1}".format(width_mm, depth_mm) if depth_mm is not None
+                 else "{0} wide".format(width_mm))
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
-        cache[width_mm] = existing
+        cache[key] = existing
         return existing
     new_symbol = base_symbol.Duplicate(type_name)
-    _set_width(new_symbol, width_mm)
-    cache[width_mm] = new_symbol
+    _set_dimension(new_symbol, _WIDTH_PARAM_NAMES, width_mm)
+    if depth_mm is not None:
+        _set_dimension(new_symbol, _DEPTH_PARAM_NAMES, depth_mm)
+    cache[key] = new_symbol
     return new_symbol
 
 
@@ -98,9 +111,10 @@ def _find_type_in_family(family, type_name):
     return None
 
 
-def _set_width(symbol, width_mm):
-    internal = mm_to_internal(width_mm)
-    for name in _WIDTH_PARAM_NAMES:
+def _set_dimension(symbol, param_names, value_mm):
+    """Set the first writable matching type parameter to value_mm; True if set."""
+    internal = mm_to_internal(value_mm)
+    for name in param_names:
         parameter = symbol.LookupParameter(name)
         if parameter is not None and not parameter.IsReadOnly:
             parameter.Set(internal)
