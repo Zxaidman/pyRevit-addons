@@ -74,7 +74,7 @@
             <TextBlock Grid.Row="4" Text="Build" FontWeight="Bold" Margin="0,12,0,6"/>
             <StackPanel Grid.Row="5" Orientation="Vertical">
                 <CheckBox x:Name="chk_grids"   Content="Create grids from grid lines" IsChecked="True"/>
-                <CheckBox x:Name="chk_columns" Content="Create columns (rectangular sections)" IsChecked="True" Margin="0,4,0,0"/>
+                <CheckBox x:Name="chk_columns" Content="Create columns (rectangular sections)" Margin="0,4,0,0"/>
                 <Grid Margin="23,4,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="92"/>
@@ -95,7 +95,7 @@
                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
                     <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="24" Margin="0,2"/>
                 </Grid>
-                <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,4,0,0"/>
+                <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" Margin="0,4,0,0"/>
                 <Grid Margin="23,4,0,2">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="92"/>
