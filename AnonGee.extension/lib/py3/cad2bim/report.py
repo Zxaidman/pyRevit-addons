@@ -22,6 +22,17 @@ DEFAULT_LIMITS = dict((key, config.DEFAULTS[key]) for key in (
     "beam_width_min_mm", "beam_width_max_mm",
     "col_b_min_mm", "col_b_max_mm", "col_h_min_mm", "col_h_max_mm"))
 
+_FRAG_MAX_LINE_MM = 2000.0   # column-layer lines shorter than this are junction bits
+_FRAG_GAP_MM = 400.0         # fragments within this gap belong to the same column
+
+
+def _inside_rectangles(cx, cy, rectangles):
+    """True if (cx, cy) falls within any rectangle's axis-aligned bbox."""
+    for rect in rectangles:
+        if rect.x_min <= cx <= rect.x_max and rect.y_min <= cy <= rect.y_max:
+            return True
+    return False
+
 
 def parse_standard_sizes(text):
     """Parse '300x600, 300x750' -> [(300.0, 600.0), ...] (b<=h). Tolerant of junk."""
@@ -132,15 +143,18 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     arc_records = []
     polyline_records = []
     unplaced_raw = []   # debug: column-layer geometry that produced no rectangle
+    fragments = []      # small leftover pieces to reassemble into clipped columns
     for record in records:
         if record.category != CATEGORY_COLUMN:
             continue
         if record.kind == "line":
             line_points.append(record.points)
-            line_members.append({"layer": record.layer,
-                                 "length_mm": _polyline_length_ft(record.points) * 304.8})
+            length_mm = _polyline_length_ft(record.points) * 304.8
+            line_members.append({"layer": record.layer, "length_mm": length_mm})
             unplaced_raw.append({"kind": "line", "layer": record.layer,
                                  "pts": _pts_mm(record.points)})
+            if length_mm < _FRAG_MAX_LINE_MM:   # short = junction fragment, not a spine
+                fragments.append(record.points)
         elif record.kind == "arc":
             arc_records.append(record)
         else:
@@ -172,6 +186,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
                 unplaced_raw.append({"kind": record.kind, "layer": record.layer,
                                      "status": result["status"],
                                      "pts": _pts_mm(record.points)})
+                fragments.append(record.points)
             continue   # whole shape was a circle-drawing artifact
         status_counts[result["status"]] += 1
         total_rectangles += len(kept)
@@ -195,6 +210,28 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         })
     status_counts["line_member"] += len(line_members)
     status_counts["circle"] += len(circles)
+
+    # Recover columns whose Revit outline was clipped into disconnected fragments
+    # at a junction (e.g. angled F9): cluster the leftover pieces and fit an
+    # oriented rectangle. Skip any that land inside an already-placed column.
+    recovered = shapes.recover_oriented_columns(
+        fragments, gap_ft=config.mm_to_ft(_FRAG_GAP_MM))
+    recovered_rects = []
+    for rect in recovered:
+        cx, cy, _cz = rect.center
+        if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
+            continue
+        recovered_rects.append(rect)
+    if recovered_rects:
+        status_counts["recovered_rect"] += len(recovered_rects)
+        total_rectangles += len(recovered_rects)
+        leg_rectangles.extend(recovered_rects)
+        entries.append({
+            "layer": "(recovered)",
+            "status": "recovered_rect",
+            "approx": True,
+            "rectangles": [rect.to_dict() for rect in recovered_rects],
+        })
 
     refined = _apply_column_marks(entries, texts,
                                   config.mm_to_ft(tol["mark_radius_mm"]))

@@ -185,6 +185,73 @@ def min_area_rect(ring, z=0.0):
     return OrientedRect(cx, cy, long_len, short_len, long_axis_deg, *bbox, z=z)
 
 
+def _min_dist2(a, b):
+    """Smallest squared distance between any point of a and any point of b."""
+    best = float("inf")
+    for px, py in a:
+        for qx, qy in b:
+            d = (px - qx) ** 2 + (py - qy) ** 2
+            if d < best:
+                best = d
+    return best
+
+
+def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
+    """Recover oriented columns from clipped/fragmented outlines.
+
+    Revit's CAD import sometimes breaks an angled column's outline into several
+    disconnected pieces at a beam junction, so no single piece forms a closed ring
+    and the column is lost. This clusters nearby fragments (any two within gap_ft)
+    and fits a minimum-area oriented rectangle to each cluster's combined points.
+
+    `fragments`: list of 2D-or-3D point-lists (feet). Returns [OrientedRect]. Only
+    clusters built from >= min_fragments pieces are returned (a lone stray fragment
+    never becomes a column); size filtering is left to the caller.
+    """
+    frags = []
+    for points in fragments:
+        xy = [(p[0], p[1]) for p in points]
+        if len(xy) >= 2:
+            frags.append(xy)
+    count = len(frags)
+    if count == 0:
+        return []
+
+    parent = list(range(count))
+
+    def find(i):
+        root = i
+        while parent[root] != root:
+            root = parent[root]
+        while parent[i] != root:
+            parent[i], i = root, parent[i]
+        return root
+
+    gap2 = gap_ft * gap_ft
+    for i in range(count):
+        for j in range(i + 1, count):
+            ri, rj = find(i), find(j)
+            if ri != rj and _min_dist2(frags[i], frags[j]) <= gap2:
+                parent[ri] = rj
+
+    groups = {}
+    for i in range(count):
+        root = find(i)
+        bucket = groups.setdefault(root, {"pts": [], "n": 0})
+        bucket["pts"].extend(frags[i])
+        bucket["n"] += 1
+
+    rects = []
+    for bucket in groups.values():
+        if bucket["n"] < min_fragments:
+            continue
+        distinct = set((round(x, 6), round(y, 6)) for x, y in bucket["pts"])
+        if len(distinct) < 3:
+            continue
+        rects.append(min_area_rect(bucket["pts"]))
+    return rects
+
+
 def snap_to_standard(value_ft, standards_ft, tol_ft):
     """Snap a measurement to the nearest standard size if within tolerance."""
     if not standards_ft:
