@@ -523,7 +523,22 @@ def main():
         _error("DXF read failed", "Could not read the DXF for text.", traceback.format_exc())
         return
 
-    text_affine = transform.from_link(instance)
+    # Map DXF coords -> Revit feet using the GRID lines as anchors: they are the
+    # same lines in both the Revit and DXF extractions, so aligning their bounding
+    # boxes is exact (no symbol-space unit guessing). Fall back to the link's own
+    # transform only if no grid geometry is available.
+    rev_grids = [r for r in revit_result.records
+                 if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
+    dxf_grids = [r for r in dxf_result.records
+                 if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
+    rev_bbox = transform.bbox_of_records(rev_grids)
+    dxf_bbox = transform.bbox_of_records(dxf_grids)
+    if rev_bbox and dxf_bbox:
+        text_affine = transform.empirical_affine(dxf_bbox, rev_bbox)
+        transform_method = "grid_anchored"
+    else:
+        text_affine = transform.from_link(instance)
+        transform_method = "link_GetTotalTransform"
     transform.apply_to_texts(text_affine, dxf_result.texts)
     marks.parse_texts(dxf_result.texts)
     # Map a copy of the DXF geometry the same way, only to report problem geometry.
@@ -555,16 +570,17 @@ def main():
     compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
                                                     config.DEFAULTS["compare_tol_mm"]))
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
-    comparison["transform"] = {"method": "link_GetTotalTransform"}
+    comparison["transform"] = {"method": transform_method}
 
+    # Text is mapped + exported (so we can see label layers/positions) but kept
+    # OUT of sizing for now: size labels carry no mark name, so routing them to
+    # the right members needs layer-aware logic (next step) to avoid mis-sizing.
     sections = report.build_column_sections(revit_result.records, limits, standards,
-                                            texts=dxf_result.texts,
-                                            tolerances=tolerances)
+                                            texts=None, tolerances=tolerances)
     beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
-                                               texts=dxf_result.texts,
-                                               tolerances=tolerances)
+                                               texts=None, tolerances=tolerances)
 
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):

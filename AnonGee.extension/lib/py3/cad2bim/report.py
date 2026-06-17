@@ -659,7 +659,8 @@ def _compact_texts(texts):
         if text.b_mm is None:
             continue
         point = text.point_internal
-        out.append({"mark": text.mark, "b": text.b_mm, "h": text.h_mm,
+        out.append({"mark": text.mark, "layer": text.layer,
+                    "b": text.b_mm, "h": text.h_mm,
                     "x": _mm(point[0]) if point else None,
                     "y": _mm(point[1]) if point else None})
     return out
