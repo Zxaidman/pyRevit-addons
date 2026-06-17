@@ -18,23 +18,38 @@ import os
 
 from cad2bim.model import CurveRecord, TextRecord, DxfReadResult
 
-# ezdxf is vendored under lib/py3; import lazily-friendly so a missing install
-# produces a clear message at call time rather than an import-time crash.
-try:
-    import ezdxf
-    from ezdxf import recover as _ezdxf_recover
-    _EZDXF_ERROR = None
-except Exception as import_error:   # pragma: no cover - environment dependent
-    ezdxf = None
-    _ezdxf_recover = None
-    _EZDXF_ERROR = import_error
+# ezdxf is vendored under lib/py3. Import LAZILY (not at module load): the CPython3
+# engine caches sys.modules across runs, so a module-load import that failed once
+# (e.g. before ezdxf was provisioned) would stay failed for the whole session. A
+# lazy retry picks ezdxf up on the next run without a full Revit restart.
+ezdxf = None
+_ezdxf_recover = None
+_EZDXF_ERROR = "ezdxf not imported yet"
+
+
+def _ensure_ezdxf():
+    """Import ezdxf on demand; cache the module once it succeeds. Returns bool."""
+    global ezdxf, _ezdxf_recover, _EZDXF_ERROR
+    if ezdxf is not None:
+        return True
+    try:
+        import ezdxf as _ezdxf_module
+        from ezdxf import recover as _recover_module
+        ezdxf = _ezdxf_module
+        _ezdxf_recover = _recover_module
+        _EZDXF_ERROR = None
+        return True
+    except Exception as import_error:
+        _EZDXF_ERROR = import_error
+        return False
+
 
 _FLATTEN_DIST = 0.5     # tessellation sag for splines/ellipses, drawing units
 _CIRCLE_SAMPLES = (0.0, 120.0, 240.0)   # degrees: 3 points fix an exact circle
 
 
 def ezdxf_available():
-    return ezdxf is not None
+    return _ensure_ezdxf()
 
 
 def read_dxf(path):
@@ -42,11 +57,11 @@ def read_dxf(path):
 
     Fail-fast with a clear message if ezdxf is missing or the file is unreadable.
     """
-    if ezdxf is None:
+    if not _ensure_ezdxf():
         raise RuntimeError(
-            "ezdxf is not available. Run this button on the pyRevit CPython3 "
-            "engine and provision ezdxf into lib/py3 (tools/auto_provision.py). "
-            "Underlying import error: {0}".format(_EZDXF_ERROR))
+            "ezdxf is not available. Provision it into lib/py3 "
+            "(tools/auto_provision.py) and re-run. Import error: {0}".format(
+                _EZDXF_ERROR))
     if not path or not os.path.exists(path):
         raise IOError("DXF file not found: {0}".format(path))
 

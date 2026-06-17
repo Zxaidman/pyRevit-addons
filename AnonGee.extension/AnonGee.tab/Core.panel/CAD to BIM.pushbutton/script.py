@@ -398,9 +398,10 @@ def main():
 
     if not dxf_reader.ezdxf_available():
         _error("ezdxf not available",
-               "ezdxf could not be imported.\n\nRun this button on the pyRevit "
-               "CPython3 engine and provision ezdxf into lib/py3 "
-               "(tools/auto_provision.py).")
+               "ezdxf could not be imported on this engine.\n\nIf you just "
+               "provisioned it, run the button again (or fully restart Revit). "
+               "Otherwise run tools/auto_provision.py to install it into lib/py3.",
+               detail=str(dxf_reader._EZDXF_ERROR))
         return
 
     # 1. Pick the DXF + its unit + positioning, then link it (own transaction).
