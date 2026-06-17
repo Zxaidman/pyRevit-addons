@@ -55,10 +55,30 @@ def main():
     for mod_name in modules_to_test:
         try:
             module = __import__(mod_name)
-            path = getattr(module, "__file__", None) or "Built-in / Embedded"
-            print("   [OK]   {:<10} -> {}".format(mod_name, path))
+            path = getattr(module, "__file__", None)
+            version = getattr(module, "__version__", "?")
+            if path is None and mod_name not in ("clr",):
+                # A third-party package with no __file__ is a namespace/partial
+                # install (e.g. ezdxf wiped by `git clean`) -- it imports but is
+                # broken. clr legitimately has no __file__.
+                print("   [WARN] {:<10} -> namespace/partial install (no __file__) "
+                      "-- reinstall into lib/py3".format(mod_name))
+            else:
+                print("   [OK]   {:<10} v{:<8} -> {}".format(
+                    mod_name, version, path or "Built-in / Embedded"))
         except ImportError as e:
             print("   [FAIL] {:<10} -> {}".format(mod_name, e))
+
+    # ezdxf deep check: a namespace folder imports fine but has no submodules,
+    # which is exactly what breaks CAD to BIM ("cannot import name 'recover'").
+    try:
+        import ezdxf as _ezdxf_probe
+        from ezdxf import recover as _recover_probe  # noqa: F401
+        print("   [OK]   ezdxf deep-check: recover import works (v{})".format(
+            getattr(_ezdxf_probe, "__version__", "?")))
+    except Exception as deep_error:
+        print("   [FAIL] ezdxf deep-check: {} -- reinstall ezdxf into lib/py3 "
+              "(tools/auto_provision.py)".format(deep_error))
     print("")
 
     # ── 4. Stdlib probe (this engine has a stripped stdlib path) ──────────────
