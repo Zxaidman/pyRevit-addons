@@ -131,6 +131,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     line_members = []
     arc_records = []
     polyline_records = []
+    unplaced_raw = []   # debug: column-layer geometry that produced no rectangle
     for record in records:
         if record.category != CATEGORY_COLUMN:
             continue
@@ -138,6 +139,8 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
             line_points.append(record.points)
             line_members.append({"layer": record.layer,
                                  "length_mm": _polyline_length_ft(record.points) * 304.8})
+            unplaced_raw.append({"kind": "line", "layer": record.layer,
+                                 "pts": _pts_mm(record.points)})
         elif record.kind == "arc":
             arc_records.append(record)
         else:
@@ -165,6 +168,10 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         if dropped:
             status_counts["circle_artifact"] += dropped
         if not kept:
+            if result["status"] != "rectangle":   # genuinely lost, not a circle bit
+                unplaced_raw.append({"kind": record.kind, "layer": record.layer,
+                                     "status": result["status"],
+                                     "pts": _pts_mm(record.points)})
             continue   # whole shape was a circle-drawing artifact
         status_counts[result["status"]] += 1
         total_rectangles += len(kept)
@@ -208,7 +215,13 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         "line_members": line_members,
         "line_spines": [spine.to_dict() for spine in spines],
         "circles": [circle.to_dict() for circle in circles],
+        "dropped_raw": unplaced_raw,
     }
+
+
+def _pts_mm(points):
+    """[(x,y,z) feet ...] -> [[x_mm, y_mm], ...] integer pairs, for debug dumps."""
+    return [[int(round(p[0] * _MM)), int(round(p[1] * _MM))] for p in points]
 
 
 def _filter_column_entries(entries, limits, standards, snap_tol_mm):
@@ -643,7 +656,8 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
         "columns": {"outcome": outcomes.get("columns"),
                     "status_counts": sections.get("status_counts", {}),
                     "items": _compact_columns(sections),
-                    "circles": _compact_circles(sections)},
+                    "circles": _compact_circles(sections),
+                    "dropped_raw": sections.get("dropped_raw", [])},
         "beams": {"outcome": outcomes.get("beams"),
                   "status_counts": beams.get("status_counts", {}),
                   "items": _compact_beams(beams)},
