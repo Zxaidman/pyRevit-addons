@@ -231,3 +231,23 @@ Major remodel of the trigger and the data pipeline (see plan + findings docs).
   re-sized to 230 wide x 500 deep (mark B1) from text, and JSON export carries the
   `texts` + `comparison` blocks. **Still needs the in-Revit pass** (CPython3 WPF
   render, `Document.Link` out-param, transform alignment under both placements).
+
+### CPython3 engine compliance (v0.13.0, follow-up)
+Brought the button in line with the Brand Guidelines CPython3 rules (12.1 / 12.8.4
+/ 12.9 / 17), which the first cut violated by importing `pyrevit.forms` and using
+`forms.WPFWindow` (the IronPython-only `wpf` module crashes the CPython3 engine).
+
+- **Removed all pyRevit IronPython imports.** No `from pyrevit import ...` anywhere
+  in the button or the cad2bim package (verified by grep).
+- **Windows load via `XamlReader.Load`** from `.xaml` files (mirrors the shipping
+  BIM Generation tool): `clr.AddReference` for PresentationFramework/Core/
+  WindowsBase, bind controls with `window.FindName`, wire events with `+=`, show
+  with `ShowDialog()`.
+- **Active document from `__revit__.ActiveUIDocument.Document`** (not `pyrevit.revit`).
+- **Dialogs use `System.Windows.MessageBox`** and `System.Windows.Forms`
+  Open/Save file dialogs; console output via `print()`. No `script.get_output`.
+- **New `link_options.xaml`** is a small "Link DXF" dialog (file + unit + positioning)
+  replacing the stock `forms` pickers; deleted `cad2bim/ui.py` (pyRevit-forms based).
+- Root `<Window>` attributes are literals only (no `StaticResource`) per 12.7.A.
+- Re-verified: `script.py`, `link_options.xaml` + `ui.xaml`, and all cad2bim modules
+  compile / are well-formed; text-sizing integration test still passes.

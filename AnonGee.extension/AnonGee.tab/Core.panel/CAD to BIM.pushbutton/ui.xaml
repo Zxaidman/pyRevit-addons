@@ -5,6 +5,7 @@
         MinHeight="620" MinWidth="500"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
+        Background="White"
         UseLayoutRounding="True">
 
     <DockPanel LastChildFill="True">

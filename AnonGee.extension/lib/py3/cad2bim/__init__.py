@@ -15,12 +15,14 @@ stays thin. It is intentionally split by single responsibility:
     compare.py          diff Revit-link vs DXF geometry (problem geometry)
     marks.py            parse "C1 400x400" text and match it to members
     layers.py           layer -> element-category classification (convention)
-    ui.py               pyRevit forms dialogs (file/unit/placement pickers)
     report.py           human summary + JSON export (feeds future ezdxf validator)
 
-This package now runs on the pyRevit CPython3 engine (ezdxf needs CPython >=3.10).
-The pure-geometry/parsing modules (shapes, transform, compare, marks) import no
-Revit assemblies, so they can be statically inspected and unit-tested outside Revit.
+This package runs on the pyRevit CPython3 engine (ezdxf needs CPython >=3.10) and
+imports NO pyRevit IronPython modules (pyrevit.forms / pyrevit.revit), per the
+AnonGee Brand Guidelines 12.1 / 12.8.4 / 12.9. The pushbutton builds its windows
+with XamlReader.Load and uses System.Windows dialogs directly. The pure-geometry
+modules (shapes, transform, compare, marks) import no Revit assemblies, so they can
+be statically inspected and unit-tested outside Revit.
 """
 
 __version__ = "0.13.0"  # DXF-pick entry + ezdxf hybrid extraction + text-driven sizing
