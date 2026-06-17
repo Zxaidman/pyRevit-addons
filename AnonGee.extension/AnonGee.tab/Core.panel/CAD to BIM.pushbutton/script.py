@@ -109,6 +109,25 @@ def _error(title, message, detail=None):
     MessageBox.Show(body, title, MessageBoxButton.OK, MessageBoxImage.Error)
 
 
+def _persisted(tstatus, gstatus):
+    """True only if both the inner transaction and the group actually committed."""
+    from Autodesk.Revit.DB import TransactionStatus
+    return (tstatus == TransactionStatus.Committed
+            and gstatus == TransactionStatus.Committed)
+
+
+def _rollback_alert(label, tstatus, gstatus):
+    """Report a silent commit rollback truthfully instead of faking success."""
+    message = (
+        "{0} were computed but the Revit transaction did NOT persist (commit "
+        "status: {1}, group: {2}).\n\nThis usually means error-severity failures "
+        "at commit -- most often running into a project that already contains "
+        "these elements. Try a fresh/empty project (or undo the previous run), "
+        "then run again.".format(label, tstatus, gstatus))
+    print(message)
+    _error("{0} not saved".format(label), message)
+
+
 def _load_window(xaml_path):
     """Load a WPF Window from a .xaml file via XamlReader (CPython3-safe)."""
     stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
@@ -607,7 +626,7 @@ def _create_grids(doc, records):
     All Revit writes happen here on the Revit API thread after the window closes.
     Both the inner transaction and the group roll back on any failure.
     """
-    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     grid_records = [r for r in records
                     if r.category == layers.CATEGORY_GRID and r.kind in ("line", "arc")]
     if not grid_records:
@@ -622,8 +641,8 @@ def _create_grids(doc, records):
     try:
         transactions.attach_warning_swallower(transaction)
         result = grids.create_grids(doc, grid_records, namer)
-        transaction.Commit()
-        group.Assimilate()
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
@@ -631,6 +650,10 @@ def _create_grids(doc, records):
             group.RollBack()
         _error("Grid creation failed", "Grid creation failed.", str(creation_error))
         return {"created": 0, "skipped": 0, "errors": 1}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Grids", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
     print("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
@@ -642,7 +665,7 @@ def _create_grids(doc, records):
 
 def _create_columns(doc, sections, selections):
     """Place rectangular + circular columns from the decomposed sections, in a group."""
-    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     family_id = selections.get("column_family_id")
     base_id = selections.get("base_level_id")
     top_id = selections.get("top_level_id")
@@ -670,8 +693,8 @@ def _create_columns(doc, sections, selections):
                 doc, circles, circular_id, base_id, top_id)
         elif circles:
             print("  circular columns skipped: no circular family selected")
-        transaction.Commit()
-        group.Assimilate()
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
@@ -679,6 +702,10 @@ def _create_columns(doc, sections, selections):
             group.RollBack()
         _error("Column creation failed", "Column creation failed.", str(creation_error))
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 1}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Columns", tstatus, gstatus)
+        return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
     print("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
         len(result["created"]), len(circular["created"]),
@@ -692,7 +719,7 @@ def _create_columns(doc, sections, selections):
 
 def _create_beams(doc, beam_segments, selections):
     """Place beams along derived centerlines at the columns' top level, in a group."""
-    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     beam_id = selections.get("beam_family_id")
     level_id = selections.get("top_level_id")
     if beam_id is None or level_id is None:
@@ -710,8 +737,8 @@ def _create_beams(doc, beam_segments, selections):
     try:
         transactions.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
-        transaction.Commit()
-        group.Assimilate()
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
@@ -719,6 +746,10 @@ def _create_beams(doc, beam_segments, selections):
             group.RollBack()
         _error("Beam creation failed", "Beam creation failed.", str(creation_error))
         return {"created": 0, "skipped": 0, "errors": 1}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Beams", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
     print("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
