@@ -137,6 +137,19 @@ def _save_json(default_name):
     return None
 
 
+def _select_containing(combo, keywords):
+    """Select the first combo item whose label contains any keyword (lowercased).
+
+    Returns True if a match was selected, leaving the prior selection otherwise.
+    """
+    for index in range(combo.Items.Count):
+        label = str(combo.Items[index]).lower()
+        if any(keyword in label for keyword in keywords):
+            combo.SelectedIndex = index
+            return True
+    return False
+
+
 # --- Link DXF dialog (file + unit + positioning) -----------------------------
 
 class LinkOptionsDialog(object):
@@ -159,6 +172,8 @@ class LinkOptionsDialog(object):
             self.cb_unit.SelectedIndex = 0
         if self.cb_placement.Items.Count:
             self.cb_placement.SelectedIndex = 0
+            # Default to Origin-to-Origin (most predictable alignment).
+            _select_containing(self.cb_placement, ["origin to origin"])
         find("btn_browse").Click += self._on_browse
         find("btn_link").Click += self._on_link
         find("btn_cancel").Click += self._on_cancel
@@ -218,10 +233,17 @@ class CadToBimWindow(object):
         self.cb_top_level = find("cb_top_level")
         self.cb_beam_family = find("cb_beam_family")
         self._family_ids = self._fill_combo(self.cb_family, column_symbols)
+        _select_containing(self.cb_family, ["rect"])
         self._fill_combo(self.cb_circular_family, column_symbols)
+        _select_containing(self.cb_circular_family, ["round", "circ"])
+        # Levels are sorted lowest-first, so combo index ascends with elevation.
+        # Base defaults to the lowest, top to the next level above it.
         self._level_ids = self._fill_combo(self.cb_base_level, level_options)
         self._fill_combo(self.cb_top_level, level_options)
+        if self.cb_top_level.Items.Count > 1:
+            self.cb_top_level.SelectedIndex = 1
         self._beam_ids = self._fill_combo(self.cb_beam_family, beam_symbols)
+        _select_containing(self.cb_beam_family, ["rect"])
 
         self.chk_grids = find("chk_grids")
         self.chk_columns = find("chk_columns")
@@ -388,7 +410,31 @@ class CadToBimWindow(object):
             "col_h_max_mm": self._read_int(self.tb_colh_max, defaults["col_h_max_mm"]),
         }
 
+    def _validate_levels(self):
+        """If columns/beams are requested, ensure top level is above base.
+
+        Combo index ascends with elevation (levels are sorted lowest-first), so the
+        check is index-based. Returns an error string, or None when valid.
+        """
+        if not (self.chk_columns.IsChecked or self.chk_beams.IsChecked):
+            return None
+        base_idx = self.cb_base_level.SelectedIndex
+        top_idx = self.cb_top_level.SelectedIndex
+        if base_idx < 0 or top_idx < 0:
+            return "Select a base level and a top level."
+        if base_idx == top_idx:
+            return ("Base level and top level are the same. Choose a top level "
+                    "above the base to give columns/beams their height.")
+        if top_idx < base_idx:
+            return ("Base level is set above the top level. Adjust so the top "
+                    "level is above the base to proceed.")
+        return None
+
     def on_run(self, sender, args):
+        level_error = self._validate_levels()
+        if level_error:
+            _alert("Check levels", level_error)
+            return   # keep the window open so the user can fix it
         mapping = {}
         for layer, combo in self._combos:
             mapping[layer] = combo.SelectedItem or layers.CATEGORY_UNMAPPED
