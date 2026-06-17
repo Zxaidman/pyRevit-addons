@@ -51,7 +51,7 @@ def main():
 
     # ── 3. Module availability ───────────────────────────────────────────────
     print("DEPENDENCIES")
-    modules_to_test = ["numpy", "openpyxl", "pythonnet", "clr"]
+    modules_to_test = ["numpy", "openpyxl", "pythonnet", "clr", "ezdxf"]
     for mod_name in modules_to_test:
         try:
             module = __import__(mod_name)
