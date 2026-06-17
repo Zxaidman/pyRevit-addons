@@ -509,27 +509,29 @@ def main():
         _error("Link failed", "Could not link the DXF.", traceback.format_exc())
         return
 
-    # 2. Hybrid read: Revit link geometry + ezdxf geometry/text; then align.
+    # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
+    #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
+    #    only, mapped into Revit coordinates by the link's own exact transform.
     revit_result = geometry_reader.read_link(doc, instance)
+    if revit_result.is_empty():
+        _alert("Empty link", "The linked DXF produced no readable geometry in "
+               "Revit. Check the link is visible in the active view.")
+        return
     try:
         dxf_result = dxf_reader.read_dxf(path)
     except Exception:
-        _error("DXF read failed", "Could not read the DXF.", traceback.format_exc())
-        return
-    if dxf_result.is_empty():
-        _alert("Empty DXF", "'{0}' contained no readable geometry or text.".format(
-            dxf_result.source_name))
+        _error("DXF read failed", "Could not read the DXF for text.", traceback.format_exc())
         return
 
-    affine, transform_diag = transform.build_dxf_to_internal(
-        instance, dxf_result.records, revit_result.records, None)
-    transform.apply_to_records(affine, dxf_result.records)
-    transform.apply_to_texts(affine, dxf_result.texts)
+    text_affine = transform.from_link(instance)
+    transform.apply_to_texts(text_affine, dxf_result.texts)
     marks.parse_texts(dxf_result.texts)
+    # Map a copy of the DXF geometry the same way, only to report problem geometry.
+    transform.apply_to_records(text_affine, dxf_result.records)
 
-    # Build the window from the DXF records (the authoritative source); no API calls.
-    layer_counts = report.build_layer_counts(dxf_result.records)
-    names = _layer_names(dxf_result.records)
+    # Build the window from the REVIT records (the build source); no API calls.
+    layer_counts = report.build_layer_counts(revit_result.records)
+    names = _layer_names(revit_result.records)
     layer_rows = [(name, layer_counts.get(name, {}).get("count", 0)) for name in names]
     default_mapping = layers.build_default_mapping(names)
     column_symbols = columns.structural_column_symbols(doc)
@@ -544,22 +546,21 @@ def main():
         return
 
     selections = window.result
-    layers.apply_mapping(dxf_result.records, selections["mapping"])
+    layers.apply_mapping(revit_result.records, selections["mapping"])
     limits = selections.get("limits")
     standards = selections.get("standards")
     tolerances = selections.get("tolerances") or {}
 
-    # Compare Revit-link vs DXF geometry to surface problem geometry, using the
-    # user's compare radius (this is diagnostic; we build from the DXF either way).
+    # Diagnostic only: how much Revit's import dropped/clipped vs the raw DXF.
     compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
                                                     config.DEFAULTS["compare_tol_mm"]))
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
-    comparison["transform"] = transform_diag
+    comparison["transform"] = {"method": "link_GetTotalTransform"}
 
-    sections = report.build_column_sections(dxf_result.records, limits, standards,
+    sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=dxf_result.texts,
                                             tolerances=tolerances)
-    beam_segments = report.build_beam_segments(dxf_result.records,
+    beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
                                                texts=dxf_result.texts,
@@ -568,19 +569,19 @@ def main():
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
         print(line)
-    for line in report.format_console(dxf_result, selections["mapping"],
+    for line in report.format_console(revit_result, selections["mapping"],
                                       sections, beam_segments):
         print(line)
 
     outcomes = {}
     if selections["create_grids"]:
-        outcomes["grids"] = _create_grids(doc, dxf_result.records)
+        outcomes["grids"] = _create_grids(doc, revit_result.records)
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     if selections["export"]:
-        _export(dxf_result, selections["mapping"], sections, beam_segments,
+        _export(revit_result, selections["mapping"], sections, beam_segments,
                 outcomes, dxf_result.texts, comparison)
 
 

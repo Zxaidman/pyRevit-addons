@@ -112,12 +112,26 @@ def _size_mismatch(a_bbox, b_bbox):
     return worst
 
 
+def from_link(import_instance):
+    """Exact DXF-coords -> Revit-internal-feet affine from the link's OWN transform.
+
+    This is authoritative for mapping the DXF's text points into Revit coordinates:
+    the ImportInstance's GetTotalTransform() is precisely the matrix Revit applied
+    when it linked the DXF (unit scale + placement), so no bbox guessing is needed.
+    """
+    t = import_instance.GetTotalTransform()
+    bx, by, bz, origin = t.BasisX, t.BasisY, t.BasisZ, t.Origin
+    return Affine.from_basis((bx.X, bx.Y, bx.Z), (by.X, by.Y, by.Z),
+                             (bz.X, bz.Y, bz.Z), (origin.X, origin.Y, origin.Z))
+
+
 def build_dxf_to_internal(import_instance, dxf_records, revit_records, logger=None):
     """Return (affine, diagnostics) mapping DXF coords -> Revit internal feet.
 
     Primary: the link's GetTotalTransform(). Validated against the geometry bboxes;
-    on a gross size mismatch, falls back to the empirical bbox fit. `diagnostics`
-    is a small dict for the console/JSON.
+    on a gross size mismatch, falls back to the empirical bbox fit. Retained for
+    diagnostics only -- element building now uses the Revit link geometry directly,
+    and text uses from_link() above.
     """
     revit_transform = import_instance.GetTotalTransform()
     bx, by, bz = revit_transform.BasisX, revit_transform.BasisY, revit_transform.BasisZ
