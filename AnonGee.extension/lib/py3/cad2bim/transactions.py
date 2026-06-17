@@ -12,7 +12,14 @@ from Autodesk.Revit.DB import (IFailuresPreprocessor, FailureProcessingResult,
 
 
 class WarningSwallower(IFailuresPreprocessor):
-    """Deletes warning-severity failures during a transaction; errors untouched."""
+    """Deletes warning-severity failures during a transaction; errors untouched.
+
+    `__namespace__` is required by Python.NET 3 to build a real derived CLR type
+    from a .NET interface -- without it, `WarningSwallower()` routes to the
+    interface's one-arg cast and raises "interface takes exactly one argument".
+    """
+
+    __namespace__ = "CadToBim"
 
     def PreprocessFailures(self, failures_accessor):
         for failure in failures_accessor.GetFailureMessages():
