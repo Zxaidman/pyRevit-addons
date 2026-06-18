@@ -261,6 +261,78 @@ def _pts_mm(points):
     return [[int(round(p[0] * _MM)), int(round(p[1] * _MM))] for p in points]
 
 
+_TEXT_SIZE_OK_MM = 80.0   # a single column already this close to its label is left as-is
+
+
+def correct_columns_with_text(sections, column_texts, radius_ft):
+    """Use column size labels (one per real column) to fix clipped/split geometry.
+
+    For each sized column-text label, gather the placed column rectangles within
+    radius_ft:
+      * one rectangle already matching the label -> left untouched;
+      * one CLIPPED rectangle (e.g. G9 463x750) -> resized to the label (600x750),
+        keeping its orientation;
+      * two pieces split by a crossing grid line (e.g. E9) -> merged into one
+        column at their combined centre, sized to the label.
+    Clusters of >2 pieces (multi-leg lift/stair cores) are left as separate legs.
+    Returns the count corrected.
+    """
+    entries = sections.get("entries", [])
+    rects = [rect for entry in entries for rect in entry["rectangles"]]
+    sized = [t for t in (column_texts or [])
+             if t.b_mm is not None and t.h_mm is not None and t.point_internal]
+    used = set()
+    corrected = []
+    r2 = radius_ft * radius_ft
+    for text in sized:
+        small = min(text.b_mm, text.h_mm)
+        big = max(text.b_mm, text.h_mm)
+        tx, ty = text.point_internal[0], text.point_internal[1]
+        near = [rect for rect in rects if id(rect) not in used
+                and (rect["center"][0] - tx) ** 2 + (rect["center"][1] - ty) ** 2 <= r2]
+        if not near or len(near) > 2:
+            continue   # none, or a multi-leg lift/stair core: leave the geometry
+        if len(near) == 1:
+            small_g = min(near[0]["width_mm"], near[0]["height_mm"])
+            big_g = max(near[0]["width_mm"], near[0]["height_mm"])
+            if abs(small_g - small) <= _TEXT_SIZE_OK_MM and abs(big_g - big) <= _TEXT_SIZE_OK_MM:
+                continue   # already the right size; don't disturb it
+        for rect in near:
+            used.add(id(rect))
+        corrected.append(_merge_to_label(near, small, big, text.mark))
+    if not corrected:
+        return 0
+    leftover = [rect for rect in rects if id(rect) not in used]
+    sections["entries"] = [{"layer": "(text-corrected)", "status": "text_corrected",
+                            "approx": True, "rectangles": corrected + leftover}]
+    counts = sections.setdefault("status_counts", {})
+    counts["text_corrected"] = counts.get("text_corrected", 0) + len(corrected)
+    sections["total_rectangles"] = len(corrected) + len(leftover)
+    return len(corrected)
+
+
+def _merge_to_label(rects, small_mm, big_mm, mark):
+    """One column rectangle at the merged centre, sized small x big (short x long)."""
+    mcx = sum(r["center"][0] for r in rects) / len(rects)
+    mcy = sum(r["center"][1] for r in rects) / len(rects)
+    mz = rects[0]["center"][2]
+    if len(rects) == 1 and rects[0].get("long_axis_deg") is not None:
+        deg = rects[0]["long_axis_deg"]     # keep a clipped oriented column's angle
+    else:
+        xs = []
+        ys = []
+        for r in rects:
+            hw = (r["width_mm"] / _MM) / 2.0
+            hh = (r["height_mm"] / _MM) / 2.0
+            xs += [r["center"][0] - hw, r["center"][0] + hw]
+            ys += [r["center"][1] - hh, r["center"][1] + hh]
+        deg = 90.0 if (max(ys) - min(ys)) >= (max(xs) - min(xs)) else 0.0
+    return {"center": [mcx, mcy, mz],
+            "width_mm": small_mm, "height_mm": big_mm,
+            "width_ft": small_mm / _MM, "height_ft": big_mm / _MM,
+            "long_axis_deg": deg, "mark": mark}
+
+
 def _filter_column_entries(entries, limits, standards, snap_tol_mm):
     """Snap each rectangle's b/h to standard sizes and drop out-of-range ones.
 

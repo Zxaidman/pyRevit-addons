@@ -47,6 +47,32 @@ ALL_CATEGORIES = (
     CATEGORY_SLAB_EDGE, CATEGORY_UNMAPPED,
 )
 
+# Text/label layers carry the size marks (e.g. "S-COLS-IDEN", "S-BEAM-IDEN").
+# They are routed separately from geometry: a column-text label refines/merges
+# columns, a beam-text label refines beams. The geometry exclusion of "iden"
+# does NOT apply here -- these layers are exactly where the marks live.
+CATEGORY_COLUMN_TEXT = "column text"
+CATEGORY_BEAM_TEXT = "beam text"
+CATEGORY_TEXT_IGNORE = "ignore"
+TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT, CATEGORY_TEXT_IGNORE)
+
+
+def classify_text_layer(layer_name):
+    """Default routing for a TEXT layer: column-text / beam-text / ignore."""
+    if not layer_name:
+        return CATEGORY_TEXT_IGNORE
+    text = layer_name.lower()
+    if "col" in text:
+        return CATEGORY_COLUMN_TEXT
+    if "beam" in text or "girder" in text or "joist" in text:
+        return CATEGORY_BEAM_TEXT
+    return CATEGORY_TEXT_IGNORE
+
+
+def build_default_text_mapping(layer_keys):
+    """Pre-fill {text_layer: text_category} from the convention for the dialog."""
+    return dict((key, classify_text_layer(key)) for key in layer_keys)
+
 
 def classify_layer(layer_name, overrides=None):
     """Return a category for one layer.

@@ -235,16 +235,21 @@ class CadToBimWindow(object):
     """
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
-                 column_symbols, level_options, beam_symbols):
+                 column_symbols, level_options, beam_symbols,
+                 text_layer_rows=None, text_categories=None, default_text_mapping=None):
         self.result = None
         self._combos = []
+        self._text_combos = []
         self.window = _load_window(_XAML)
         find = self.window.FindName
 
         find("version_text").Text = "v{0}".format(cad2bim.__version__)
         find("source_text").Text = source_name
-        self.layer_rows_panel = find("layer_rows")
-        self._build_rows(layer_rows, categories, default_mapping)
+        self._build_rows(find("layer_rows"), layer_rows, categories,
+                         default_mapping, self._combos)
+        self._build_rows(find("text_rows"), text_layer_rows or [],
+                         text_categories or [], default_text_mapping or {},
+                         self._text_combos)
 
         self.cb_family = find("cb_family")
         self.cb_circular_family = find("cb_circular_family")
@@ -317,8 +322,9 @@ class CadToBimWindow(object):
             combo.SelectedIndex = 0
         return mapping
 
-    def _build_rows(self, layer_rows, categories, default_mapping):
-        """One row per CAD layer: name, curve count, category combo (stock styling)."""
+    def _build_rows(self, panel, layer_rows, categories, default_mapping, combo_store):
+        """One row per layer: name, count, category combo. Appends (layer, combo)
+        to combo_store so the caller can read the chosen mapping back."""
         for layer, count in layer_rows:
             row = WpfGrid()
             row.Margin = Thickness(0, 2, 0, 2)
@@ -341,14 +347,16 @@ class CadToBimWindow(object):
             combo = ComboBox()
             for category in categories:
                 combo.Items.Add(category)
-            combo.SelectedItem = default_mapping.get(layer, layers.CATEGORY_UNMAPPED)
+            combo.SelectedItem = default_mapping.get(layer)
+            if combo.SelectedItem is None and combo.Items.Count:
+                combo.SelectedIndex = combo.Items.Count - 1   # last = unmapped/ignore
             WpfGrid.SetColumn(combo, 2)
 
             row.Children.Add(name_block)
             row.Children.Add(count_block)
             row.Children.Add(combo)
-            self.layer_rows_panel.Children.Add(row)
-            self._combos.append((layer, combo))
+            panel.Children.Add(row)
+            combo_store.append((layer, combo))
 
     def _init_sizing(self):
         """Seed the limit fields from defaults and two-way link each slider+input."""
@@ -457,8 +465,12 @@ class CadToBimWindow(object):
         mapping = {}
         for layer, combo in self._combos:
             mapping[layer] = combo.SelectedItem or layers.CATEGORY_UNMAPPED
+        text_mapping = {}
+        for layer, combo in self._text_combos:
+            text_mapping[layer] = combo.SelectedItem or layers.CATEGORY_TEXT_IGNORE
         self.result = {
             "mapping": mapping,
+            "text_mapping": text_mapping,
             "create_grids": bool(self.chk_grids.IsChecked),
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
@@ -572,9 +584,19 @@ def main():
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
 
+    # Text layers (size marks) come from the DXF, routed separately from geometry.
+    text_layer_counts = {}
+    for text in dxf_result.texts:
+        text_layer_counts[text.layer_key] = text_layer_counts.get(text.layer_key, 0) + 1
+    text_names = sorted(text_layer_counts.keys())
+    text_layer_rows = [(name, text_layer_counts[name]) for name in text_names]
+    default_text_mapping = layers.build_default_text_mapping(text_names)
+
     window = CadToBimWindow(dxf_result.source_name, layer_rows,
                             list(layers.ALL_CATEGORIES), default_mapping,
-                            column_symbols, level_options, beam_symbols)
+                            column_symbols, level_options, beam_symbols,
+                            text_layer_rows, list(layers.TEXT_CATEGORIES),
+                            default_text_mapping)
     window.show()
     if not window.result:
         return
@@ -591,15 +613,23 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
-    # Text is mapped + exported (so we can see label layers/positions) but kept
-    # OUT of sizing for now: size labels carry no mark name, so routing them to
-    # the right members needs layer-aware logic (next step) to avoid mis-sizing.
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
     beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
                                                texts=None, tolerances=tolerances)
+
+    # Layer-routed text correction: column-text labels (one per real column) resize
+    # clipped columns (G9) and merge grid-crossing-split pieces (E9) into one.
+    text_mapping = selections.get("text_mapping") or {}
+    column_texts = [t for t in dxf_result.texts
+                    if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
+    mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
+                                                    config.DEFAULTS["mark_radius_mm"]))
+    fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft)
+    if fixed:
+        print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
 
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):

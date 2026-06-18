@@ -43,35 +43,50 @@
 
             <!-- TAB 1: Layers -->
             <TabItem Header="Layers">
-                <Grid Margin="8">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,8">
-                        <TextBlock Text="Source: " FontWeight="Bold"/>
-                        <TextBlock x:Name="source_text" Text="-" Margin="4,0,0,0"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="8">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                            <TextBlock Text="Source: " FontWeight="Bold"/>
+                            <TextBlock x:Name="source_text" Text="-" Margin="4,0,0,0"/>
+                        </StackPanel>
+
+                        <TextBlock Text="Geometry layers -> element category" FontWeight="Bold"
+                                   Margin="0,0,0,4"/>
+                        <Grid Margin="0,2,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Layer"/>
+                            <TextBlock Grid.Column="1" Text="Curves"/>
+                            <TextBlock Grid.Column="2" Text="Category"/>
+                        </Grid>
+                        <Border BorderBrush="Gray" BorderThickness="1" Padding="6" MaxHeight="300">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="layer_rows" Orientation="Vertical"/>
+                            </ScrollViewer>
+                        </Border>
+
+                        <TextBlock Text="Text layers -> size-mark routing" FontWeight="Bold"
+                                   Margin="0,12,0,4"/>
+                        <Grid Margin="0,2,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="150"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Text layer"/>
+                            <TextBlock Grid.Column="1" Text="Labels"/>
+                            <TextBlock Grid.Column="2" Text="Routing"/>
+                        </Grid>
+                        <Border BorderBrush="Gray" BorderThickness="1" Padding="6" MaxHeight="220">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="text_rows" Orientation="Vertical"/>
+                            </ScrollViewer>
+                        </Border>
                     </StackPanel>
-                    <TextBlock Grid.Row="1" Text="Map each layer to an element category"
-                               Margin="0,0,0,4"/>
-                    <Grid Grid.Row="2" Margin="0,2,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="70"/>
-                            <ColumnDefinition Width="150"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="Layer"/>
-                        <TextBlock Grid.Column="1" Text="Curves"/>
-                        <TextBlock Grid.Column="2" Text="Category"/>
-                    </Grid>
-                    <Border Grid.Row="3" BorderBrush="Gray" BorderThickness="1" Padding="6">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <StackPanel x:Name="layer_rows" Orientation="Vertical"/>
-                        </ScrollViewer>
-                    </Border>
-                </Grid>
+                </ScrollViewer>
             </TabItem>
 
             <!-- TAB 2: Build -->

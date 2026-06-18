@@ -31,7 +31,8 @@ DEFAULTS = {
 
     # --- snapping & matching (mm) -------------------------------------------
     "snap_tol_mm": 60.0,          # snap a measured size to a standard within this
-    "mark_radius_mm": 1000.0,     # a text mark this close to a member sizes it
+    "mark_radius_mm": 1300.0,     # a size label this close to a member sizes it
+                                  # (labels sit offset from the column, ~1.1 m)
     "compare_tol_mm": 300.0,      # Revit-vs-DXF "same member" match radius
 
     # --- columns ------------------------------------------------------------
