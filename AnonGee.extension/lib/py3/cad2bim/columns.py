@@ -103,6 +103,7 @@ def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id,
                 instance = doc.Create.NewFamilyInstance(
                     point, symbol, base_level, StructuralType.Column)
                 _set_top_level(instance, top_level)
+                _set_mark(instance, rectangle.get("mark"))
 
                 # The type is small(b) x big(h) with b along family X (h along Y,
                 # i.e. long axis at 90 deg). Rotate so the big side lines up with
@@ -209,6 +210,18 @@ def _set_dimension(symbol, param_names, value_mm):
             parameter.Set(internal)
             return True
     return False
+
+
+def _set_mark(instance, mark):
+    """Stamp the instance 'Mark' parameter (e.g. C1) when a mark was resolved."""
+    if not mark:
+        return
+    try:
+        parameter = instance.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)
+        if parameter is not None and not parameter.IsReadOnly:
+            parameter.Set(str(mark))
+    except Exception:
+        pass   # naming is best-effort; never fail placement over a mark
 
 
 def _set_top_level(instance, top_level):

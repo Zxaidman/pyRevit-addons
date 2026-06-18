@@ -264,58 +264,100 @@ def _pts_mm(points):
 _TEXT_SIZE_OK_MM = 80.0   # a single column already this close to its label is left as-is
 
 
-def correct_columns_with_text(sections, column_texts, radius_ft,
+def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
                               grid_x=None, grid_y=None, grid_snap_ft=None):
-    """Use column size labels (one per real column) to fix clipped/split geometry.
+    """Use column labels (one per real column) to fix clipped/split geometry and
+    to name columns.
 
-    For each sized column-text label, gather the placed column rectangles within
-    radius_ft:
-      * one rectangle already matching the label -> left untouched;
-      * one CLIPPED rectangle (e.g. G9 463x750) -> resized to the label (600x750),
-        keeping its orientation;
-      * two pieces split by a crossing grid line (e.g. E9) -> merged into one
-        column at their combined centre, sized to the label.
+    A label supplies a SIZE (inline "600x750"), a MARK ("C1"), or both. The size
+    used for a column is resolved: inline label size > schedule[mark] > geometry.
+    For each label, gather the placed column rectangles within radius_ft:
+      * one rectangle already the right size -> left as-is (mark stamped);
+      * one CLIPPED rectangle with a known size -> resized + snapped to the grid;
+      * two split pieces -> merged into one column (sized to the label/schedule, or
+        their combined footprint when no size is known) + snapped to the grid;
+      * a single mark-only piece (no size anywhere) -> kept as geometry, mark only.
     Clusters of >2 pieces (multi-leg lift/stair cores) are left as separate legs.
-    A corrected centre is snapped to the nearest grid line (within grid_snap_ft):
-    columns sit on grid intersections, and a clipped outline's centroid is offset
-    from the true centre, so this recovers the right position. Returns the count.
+    Returns the count of columns touched (resized/merged/named).
     """
+    schedule = schedule or {}
     entries = sections.get("entries", [])
     rects = [rect for entry in entries for rect in entry["rectangles"]]
-    sized = [t for t in (column_texts or [])
-             if t.b_mm is not None and t.h_mm is not None and t.point_internal]
+    labels = [t for t in (column_texts or []) if t.point_internal and
+              ((t.b_mm is not None and t.h_mm is not None) or t.mark)]
     used = set()
-    corrected = []
+    outputs = []
     r2 = radius_ft * radius_ft
-    for text in sized:
-        small = min(text.b_mm, text.h_mm)
-        big = max(text.b_mm, text.h_mm)
+    for text in labels:
         tx, ty = text.point_internal[0], text.point_internal[1]
         near = [rect for rect in rects if id(rect) not in used
                 and (rect["center"][0] - tx) ** 2 + (rect["center"][1] - ty) ** 2 <= r2]
         if not near or len(near) > 2:
             continue   # none, or a multi-leg lift/stair core: leave the geometry
-        if len(near) == 1:
+        size = _label_size(text, schedule)   # (small, big) mm, or None
+
+        if size is None and len(near) == 1:
+            # Mark only, single clean piece: name it, keep geometry size+position.
+            out = _copy_rect(near[0])
+            out["mark"] = text.mark
+            used.add(id(near[0]))
+            outputs.append(out)
+            continue
+        if size is not None and len(near) == 1:
             small_g = min(near[0]["width_mm"], near[0]["height_mm"])
             big_g = max(near[0]["width_mm"], near[0]["height_mm"])
-            if abs(small_g - small) <= _TEXT_SIZE_OK_MM and abs(big_g - big) <= _TEXT_SIZE_OK_MM:
-                continue   # already the right size; don't disturb it
+            if abs(small_g - size[0]) <= _TEXT_SIZE_OK_MM and abs(big_g - size[1]) <= _TEXT_SIZE_OK_MM:
+                out = _copy_rect(near[0])      # already right size: just name it
+                out["mark"] = text.mark
+                used.add(id(near[0]))
+                outputs.append(out)
+                continue
+        if size is None:                       # split pieces, no size: use footprint
+            size = _union_size(near)
+
         for rect in near:
             used.add(id(rect))
-        rect = _merge_to_label(near, small, big, text.mark)
-        if grid_snap_ft:
+        rect = _merge_to_label(near, size[0], size[1], text.mark)
+        if grid_snap_ft:                       # we moved/resized -> snap onto the grid
             rect["center"][0] = _snap(rect["center"][0], grid_x, grid_snap_ft)
             rect["center"][1] = _snap(rect["center"][1], grid_y, grid_snap_ft)
-        corrected.append(rect)
-    if not corrected:
+        outputs.append(rect)
+    if not outputs:
         return 0
     leftover = [rect for rect in rects if id(rect) not in used]
     sections["entries"] = [{"layer": "(text-corrected)", "status": "text_corrected",
-                            "approx": True, "rectangles": corrected + leftover}]
+                            "approx": True, "rectangles": outputs + leftover}]
     counts = sections.setdefault("status_counts", {})
-    counts["text_corrected"] = counts.get("text_corrected", 0) + len(corrected)
-    sections["total_rectangles"] = len(corrected) + len(leftover)
-    return len(corrected)
+    counts["text_corrected"] = counts.get("text_corrected", 0) + len(outputs)
+    sections["total_rectangles"] = len(outputs) + len(leftover)
+    return len(outputs)
+
+
+def _label_size(text, schedule):
+    """(small, big) mm for a label: inline size first, else schedule[mark], else None."""
+    if text.b_mm is not None and text.h_mm is not None:
+        return (min(text.b_mm, text.h_mm), max(text.b_mm, text.h_mm))
+    if text.mark and text.mark in schedule:
+        b, h = schedule[text.mark]
+        return (min(b, h), max(b, h))
+    return None
+
+
+def _union_size(rects):
+    """(small, big) mm of the axis-aligned union of the rectangles' footprints."""
+    xs, ys = [], []
+    for r in rects:
+        cx, cy = r["center"][0] * _MM, r["center"][1] * _MM
+        xs += [cx - r["width_mm"] / 2.0, cx + r["width_mm"] / 2.0]
+        ys += [cy - r["height_mm"] / 2.0, cy + r["height_mm"] / 2.0]
+    w, h = max(xs) - min(xs), max(ys) - min(ys)
+    return (min(w, h), max(w, h))
+
+
+def _copy_rect(rect):
+    out = dict(rect)
+    out["center"] = list(rect["center"])
+    return out
 
 
 def _snap(value, positions, tol_ft):
