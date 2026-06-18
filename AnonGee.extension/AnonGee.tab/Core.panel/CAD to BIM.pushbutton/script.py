@@ -502,6 +502,23 @@ def _layer_names(records):
     return sorted(set(r.layer_key for r in records))
 
 
+def _grid_axis_positions(records):
+    """(grid_x, grid_y) lists in internal feet from the grid lines: a vertical
+    grid contributes its x, a horizontal grid its y. Used to snap columns."""
+    grid_x, grid_y = set(), set()
+    for record in records:
+        if layers.classify_layer(record.layer_key) != layers.CATEGORY_GRID:
+            continue
+        if record.kind != "line" or len(record.points) < 2:
+            continue
+        p0, p1 = record.points[0], record.points[-1]
+        if abs(p1[0] - p0[0]) <= abs(p1[1] - p0[1]):
+            grid_x.add((p0[0] + p1[0]) / 2.0)   # vertical grid -> constant x
+        else:
+            grid_y.add((p0[1] + p1[1]) / 2.0)   # horizontal grid -> constant y
+    return sorted(grid_x), sorted(grid_y)
+
+
 def main():
     uidoc = getattr(__revit__, "ActiveUIDocument", None)
     if uidoc is None or uidoc.Document is None:
@@ -620,14 +637,25 @@ def main():
                                                limits, standards,
                                                texts=None, tolerances=tolerances)
 
-    # Layer-routed text correction: column-text labels (one per real column) resize
-    # clipped columns (G9) and merge grid-crossing-split pieces (E9) into one.
+    # Route text labels by their (user-confirmed) layer.
     text_mapping = selections.get("text_mapping") or {}
     column_texts = [t for t in dxf_result.texts
                     if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
+    grid_texts = [t for t in dxf_result.texts
+                  if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
+
+    # Grid-line axis positions (internal feet) -> snap text-corrected column
+    # centres onto the grid (columns sit on grid intersections).
+    grid_x, grid_y = _grid_axis_positions(revit_result.records)
+
+    # Column-text labels (one per real column) resize clipped columns (G9) and
+    # merge grid-crossing-split pieces (E9), snapped to the grid intersection.
     mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
                                                     config.DEFAULTS["mark_radius_mm"]))
-    fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft)
+    grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
+    fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
+                                             grid_x=grid_x, grid_y=grid_y,
+                                             grid_snap_ft=grid_snap_ft)
     if fixed:
         print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
 
@@ -640,7 +668,7 @@ def main():
 
     outcomes = {}
     if selections["create_grids"]:
-        outcomes["grids"] = _create_grids(doc, revit_result.records)
+        outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
     if selections["create_beams"]:
@@ -650,11 +678,13 @@ def main():
                 outcomes, dxf_result.texts, comparison)
 
 
-def _create_grids(doc, records):
+def _create_grids(doc, records, grid_texts=None):
     """Create grids from classified grid lines, inside a transaction group.
 
-    All Revit writes happen here on the Revit API thread after the window closes.
-    Both the inner transaction and the group roll back on any failure.
+    Names come from grid-text labels (e.g. DWG bubbles 'A','1') when available,
+    falling back to the A-Z x 1-9 convention. All Revit writes happen here on the
+    API thread after the window closes; both transaction and group roll back on
+    any failure.
     """
     from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     grid_records = [r for r in records
@@ -663,7 +693,7 @@ def _create_grids(doc, records):
         print("Grids -- no grid-category lines to create.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
-    namer = grids.GridNamer(grid_records)
+    namer = grids.build_grid_namer(grid_records, grid_texts)
     group = TransactionGroup(doc, "CAD to BIM: Grids")
     transaction = Transaction(doc, "Create grids")
     group.Start()

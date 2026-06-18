@@ -264,7 +264,8 @@ def _pts_mm(points):
 _TEXT_SIZE_OK_MM = 80.0   # a single column already this close to its label is left as-is
 
 
-def correct_columns_with_text(sections, column_texts, radius_ft):
+def correct_columns_with_text(sections, column_texts, radius_ft,
+                              grid_x=None, grid_y=None, grid_snap_ft=None):
     """Use column size labels (one per real column) to fix clipped/split geometry.
 
     For each sized column-text label, gather the placed column rectangles within
@@ -275,7 +276,9 @@ def correct_columns_with_text(sections, column_texts, radius_ft):
       * two pieces split by a crossing grid line (e.g. E9) -> merged into one
         column at their combined centre, sized to the label.
     Clusters of >2 pieces (multi-leg lift/stair cores) are left as separate legs.
-    Returns the count corrected.
+    A corrected centre is snapped to the nearest grid line (within grid_snap_ft):
+    columns sit on grid intersections, and a clipped outline's centroid is offset
+    from the true centre, so this recovers the right position. Returns the count.
     """
     entries = sections.get("entries", [])
     rects = [rect for entry in entries for rect in entry["rectangles"]]
@@ -299,7 +302,11 @@ def correct_columns_with_text(sections, column_texts, radius_ft):
                 continue   # already the right size; don't disturb it
         for rect in near:
             used.add(id(rect))
-        corrected.append(_merge_to_label(near, small, big, text.mark))
+        rect = _merge_to_label(near, small, big, text.mark)
+        if grid_snap_ft:
+            rect["center"][0] = _snap(rect["center"][0], grid_x, grid_snap_ft)
+            rect["center"][1] = _snap(rect["center"][1], grid_y, grid_snap_ft)
+        corrected.append(rect)
     if not corrected:
         return 0
     leftover = [rect for rect in rects if id(rect) not in used]
@@ -309,6 +316,14 @@ def correct_columns_with_text(sections, column_texts, radius_ft):
     counts["text_corrected"] = counts.get("text_corrected", 0) + len(corrected)
     sections["total_rectangles"] = len(corrected) + len(leftover)
     return len(corrected)
+
+
+def _snap(value, positions, tol_ft):
+    """Snap value to the nearest grid position within tol_ft, else return value."""
+    if not positions:
+        return value
+    nearest = min(positions, key=lambda p: abs(p - value))
+    return nearest if abs(nearest - value) <= tol_ft else value
 
 
 def _merge_to_label(rects, small_mm, big_mm, mark):

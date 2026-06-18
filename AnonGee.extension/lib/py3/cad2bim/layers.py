@@ -53,15 +53,19 @@ ALL_CATEGORIES = (
 # does NOT apply here -- these layers are exactly where the marks live.
 CATEGORY_COLUMN_TEXT = "column text"
 CATEGORY_BEAM_TEXT = "beam text"
+CATEGORY_GRID_TEXT = "grid text"
 CATEGORY_TEXT_IGNORE = "ignore"
-TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT, CATEGORY_TEXT_IGNORE)
+TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
+                   CATEGORY_GRID_TEXT, CATEGORY_TEXT_IGNORE)
 
 
 def classify_text_layer(layer_name):
-    """Default routing for a TEXT layer: column-text / beam-text / ignore."""
+    """Default routing for a TEXT layer: column / beam / grid text, or ignore."""
     if not layer_name:
         return CATEGORY_TEXT_IGNORE
     text = layer_name.lower()
+    if "grid" in text or "axis" in text:
+        return CATEGORY_GRID_TEXT
     if "col" in text:
         return CATEGORY_COLUMN_TEXT
     if "beam" in text or "girder" in text or "joist" in text:

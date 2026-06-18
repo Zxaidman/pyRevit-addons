@@ -71,6 +71,54 @@ class GridNamer:
         return self._names.get(id(record))
 
 
+# A grid bubble/label sits at (or just beyond) one end of its grid line; match a
+# label to the line whose nearest endpoint is within this distance.
+_GRID_TEXT_MAX_FT = 2500.0 / 304.8
+
+
+class TextGridNamer:
+    """Names grids from grid-text labels (e.g. DWG grid bubbles 'A', '1').
+
+    Each label is assigned to the grid line whose nearest endpoint is closest to
+    it; that grid takes the label's text as its name. Any grid without a nearby
+    label falls back to the convention namer, so naming degrades gracefully.
+    """
+
+    def __init__(self, grid_records, grid_texts, fallback):
+        self._names = {}
+        self._fallback = fallback
+        ends = [(r, r.points[0], r.points[-1]) for r in grid_records
+                if len(r.points) >= 2]
+        max_d2 = _GRID_TEXT_MAX_FT * _GRID_TEXT_MAX_FT
+        for text in grid_texts or []:
+            point = text.point_internal
+            label = (text.text or "").strip()
+            if not point or not label:
+                continue
+            tx, ty = point[0], point[1]
+            best = None
+            best_d2 = max_d2
+            for record, p0, p1 in ends:
+                d2 = min((p0[0] - tx) ** 2 + (p0[1] - ty) ** 2,
+                         (p1[0] - tx) ** 2 + (p1[1] - ty) ** 2)
+                if d2 <= best_d2:
+                    best = record
+                    best_d2 = d2
+            if best is not None:
+                self._names[id(best)] = label
+
+    def name_for(self, record):
+        return self._names.get(id(record)) or self._fallback.name_for(record)
+
+
+def build_grid_namer(grid_records, grid_texts=None):
+    """Convention namer, upgraded to text-derived names when grid labels exist."""
+    convention = GridNamer(grid_records)
+    if grid_texts:
+        return TextGridNamer(grid_records, grid_texts, convention)
+    return convention
+
+
 def _to_letters(index):
     """0->A, 1->B, ... 25->Z, 26->AA, ..."""
     text = ""

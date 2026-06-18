@@ -34,6 +34,7 @@ DEFAULTS = {
     "mark_radius_mm": 1300.0,     # a size label this close to a member sizes it
                                   # (labels sit offset from the column, ~1.1 m)
     "compare_tol_mm": 300.0,      # Revit-vs-DXF "same member" match radius
+    "grid_snap_mm": 300.0,        # snap a text-corrected column centre to a grid line
 
     # --- columns ------------------------------------------------------------
     "col_region_max_side_mm": 1500.0,  # min side above this = lift/stair, skipped
