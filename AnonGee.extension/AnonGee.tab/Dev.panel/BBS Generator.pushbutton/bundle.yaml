@@ -1,0 +1,26 @@
+title: BBS Generator
+author: Zaid Shaikh
+tooltip: |
+  Bar Bending Schedule Generator.
+
+  What it does
+    • Reads native Revit DB.Rebar elements from the active model.
+    • Supports IS 2502:2019, BS 8666:2020, and ACI 318-19 / CRSI standards.
+    • Organises output per floor level and per member (beam, column, slab, foundation).
+    • Exports a formatted Excel workbook: BBS sheet, Calculation sheet, Summary sheet.
+    • Optional ePDF export from the same workbook.
+    • Revision tracking: compares against a previous BBS export and highlights changes.
+
+  Tabs
+    1. Settings  — standard, unit weight toggle, calc sheet, PDF, revision tracking.
+    2. Scope     — model / view / selection, level filter, member filter, diameter filter.
+    3. Preview   — live DataGrid of resolved BarRecords with summary panel.
+    4. Export    — output path, filename, sheet options, export button + log.
+
+  Before you run it
+    • Requires CPython 3 engine in pyRevit.
+    • Requires openpyxl: pip install openpyxl  (tool will prompt if missing).
+    • Rebar must use native DB.Rebar (not area/path reinforcement).
+
+  Version: 1.0.0
+  Author: Zaid Shaikh
