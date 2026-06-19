@@ -252,6 +252,167 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
     return rects
 
 
+# Rectilinear fragment assembly tolerances (feet).
+_ASM_SNAP_FT = 40.0 / 304.8      # endpoints within ~40 mm are the same vertex
+_ASM_BRIDGE_FT = 1600.0 / 304.8  # close a dangling axis-aligned gap up to ~1.6 m
+#                                  (the wall thickness CAD omits as an 'end cap')
+
+
+def _edges_of(path):
+    """2D edges of a point path. Returns (edges, all_axis_aligned)."""
+    pts = [(p[0], p[1]) for p in path]
+    edges = []
+    ok = True
+    for a, b in zip(pts, pts[1:]):
+        if _close(a, b):
+            continue
+        if abs(a[0] - b[0]) > _TOL and abs(a[1] - b[1]) > _TOL:
+            ok = False
+        edges.append((a, b))
+    return edges, ok
+
+
+def _walk_cycle(adjacency, start):
+    """Walk a simple cycle (all vertices degree 2) from start; return (ring, pids)."""
+    ring = [start]
+    pids = set()
+    prev, cur = None, start
+    for _ in range(len(adjacency) + 1):
+        nxt = npid = None
+        for nb, pid in adjacency[cur]:
+            if nb != prev:
+                nxt, npid = nb, pid
+                break
+        if nxt is None:
+            return None, set()
+        pids.add(npid)
+        if nxt == start:
+            return ring, pids
+        ring.append(nxt)
+        prev, cur = cur, nxt
+    return None, set()
+
+
+def assemble_rectilinear_rings(paths, snap_ft=_ASM_SNAP_FT,
+                               bridge_ft=_ASM_BRIDGE_FT):
+    """Stitch open, axis-aligned fragments into closed rectilinear rings.
+
+    Revit's CAD import often leaves a long wall and the perpendicular wall-legs that
+    meet it as ONE fused, *unclosed* outline -- e.g. a 12300-long base with four
+    300x3300 teeth, where the base edge sits a wall-thickness off the tooth roots and
+    the end caps are never drawn. No closed ring exists, so each piece would route to
+    oriented-bbox recovery and collapse into a single oversized blob.
+
+    This rebuilds the implied boundary: endpoints within `snap_ft` merge to one
+    vertex, dangling ends that line up axis-aligned within `bridge_ft` are joined
+    (the missing end caps / open tooth bases), and every connected component that
+    reduces to a single simple cycle (all vertices degree 2) is walked into a ring.
+
+    `paths`: list of point-lists (feet, 2D or 3D). Returns (rings, consumed_ids),
+    rings being lists of (x, y) vertices and consumed_ids the set of indices into
+    `paths` whose geometry became part of a closed ring. A component carrying a
+    non-axis-aligned edge, or that never closes into a clean degree-2 cycle, is left
+    out (its ids stay unconsumed) so the caller can fall back to oriented recovery.
+    """
+    verts = []
+
+    def vid(pt):
+        for i, q in enumerate(verts):
+            if abs(q[0] - pt[0]) <= snap_ft and abs(q[1] - pt[1]) <= snap_ft:
+                return i
+        verts.append((pt[0], pt[1]))
+        return len(verts) - 1
+
+    adjacency = {}
+    edge_keys = set()
+
+    def add_edge(a, b, pid):
+        if a == b:
+            return
+        key = (a, b) if a < b else (b, a)
+        if key in edge_keys:
+            return
+        edge_keys.add(key)
+        adjacency.setdefault(a, []).append((b, pid))
+        adjacency.setdefault(b, []).append((a, pid))
+
+    for pid, path in enumerate(paths):
+        edges, ok = _edges_of(path)
+        if not ok or not edges:
+            continue
+        for a, b in edges:
+            add_edge(vid(a), vid(b), pid)
+
+    # Bridge dangling ends: join each degree-1 vertex to its nearest axis-aligned
+    # degree-1 partner within bridge_ft (the end caps CAD leaves off a fused wall).
+    dangling = [v for v in adjacency if len(adjacency[v]) == 1]
+    used = set()
+    for v in dangling:
+        if v in used:
+            continue
+        vx, vy = verts[v]
+        neighbours = {nb for nb, _ in adjacency[v]}
+        best = None
+        for w in dangling:
+            if w == v or w in used or w in neighbours:
+                continue
+            wx, wy = verts[w]
+            if abs(vx - wx) > snap_ft and abs(vy - wy) > snap_ft:
+                continue   # not axis-aligned with v
+            d = abs(vx - wx) + abs(vy - wy)
+            if d <= bridge_ft and (best is None or d < best[0]):
+                best = (d, w)
+        if best is not None:
+            add_edge(v, best[1], -1)
+            used.add(v)
+            used.add(best[1])
+
+    rings = []
+    consumed = set()
+    seen = set()
+    for start in list(adjacency):
+        if start in seen:
+            continue
+        comp = []
+        stack = [start]
+        seen.add(start)
+        while stack:
+            u = stack.pop()
+            comp.append(u)
+            for nb, _pid in adjacency[u]:
+                if nb not in seen:
+                    seen.add(nb)
+                    stack.append(nb)
+        if len(comp) < 4 or any(len(adjacency[u]) != 2 for u in comp):
+            continue   # not a single simple cycle -> leave for oriented recovery
+        ring, pids = _walk_cycle(adjacency, comp[0])
+        if ring is None or len(ring) < 4:
+            continue
+        rings.append([verts[v] for v in ring])
+        consumed |= (pids - {-1})
+    return rings, consumed
+
+
+def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
+                                bridge_ft=_ASM_BRIDGE_FT):
+    """Recover columns from fused/unclosed axis-aligned wall outlines.
+
+    Assembles `paths` into closed rectilinear rings (see assemble_rectilinear_rings)
+    and decomposes each into axis-aligned Rectangles. Returns (rectangles,
+    consumed_ids); size acceptance is left to the caller.
+    """
+    rings, consumed = assemble_rectilinear_rings(paths, snap_ft, bridge_ft)
+    rects = []
+    for ring in rings:
+        simplified = simplify_ring(ring)
+        if len(simplified) < 4 or not is_rectilinear(simplified):
+            continue
+        for rect in decompose_to_rectangles(simplified, z):
+            if rect.width_ft > _TOL and rect.height_ft > _TOL:
+                rects.append(rect)
+    return rects, consumed
+
+
 def snap_to_standard(value_ft, standards_ft, tol_ft):
     """Snap a measurement to the nearest standard size if within tolerance."""
     if not standards_ft:
