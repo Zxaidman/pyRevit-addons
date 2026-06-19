@@ -24,7 +24,7 @@ Decomposition method: grid-partition + greedy maximal-rectangle merge.
 
 import math
 
-from cad2bim import config as _cfg
+from . import config as _cfg
 
 _TOL = 1.0e-4   # feet (~0.03 mm): collinear / axis-alignment tolerance (numerical)
 

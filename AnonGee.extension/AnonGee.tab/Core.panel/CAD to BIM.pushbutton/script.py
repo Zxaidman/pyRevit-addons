@@ -20,8 +20,9 @@ CPython3 engine compliance (AnonGee Brand Guidelines 12.1 / 12.8.4 / 12.9):
     System.Windows.Forms file dialogs (mirrors the shipping BIM Generation tool).
   * Model writes happen after the modal window closes, on the Revit API thread.
 
-The cad2bim package lives in lib/py3; path_resolver injects it. If the banner's
-version/path is not what you expect, a stale shadow copy is on sys.path.
+The cad2bim package lives in lib/py3/anongee_toolkit; path_resolver puts lib/py3
+on sys.path. If the banner's version/path is not what you expect, a stale shadow
+copy is on sys.path.
 """
 
 __title__ = "CAD to BIM"
@@ -82,8 +83,8 @@ def _bootstrap_lib_path():
 
 _bootstrap_lib_path()
 
-import cad2bim
-from cad2bim import (compat, geometry_reader, layers, report, grids,
+from anongee_toolkit import cad2bim
+from anongee_toolkit.cad2bim import (compat, geometry_reader, layers, report, grids,
                      transactions, columns, beams, dxf_linker, dxf_reader,
                      transform, compare, marks, config)
 

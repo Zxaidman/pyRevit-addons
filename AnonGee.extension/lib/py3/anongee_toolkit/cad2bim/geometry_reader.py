@@ -19,8 +19,8 @@ already baked in by the link transform. They are stored verbatim -- never rescal
 from Autodesk.Revit.DB import (Options, GeometryInstance, PolyLine, Curve, Line,
                                Arc, ElementId)
 
-from cad2bim.model import CurveRecord, ReadResult
-from cad2bim.cad_links import describe_link
+from .model import CurveRecord, ReadResult
+from .cad_links import describe_link
 
 _ARC_SAMPLES = 0.5  # arcs are kept as start / mid / end so the arc can be rebuilt
 

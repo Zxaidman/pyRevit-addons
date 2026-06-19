@@ -24,9 +24,9 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                ElementTransformUtils, Line)
 from Autodesk.Revit.DB.Structure import StructuralType
 
-from cad2bim.units import mm_to_internal
-from cad2bim.compat import get_element_name
-from cad2bim import config
+from .units import mm_to_internal
+from .compat import get_element_name
+from . import config
 
 _B_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _H_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")

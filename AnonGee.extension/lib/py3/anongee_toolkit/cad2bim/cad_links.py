@@ -9,7 +9,7 @@ for this tool because only links carry a stable, reversible reference.
 
 from Autodesk.Revit.DB import FilteredElementCollector, ImportInstance
 
-from cad2bim.compat import element_id_value, get_element_name
+from .compat import element_id_value, get_element_name
 
 
 def find_cad_links(doc):

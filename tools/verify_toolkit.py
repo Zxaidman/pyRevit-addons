@@ -851,8 +851,8 @@ def test_dialogs_import():
 def test_schedule():
     section("cad2bim column-schedule parser")
     try:
-        from cad2bim import marks, layers
-        from cad2bim.model import TextRecord
+        from anongee_toolkit.cad2bim import marks, layers
+        from anongee_toolkit.cad2bim.model import TextRecord
     except Exception as e:
         fail("cad2bim.marks / layers import", e)
         return
@@ -910,8 +910,8 @@ def test_schedule():
 def test_column_split_guard():
     section("cad2bim column split-vs-separate guard")
     try:
-        from cad2bim import report, config, marks
-        from cad2bim.model import TextRecord
+        from anongee_toolkit.cad2bim import report, config, marks
+        from anongee_toolkit.cad2bim.model import TextRecord
     except Exception as e:
         fail("cad2bim.report import", e)
         return

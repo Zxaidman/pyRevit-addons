@@ -10,10 +10,10 @@ import json
 import math
 from collections import defaultdict, Counter
 
-from cad2bim import shapes
-from cad2bim import marks
-from cad2bim import config
-from cad2bim.layers import CATEGORY_COLUMN, CATEGORY_BEAM
+from . import shapes
+from . import marks
+from . import config
+from .layers import CATEGORY_COLUMN, CATEGORY_BEAM
 
 _MM = config.MM_PER_FT
 

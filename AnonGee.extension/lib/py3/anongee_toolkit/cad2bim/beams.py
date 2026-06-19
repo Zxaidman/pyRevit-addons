@@ -15,8 +15,8 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                FamilySymbol, XYZ, Line)
 from Autodesk.Revit.DB.Structure import StructuralType
 
-from cad2bim.units import mm_to_internal
-from cad2bim.compat import get_element_name
+from .units import mm_to_internal
+from .compat import get_element_name
 
 _WIDTH_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _DEPTH_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
