@@ -988,6 +988,81 @@ def test_column_split_guard():
 
 
 # ---------------------------------------------------------------------------
+# cad2bim beam-column junction recovery (real Test10 geometry, pure)
+# ---------------------------------------------------------------------------
+
+def test_junction_recovery():
+    section("cad2bim beam-column junction recovery")
+    try:
+        from anongee_toolkit.cad2bim import report, config
+        from anongee_toolkit.cad2bim.model import CurveRecord
+        from anongee_toolkit.cad2bim.layers import CATEGORY_COLUMN
+    except Exception as e:
+        fail("cad2bim.report import", e)
+        return
+
+    ft = lambda mm: mm / config.MM_PER_FT
+
+    def poly(mm_pts):
+        """An OPEN column-layer polyline (junction fragment) from mm corners."""
+        pts = [(ft(x), ft(y), 0.0) for x, y in mm_pts]
+        rec = CurveRecord("polyline", pts, "S-COLS", None)
+        rec.category = CATEGORY_COLUMN
+        return rec
+
+    def sizes(sections):
+        out = []
+        for entry in sections["entries"]:
+            for r in entry["rectangles"]:
+                out.append((round(r["width_mm"]), round(r["height_mm"]),
+                            round(r["center"][0] * config.MM_PER_FT),
+                            round(r["center"][1] * config.MM_PER_FT)))
+        return out
+
+    # I5 = (17000, 27700): a 750x900 column whose outline a vertical beam (bottom
+    # edge) and the grid-line beam (both sides) sliced into open partial loops --
+    # the top three sides as one open shape, the two bottom corners as L's.
+    i5 = [
+        poly([(16625, 27850), (16625, 28150), (17375, 28150), (17375, 27850)]),
+        poly([(16850, 27250), (16625, 27250), (16625, 27550)]),
+        poly([(17375, 27550), (17375, 27250), (17150, 27250)]),
+    ]
+    sec = report.build_column_sections(i5)
+    got = sizes(sec)
+    check("I5 junction recovers ONE column (no slivers)", lambda: len(got) == 1)
+    check("I5 recovers the true 750x900 footprint",
+          lambda: got and sorted(got[0][:2]) == [750, 900])
+    check("I5 column is centred on the grid intersection",
+          lambda: got and got[0][2:] == (17000, 27700))
+    check("no 300x750 beam-width sliver is placed",
+          lambda: all(sorted(s[:2]) != [300, 750] for s in got))
+
+    # I7 = (25000, 27700): a 600x750 column rotated ~45 deg, sliced at its diagonal
+    # junction into five short open edges. The closed-ring auto-close used to emit
+    # a 463x750 partial; clustered recovery must give the true 600x750.
+    i7 = [
+        poly([(24947, 28177), (25477, 27647)]),
+        poly([(24620, 27850), (24947, 28177)]),
+        poly([(24850, 27426), (24726, 27550)]),
+        poly([(25380, 27550), (25150, 27320)]),
+        poly([(25477, 27647), (25380, 27550)]),
+    ]
+    sec7 = report.build_column_sections(i7)
+    got7 = sizes(sec7)
+    check("I7 rotated junction recovers ONE column",
+          lambda: len(got7) == 1)
+    check("I7 recovers the true 600x750 footprint",
+          lambda: got7 and sorted(got7[0][:2]) == [600, 750])
+
+    # Guard: a genuinely CLOSED column polyline must still decompose normally.
+    closed = poly([(0, 0), (300, 0), (300, 900), (0, 900), (0, 0)])
+    secc = report.build_column_sections([closed])
+    gotc = sizes(secc)
+    check("closed column polyline still placed directly",
+          lambda: len(gotc) == 1 and sorted(gotc[0][:2]) == [300, 900])
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -1006,6 +1081,7 @@ if __name__ == "__main__":
     test_dialogs_import()
     test_schedule()
     test_column_split_guard()
+    test_junction_recovery()
 
     print("\n" + "=" * 60)
     print("Results: {} passed, {} failed".format(PASS, FAIL))

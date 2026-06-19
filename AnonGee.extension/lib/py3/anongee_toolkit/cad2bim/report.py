@@ -24,6 +24,22 @@ DEFAULT_LIMITS = dict((key, config.DEFAULTS[key]) for key in (
 
 _FRAG_MAX_LINE_MM = 2000.0   # column-layer lines shorter than this are junction bits
 _FRAG_GAP_MM = 400.0         # fragments within this gap belong to the same column
+_CLOSE_TOL_FT = 1.0e-3       # ~0.3 mm: ring is closed when its ends meet this close
+
+
+def _ring_closed(points):
+    """True if a polyline's first and last vertices coincide (a closed ring).
+
+    Both readers mark closure this way: the DXF reader appends the start point to
+    a closed LWPOLYLINE/POLYLINE, and Revit's PolyLine repeats the start for a
+    closed loop. A polyline whose ends do NOT meet is an open path -- at a
+    beam-column junction that means a partial outline (an L/U/-shaped fragment),
+    NOT a column to be auto-closed into a (wrong, undersized) rectangle.
+    """
+    if len(points) < 4:
+        return False
+    a, b = points[0], points[-1]
+    return abs(a[0] - b[0]) <= _CLOSE_TOL_FT and abs(a[1] - b[1]) <= _CLOSE_TOL_FT
 
 
 def _inside_rectangles(cx, cy, rectangles):
@@ -176,6 +192,17 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         return False
 
     for record in polyline_records:
+        # An OPEN polyline on the column layer is a junction fragment (a partial
+        # L/U/-outline left when beams sliced the column), not a closed column.
+        # Auto-closing it would forge a wrong, undersized sliver AND steal its
+        # segments from recovery; route it to the fragment pool to be reassembled.
+        if not _ring_closed(record.points):
+            unplaced_raw.append({"kind": record.kind, "layer": record.layer,
+                                 "status": "open_path",
+                                 "pts": _pts_mm(record.points)})
+            fragments.append(record.points)
+            status_counts["open_fragment"] += 1
+            continue
         result = shapes.parse_column_polyline(record.points)
         kept = [rect for rect in result["rectangles"] if not _inside_a_circle(rect)]
         dropped = len(result["rectangles"]) - len(kept)
