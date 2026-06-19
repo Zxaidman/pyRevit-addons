@@ -1,0 +1,20 @@
+{
+  "name": "AnonGee BIM Tools",
+  "version": "1.0.0",
+  "description": "A professional suite of structural and architectural BIM automation tools for Autodesk Revit — parameter filtering, BIM generation from INP/DXF, bar bending schedules, rebar visibility, bulk operations, and more.",
+  "author": "Zaid Shaikh (AnonGee)",
+  "website": "https://github.com/Zxaidman/pyRevit-addons",
+  "min_pyrevit_version": "6.10.0",
+  "bundles": [
+    {
+      "type": "tab",
+      "name": "AnonGee.tab",
+      "folders": [
+        "AnonGee.tab/Essential.panel",
+        "AnonGee.tab/Advance.panel",
+        "AnonGee.tab/Core.panel",
+        "AnonGee.tab/Dev.panel"
+      ]
+    }
+  ]
+}
