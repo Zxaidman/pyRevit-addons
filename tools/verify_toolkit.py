@@ -904,6 +904,64 @@ def test_schedule():
 
 
 # ---------------------------------------------------------------------------
+# cad2bim column text-correction: tight-grid split guard (pure)
+# ---------------------------------------------------------------------------
+
+def test_column_split_guard():
+    section("cad2bim column split-vs-separate guard")
+    try:
+        from cad2bim import report, config, marks
+        from cad2bim.model import TextRecord
+    except Exception as e:
+        fail("cad2bim.report import", e)
+        return
+
+    MM = config.MM_PER_FT
+    ft = lambda mm: mm / MM
+
+    def rect(x, y, w, h, deg):
+        return {"center": [ft(x), ft(y), 0.0], "width_mm": w, "height_mm": h,
+                "width_ft": w / MM, "height_ft": h / MM, "long_axis_deg": deg}
+
+    def lbl(text, x, y):
+        t = TextRecord(text, "S-COLS-IDEN", (x, y, 0))
+        t.point_internal = (ft(x), ft(y), 0)
+        marks.parse_texts([t])
+        return t
+
+    # Two complete columns on grids 1500mm apart, each with its own offset label.
+    # The label radius (1300mm) reaches both, but they must NOT be fused.
+    A = rect(25000, 26300, 300, 450, 43.0)
+    B = rect(25000, 27800, 300, 450, 61.0)
+    sec = {"entries": [{"rectangles": [A, B]}]}
+    labels = [lbl("C_300 X 450", 24917, 26863), lbl("C_300 X 450", 24917, 28363)]
+    report.correct_columns_with_text(sec, labels, ft(1300.0),
+                                     grid_x=[ft(25000)],
+                                     grid_y=[ft(26300), ft(27800)],
+                                     grid_snap_ft=ft(300.0))
+    outs = sec["entries"][0]["rectangles"]
+    ys = sorted(round(r["center"][1] * MM) for r in outs)
+    check("tight-grid columns are NOT fused (two kept)", lambda: len(outs) == 2)
+    check("both columns stay on their own grids", lambda: ys == [26300, 27800])
+    check("no mid-bay column at the 27050 midpoint",
+          lambda: all(round(r["center"][1] * MM) != 27050 for r in outs))
+    check("each column keeps its own orientation",
+          lambda: sorted(r.get("long_axis_deg") for r in outs) == [43.0, 61.0])
+
+    # A single column the import clipped into two touching halves MUST still merge.
+    F1 = rect(50000, 29850, 600, 300, 0.0)
+    F2 = rect(50000, 30150, 600, 300, 0.0)
+    sec2 = {"entries": [{"rectangles": [F1, F2]}]}
+    report.correct_columns_with_text(sec2, [lbl("C_600 X 600", 50000, 30900)],
+                                     ft(1300.0), grid_x=[ft(50000)],
+                                     grid_y=[ft(30000)], grid_snap_ft=ft(300.0))
+    o2 = sec2["entries"][0]["rectangles"]
+    check("genuine clipped split still merges to one column", lambda: len(o2) == 1)
+    check("merged column sized to its label",
+          lambda: (o2[0]["width_mm"], o2[0]["height_mm"]) == (600, 600))
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -921,6 +979,7 @@ if __name__ == "__main__":
     test_forms_import()
     test_dialogs_import()
     test_schedule()
+    test_column_split_guard()
 
     print("\n" + "=" * 60)
     print("Results: {} passed, {} failed".format(PASS, FAIL))

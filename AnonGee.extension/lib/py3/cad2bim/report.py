@@ -262,6 +262,8 @@ def _pts_mm(points):
 
 
 _TEXT_SIZE_OK_MM = 80.0   # a single column already this close to its label is left as-is
+_SPLIT_CENTRE_SLACK_MM = 80.0      # split fragments' centres lie within (long side + this)
+_SPLIT_NO_SIZE_MAX_CENTRE_MM = 800.0   # no label size: only fuse pieces this close
 
 
 def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
@@ -296,6 +298,15 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
             continue   # none, or a multi-leg lift/stair core: leave the geometry
         size = _label_size(text, schedule)   # (small, big) mm, or None
 
+        if len(near) == 2 and not _is_split_pair(near, size):
+            # One label per column, but an offset label on a tight grid bay (e.g.
+            # grids ~1500mm apart) can reach a NEIGHBOURING column too. These are
+            # two complete, separate columns -- bind this label to its OWN
+            # (nearest) column and leave the other for its own label, instead of
+            # fusing them into one column mid-bay with its orientation lost.
+            near = [min(near, key=lambda r:
+                        (r["center"][0] - tx) ** 2 + (r["center"][1] - ty) ** 2)]
+
         if size is None and len(near) == 1:
             # Mark only, single clean piece: name it, keep geometry size+position.
             out = _copy_rect(near[0])
@@ -304,9 +315,7 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
             outputs.append(out)
             continue
         if size is not None and len(near) == 1:
-            small_g = min(near[0]["width_mm"], near[0]["height_mm"])
-            big_g = max(near[0]["width_mm"], near[0]["height_mm"])
-            if abs(small_g - size[0]) <= _TEXT_SIZE_OK_MM and abs(big_g - size[1]) <= _TEXT_SIZE_OK_MM:
+            if _fills_size(near[0], size):
                 out = _copy_rect(near[0])      # already right size: just name it
                 out["mark"] = text.mark
                 used.add(id(near[0]))
@@ -331,6 +340,33 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
     counts["text_corrected"] = counts.get("text_corrected", 0) + len(outputs)
     sections["total_rectangles"] = len(outputs) + len(leftover)
     return len(outputs)
+
+
+def _is_split_pair(rects, size):
+    """True when two near rectangles are two fragments of ONE clipped column
+    (safe to merge), False when they are two complete, separate columns that a
+    single offset label happened to reach across a tight grid bay.
+
+    A genuine clip splits one column, so the fragments' centres lie within the
+    column's own long dimension; two distinct columns sit a grid bay apart. And
+    if BOTH near pieces already fill the labelled size, they cannot be fragments.
+    """
+    a, b = rects
+    centre_mm = math.hypot(a["center"][0] - b["center"][0],
+                           a["center"][1] - b["center"][1]) * _MM
+    if size is not None:
+        if _fills_size(a, size) and _fills_size(b, size):
+            return False
+        return centre_mm <= size[1] + _SPLIT_CENTRE_SLACK_MM
+    return centre_mm <= _SPLIT_NO_SIZE_MAX_CENTRE_MM
+
+
+def _fills_size(rect, size):
+    """True when a rectangle already matches the labelled (small, big) mm size."""
+    small_g = min(rect["width_mm"], rect["height_mm"])
+    big_g = max(rect["width_mm"], rect["height_mm"])
+    return (abs(small_g - size[0]) <= _TEXT_SIZE_OK_MM and
+            abs(big_g - size[1]) <= _TEXT_SIZE_OK_MM)
 
 
 def _label_size(text, schedule):
