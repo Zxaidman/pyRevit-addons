@@ -238,6 +238,37 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     status_counts["line_member"] += len(line_members)
     status_counts["circle"] += len(circles)
 
+    # Recover columns from fused/unclosed AXIS-ALIGNED wall outlines first: a long
+    # wall drawn as one comb with its perpendicular legs (e.g. a 12300 base + four
+    # 300x3300 teeth) never closes into a ring, so each piece would otherwise blob
+    # into one oversized oriented rect. Assemble the pieces into closed rectilinear
+    # rings and decompose them into their real columns. Feed both the open-path
+    # fragments and the bare column lines (the long wall edges live in line_points).
+    recl_paths = list(fragments) + list(line_points)
+    recl_z = next((p[0][2] for p in recl_paths if p and len(p[0]) > 2), 0.0)
+    strip_rects_raw, recl_consumed = shapes.recover_rectilinear_columns(
+        recl_paths, z=recl_z)
+    strip_rects = []
+    for rect in strip_rects_raw:
+        cx, cy, _cz = rect.center
+        if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
+            continue
+        strip_rects.append(rect)
+    if strip_rects:
+        status_counts["recovered_strip"] += len(strip_rects)
+        total_rectangles += len(strip_rects)
+        leg_rectangles.extend(strip_rects)
+        entries.append({
+            "layer": "(recovered)",
+            "status": "recovered_strip",
+            "approx": True,
+            "rectangles": [rect.to_dict() for rect in strip_rects],
+        })
+    # Drop fragments consumed by the rectilinear assembly so the oriented pass below
+    # cannot re-cluster them into a duplicate blob (fragment ids index recl_paths,
+    # whose first len(fragments) entries are the fragments themselves).
+    fragments = [frag for i, frag in enumerate(fragments) if i not in recl_consumed]
+
     # Recover columns whose Revit outline was clipped into disconnected fragments
     # at a junction (e.g. angled F9): cluster the leftover pieces and fit an
     # oriented rectangle. Skip any that land inside an already-placed column.
