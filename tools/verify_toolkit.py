@@ -845,6 +845,65 @@ def test_dialogs_import():
 
 
 # ---------------------------------------------------------------------------
+# cad2bim column-schedule parser (pure: no Revit / .NET)
+# ---------------------------------------------------------------------------
+
+def test_schedule():
+    section("cad2bim column-schedule parser")
+    try:
+        from cad2bim import marks, layers
+        from cad2bim.model import TextRecord
+    except Exception as e:
+        fail("cad2bim.marks / layers import", e)
+        return
+
+    def cell(text, x=0.0, y=0.0):
+        return TextRecord(text, "S-COLS-SCHEDULE", (x, y, 0.0))
+
+    # Inline cells (mark + size in one cell) are read directly.
+    inline = marks.parse_schedule([cell("C1 400x600"), cell("C2 300x300")])
+    check("inline cell sizes a mark",
+          lambda: inline.get("C1") == (400.0, 600.0))
+    check("two inline rows both captured",
+          lambda: inline.get("C2") == (300.0, 300.0))
+
+    # Split cells: mark and size in separate cells on the same table row.
+    split = marks.parse_schedule([
+        cell("C9", 0, 100), cell("400x600", 50, 100),
+        cell("C10", 0, 90), cell("300x300", 50, 90)])
+    check("split row pairs mark with its row's size",
+          lambda: split.get("C9") == (400.0, 600.0))
+    check("second split row pairs independently",
+          lambda: split.get("C10") == (300.0, 300.0))
+
+    # A size directly above/below a mark (same column) is NOT its size.
+    same_col = marks.parse_schedule([cell("C5", 0, 100), cell("250x250", 0, 80)])
+    check("same-column size is not paired across rows",
+          lambda: "C5" not in same_col)
+
+    # Inline reading wins over a stray split pairing for the same mark.
+    prec = marks.parse_schedule([
+        cell("C1 400x600", 0, 0), cell("C1", 0, 50), cell("999x999", 50, 50)])
+    check("inline size wins over split on conflict",
+          lambda: prec.get("C1") == (400.0, 600.0))
+
+    check("empty input yields empty schedule",
+          lambda: marks.parse_schedule([]) == {})
+    check("None input yields empty schedule",
+          lambda: marks.parse_schedule(None) == {})
+
+    # Layer routing: a schedule layer must route to the new category, not plan text.
+    check("schedule layer routes to column schedule",
+          lambda: layers.classify_text_layer("S-COLS-SCHEDULE")
+          == layers.CATEGORY_COLUMN_SCHEDULE)
+    check("plain column layer still routes to column text",
+          lambda: layers.classify_text_layer("S-COLS-IDEN")
+          == layers.CATEGORY_COLUMN_TEXT)
+    check("column schedule is an offered text category",
+          lambda: layers.CATEGORY_COLUMN_SCHEDULE in layers.TEXT_CATEGORIES)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -861,6 +920,7 @@ if __name__ == "__main__":
     test_import_graph()
     test_forms_import()
     test_dialogs_import()
+    test_schedule()
 
     print("\n" + "=" * 60)
     print("Results: {} passed, {} failed".format(PASS, FAIL))

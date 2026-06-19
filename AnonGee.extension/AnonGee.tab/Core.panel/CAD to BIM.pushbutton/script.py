@@ -643,6 +643,16 @@ def main():
                     if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
     grid_texts = [t for t in dxf_result.texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
+    schedule_texts = [t for t in dxf_result.texts
+                      if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
+
+    # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
+    # authoritative; any sized plan label supplements a mark the table omits.
+    schedule = marks.parse_schedule(schedule_texts)
+    for mark, size in marks.parse_schedule(column_texts).items():
+        schedule.setdefault(mark, size)
+    if schedule:
+        print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
 
     # Grid-line axis positions (internal feet) -> snap text-corrected column
     # centres onto the grid (columns sit on grid intersections).
@@ -654,6 +664,7 @@ def main():
                                                     config.DEFAULTS["mark_radius_mm"]))
     grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
     fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
+                                             schedule=schedule,
                                              grid_x=grid_x, grid_y=grid_y,
                                              grid_snap_ft=grid_snap_ft)
     if fixed:

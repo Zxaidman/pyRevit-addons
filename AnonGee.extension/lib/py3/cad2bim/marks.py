@@ -61,6 +61,69 @@ def sized_texts(texts):
             if t.b_mm is not None and t.h_mm is not None and t.point_internal]
 
 
+def parse_schedule(texts):
+    """Build a {mark: (b_mm, h_mm)} lookup from a column-schedule's text cells.
+
+    A column schedule is a table; in DXF its cells are individual TEXT entities.
+    This reconstructs the mark->size mapping the table encodes so a plan label
+    that carries ONLY a mark ("C9") can still be sized from its schedule row.
+
+    Two cell layouts are handled:
+      * inline -- one cell carries both mark and size ("C1  400x600"); these are
+        position-independent and always trusted first;
+      * split -- the mark and the size sit in separate cells on the same table
+        row, paired by their shared y (the nearest mark cell to a size cell that
+        is more to its side than above/below it).
+    On a conflict the inline reading wins, then the first split pairing found.
+    Returns {} for no input. Sizes keep (b, h) order as written.
+    """
+    schedule = {}
+    if not texts:
+        return schedule
+
+    parsed = []   # (mark, b_mm, h_mm, (x, y)) for every cell we can place
+    for record in texts:
+        mark, b_mm, h_mm = parse_mark(record.text)
+        parsed.append((mark, b_mm, h_mm, _schedule_xy(record)))
+
+    # 1. Inline cells: a single cell carrying both a mark and a size.
+    for mark, b_mm, h_mm, _xy in parsed:
+        if mark and b_mm is not None and h_mm is not None:
+            schedule.setdefault(mark, (b_mm, h_mm))
+
+    # 2. Split cells: pair each size-only cell with its row's mark-only cell.
+    mark_cells = [(mark, xy) for mark, b_mm, h_mm, xy in parsed
+                  if mark and b_mm is None and xy is not None]
+    size_cells = [(b_mm, h_mm, xy) for mark, b_mm, h_mm, xy in parsed
+                  if b_mm is not None and h_mm is not None and mark is None
+                  and xy is not None]
+    for b_mm, h_mm, (sx, sy) in size_cells:
+        best_mark = None
+        best_d2 = None
+        for mark, (mx, my) in mark_cells:
+            dx, dy = mx - sx, my - sy
+            if abs(dy) >= abs(dx):
+                continue   # the mark is in another row (above/below), not this one
+            d2 = dx * dx + dy * dy
+            if best_d2 is None or d2 < best_d2:
+                best_d2, best_mark = d2, mark
+        if best_mark and best_mark not in schedule:
+            schedule[best_mark] = (b_mm, h_mm)
+
+    return schedule
+
+
+def _schedule_xy(record):
+    """Planar (x, y) for a schedule cell: internal feet if mapped, else DXF coords.
+
+    Only the cells' positions RELATIVE to each other matter for row pairing, and
+    both spaces share one scale within a file, so either works."""
+    point = record.point_internal or record.point
+    if not point:
+        return None
+    return (point[0], point[1])
+
+
 def nearest_sized_text(cx, cy, candidates, radius_ft):
     """Return the nearest sized TextRecord within radius_ft of (cx, cy), or None.
 

@@ -54,18 +54,27 @@ ALL_CATEGORIES = (
 CATEGORY_COLUMN_TEXT = "column text"
 CATEGORY_BEAM_TEXT = "beam text"
 CATEGORY_GRID_TEXT = "grid text"
+# The column-schedule table: mark<->size rows that size MARK-ONLY plan labels
+# (e.g. "C9" on the plan, "C9 400x600" in the table). Routed apart from plan
+# column text because the table is a block of cells, not member-adjacent labels.
+CATEGORY_COLUMN_SCHEDULE = "column schedule"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
-                   CATEGORY_GRID_TEXT, CATEGORY_TEXT_IGNORE)
+                   CATEGORY_GRID_TEXT, CATEGORY_COLUMN_SCHEDULE,
+                   CATEGORY_TEXT_IGNORE)
 
 
 def classify_text_layer(layer_name):
-    """Default routing for a TEXT layer: column / beam / grid text, or ignore."""
+    """Default routing for a TEXT layer: column / beam / grid / schedule, or ignore."""
     if not layer_name:
         return CATEGORY_TEXT_IGNORE
     text = layer_name.lower()
     if "grid" in text or "axis" in text:
         return CATEGORY_GRID_TEXT
+    # A schedule layer carries "sched"/"schd"/"table" -- check before plain "col"
+    # so a "S-COLS-SCHEDULE" layer routes to the table, not to plan column text.
+    if "sched" in text or "schd" in text or "table" in text:
+        return CATEGORY_COLUMN_SCHEDULE
     if "col" in text:
         return CATEGORY_COLUMN_TEXT
     if "beam" in text or "girder" in text or "joist" in text:
