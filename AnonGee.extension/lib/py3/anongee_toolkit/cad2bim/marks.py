@@ -65,33 +65,38 @@ def parse_schedule(texts):
     """Build a {mark: (b_mm, h_mm)} lookup from a column-schedule's text cells.
 
     A column schedule is a table; in DXF its cells are individual TEXT entities.
-    This reconstructs the mark->size mapping the table encodes so a plan label
-    that carries ONLY a mark ("C9") can still be sized from its schedule row.
+    This reconstructs the mark->size mapping so a plan label that carries ONLY a
+    mark ("C9") can still be sized from its schedule row.
 
-    Two cell layouts are handled:
-      * inline -- one cell carries both mark and size ("C1  400x600"); these are
-        position-independent and always trusted first;
-      * split -- the mark and the size sit in separate cells on the same table
-        row, paired by their shared y (the nearest mark cell to a size cell that
-        is more to its side than above/below it).
-    On a conflict the inline reading wins, then the first split pairing found.
+    Three cell layouts are handled, most specific first:
+      * tabular -- a real table with a header row (e.g. "Mark W L H", repeated for
+        several side-by-side blocks). The header fixes each column's x and role;
+        every data row is read column by column. Plan size is W x L; a height
+        column (H) is ignored. This is the common CAD column schedule.
+      * inline -- one cell carries both mark and size ("C1  400x600").
+      * split -- a mark cell and a single size cell ("400x600") share a row.
+    On a conflict the tabular reading wins, then inline, then the first split.
     Returns {} for no input. Sizes keep (b, h) order as written.
     """
     schedule = {}
     if not texts:
         return schedule
 
-    parsed = []   # (mark, b_mm, h_mm, (x, y)) for every cell we can place
-    for record in texts:
-        mark, b_mm, h_mm = parse_mark(record.text)
-        parsed.append((mark, b_mm, h_mm, _schedule_xy(record)))
+    placed = [(record.text, _schedule_xy(record)) for record in texts]
+    cells = [(xy[0], xy[1], text) for text, xy in placed if xy]
 
-    # 1. Inline cells: a single cell carrying both a mark and a size.
+    # 1. Tabular: header-driven, the usual CAD column schedule.
+    for mark, size in _parse_schedule_table(_cluster_rows(cells)).items():
+        schedule.setdefault(mark, size)
+
+    parsed = [(parse_mark(text) + (xy,)) for text, xy in placed]
+
+    # 2. Inline cells: a single cell carrying both a mark and a size.
     for mark, b_mm, h_mm, _xy in parsed:
         if mark and b_mm is not None and h_mm is not None:
             schedule.setdefault(mark, (b_mm, h_mm))
 
-    # 2. Split cells: pair each size-only cell with its row's mark-only cell.
+    # 3. Split cells: pair each size-only cell with its row's mark-only cell.
     mark_cells = [(mark, xy) for mark, b_mm, h_mm, xy in parsed
                   if mark and b_mm is None and xy is not None]
     size_cells = [(b_mm, h_mm, xy) for mark, b_mm, h_mm, xy in parsed
@@ -111,6 +116,151 @@ def parse_schedule(texts):
             schedule[best_mark] = (b_mm, h_mm)
 
     return schedule
+
+
+# Schedule header keywords -> column role. Plan size is W x L; H is the column's
+# vertical height (ignored for the footprint). Single letters cover terse CAD
+# headers ("W L H"); full words cover verbose ones.
+_HDR_MARK = ("mark", "ref", "col", "column", "type", "no", "id")
+_HDR_W = ("w", "b", "width", "breadth")
+_HDR_L = ("l", "d", "depth", "length")
+_HDR_H = ("h", "ht", "height", "lvl", "level")
+_HDR_SIZE = ("size", "section", "dim", "dimensions", "bxd", "wxl", "wxd")
+
+
+def _header_role(text):
+    """Role of a header cell ('mark'/'w'/'l'/'h'/'size'), or None if not a header."""
+    t = (text or "").strip().lower().rstrip(".")
+    if t in _HDR_MARK:
+        return "mark"
+    if t in _HDR_W:
+        return "w"
+    if t in _HDR_L:
+        return "l"
+    if t in _HDR_H:
+        return "h"
+    if t in _HDR_SIZE:
+        return "size"
+    return None
+
+
+def _cluster_rows(cells):
+    """Group (x, y, text) cells into table rows by y (single-linkage).
+
+    The row pitch is learned from the data (median y-gap), so this works in mm or
+    metres without a hard-coded tolerance. Returns [(row_y, [(x, text), ...]), ...]
+    ordered top-to-bottom.
+    """
+    if not cells:
+        return []
+    ys = sorted(set(c[1] for c in cells))
+    gaps = [b - a for a, b in zip(ys, ys[1:]) if b - a > 1e-9]
+    pitch = _median(gaps) if gaps else 1.0
+    tol = pitch * 0.45
+    rows = []   # each: [anchor_y, [(x, text), ...], last_y]
+    for x, y, text in sorted(cells, key=lambda c: -c[1]):
+        if rows and (rows[-1][2] - y) <= tol:
+            rows[-1][1].append((x, text))
+            rows[-1][2] = y
+        else:
+            rows.append([y, [(x, text)], y])
+    return [(r[0], r[1]) for r in rows]
+
+
+def _parse_schedule_table(rows):
+    """Header-driven {mark: (w, l)} from row-clustered schedule cells.
+
+    Finds a header row, splits it into side-by-side Mark|W|L(|H) blocks by the
+    header cells' x, then reads each data row column by column. Empty if no header.
+    """
+    header = None
+    for _y, cells in rows:
+        roles = [(x, _header_role(t)) for x, t in cells]
+        roles = [(x, r) for x, r in roles if r]
+        n_mark = sum(1 for _, r in roles if r == "mark")
+        n_dim = sum(1 for _, r in roles if r in ("w", "l"))
+        n_size = sum(1 for _, r in roles if r == "size")
+        if n_mark >= 1 and (n_dim >= 2 or n_size >= 1):
+            header = sorted(roles)
+            break
+    if not header:
+        return {}
+
+    blocks = []   # each: {"mark": x, "w": x, "l": x} or {"mark": x, "size": x}
+    current = None
+    for x, role in header:
+        if role == "mark":
+            current = {"mark": x}
+            blocks.append(current)
+        elif current is not None and role in ("w", "l", "size"):
+            current.setdefault(role, x)
+    blocks = [b for b in blocks if ("w" in b and "l" in b) or "size" in b]
+    if not blocks:
+        return {}
+
+    xs = sorted(x for x, _ in header)
+    pitch = min((b - a for a, b in zip(xs, xs[1:])), default=0.0)
+    tol = pitch * 0.5 if pitch > 0 else None
+
+    out = {}
+    for _y, cells in rows:
+        if any(_header_role(t) for _, t in cells):
+            continue   # skip header row(s)
+        for block in blocks:
+            name, _b, _h = parse_mark(_cell_at(cells, block["mark"], tol) or "")
+            if not name:
+                continue
+            if "size" in block:
+                wh = _two_numbers(_cell_at(cells, block["size"], tol))
+            else:
+                w = _number(_cell_at(cells, block["w"], tol))
+                l = _number(_cell_at(cells, block["l"], tol))
+                wh = (w, l) if (w is not None and l is not None) else None
+            if wh:
+                out.setdefault(name, wh)
+    return out
+
+
+def _cell_at(cells, target_x, tol):
+    """Text of the cell whose x is nearest target_x (within tol, if given)."""
+    best, best_d = None, None
+    for x, text in cells:
+        d = abs(x - target_x)
+        if (tol is None or d <= tol) and (best_d is None or d < best_d):
+            best, best_d = text, d
+    return best
+
+
+def _number(text):
+    """A plain numeric cell as float, or None."""
+    if not text:
+        return None
+    try:
+        return float(text.strip())
+    except (ValueError, AttributeError):
+        return None
+
+
+def _two_numbers(text):
+    """(a, b) from a 'AxB' size cell, or None."""
+    if not text:
+        return None
+    match = _SIZE_RE.search(text)
+    if not match:
+        return None
+    try:
+        return (float(match.group(1)), float(match.group(2)))
+    except (ValueError, TypeError):
+        return None
+
+
+def _median(values):
+    s = sorted(values)
+    n = len(s)
+    if n == 0:
+        return 0.0
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2.0
 
 
 def _schedule_xy(record):

@@ -902,6 +902,32 @@ def test_schedule():
     check("column schedule is an offered text category",
           lambda: layers.CATEGORY_COLUMN_SCHEDULE in layers.TEXT_CATEGORIES)
 
+    # Tabular schedule with a header row (Mark|W|L|H), two side-by-side blocks --
+    # the real CAD column-schedule shape (Test15). Each value is its own cell;
+    # plan size is W x L and the H (height) column must be ignored.
+    def table():
+        cells = []
+        # header at y=100: two blocks
+        for bx in (0, 1000):
+            for dx, t in ((0, "Mark"), (100, "W"), (200, "L"), (300, "H")):
+                cells.append(cell(t, bx + dx, 100))
+        # two data rows
+        rows = [(90, [("C1", "300", "450", "4000"), ("C3", "600", "900", "4000")]),
+                (80, [("C2", "300", "600", "4000"), ("C4", "750", "900", "3500")])]
+        for y, blocks in rows:
+            for bx, (mk, w, l, h) in zip((0, 1000), blocks):
+                for dx, t in ((0, mk), (100, w), (200, l), (300, h)):
+                    cells.append(cell(t, bx + dx, y))
+        return cells
+
+    sch = marks.parse_schedule(table())
+    check("tabular schedule reads all four marks", lambda: len(sch) == 4)
+    check("Mark|W|L row gives W x L size", lambda: sch.get("C1") == (300.0, 450.0))
+    check("second block on same row parsed too", lambda: sch.get("C3") == (600.0, 900.0))
+    check("height (H) column is ignored",
+          lambda: 4000.0 not in (sch.get("C2") or ()) and sch.get("C2") == (300.0, 600.0))
+    check("last block/row parsed", lambda: sch.get("C4") == (750.0, 900.0))
+
 
 # ---------------------------------------------------------------------------
 # cad2bim column text-correction: tight-grid split guard (pure)
