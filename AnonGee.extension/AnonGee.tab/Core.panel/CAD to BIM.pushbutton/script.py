@@ -1,26 +1,52 @@
+#! python3
 # -*- coding: utf-8 -*-
-"""CAD to BIM -- linked-DWG reader + grids pass.
+"""CAD to BIM -- pick a DXF, link it, and build Revit structure from it.
 
-Reads a linked CAD, classifies its curves by layer (convention + optional
-override), reports the parse, optionally exports the intermediate JSON, and
-creates Revit GRIDS from the classified grid lines.
+Workflow (CAD-free model is the normal case):
+  1. Pick a .dxf, choose its drawing unit and positioning (Link DXF dialog).
+  2. Link it programmatically (like Revit's Link CAD dialog).
+  3. Hybrid extraction: read the Revit link's geometry (internal feet) AND read the
+     same DXF with ezdxf for geometry + TEXT; align them with the link transform.
+  4. Compare the two to find problem geometry (Revit clips/merges at junctions) and
+     build from the cleaner ezdxf geometry.
+  5. Classify layers, refine sizes from text marks ("C1 400x400"), and create grids,
+     columns and beams in a TransactionGroup with warning suppression.
 
-Grids are created inside a TransactionGroup with warning suppression. Columns,
-beams and slabs remain later passes and are deliberately absent (not stubbed).
+CPython3 engine compliance (AnonGee Brand Guidelines 12.1 / 12.8.4 / 12.9):
+  * `#! python3` shebang on line 1; explicit imports only.
+  * NO pyRevit IronPython modules (pyrevit.forms / pyrevit.revit) -- they crash the
+    CPython3 engine. Windows load via XamlReader.Load from a .xaml file; the active
+    document comes from `__revit__`; dialogs use System.Windows.MessageBox and
+    System.Windows.Forms file dialogs (mirrors the shipping BIM Generation tool).
+  * Model writes happen after the modal window closes, on the Revit API thread.
 
-The cad2bim package lives in `lib/py2/`. pyRevit puts `lib/` on sys.path (so
-`path_resolver` imports), but NOT the py2/py3 subfolders -- so we call the repo's
-`path_resolver.update_paths()` first to inject `lib/py2` before importing cad2bim.
+The cad2bim package lives in lib/py3/anongee_toolkit; path_resolver puts lib/py3
+on sys.path. If the banner's version/path is not what you expect, a stale shadow
+copy is on sys.path.
 """
 
 __title__ = "CAD to BIM"
-__doc__ = ("Read a linked CAD (DWG), classify its curves by layer, and create "
-           "Revit grids from the grid lines. Columns/beams/slabs are later passes.")
 __author__ = "AnonGee"
 __min_revit_ver__ = 2022
 
 import os
 import sys
+import traceback
+
+import clr
+clr.AddReference("PresentationFramework")
+clr.AddReference("PresentationCore")
+clr.AddReference("WindowsBase")
+clr.AddReference("System.Xml")
+clr.AddReference("System.Windows.Forms")
+
+from System.Windows.Markup import XamlReader
+from System.IO import FileStream, FileMode, FileAccess
+from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
+                            Thickness, GridLength, GridUnitType, VerticalAlignment)
+from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
+                                     ComboBox)
+import System.Windows.Forms
 
 
 def _bootstrap_lib_path():
@@ -28,8 +54,7 @@ def _bootstrap_lib_path():
 
     Primary: the repo's own path_resolver, which pyRevit makes importable by
     adding the extension `lib/` folder to sys.path. Fallback: climb from this
-    file to find the `lib` dir and inject py2/py3 directly, so the button still
-    loads if path_resolver cannot be imported for any reason.
+    file to find the `lib` dir and inject py2/py3 directly.
     """
     try:
         import path_resolver
@@ -42,7 +67,7 @@ def _bootstrap_lib_path():
     try:
         cursor = os.path.dirname(os.path.abspath(__file__))
     except NameError:
-        return  # no __file__ in this host; rely on whatever is already on path
+        return
 
     for _ in range(8):  # bounded: button -> panel -> tab -> extension -> lib
         candidate = os.path.join(cursor, "lib", sub)
@@ -58,45 +83,225 @@ def _bootstrap_lib_path():
 
 _bootstrap_lib_path()
 
-from pyrevit import revit, forms, script, HOST_APP
-from Autodesk.Revit.DB import Transaction, TransactionGroup
-from System.Windows.Controls import Grid as WpfGrid, ColumnDefinition, TextBlock, ComboBox
-from System.Windows import Thickness, GridLength, GridUnitType, VerticalAlignment
+from anongee_toolkit import cad2bim
+from anongee_toolkit.cad2bim import (compat, geometry_reader, layers, report, grids,
+                     transactions, columns, beams, dxf_linker, dxf_reader,
+                     transform, compare, marks, config)
 
-import cad2bim
-from cad2bim import (compat, cad_links, geometry_reader, layers, ui, report,
-                     grids, transactions, columns, beams)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_XAML = os.path.join(_HERE, "ui.xaml")
+_LINK_XAML = os.path.join(_HERE, "link_options.xaml")
 
-logger = script.get_logger()
-output = script.get_output()
+# A size label within this distance of a member refines it; also the proximity the
+# comparison uses to decide "this is the same member" (~half a column).
+_COMPARE_TOL_FT = 300.0 / 304.8
 
-_XAML = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui.xaml")
+
+# --- dialogs / messaging (System.Windows only -- no pyRevit) -----------------
+
+def _alert(title, message):
+    MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning)
 
 
-class CadToBimWindow(forms.WPFWindow):
-    """Single capture-only window: edit the layer mapping and pick what to build.
+def _error(title, message, detail=None):
+    body = message
+    if detail:
+        body += "\n\n--- technical detail ---\n{0}".format(detail)
+    MessageBox.Show(body, title, MessageBoxButton.OK, MessageBoxImage.Error)
+
+
+def _persisted(tstatus, gstatus):
+    """True only if both the inner transaction and the group actually committed."""
+    from Autodesk.Revit.DB import TransactionStatus
+    return (tstatus == TransactionStatus.Committed
+            and gstatus == TransactionStatus.Committed)
+
+
+def _rollback_alert(label, tstatus, gstatus):
+    """Report a silent commit rollback truthfully instead of faking success."""
+    message = (
+        "{0} were computed but the Revit transaction did NOT persist (commit "
+        "status: {1}, group: {2}).\n\nThis usually means error-severity failures "
+        "at commit -- most often running into a project that already contains "
+        "these elements. Try a fresh/empty project (or undo the previous run), "
+        "then run again.".format(label, tstatus, gstatus))
+    print(message)
+    _error("{0} not saved".format(label), message)
+
+
+def _load_window(xaml_path):
+    """Load a WPF Window from a .xaml file via XamlReader (CPython3-safe)."""
+    stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
+    try:
+        return XamlReader.Load(stream)
+    finally:
+        stream.Close()
+
+
+def _open_dxf():
+    dialog = System.Windows.Forms.OpenFileDialog()
+    dialog.Title = "Pick a DXF to link and convert"
+    dialog.Filter = "DXF files (*.dxf)|*.dxf|All files (*.*)|*.*"
+    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
+        return dialog.FileName
+    return None
+
+
+def _save_json(default_name):
+    dialog = System.Windows.Forms.SaveFileDialog()
+    dialog.Title = "Export parsed curves to JSON"
+    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+    dialog.FileName = default_name
+    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
+        return dialog.FileName
+    return None
+
+
+def _select_containing(combo, keywords):
+    """Select the first combo item whose label contains any keyword (lowercased).
+
+    Returns True if a match was selected, leaving the prior selection otherwise.
+    """
+    for index in range(combo.Items.Count):
+        label = str(combo.Items[index]).lower()
+        if any(keyword in label for keyword in keywords):
+            combo.SelectedIndex = index
+            return True
+    return False
+
+
+# --- Link DXF dialog (file + unit + positioning) -----------------------------
+
+class LinkOptionsDialog(object):
+    """Small modal that mirrors Revit's Link CAD dialog: pick file + unit + placement."""
+
+    def __init__(self, active_view_name="-"):
+        self.result = None
+        self.window = _load_window(_LINK_XAML)
+        find = self.window.FindName
+        self.tb_path = find("tb_path")
+        self.cb_unit = find("cb_unit")
+        self.cb_placement = find("cb_placement")
+        self.chk_view_only = find("chk_view_only")
+        find("tb_active_view").Text = active_view_name
+        for label, _value in dxf_linker.UNIT_CHOICES:
+            self.cb_unit.Items.Add(label)
+        for label, _value in dxf_linker.PLACEMENT_CHOICES:
+            self.cb_placement.Items.Add(label)
+        if self.cb_unit.Items.Count:
+            self.cb_unit.SelectedIndex = 0
+        if self.cb_placement.Items.Count:
+            self.cb_placement.SelectedIndex = 0
+            # Default to Origin-to-Origin (most predictable alignment).
+            _select_containing(self.cb_placement, ["origin to origin"])
+        find("btn_browse").Click += self._on_browse
+        find("btn_link").Click += self._on_link
+        find("btn_cancel").Click += self._on_cancel
+
+    def _on_browse(self, sender, args):
+        path = _open_dxf()
+        if path:
+            self.tb_path.Text = path
+
+    def _on_link(self, sender, args):
+        path = (self.tb_path.Text or "").strip()
+        if not path or not os.path.exists(path):
+            _alert("DXF required", "Pick a DXF file that exists before linking.")
+            return
+        if not self.cb_unit.SelectedItem or not self.cb_placement.SelectedItem:
+            _alert("Options required", "Choose a drawing unit and positioning.")
+            return
+        self.result = {"path": path,
+                       "unit": self.cb_unit.SelectedItem,
+                       "placement": self.cb_placement.SelectedItem,
+                       "this_view_only": bool(self.chk_view_only.IsChecked)}
+        self.window.Close()
+
+    def _on_cancel(self, sender, args):
+        self.result = None
+        self.window.Close()
+
+    def show(self):
+        self.window.ShowDialog()
+
+
+# --- main mapping / build window (capture-only) ------------------------------
+
+class CadToBimWindow(object):
+    """Capture-only window: edit the layer mapping and pick what to build.
 
     Holds no Revit API references and performs no model writes -- it only gathers
     the user's choices into self.result and closes. All model work happens after
-    show_dialog() returns, on the Revit API thread (the brand's no-blocking rule).
+    show() returns, on the Revit API thread.
     """
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
-                 column_symbols, level_options, beam_symbols):
-        forms.WPFWindow.__init__(self, _XAML)
+                 column_symbols, level_options, beam_symbols,
+                 text_layer_rows=None, text_categories=None, default_text_mapping=None):
         self.result = None
         self._combos = []
-        self.version_text.Text = "v{0}".format(cad2bim.__version__)
-        self.source_text.Text = source_name
-        self._build_rows(layer_rows, categories, default_mapping)
+        self._text_combos = []
+        self.window = _load_window(_XAML)
+        find = self.window.FindName
+
+        find("version_text").Text = "v{0}".format(cad2bim.__version__)
+        find("source_text").Text = source_name
+        self._build_rows(find("layer_rows"), layer_rows, categories,
+                         default_mapping, self._combos)
+        self._build_rows(find("text_rows"), text_layer_rows or [],
+                         text_categories or [], default_text_mapping or {},
+                         self._text_combos)
+
+        self.cb_family = find("cb_family")
+        self.cb_circular_family = find("cb_circular_family")
+        self.cb_base_level = find("cb_base_level")
+        self.cb_top_level = find("cb_top_level")
+        self.cb_beam_family = find("cb_beam_family")
         self._family_ids = self._fill_combo(self.cb_family, column_symbols)
+        _select_containing(self.cb_family, ["rect"])
         self._fill_combo(self.cb_circular_family, column_symbols)
+        _select_containing(self.cb_circular_family, ["round", "circ"])
+        # Levels are sorted lowest-first, so combo index ascends with elevation.
+        # Base defaults to the lowest, top to the next level above it.
         self._level_ids = self._fill_combo(self.cb_base_level, level_options)
         self._fill_combo(self.cb_top_level, level_options)
+        if self.cb_top_level.Items.Count > 1:
+            self.cb_top_level.SelectedIndex = 1
         self._beam_ids = self._fill_combo(self.cb_beam_family, beam_symbols)
+        _select_containing(self.cb_beam_family, ["rect"])
+
+        self.chk_grids = find("chk_grids")
+        self.chk_columns = find("chk_columns")
+        self.chk_beams = find("chk_beams")
+        self.chk_slabs = find("chk_slabs")
+        self.chk_export = find("chk_export")
+
+        self.tb_beam_min = find("tb_beam_min")
+        self.tb_beam_max = find("tb_beam_max")
+        self.tb_colb_min = find("tb_colb_min")
+        self.tb_colb_max = find("tb_colb_max")
+        self.tb_colh_min = find("tb_colh_min")
+        self.tb_colh_max = find("tb_colh_max")
+        self.sl_beam_min = find("sl_beam_min")
+        self.sl_beam_max = find("sl_beam_max")
+        self.sl_colb_min = find("sl_colb_min")
+        self.sl_colb_max = find("sl_colb_max")
+        self.sl_colh_min = find("sl_colh_min")
+        self.sl_colh_max = find("sl_colh_max")
+        self.tb_std_columns = find("tb_std_columns")
+        self.tb_std_beams = find("tb_std_beams")
+        self.tb_snap = find("tb_snap")
+        self.tb_markrad = find("tb_markrad")
+        self.tb_compare = find("tb_compare")
+        self.tb_region = find("tb_region")
+        self.tb_circ_min = find("tb_circ_min")
+        self.tb_circ_max = find("tb_circ_max")
+        self.tb_pair_min = find("tb_pair_min")
+        self.tb_pair_max = find("tb_pair_max")
         self._init_sizing()
+        self._init_tolerances()
+
         if not column_symbols:
-            # Fail loud, fail useful: nothing to place into.
             self.chk_columns.IsChecked = False
             self.chk_columns.IsEnabled = False
             self.chk_columns.Content = "Create columns (load a structural column family first)"
@@ -104,8 +309,9 @@ class CadToBimWindow(forms.WPFWindow):
             self.chk_beams.IsChecked = False
             self.chk_beams.IsEnabled = False
             self.chk_beams.Content = "Create beams (load a structural framing family first)"
-        self.btn_run.Click += self.on_run
-        self.btn_cancel.Click += self.on_cancel
+
+        find("btn_run").Click += self.on_run
+        find("btn_cancel").Click += self.on_cancel
 
     def _fill_combo(self, combo, label_id_pairs):
         """Populate a combo with labels; return {label: ElementId}. Selects the first."""
@@ -117,10 +323,9 @@ class CadToBimWindow(forms.WPFWindow):
             combo.SelectedIndex = 0
         return mapping
 
-    def _build_rows(self, layer_rows, categories, default_mapping):
-        combo_style = self.Resources["InputComboBox"]
-        mono_font = self.Resources["FontMono"]
-        body_size = self.Resources["FontSizeBody"]
+    def _build_rows(self, panel, layer_rows, categories, default_mapping, combo_store):
+        """One row per layer: name, count, category combo. Appends (layer, combo)
+        to combo_store so the caller can read the chosen mapping back."""
         for layer, count in layer_rows:
             row = WpfGrid()
             row.Margin = Thickness(0, 2, 0, 2)
@@ -132,29 +337,27 @@ class CadToBimWindow(forms.WPFWindow):
 
             name_block = TextBlock()
             name_block.Text = layer
-            name_block.FontFamily = mono_font
-            name_block.FontSize = body_size
             name_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(name_block, 0)
 
             count_block = TextBlock()
             count_block.Text = str(count)
-            count_block.FontSize = body_size
             count_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(count_block, 1)
 
             combo = ComboBox()
-            combo.Style = combo_style
             for category in categories:
                 combo.Items.Add(category)
-            combo.SelectedItem = default_mapping.get(layer, layers.CATEGORY_UNMAPPED)
+            combo.SelectedItem = default_mapping.get(layer)
+            if combo.SelectedItem is None and combo.Items.Count:
+                combo.SelectedIndex = combo.Items.Count - 1   # last = unmapped/ignore
             WpfGrid.SetColumn(combo, 2)
 
             row.Children.Add(name_block)
             row.Children.Add(count_block)
             row.Children.Add(combo)
-            self.layer_rows.Children.Add(row)
-            self._combos.append((layer, combo))
+            panel.Children.Add(row)
+            combo_store.append((layer, combo))
 
     def _init_sizing(self):
         """Seed the limit fields from defaults and two-way link each slider+input."""
@@ -187,11 +390,42 @@ class CadToBimWindow(forms.WPFWindow):
         slider.ValueChanged += on_slider
         textbox.LostFocus += on_text
 
+    def _init_tolerances(self):
+        """Seed the Units & Tolerances fields from config defaults (mm)."""
+        d = config.DEFAULTS
+        self.tb_snap.Text = str(int(d["snap_tol_mm"]))
+        self.tb_markrad.Text = str(int(d["mark_radius_mm"]))
+        self.tb_compare.Text = str(int(d["compare_tol_mm"]))
+        self.tb_region.Text = str(int(d["col_region_max_side_mm"]))
+        self.tb_circ_min.Text = str(int(d["circle_min_dia_mm"]))
+        self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
+        self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
+        self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+
     def _read_int(self, textbox, fallback):
         try:
             return int(round(float(textbox.Text)))
         except (ValueError, TypeError):
             return fallback
+
+    def _read_float(self, textbox, fallback):
+        try:
+            return float(textbox.Text)
+        except (ValueError, TypeError):
+            return fallback
+
+    def _read_tolerances(self):
+        d = config.DEFAULTS
+        return {
+            "snap_tol_mm": self._read_float(self.tb_snap, d["snap_tol_mm"]),
+            "mark_radius_mm": self._read_float(self.tb_markrad, d["mark_radius_mm"]),
+            "compare_tol_mm": self._read_float(self.tb_compare, d["compare_tol_mm"]),
+            "col_region_max_side_mm": self._read_float(self.tb_region, d["col_region_max_side_mm"]),
+            "circle_min_dia_mm": self._read_float(self.tb_circ_min, d["circle_min_dia_mm"]),
+            "circle_max_dia_mm": self._read_float(self.tb_circ_max, d["circle_max_dia_mm"]),
+            "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
+            "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
+        }
 
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
@@ -204,12 +438,40 @@ class CadToBimWindow(forms.WPFWindow):
             "col_h_max_mm": self._read_int(self.tb_colh_max, defaults["col_h_max_mm"]),
         }
 
+    def _validate_levels(self):
+        """If columns/beams are requested, ensure top level is above base.
+
+        Combo index ascends with elevation (levels are sorted lowest-first), so the
+        check is index-based. Returns an error string, or None when valid.
+        """
+        if not (self.chk_columns.IsChecked or self.chk_beams.IsChecked):
+            return None
+        base_idx = self.cb_base_level.SelectedIndex
+        top_idx = self.cb_top_level.SelectedIndex
+        if base_idx < 0 or top_idx < 0:
+            return "Select a base level and a top level."
+        if base_idx == top_idx:
+            return ("Base level and top level are the same. Choose a top level "
+                    "above the base to give columns/beams their height.")
+        if top_idx < base_idx:
+            return ("Base level is set above the top level. Adjust so the top "
+                    "level is above the base to proceed.")
+        return None
+
     def on_run(self, sender, args):
+        level_error = self._validate_levels()
+        if level_error:
+            _alert("Check levels", level_error)
+            return   # keep the window open so the user can fix it
         mapping = {}
         for layer, combo in self._combos:
             mapping[layer] = combo.SelectedItem or layers.CATEGORY_UNMAPPED
+        text_mapping = {}
+        for layer, combo in self._text_combos:
+            text_mapping[layer] = combo.SelectedItem or layers.CATEGORY_TEXT_IGNORE
         self.result = {
             "mapping": mapping,
+            "text_mapping": text_mapping,
             "create_grids": bool(self.chk_grids.IsChecked),
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
@@ -220,159 +482,281 @@ class CadToBimWindow(forms.WPFWindow):
             "top_level_id": self._level_ids.get(self.cb_top_level.SelectedItem),
             "export": bool(self.chk_export.IsChecked),
             "limits": self._read_limits(),
+            "tolerances": self._read_tolerances(),
             "standards": {
                 "column": report.parse_standard_sizes(self.tb_std_columns.Text),
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
             },
         }
-        self.Close()
+        self.window.Close()
 
     def on_cancel(self, sender, args):
         self.result = None
-        self.Close()
+        self.window.Close()
+
+    def show(self):
+        self.window.ShowDialog()
+
+
+def _layer_names(records):
+    """Distinct layer keys present in a record list, sorted for stable display."""
+    return sorted(set(r.layer_key for r in records))
+
+
+def _grid_axis_positions(records):
+    """(grid_x, grid_y) lists in internal feet from the grid lines: a vertical
+    grid contributes its x, a horizontal grid its y. Used to snap columns."""
+    grid_x, grid_y = set(), set()
+    for record in records:
+        if layers.classify_layer(record.layer_key) != layers.CATEGORY_GRID:
+            continue
+        if record.kind != "line" or len(record.points) < 2:
+            continue
+        p0, p1 = record.points[0], record.points[-1]
+        if abs(p1[0] - p0[0]) <= abs(p1[1] - p0[1]):
+            grid_x.add((p0[0] + p1[0]) / 2.0)   # vertical grid -> constant x
+        else:
+            grid_y.add((p0[1] + p1[1]) / 2.0)   # horizontal grid -> constant y
+    return sorted(grid_x), sorted(grid_y)
 
 
 def main():
-    doc = revit.doc
-    if doc is None:
-        forms.alert("Open a Revit project before running CAD to BIM.", exitscript=True)
+    uidoc = getattr(__revit__, "ActiveUIDocument", None)
+    if uidoc is None or uidoc.Document is None:
+        _alert("No document", "Open a Revit project before running CAD to BIM.")
         return
+    doc = uidoc.Document
 
-    # Version banner: confirms WHICH cad2bim actually loaded. If the version or
-    # path below is not what you expect, a stale or shadowing copy is on sys.path
-    # (e.g. a leftover lib/cad2bim hijacking lib/py2/cad2bim) -- reload pyRevit
-    # and remove the stray copy.
     module_dir = os.path.dirname(os.path.abspath(report.__file__))
-    output.print_md("**cad2bim {0}** loaded from `{1}`".format(cad2bim.__version__, module_dir))
-    logger.info("cad2bim {0} from {1}".format(cad2bim.__version__, module_dir))
+    print("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
+    print(compat.runtime_summary())
+    try:
+        print("Host: Revit {0}".format(__revit__.Application.VersionNumber))
+    except Exception:
+        pass
 
-    # Startup self-check: surfaces the runtime/host so the Revit-2025 IronPython
-    # loader situation (a pyRevit 5.1-line issue, reworked in the 6.x line) is
-    # visible in the log if anything ever misbehaves.
-    logger.info(compat.runtime_summary())
-    logger.info("Host: Revit {0}".format(HOST_APP.version))
-
-    links = cad_links.find_cad_links(doc)
-    if not links:
-        forms.alert("No linked CAD (DWG) found. Link a DWG, then re-run.",
-                    exitscript=True)
+    if not dxf_reader.ezdxf_available():
+        _error("ezdxf not available",
+               "ezdxf could not be imported on this engine.\n\nIf you just "
+               "provisioned it, run the button again (or fully restart Revit). "
+               "Otherwise run tools/auto_provision.py to install it into lib/py3.",
+               detail=str(dxf_reader._EZDXF_ERROR))
         return
 
-    chosen_link = ui.pick_link(doc, links)   # stock picker only when >1 link
-    if chosen_link is None:
-        forms.alert("No link selected -- nothing to read.", exitscript=True)
+    # 1. Pick the DXF + its unit + positioning, then link it (own transaction).
+    active_view_name = getattr(getattr(doc, "ActiveView", None), "Name", "-")
+    options = LinkOptionsDialog(active_view_name)
+    options.show()
+    if not options.result:
+        return
+    path = options.result["path"]
+    try:
+        instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
+                                       options.result["placement"],
+                                       this_view_only=options.result["this_view_only"])
+    except Exception:
+        _error("Link failed", "Could not link the DXF.", traceback.format_exc())
         return
 
-    read_result = geometry_reader.read_link(doc, chosen_link)
-    if read_result.is_empty():
-        forms.alert("'{0}' contained no readable curves.".format(read_result.source_name),
-                    exitscript=True)
+    # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
+    #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
+    #    only, mapped into Revit coordinates by the link's own exact transform.
+    revit_result = geometry_reader.read_link(doc, instance)
+    if revit_result.is_empty():
+        _alert("Empty link", "The linked DXF produced no readable geometry in "
+               "Revit. Check the link is visible in the active view.")
+        return
+    try:
+        dxf_result = dxf_reader.read_dxf(path)
+    except Exception:
+        _error("DXF read failed", "Could not read the DXF for text.", traceback.format_exc())
         return
 
-    # Build the window from already-read data; the window touches no Revit API.
-    layer_counts = report.build_layer_counts(read_result.records)
-    layer_rows = [(name, layer_counts.get(name, {}).get("count", 0))
-                  for name in read_result.layer_names]
-    default_mapping = layers.build_default_mapping(read_result.layer_names)
+    # Map DXF coords -> Revit feet using the GRID lines as anchors: they are the
+    # same lines in both the Revit and DXF extractions, so aligning their bounding
+    # boxes is exact (no symbol-space unit guessing). Fall back to the link's own
+    # transform only if no grid geometry is available.
+    rev_grids = [r for r in revit_result.records
+                 if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
+    dxf_grids = [r for r in dxf_result.records
+                 if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
+    rev_bbox = transform.bbox_of_records(rev_grids)
+    dxf_bbox = transform.bbox_of_records(dxf_grids)
+    if rev_bbox and dxf_bbox:
+        text_affine = transform.empirical_affine(dxf_bbox, rev_bbox)
+        transform_method = "grid_anchored"
+    else:
+        text_affine = transform.from_link(instance)
+        transform_method = "link_GetTotalTransform"
+    transform.apply_to_texts(text_affine, dxf_result.texts)
+    marks.parse_texts(dxf_result.texts)
+    # Map a copy of the DXF geometry the same way, only to report problem geometry.
+    transform.apply_to_records(text_affine, dxf_result.records)
+
+    # Build the window from the REVIT records (the build source); no API calls.
+    layer_counts = report.build_layer_counts(revit_result.records)
+    names = _layer_names(revit_result.records)
+    layer_rows = [(name, layer_counts.get(name, {}).get("count", 0)) for name in names]
+    default_mapping = layers.build_default_mapping(names)
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
 
-    window = CadToBimWindow(read_result.source_name, layer_rows,
+    # Text layers (size marks) come from the DXF, routed separately from geometry.
+    text_layer_counts = {}
+    for text in dxf_result.texts:
+        text_layer_counts[text.layer_key] = text_layer_counts.get(text.layer_key, 0) + 1
+    text_names = sorted(text_layer_counts.keys())
+    text_layer_rows = [(name, text_layer_counts[name]) for name in text_names]
+    default_text_mapping = layers.build_default_text_mapping(text_names)
+
+    window = CadToBimWindow(dxf_result.source_name, layer_rows,
                             list(layers.ALL_CATEGORIES), default_mapping,
-                            column_symbols, level_options, beam_symbols)
-    window.show_dialog()
+                            column_symbols, level_options, beam_symbols,
+                            text_layer_rows, list(layers.TEXT_CATEGORIES),
+                            default_text_mapping)
+    window.show()
     if not window.result:
-        return  # cancelled -- nothing read or written
+        return
 
     selections = window.result
-    layers.apply_mapping(read_result.records, selections["mapping"])
+    layers.apply_mapping(revit_result.records, selections["mapping"])
     limits = selections.get("limits")
     standards = selections.get("standards")
-    sections = report.build_column_sections(read_result.records, limits, standards)
-    beam_segments = report.build_beam_segments(read_result.records,
-                                               sections.get("circles"),
-                                               limits, standards)
+    tolerances = selections.get("tolerances") or {}
 
-    output.print_md("### CAD to BIM {0}".format(cad2bim.__version__))
-    for line in report.format_console(read_result, selections["mapping"],
+    # Diagnostic only: how much Revit's import dropped/clipped vs the raw DXF.
+    compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
+                                                    config.DEFAULTS["compare_tol_mm"]))
+    comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
+    comparison["transform"] = {"method": transform_method}
+
+    sections = report.build_column_sections(revit_result.records, limits, standards,
+                                            texts=None, tolerances=tolerances)
+    beam_segments = report.build_beam_segments(revit_result.records,
+                                               sections.get("circles"),
+                                               limits, standards,
+                                               texts=None, tolerances=tolerances)
+
+    # Route text labels by their (user-confirmed) layer.
+    text_mapping = selections.get("text_mapping") or {}
+    column_texts = [t for t in dxf_result.texts
+                    if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
+    grid_texts = [t for t in dxf_result.texts
+                  if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
+    schedule_texts = [t for t in dxf_result.texts
+                      if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
+
+    # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
+    # authoritative; any sized plan label supplements a mark the table omits.
+    schedule = marks.parse_schedule(schedule_texts)
+    for mark, size in marks.parse_schedule(column_texts).items():
+        schedule.setdefault(mark, size)
+    if schedule:
+        print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
+
+    # Grid-line axis positions (internal feet) -> snap text-corrected column
+    # centres onto the grid (columns sit on grid intersections).
+    grid_x, grid_y = _grid_axis_positions(revit_result.records)
+
+    # Column-text labels (one per real column) resize clipped columns (G9) and
+    # merge grid-crossing-split pieces (E9), snapped to the grid intersection.
+    mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
+                                                    config.DEFAULTS["mark_radius_mm"]))
+    grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
+    fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
+                                             schedule=schedule,
+                                             grid_x=grid_x, grid_y=grid_y,
+                                             grid_snap_ft=grid_snap_ft)
+    if fixed:
+        print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
+
+    print("### CAD to BIM {0}".format(cad2bim.__version__))
+    for line in compare.format_console(comparison):
+        print(line)
+    for line in report.format_console(revit_result, selections["mapping"],
                                       sections, beam_segments):
-        output.print_md("`{0}`".format(line))
+        print(line)
 
     outcomes = {}
     if selections["create_grids"]:
-        outcomes["grids"] = _create_grids(doc, read_result.records)
+        outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     if selections["export"]:
-        _export(read_result, selections["mapping"], sections, beam_segments, outcomes)
+        _export(revit_result, selections["mapping"], sections, beam_segments,
+                outcomes, dxf_result.texts, comparison)
 
 
-def _create_grids(doc, records):
+def _create_grids(doc, records, grid_texts=None):
     """Create grids from classified grid lines, inside a transaction group.
 
-    Called only when the user ticked "Create grids". All Revit writes happen here
-    on the Revit API thread after the window has closed -- never in a UI handler.
-    Both the inner transaction and the group roll back on any failure.
+    Names come from grid-text labels (e.g. DWG bubbles 'A','1') when available,
+    falling back to the A-Z x 1-9 convention. All Revit writes happen here on the
+    API thread after the window closes; both transaction and group roll back on
+    any failure.
     """
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     grid_records = [r for r in records
                     if r.category == layers.CATEGORY_GRID and r.kind in ("line", "arc")]
     if not grid_records:
-        output.print_md("`Grids -- no grid-category lines to create.`")
+        print("Grids -- no grid-category lines to create.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
-    namer = grids.GridNamer(grid_records)
+    namer = grids.build_grid_namer(grid_records, grid_texts)
     group = TransactionGroup(doc, "CAD to BIM: Grids")
     transaction = Transaction(doc, "Create grids")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
+        transactions.attach_warning_swallower(transaction)
         result = grids.create_grids(doc, grid_records, namer)
-        transaction.Commit()
-        group.Assimilate()
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
         if group.HasStarted() and not group.HasEnded():
             group.RollBack()
-        logger.error("Grid creation failed: {0}".format(creation_error))
-        forms.alert("Grid creation failed:\n{0}".format(creation_error))
+        _error("Grid creation failed", "Grid creation failed.", str(creation_error))
         return {"created": 0, "skipped": 0, "errors": 1}
 
-    output.print_md("`Grids -- created: {0}, skipped: {1}, errors: {2}`".format(
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Grids", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
+
+    print("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"]:
-        logger.warning("grid: {0}".format(message))
+        print("  grid: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
 
 def _create_columns(doc, sections, selections):
-    """Place rectangular columns from the decomposed sections, in a group.
-
-    Validates the family/level choices first (fail loud), then writes inside a
-    TransactionGroup + Transaction with warning suppression and rollback.
-    """
+    """Place rectangular + circular columns from the decomposed sections, in a group."""
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     family_id = selections.get("column_family_id")
     base_id = selections.get("base_level_id")
     top_id = selections.get("top_level_id")
     if family_id is None or base_id is None or top_id is None:
-        forms.alert("Columns skipped: choose a column family and base/top levels.")
+        _alert("Columns skipped", "Choose a column family and base/top levels.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
     if not sections.get("entries"):
-        output.print_md("`Columns -- no column sections to place.`")
+        print("Columns -- no column sections to place.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Columns")
     transaction = Transaction(doc, "Create columns")
+    region_max = (selections.get("tolerances") or {}).get("col_region_max_side_mm")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
-        result = columns.place_columns(doc, sections, family_id, base_id, top_id)
+        transactions.attach_warning_swallower(transaction)
+        result = columns.place_columns(doc, sections, family_id, base_id, top_id,
+                                       region_max_side_mm=region_max)
         circles = sections.get("circles", [])
         circular_id = selections.get("circular_family_id")
         circular = {"created": [], "errors": []}
@@ -380,23 +764,26 @@ def _create_columns(doc, sections, selections):
             circular = columns.place_circular_columns(
                 doc, circles, circular_id, base_id, top_id)
         elif circles:
-            logger.warning("circular columns skipped: no circular family selected")
-        transaction.Commit()
-        group.Assimilate()
+            print("  circular columns skipped: no circular family selected")
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
         if group.HasStarted() and not group.HasEnded():
             group.RollBack()
-        logger.error("Column creation failed: {0}".format(creation_error))
-        forms.alert("Column creation failed:\n{0}".format(creation_error))
+        _error("Column creation failed", "Column creation failed.", str(creation_error))
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 1}
 
-    output.print_md("`Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}`".format(
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Columns", tstatus, gstatus)
+        return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0, "rolled_back": True}
+
+    print("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
         len(result["created"]), len(circular["created"]),
         len(result["skipped"]), len(result["errors"]) + len(circular["errors"])))
     for message in result["errors"] + circular["errors"] + result["skipped"]:
-        logger.warning("column: {0}".format(message))
+        print("  column: {0}".format(message))
     return {"rect": len(result["created"]), "circular": len(circular["created"]),
             "skipped": len(result["skipped"]),
             "errors": len(result["errors"]) + len(circular["errors"])}
@@ -404,55 +791,63 @@ def _create_columns(doc, sections, selections):
 
 def _create_beams(doc, beam_segments, selections):
     """Place beams along derived centerlines at the columns' top level, in a group."""
+    from Autodesk.Revit.DB import Transaction, TransactionGroup, TransactionStatus
     beam_id = selections.get("beam_family_id")
     level_id = selections.get("top_level_id")
     if beam_id is None or level_id is None:
-        forms.alert("Beams skipped: choose a beam family and a top level.")
+        _alert("Beams skipped", "Choose a beam family and a top level.")
         return {"created": 0, "skipped": 0, "errors": 0}
     segments = beam_segments.get("segments", [])
     if not segments:
-        output.print_md("`Beams -- no beam segments to place.`")
+        print("Beams -- no beam segments to place.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Beams")
     transaction = Transaction(doc, "Create beams")
     group.Start()
     transaction.Start()
-    transactions.attach_warning_swallower(transaction)
     try:
+        transactions.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
-        transaction.Commit()
-        group.Assimilate()
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
     except Exception as creation_error:
         if transaction.HasStarted() and not transaction.HasEnded():
             transaction.RollBack()
         if group.HasStarted() and not group.HasEnded():
             group.RollBack()
-        logger.error("Beam creation failed: {0}".format(creation_error))
-        forms.alert("Beam creation failed:\n{0}".format(creation_error))
+        _error("Beam creation failed", "Beam creation failed.", str(creation_error))
         return {"created": 0, "skipped": 0, "errors": 1}
 
-    output.print_md("`Beams -- created: {0}, skipped: {1}, errors: {2}`".format(
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Beams", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
+
+    print("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"] + result["skipped"]:
-        logger.warning("beam: {0}".format(message))
+        print("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
 
-def _export(read_result, mapping, sections, beam_segments, outcomes):
-    """Write the intermediate JSON (the user already opted in via the window)."""
-    target = forms.save_file(file_ext="json", default_name="cad_to_bim_read")
+def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):
+    """Write the intermediate JSON (the user opted in via the window)."""
+    target = _save_json("cad_to_bim_read.json")
     if not target:
         return
     try:
-        report.export_json(target, read_result, mapping, sections,
-                           beam_segments, outcomes)
-        output.print_md("`Exported JSON (with report) -> {0}`".format(target))
+        report.export_json(target, read_result, mapping, sections, beam_segments,
+                           outcomes, texts=texts, comparison=comparison)
+        print("Exported JSON (with report) -> {0}".format(target))
     except (IOError, OSError) as write_error:
-        logger.error("JSON export failed: {0}".format(write_error))
-        forms.alert("Could not write the JSON file:\n{0}".format(write_error))
+        _error("JSON export failed", "Could not write the JSON file.", str(write_error))
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        _error("Unexpected error",
+               "An unexpected error occurred. The CPython3 engine is still running "
+               "-- you do not need to restart Revit.", traceback.format_exc())

@@ -191,3 +191,63 @@ Targets `AnonGee.extension` → `AnonGee.tab` → `Core.panel` → `CAD to BIM.p
 - Validated on Test11: the spurious 1064 mm-wide beam at the F-G junction is dropped
   by the default beam-width limit (raising the max to 1200 lets it back in), and the
   spine (300 x 12300) still passes because h_max is generous.
+
+### DXF-pick entry + ezdxf hybrid extraction + text sizing (v0.13.0)
+Major remodel of the trigger and the data pipeline (see plan + findings docs).
+
+- **New entry point — CAD-free model is the normal case.** The button no longer
+  requires a pre-linked DWG. It asks the user to pick a `.dxf`, choose its drawing
+  unit (mm/cm/dm/m/ft/in) and positioning (Auto Center-to-Center / Origin-to-Origin
+  / By Shared Coordinates), then **links it programmatically** via
+  `dxf_linker.link_dxf` (`Document.Link` + `DWGImportOptions`, own Transaction).
+  The old `cad_links.find_cad_links` / `ui.pick_link` entry is removed.
+- **Engine moved to pyRevit CPython3** (`#! python3`). `cad2bim` now lives in
+  `lib/py3/` (was `lib/py2/`); the code was already py3-clean. This lets `ezdxf`
+  import in-process from `lib/py3` — no external interpreter, no subprocess.
+  Provisioned via `tools/auto_provision.py` (added `ezdxf`; fixed its stale
+  `pyZaid.extension` path to `AnonGee.extension`).
+- **Hybrid extraction.** `geometry_reader.read_link` still reads the Revit link
+  (internal feet). `dxf_reader.read_dxf` reads the *same* DXF with ezdxf for
+  geometry **and TEXT** (TEXT/MTEXT + block INSERT/ATTRIB tags), ascii **and
+  binary**. `transform.build_dxf_to_internal` maps DXF coords to internal feet from
+  the link's `GetTotalTransform()`, validated against the two geometry bboxes with
+  an empirical scale+translation fallback on a gross mismatch.
+- **Compare + auto-correct.** `compare.diff` aligns Revit-link vs DXF geometry and
+  reports problem geometry (members the Revit import drops/merges/clips at
+  junctions). Element creation builds from the cleaner **DXF geometry**, so the
+  junction-clipping issues are corrected at source; the comparison is logged to the
+  console + JSON for audit.
+- **Text-driven sizing.** `marks.parse_mark` parses "C1 400x400" / "B1 230x500";
+  `report.build_column_sections` / `build_beam_segments` refine each member from the
+  nearest sized mark — including beam **depth**, which 2D geometry cannot give.
+  `beams.place_beams` now sets both width and depth (type "{w} x {h}") when a depth
+  is present, else keeps width-only.
+- **UI de-themed to stock.** `ui.xaml` stripped of the AnonGee brand resources to
+  default WPF controls (all `x:Name`s preserved); branding to return when the tool
+  is production-ready.
+- **Verified (standalone, no Revit):** all modules `py_compile`; `ui.xaml`
+  well-formed with every bound control present; integration test confirms a 500 mm
+  square column re-sized to 600x600 (mark C1) and a 250 mm parallel-line beam
+  re-sized to 230 wide x 500 deep (mark B1) from text, and JSON export carries the
+  `texts` + `comparison` blocks. **Still needs the in-Revit pass** (CPython3 WPF
+  render, `Document.Link` out-param, transform alignment under both placements).
+
+### CPython3 engine compliance (v0.13.0, follow-up)
+Brought the button in line with the Brand Guidelines CPython3 rules (12.1 / 12.8.4
+/ 12.9 / 17), which the first cut violated by importing `pyrevit.forms` and using
+`forms.WPFWindow` (the IronPython-only `wpf` module crashes the CPython3 engine).
+
+- **Removed all pyRevit IronPython imports.** No `from pyrevit import ...` anywhere
+  in the button or the cad2bim package (verified by grep).
+- **Windows load via `XamlReader.Load`** from `.xaml` files (mirrors the shipping
+  BIM Generation tool): `clr.AddReference` for PresentationFramework/Core/
+  WindowsBase, bind controls with `window.FindName`, wire events with `+=`, show
+  with `ShowDialog()`.
+- **Active document from `__revit__.ActiveUIDocument.Document`** (not `pyrevit.revit`).
+- **Dialogs use `System.Windows.MessageBox`** and `System.Windows.Forms`
+  Open/Save file dialogs; console output via `print()`. No `script.get_output`.
+- **New `link_options.xaml`** is a small "Link DXF" dialog (file + unit + positioning)
+  replacing the stock `forms` pickers; deleted `cad2bim/ui.py` (pyRevit-forms based).
+- Root `<Window>` attributes are literals only (no `StaticResource`) per 12.7.A.
+- Re-verified: `script.py`, `link_options.xaml` + `ui.xaml`, and all cad2bim modules
+  compile / are well-formed; text-sizing integration test still passes.

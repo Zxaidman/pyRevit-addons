@@ -1,7 +1,9 @@
 title: CAD to BIM
 tooltip: >
-  Read a linked CAD (DWG), classify its curves by layer
-  (grid / column / beam / slab-edge), and create Revit grids from
-  the grid lines. Columns / beams / slabs are later passes.
-author: RCC BIM Tools
+  Pick a DXF, link it (choose unit + positioning), then build Revit
+  grids / columns / beams from its geometry and text marks. Uses hybrid
+  extraction: the Revit link for placement plus ezdxf for geometry + text,
+  matched by the link transform, building from the cleaner DXF geometry.
+  Runs on the pyRevit CPython3 engine.
+author: AnonGee
 min_revit_version: 2022
