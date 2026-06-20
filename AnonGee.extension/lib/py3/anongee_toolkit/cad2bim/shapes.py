@@ -580,22 +580,25 @@ def parse_column_polyline(points):
     Column outlines are treated as implicitly closed rings: DWG polylines with the
     'closed' flag set often arrive without a duplicated start point (first != last),
     so closure is inferred from the ring rather than from a repeated endpoint.
-    Genuine open paths (e.g. 2-point leaders) collapse to < 4 corners and report
-    'degenerate'.
+    Genuine open paths (e.g. 2-point leaders) collapse to < 3 corners and report
+    'degenerate'. A 3-corner ring (a triangular column / model-in-place footprint)
+    is kept and boxed as an oriented rectangle, not dropped.
     """
-    if not points or len(points) < 4:
+    if not points or len(points) < 3:
         return {"status": "degenerate", "rectangles": []}
 
     xy, z = to_xy(points)
     ring = simplify_ring(xy)
-    if len(ring) < 4:
+    if len(ring) < 3:
         return {"status": "degenerate", "rectangles": []}
 
     if not is_rectilinear(ring):
-        # Not axis-aligned: a rotated rectangular column (or a genuinely irregular
-        # shape). A minimum-area oriented box recovers a rotated rectangle's true
-        # size+angle (even with a stray vertex) and stays tight for odd shapes,
-        # so we no longer oversize these with an axis-aligned bbox.
+        # Not axis-aligned: a rotated rectangular column, OR a genuinely irregular
+        # profile (triangle / trapezoid / model-in-place footprint -- is_rectilinear
+        # is False for a 3-corner ring, so triangles land here too). A minimum-area
+        # oriented box recovers a rotated rectangle's true size+angle (even with a
+        # stray vertex) and gives an irregular profile its tightest enclosing
+        # rectangle, so the column is placed (approx) instead of dropped.
         return {"status": "oriented_rect",
                 "rectangles": [min_area_rect(ring, z)],
                 "approx": True}

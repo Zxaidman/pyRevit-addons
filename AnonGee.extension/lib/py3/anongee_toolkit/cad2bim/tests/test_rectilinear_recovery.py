@@ -179,5 +179,36 @@ class BboxShellCompletion(unittest.TestCase):
         self.assertEqual(shapes.recover_rectilinear_columns([three_sided])[0], [])
 
 
+class IrregularProfiles(unittest.TestCase):
+    """parse_column_polyline keeps a triangular column (3 corners) as an oriented
+    box instead of dropping it, while degenerate slivers still drop and every other
+    shape is unchanged (no regression to placed columns)."""
+
+    def test_triangle_is_kept_as_oriented_box(self):
+        tri = _ring((14700, 11700), (15300, 11700), (15000, 12300))
+        res = shapes.parse_column_polyline(tri)
+        self.assertEqual(res["status"], "oriented_rect")
+        self.assertEqual(len(res["rectangles"]), 1)
+
+    def test_trapezoid_still_placed_as_bounding_box(self):
+        trap = _ring((19600, 11700), (20400, 11700), (20200, 12300), (19800, 12300))
+        res = shapes.parse_column_polyline(trap)
+        self.assertEqual(res["status"], "oriented_rect")
+        self.assertEqual([_wh_c(r)[:2] for r in res["rectangles"]], [(600, 800)])
+
+    def test_rectangle_and_composite_unchanged(self):
+        rect = shapes.parse_column_polyline(_ring((0, 0), (400, 0), (400, 900), (0, 900)))
+        self.assertEqual(rect["status"], "rectangle")
+        l = shapes.parse_column_polyline(
+            _ring((0, 0), (800, 0), (800, 200), (200, 200), (200, 600), (0, 600)))
+        self.assertEqual(l["status"], "composite")
+
+    def test_degenerate_slivers_still_drop(self):
+        line = shapes.parse_column_polyline(_ring((0, 0), (400, 0)))
+        self.assertEqual(line["status"], "degenerate")
+        collinear = shapes.parse_column_polyline(_ring((0, 0), (200, 0), (400, 0)))
+        self.assertEqual(collinear["status"], "degenerate")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
