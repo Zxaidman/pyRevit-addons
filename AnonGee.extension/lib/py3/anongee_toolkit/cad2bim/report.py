@@ -23,7 +23,10 @@ DEFAULT_LIMITS = dict((key, config.DEFAULTS[key]) for key in (
     "col_b_min_mm", "col_b_max_mm", "col_h_min_mm", "col_h_max_mm"))
 
 _FRAG_MAX_LINE_MM = 2000.0   # column-layer lines shorter than this are junction bits
-_FRAG_GAP_MM = 400.0         # fragments within this gap belong to the same column
+_FRAG_GAP_MM = 600.0         # fragments within this gap belong to the same column
+#                              (a beam cut across an angled column can leave its two
+#                              halves ~450 mm apart; still well under the ~1500 mm
+#                              spacing of separate columns, so they do not fuse)
 _CLOSE_TOL_FT = 1.0e-3       # ~0.3 mm: ring is closed when its ends meet this close
 
 
