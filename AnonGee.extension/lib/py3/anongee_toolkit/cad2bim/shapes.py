@@ -256,6 +256,7 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
 _ASM_SNAP_FT = 40.0 / 304.8      # endpoints within ~40 mm are the same vertex
 _ASM_BRIDGE_FT = 1600.0 / 304.8  # close a dangling axis-aligned gap up to ~1.6 m
 #                                  (the wall thickness CAD omits as an 'end cap')
+_BBOX_SHELL_MIN_COVER = 0.80     # an open shell must trace >=80% of its bbox perimeter
 
 
 def _edges_of(path):
@@ -291,6 +292,43 @@ def _walk_cycle(adjacency, start):
         ring.append(nxt)
         prev, cur = cur, nxt
     return None, set()
+
+
+def _bbox_shell_ring(edges, tol):
+    """Close a partial rectangle outline to its bounding box, or return None.
+
+    `edges`: list of ((x, y), (x, y)). Returns the 4-corner bbox ring only when EVERY
+    edge lies on the bounding-box boundary, at least 3 of the 4 sides carry an edge,
+    and the traced length is >= _BBOX_SHELL_MIN_COVER of the perimeter. This rebuilds a
+    wall/column whose far end was clipped at a junction (a missing end cap) without
+    ever closing a genuine L / U / comb -- those carry interior edges off the bbox, so
+    the all-on-boundary test rejects them.
+    """
+    pts = [p for edge in edges for p in edge]
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
+    if x1 - x0 <= tol or y1 - y0 <= tol:
+        return None
+    sides = set()
+    covered = 0.0
+    for (ax, ay), (bx, by) in edges:
+        if abs(ax - x0) <= tol and abs(bx - x0) <= tol:
+            side = "xmin"
+        elif abs(ax - x1) <= tol and abs(bx - x1) <= tol:
+            side = "xmax"
+        elif abs(ay - y0) <= tol and abs(by - y0) <= tol:
+            side = "ymin"
+        elif abs(ay - y1) <= tol and abs(by - y1) <= tol:
+            side = "ymax"
+        else:
+            return None   # an interior edge -> not a plain rectangle shell
+        sides.add(side)
+        covered += abs(ax - bx) + abs(ay - by)
+    perimeter = 2.0 * ((x1 - x0) + (y1 - y0))
+    if len(sides) < 3 or covered < _BBOX_SHELL_MIN_COVER * perimeter:
+        return None
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
 
 
 def assemble_rectilinear_rings(paths, snap_ft=_ASM_SNAP_FT,
@@ -383,13 +421,34 @@ def assemble_rectilinear_rings(paths, snap_ft=_ASM_SNAP_FT,
                 if nb not in seen:
                     seen.add(nb)
                     stack.append(nb)
-        if len(comp) < 4 or any(len(adjacency[u]) != 2 for u in comp):
-            continue   # not a single simple cycle -> leave for oriented recovery
-        ring, pids = _walk_cycle(adjacency, comp[0])
-        if ring is None or len(ring) < 4:
-            continue
-        rings.append([verts[v] for v in ring])
-        consumed |= (pids - {-1})
+        # Collect this component's undirected edges and their source path ids.
+        comp_edges = []
+        comp_pids = set()
+        edone = set()
+        for u in comp:
+            for nb, pid in adjacency[u]:
+                key = (u, nb) if u < nb else (nb, u)
+                if key in edone:
+                    continue
+                edone.add(key)
+                comp_edges.append((verts[u], verts[nb]))
+                if pid != -1:
+                    comp_pids.add(pid)
+
+        # Preferred: a single simple cycle (all vertices degree 2) -> walk + decompose.
+        if len(comp) >= 4 and all(len(adjacency[u]) == 2 for u in comp):
+            ring, pids = _walk_cycle(adjacency, comp[0])
+            if ring is not None and len(ring) >= 4:
+                rings.append([verts[v] for v in ring])
+                consumed |= (pids - {-1})
+                continue
+
+        # Fallback: a partial rectangle 'shell' whose far end was clipped at a
+        # junction (e.g. a long wall missing its end cap) -- close it to its bbox.
+        shell = _bbox_shell_ring(comp_edges, snap_ft)
+        if shell is not None:
+            rings.append(shell)
+            consumed |= comp_pids
     return rings, consumed
 
 
