@@ -329,7 +329,7 @@ class CadToBimWindow(object):
         for layer, count in layer_rows:
             row = WpfGrid()
             row.Margin = Thickness(0, 2, 0, 2)
-            for width in (None, 70, 150):   # None -> star column
+            for width in (None, 70, 180):   # None -> star column
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if width is None
                                 else GridLength(width))

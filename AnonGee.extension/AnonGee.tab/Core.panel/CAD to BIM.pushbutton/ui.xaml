@@ -1,6 +1,6 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="CAD to BIM"
+        Title="cad2bim"
         Height="780" Width="600"
         MinHeight="600" MinWidth="520"
         WindowStartupLocation="CenterScreen"
@@ -16,7 +16,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="CAD to BIM" FontSize="16" FontWeight="Bold"
+            <TextBlock Grid.Column="0" Text="CAD2BIM" FontSize="16" FontWeight="Bold"
                        VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" x:Name="version_text" Text="v0.13"
                        VerticalAlignment="Center"/>
@@ -56,7 +56,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="180"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Layer"/>
                             <TextBlock Grid.Column="1" Text="Curves"/>
@@ -74,7 +74,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="150"/>
+                                <ColumnDefinition Width="180"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Text layer"/>
                             <TextBlock Grid.Column="1" Text="Labels"/>
