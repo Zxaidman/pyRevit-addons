@@ -143,5 +143,41 @@ class DecomposeSanity(unittest.TestCase):
         self.assertEqual(len(result["rectangles"]), 5)
 
 
+class BboxShellCompletion(unittest.TestCase):
+    """A wall whose far end cap was clipped at a junction (the Grid H 12300 wall):
+    its outline traces 3 sides + most of the 4th but never closes into a cycle, so
+    it is completed to its bounding box -- but only when the shape really is a
+    clipped rectangle, never an L / U / partial outline."""
+
+    # Real Test10 Grid H pieces: bottom edge + left cap + top edge (with a gap and a
+    # detached top segment); the right cap and top-right corner were never drawn.
+    _H_WALL = [
+        _ring((20150, 26150), (7850, 26150), (7850, 26450),
+              (11150, 26450), (16850, 26450)),
+        _ring((17150, 26450), (19850, 26450)),
+    ]
+
+    def test_clipped_wall_recovers_to_full_rectangle(self):
+        rects, consumed = shapes.recover_rectilinear_columns(self._H_WALL)
+        self.assertEqual([_wh_c(r) for r in rects], [(12300, 300, 14000, 26300)])
+        self.assertEqual(consumed, {0, 1})
+
+    def test_open_L_is_not_closed(self):
+        # Interior (reentrant) edges sit off the bounding box -> rejected.
+        open_l = _ring((600, 0), (600, 300), (300, 300), (300, 600), (0, 600))
+        self.assertEqual(shapes.recover_rectilinear_columns([open_l])[0], [])
+
+    def test_two_edge_corner_is_not_closed(self):
+        # Only two sides covered (< 3) -> never invents a rectangle from a corner.
+        corner = _ring((0, 0), (600, 0), (600, 600))
+        self.assertEqual(shapes.recover_rectilinear_columns([corner])[0], [])
+
+    def test_three_sided_missing_full_side_is_not_closed(self):
+        # Missing an entire long side traces only ~54% of the perimeter -> rejected,
+        # so we never fabricate a wall from half an outline.
+        three_sided = _ring((0, 0), (300, 0), (300, 3300), (0, 3300))
+        self.assertEqual(shapes.recover_rectilinear_columns([three_sided])[0], [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
