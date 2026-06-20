@@ -196,7 +196,8 @@ def _min_dist2(a, b):
     return best
 
 
-def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
+def recover_oriented_columns(fragments, gap_ft, min_fragments=2,
+                             close_gap_ft=None):
     """Recover oriented columns from clipped/fragmented outlines.
 
     Revit's CAD import sometimes breaks an angled column's outline into several
@@ -204,15 +205,22 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
     and the column is lost. This clusters nearby fragments (any two within gap_ft)
     and fits a minimum-area oriented rectangle to each cluster's combined points.
 
-    `fragments`: list of 2D-or-3D point-lists (feet). Returns [OrientedRect]. Only
-    clusters built from >= min_fragments pieces are returned (a lone stray fragment
-    never becomes a column); size filtering is left to the caller.
+    `fragments`: list of 2D-or-3D point-lists (feet). Returns [OrientedRect]. A
+    cluster of >= min_fragments pieces is recovered; a lone stray fragment normally
+    is not -- EXCEPT one whose own endpoints nearly meet (gap <= close_gap_ft, and
+    >= 4 distinct vertices), which is a single outline the import left open at one
+    junction cut, so it is recovered on its own. Size filtering is left to the caller.
     """
+    if close_gap_ft is None:
+        close_gap_ft = gap_ft
     frags = []
+    near_closed = []
     for points in fragments:
         xy = [(p[0], p[1]) for p in points]
         if len(xy) >= 2:
             frags.append(xy)
+            end_gap = math.hypot(xy[0][0] - xy[-1][0], xy[0][1] - xy[-1][1])
+            near_closed.append(end_gap <= close_gap_ft and len(set(xy)) >= 4)
     count = len(frags)
     if count == 0:
         return []
@@ -237,13 +245,16 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2):
     groups = {}
     for i in range(count):
         root = find(i)
-        bucket = groups.setdefault(root, {"pts": [], "n": 0})
+        bucket = groups.setdefault(root, {"pts": [], "n": 0, "idxs": []})
         bucket["pts"].extend(frags[i])
         bucket["n"] += 1
+        bucket["idxs"].append(i)
 
     rects = []
     for bucket in groups.values():
-        if bucket["n"] < min_fragments:
+        eligible = (bucket["n"] >= min_fragments
+                    or (bucket["n"] == 1 and near_closed[bucket["idxs"][0]]))
+        if not eligible:
             continue
         distinct = set((round(x, 6), round(y, 6)) for x, y in bucket["pts"])
         if len(distinct) < 3:
@@ -738,10 +749,14 @@ def build_circular_columns(arc_records, min_dia_ft=None, max_dia_ft=None):
         if len(points) < 3:
             continue
         z_value = points[0][2]
-        mid = points[len(points) // 2]
+        # Sample three well-separated points (0, 1/3, 2/3). A full circle imported
+        # from a Revit link tessellates to a CLOSED loop whose last point coincides
+        # with the first, so the old (first, mid, last) triple was degenerate and
+        # the column was silently lost; thirds stay ~120 deg apart for any sampling.
+        n = len(points)
+        a, b, c = points[0], points[n // 3], points[(2 * n) // 3]
         fit = circle_from_three_points(
-            (points[0][0], points[0][1]), (mid[0], mid[1]),
-            (points[-1][0], points[-1][1]))
+            (a[0], a[1]), (b[0], b[1]), (c[0], c[1]))
         if fit is None:
             continue
         cx, cy, radius = fit
