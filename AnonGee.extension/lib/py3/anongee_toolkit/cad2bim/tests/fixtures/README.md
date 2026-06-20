@@ -26,3 +26,16 @@ The last three rows are the regression-critical paths added while hardening
 Test10 (fragmented junctions, fused wall+leg combs, and clipped walls). The
 schedule block is laid out Test15-style (Mark | W | L | H, one MTEXT per cell)
 so the schedule parser is exercised too.
+
+## stress_columns_adversarial.dxf
+
+A harder plan (regenerate with `generate_stress_columns_adversarial.py`) for the
+messy real-world cases:
+
+| Region | What it tests |
+|--------|---------------|
+| `S-NOTES` block | column + beam + slab schedules **stacked on one layer** with different x-layouts — each must be read as an independent table (a beam's `D` column must not be read as a column's length) |
+| 12/B–D | column **outline and size/mark text on the same layer** (`S-COLS`) |
+| 12/E–F | **irregular** triangle / trapezoid columns (vs. an L control) |
+
+The schedule-isolation behaviour is locked by `test_schedule_parsing.py`.

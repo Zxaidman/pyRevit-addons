@@ -167,25 +167,53 @@ def _cluster_rows(cells):
     return [(r[0], r[1]) for r in rows]
 
 
+def _is_header_row(cells):
+    """Header roles [(x, role), ...] sorted by x if `cells` is a schedule header,
+    else None. A header needs a Mark column and either two dimension columns
+    (W and L) or a single combined Size column."""
+    roles = [(x, _header_role(t)) for x, t in cells]
+    roles = [(x, r) for x, r in roles if r]
+    n_mark = sum(1 for _, r in roles if r == "mark")
+    n_dim = sum(1 for _, r in roles if r in ("w", "l"))
+    n_size = sum(1 for _, r in roles if r == "size")
+    if n_mark >= 1 and (n_dim >= 2 or n_size >= 1):
+        return sorted(roles)
+    return None
+
+
 def _parse_schedule_table(rows):
-    """Header-driven {mark: (w, l)} from row-clustered schedule cells.
+    """Header-driven {mark: (w, l)} from row-clustered cells -- ONE table per header.
 
-    Finds a header row, splits it into side-by-side Mark|W|L(|H) blocks by the
-    header cells' x, then reads each data row column by column. Empty if no header.
+    Several schedules (column / beam / slab) often share a layer and stack
+    vertically. Each header row starts an INDEPENDENT table that owns the data rows
+    beneath it (until the next header), and every table is read with its OWN block
+    x-positions. That keeps a beam table's 'D' column from being read as a column
+    table's length, and a column's 'H' from being read as its length, when the
+    tables sit on one layer. The common single-header case (including side-by-side
+    blocks) is unchanged.
     """
+    out = {}
     header = None
+    data_rows = None
     for _y, cells in rows:
-        roles = [(x, _header_role(t)) for x, t in cells]
-        roles = [(x, r) for x, r in roles if r]
-        n_mark = sum(1 for _, r in roles if r == "mark")
-        n_dim = sum(1 for _, r in roles if r in ("w", "l"))
-        n_size = sum(1 for _, r in roles if r == "size")
-        if n_mark >= 1 and (n_dim >= 2 or n_size >= 1):
-            header = sorted(roles)
-            break
-    if not header:
-        return {}
+        roles = _is_header_row(cells)
+        if roles is not None:
+            if header is not None:
+                _read_table(header, data_rows, out)
+            header, data_rows = roles, []
+        elif header is not None:
+            data_rows.append(cells)
+    if header is not None:
+        _read_table(header, data_rows, out)
+    return out
 
+
+def _read_table(header, data_rows, out):
+    """Read one table's data rows into `out` using only that header's block x's.
+
+    Splits the header into side-by-side Mark|W|L (or Mark|Size) blocks and reads
+    each data row column by column; W x L is the plan size, any H column is ignored.
+    """
     blocks = []   # each: {"mark": x, "w": x, "l": x} or {"mark": x, "size": x}
     current = None
     for x, role in header:
@@ -196,16 +224,13 @@ def _parse_schedule_table(rows):
             current.setdefault(role, x)
     blocks = [b for b in blocks if ("w" in b and "l" in b) or "size" in b]
     if not blocks:
-        return {}
+        return
 
     xs = sorted(x for x, _ in header)
     pitch = min((b - a for a, b in zip(xs, xs[1:])), default=0.0)
     tol = pitch * 0.5 if pitch > 0 else None
 
-    out = {}
-    for _y, cells in rows:
-        if any(_header_role(t) for _, t in cells):
-            continue   # skip header row(s)
+    for cells in data_rows:
         for block in blocks:
             name, _b, _h = parse_mark(_cell_at(cells, block["mark"], tol) or "")
             if not name:
@@ -218,7 +243,6 @@ def _parse_schedule_table(rows):
                 wh = (w, l) if (w is not None and l is not None) else None
             if wh:
                 out.setdefault(name, wh)
-    return out
 
 
 def _cell_at(cells, target_x, tol):
