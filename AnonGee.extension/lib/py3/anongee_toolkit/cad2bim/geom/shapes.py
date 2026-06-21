@@ -821,10 +821,6 @@ _PARALLEL_SIN_TOL = math.sin(math.radians(_cfg.DEFAULTS["parallel_angle_deg"]))
 _PAIR_MIN_WIDTH_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_min_width_mm"])
 _PAIR_MAX_WIDTH_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_max_width_mm"])
 _PAIR_MIN_OVERLAP_FT = _cfg.mm_to_ft(_cfg.DEFAULTS["pair_min_overlap_mm"])
-# A recovered wall must be this elongated (long/short) to count as a core wall, so a
-# blocky angled column (e.g. 400x900, ratio 2.25) is left for the oriented pass to
-# fit from all its corners rather than undersized from two paired edges.
-_WALL_MIN_ASPECT = 2.5
 
 
 def _vsub(a, b):
@@ -906,67 +902,9 @@ def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
                    a0[1] + direction[1] * hi + normal[1] * offset)
             segments.append({"start": (start[0], start[1], az),
                              "end": (end[0], end[1], az),
-                             "width_ft": best["gap"],
-                             "i": i, "j": best["j"]})
+                             "width_ft": best["gap"]})
     leftover = [lines[k] for k in range(count) if not used[k]]
     return segments, leftover
-
-
-def recover_wall_columns(fragments, min_width_ft=None, max_width_ft=None,
-                         min_overlap_ft=None, sin_tol=None, min_aspect=None):
-    """Recover thin WALL columns (lift/stair cores) from clipped fragments.
-
-    A core is a ring of thin walls; when beams clip its outline the ring breaks into
-    many open fragments and the oriented-cluster recovery would blob them into one
-    solid rectangle over the hollow centre. Instead, split every fragment into its
-    straight edges and pair near-parallel edges ~one wall-thickness apart (reusing
-    pair_parallel_lines): each pair is one wall, fitted as a thin OrientedRect on the
-    midline. The width band naturally spares chunky columns -- faces more than
-    max_width_ft apart never pair, so they fall through to the oriented pass unchanged.
-
-    `fragments`: list of point-lists (feet). Returns (rects, consumed) where consumed
-    is the set of fragment indices that contributed a paired edge.
-    """
-    lines = []
-    owner = []
-    for index, points in enumerate(fragments):
-        if not points or len(points) < 2:
-            continue
-        edges, _axis_aligned = _edges_of(points)
-        zf = points[0][2] if len(points[0]) > 2 else 0.0
-        for a, b in edges:
-            lines.append((a, b, zf))
-            owner.append(index)
-    if not lines:
-        return [], set()
-    min_aspect = _WALL_MIN_ASPECT if min_aspect is None else min_aspect
-    segments, _leftover = pair_parallel_lines(
-        lines, min_width_ft=min_width_ft, max_width_ft=max_width_ft,
-        min_overlap_ft=min_overlap_ft, sin_tol=sin_tol)
-    rects = []
-    consumed = set()
-    for seg in segments:
-        sx, sy, sz = seg["start"]
-        ex, ey, _ez = seg["end"]
-        half = seg["width_ft"] / 2.0
-        d_x, d_y = ex - sx, ey - sy
-        length = math.hypot(d_x, d_y)
-        if length < _TOL:
-            continue
-        n_x, n_y = -d_y / length, d_x / length
-        corners = [(sx + n_x * half, sy + n_y * half),
-                   (ex + n_x * half, ey + n_y * half),
-                   (ex - n_x * half, ey - n_y * half),
-                   (sx - n_x * half, sy - n_y * half)]
-        rect = min_area_rect(corners, sz)
-        # Only claim genuinely wall-like (elongated) members; leave blocky angled
-        # columns for the oriented pass, which fits them from all four corners.
-        if rect.short_len <= _TOL or rect.long_len / rect.short_len < min_aspect:
-            continue
-        rects.append(rect)
-        consumed.add(owner[seg["i"]])
-        consumed.add(owner[seg["j"]])
-    return rects, consumed
 
 
 # --- internal helpers -------------------------------------------------------

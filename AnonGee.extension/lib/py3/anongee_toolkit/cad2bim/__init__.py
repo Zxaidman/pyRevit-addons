@@ -35,6 +35,6 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.15.0"  # recover thin WALL columns (lift/stair cores) from clipped
-#                         fragments by pairing near-parallel edges ~one wall-thickness
-#                         apart (recover_wall_columns), before the oriented blob pass
+__version__ = "0.15.1"  # revert 0.15.0 wall-recovery: it flipped a Test10 rotated
+#                         column 90 deg with no offsetting gain on the clean DXFs.
+#                         Back to 0.14.3 behaviour (circular-column label marks).
