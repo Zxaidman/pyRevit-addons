@@ -35,6 +35,6 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.15.1"  # revert 0.15.0 wall-recovery: it flipped a Test10 rotated
-#                         column 90 deg with no offsetting gain on the clean DXFs.
-#                         Back to 0.14.3 behaviour (circular-column label marks).
+__version__ = "0.16.0"  # detect (advisory only, no placement) likely fragmented
+#                         lift/stair cores: clusters of long parallel column lines
+#                         ~one wall apart that never closed -- detect_fragmented_cores

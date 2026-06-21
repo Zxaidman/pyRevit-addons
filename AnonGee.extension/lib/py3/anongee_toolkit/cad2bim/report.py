@@ -137,6 +137,88 @@ def format_summary(result, mapping):
     return lines
 
 
+# Fragmented lift/stair-core detection (advisory only -- never places geometry).
+# A core's walls are LONG (>= _CORE_WALL_MIN_LEN_MM); ordinary column edges are short
+# (<= ~900 mm), so the length gate separates a clipped core from real columns.
+_CORE_WALL_MIN_LEN_MM = 1800.0     # a wall face this long is core-scale, not a column edge
+_CORE_PAIR_MIN_OVERLAP_MM = 1500.0  # paired faces must share at least this much run
+_CORE_CLUSTER_MM = 6000.0          # walls within this span are one core
+_CORE_MIN_WALLS = 2                # need >= 2 walls to call it a core (avoids stray pairs)
+
+
+def detect_fragmented_cores(line_points, placed_rects=None):
+    """Flag a likely fragmented lift/stair core: a cluster of LONG parallel column
+    lines ~one wall-thickness apart that never closed into a placeable column.
+
+    Detection only -- returns advisory warnings (redraw the core as a closed polyline
+    so it places), never geometry. `line_points`: column-layer lines (feet).
+    `placed_rects`: already-placed columns (legs/spines/recovered) -- a candidate wall
+    whose midpoint lies inside one of these is part of a column that DID place, so it
+    is not a fragment and is skipped (this is what keeps working plans quiet). Returns
+    a list of {"center_mm": [x, y], "walls": n}.
+    """
+    placed_rects = placed_rects or []
+    tol_ft = config.mm_to_ft(2.0)
+    min_len = config.mm_to_ft(_CORE_WALL_MIN_LEN_MM)
+    min_ov = config.mm_to_ft(_CORE_PAIR_MIN_OVERLAP_MM)
+    gmin = config.mm_to_ft(config.DEFAULTS["pair_min_width_mm"])
+    gmax = config.mm_to_ft(config.DEFAULTS["pair_max_width_mm"])
+    cluster = config.mm_to_ft(_CORE_CLUSTER_MM)
+
+    segs = []   # (axis, const_coord, lo, hi); axis 'v' = vertical, 'h' = horizontal
+    for pts in line_points:
+        if not pts or len(pts) < 2:
+            continue
+        x0, y0 = pts[0][0], pts[0][1]
+        x1, y1 = pts[-1][0], pts[-1][1]
+        if abs(x1 - x0) < tol_ft and abs(y1 - y0) >= min_len:
+            segs.append(("v", x0, min(y0, y1), max(y0, y1)))
+        elif abs(y1 - y0) < tol_ft and abs(x1 - x0) >= min_len:
+            segs.append(("h", y0, min(x0, x1), max(x0, x1)))
+
+    walls = []
+    used = [False] * len(segs)
+    for i in range(len(segs)):
+        if used[i]:
+            continue
+        ai, ci, loi, hii = segs[i]
+        for j in range(i + 1, len(segs)):
+            if used[j]:
+                continue
+            aj, cj, loj, hij = segs[j]
+            if ai != aj or not (gmin <= abs(ci - cj) <= gmax):
+                continue
+            if min(hii, hij) - max(loi, loj) < min_ov:
+                continue
+            mid_c = (ci + cj) / 2.0
+            mid_e = (max(loi, loj) + min(hii, hij)) / 2.0
+            wx, wy = (mid_c, mid_e) if ai == "v" else (mid_e, mid_c)
+            used[i] = used[j] = True
+            if _inside_rectangles(wx, wy, placed_rects):
+                break   # this wall is part of a column that actually placed
+            walls.append((wx, wy))
+            break
+
+    warnings = []
+    seen = [False] * len(walls)
+    for i in range(len(walls)):
+        if seen[i]:
+            continue
+        group = [walls[i]]
+        seen[i] = True
+        for j in range(i + 1, len(walls)):
+            if (not seen[j] and abs(walls[j][0] - walls[i][0]) <= cluster
+                    and abs(walls[j][1] - walls[i][1]) <= cluster):
+                group.append(walls[j])
+                seen[j] = True
+        if len(group) >= _CORE_MIN_WALLS:
+            cx = sum(g[0] for g in group) / len(group)
+            cy = sum(g[1] for g in group) / len(group)
+            warnings.append({"center_mm": [int(round(cx * _MM)), int(round(cy * _MM))],
+                             "walls": len(group)})
+    return warnings
+
+
 def build_column_sections(records, limits=None, standards=None, texts=None,
                           tolerances=None):
     """Decompose every column-category polyline into rectangular sections, and
@@ -310,6 +392,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         "status_counts": dict(status_counts),
         "total_rectangles": total_rectangles,
         "entries": entries,
+        "warnings": detect_fragmented_cores(line_points, leg_rectangles),
         "line_members": line_members,
         "line_spines": [spine.to_dict() for spine in spines],
         "circles": [circle.to_dict() for circle in circles],
@@ -561,6 +644,16 @@ def format_column_sections(sections):
     for status, count in sorted(sections["status_counts"].items()):
         lines.append("  {0:<16} {1}".format(status, count))
     lines.append("  {0:<16} {1}".format("-> rectangles", sections["total_rectangles"]))
+
+    warnings = sections.get("warnings", [])
+    if warnings:
+        lines.append("")
+        lines.append("!! Possible FRAGMENTED lift/stair core(s) -- not placed; "
+                     "redraw as a closed polyline:")
+        for warn in warnings:
+            cx, cy = warn["center_mm"]
+            lines.append("   near ({0}, {1}) mm: {2} unpaired wall-lines".format(
+                cx, cy, warn["walls"]))
 
     composites = [e for e in sections["entries"] if e["status"] == "composite"]
     if composites:
@@ -949,6 +1042,7 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
                     "status_counts": sections.get("status_counts", {}),
                     "items": _compact_columns(sections),
                     "circles": _compact_circles(sections),
+                    "warnings": sections.get("warnings", []),
                     "dropped_raw": sections.get("dropped_raw", [])},
         "beams": {"outcome": outcomes.get("beams"),
                   "status_counts": beams.get("status_counts", {}),
