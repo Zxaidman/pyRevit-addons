@@ -35,6 +35,6 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.14.2"  # internal reorg: cad2bim modules grouped into
-#                         geom/ classify/ readers/ builders/ subpackages
-#                         (behaviour unchanged; pushbutton imports updated)
+__version__ = "0.14.3"  # name circular columns from the nearest label mark
+#                         (apply_circle_marks) -- round columns were placed but
+#                         never got their P-marks

@@ -672,6 +672,9 @@ def main():
                                              grid_snap_ft=grid_snap_ft)
     if fixed:
         print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
+    named_circles = report.apply_circle_marks(sections, column_texts, mark_radius_ft)
+    if named_circles:
+        print("columns: named {0} circular column(s) from labels".format(named_circles))
 
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):

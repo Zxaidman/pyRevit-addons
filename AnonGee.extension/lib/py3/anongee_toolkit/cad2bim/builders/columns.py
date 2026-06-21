@@ -152,6 +152,7 @@ def place_circular_columns(doc, circles, base_symbol_id, base_level_id, top_leve
             instance = doc.Create.NewFamilyInstance(
                 point, symbol, base_level, StructuralType.Column)
             _set_top_level(instance, top_level)
+            _set_mark(instance, circle.get("mark"))
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))

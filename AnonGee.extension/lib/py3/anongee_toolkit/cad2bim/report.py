@@ -403,6 +403,34 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
     return len(outputs)
 
 
+def apply_circle_marks(sections, column_texts, radius_ft):
+    """Stamp the nearest column label's MARK onto each circular column.
+
+    correct_columns_with_text only refines rectangles, so circular columns are
+    named here: each circle adopts the mark of the nearest labelled text within
+    radius_ft (its size already comes from geometry). Best-effort -- returns the
+    count named.
+    """
+    circles = sections.get("circles") or []
+    marks = [t for t in (column_texts or []) if t.mark and t.point_internal]
+    if not circles or not marks:
+        return 0
+    r2 = radius_ft * radius_ft
+    count = 0
+    for circle in circles:
+        cx, cy = circle["center"][0], circle["center"][1]
+        best, best_d2 = None, r2
+        for text in marks:
+            d2 = ((text.point_internal[0] - cx) ** 2
+                  + (text.point_internal[1] - cy) ** 2)
+            if d2 <= best_d2:
+                best, best_d2 = text, d2
+        if best is not None:
+            circle["mark"] = best.mark
+            count += 1
+    return count
+
+
 def _is_split_pair(rects, size):
     """True when two near rectangles are two fragments of ONE clipped column
     (safe to merge), False when they are two complete, separate columns that a
