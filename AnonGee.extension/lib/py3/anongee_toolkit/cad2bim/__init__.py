@@ -25,4 +25,6 @@ modules (shapes, transform, compare, marks) import no Revit assemblies, so they 
 be statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.13.0"  # DXF-pick entry + ezdxf hybrid extraction + text-driven sizing
+__version__ = "0.14.0"  # hardened column recovery: junction/comb/clipped-wall +
+#                         full-circle + oriented fragments, multi-table schedules,
+#                         triangular columns
