@@ -85,7 +85,7 @@ _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (compat, geometry_reader, layers, report, grids,
-                     transactions, columns, beams, dxf_linker, dxf_reader,
+                     txn_failures, columns, beams, dxf_linker, dxf_reader,
                      transform, compare, marks, config)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -711,7 +711,7 @@ def _create_grids(doc, records, grid_texts=None):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = grids.create_grids(doc, grid_records, namer)
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
@@ -754,7 +754,7 @@ def _create_columns(doc, sections, selections):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = columns.place_columns(doc, sections, family_id, base_id, top_id,
                                        region_max_side_mm=region_max)
         circles = sections.get("circles", [])
@@ -807,7 +807,7 @@ def _create_beams(doc, beam_segments, selections):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()

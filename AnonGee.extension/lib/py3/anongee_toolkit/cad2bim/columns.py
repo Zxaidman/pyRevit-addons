@@ -24,7 +24,7 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                ElementTransformUtils, Line)
 from Autodesk.Revit.DB.Structure import StructuralType
 
-from .units import mm_to_internal
+from .unit_convert import mm_to_internal
 from .compat import get_element_name
 from . import config
 

@@ -15,7 +15,7 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                FamilySymbol, XYZ, Line)
 from Autodesk.Revit.DB.Structure import StructuralType
 
-from .units import mm_to_internal
+from .unit_convert import mm_to_internal
 from .compat import get_element_name
 
 _WIDTH_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")

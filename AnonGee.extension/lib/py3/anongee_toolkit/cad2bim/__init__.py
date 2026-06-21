@@ -4,7 +4,7 @@
 This package holds the reusable, button-agnostic logic so each pushbutton
 stays thin. It is intentionally split by single responsibility:
 
-    units.py            mm <-> Revit internal feet (the ONLY place units convert)
+    unit_convert.py     mm <-> Revit internal feet (the ONLY place units convert)
     compat.py           Revit 2024/2025 + IronPython version-robustness helpers
     model.py            plain data holders (CurveRecord, TextRecord, results)
     cad_links.py        find/describe linked-DWG ImportInstances
@@ -25,6 +25,7 @@ modules (shapes, transform, compare, marks) import no Revit assemblies, so they 
 be statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.14.0"  # hardened column recovery: junction/comb/clipped-wall +
-#                         full-circle + oriented fragments, multi-table schedules,
-#                         triangular columns
+__version__ = "0.14.1"  # 0.14.0 column hardening + internal cleanup: renamed
+#                         units.py -> unit_convert.py, transactions.py ->
+#                         txn_failures.py (no name clash with toolkit modules);
+#                         behaviour unchanged
