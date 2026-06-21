@@ -1,69 +1,141 @@
-# Revit Development Ecosystem
+# AnonGee BIM Tools — pyRevit Extension for Autodesk Revit
 
-Welcome to my central hub for Autodesk Revit development. This ecosystem consists of production-grade automation tools, real-time data sync engines, and high-performance desktop extensions built to supercharge BIM workflows.
+A professional suite of structural and architectural BIM automation tools for **Autodesk Revit (2022+)** , delivered through the **pyRevit** framework. All tools run cleanly out-of-the-box with zero manual dependency installation for end users — dependencies are bundled inside the extension.
 
-## 🚀 Project Portfolio
-
-### 1. pyRevit Toolkit
-> High-utility Python scripts and custom UI ribbons deployed directly into Revit via the pyRevit framework.
-
-* **Language:** Python (IronPython / CPython)
-* **Core Focus:** Active viewport automation, batch parameter updates, and sheet generation shortcuts.
-* **Key Feature:** Dynamic UI buttons that read active document contexts to eliminate repetitive clicks.
-
-### 2. RevitMCP Server
-> A robust, lightweight communication server managing real-time data flow for Mechanical, Electrical, and Plumbing configurations.
-
-* **Language:** Python / Node.js
-* **Core Focus:** External database synchronization, parameter tracking, and clash coordination workflows.
-* **Key Feature:** Headless background execution allowing Revit instances to talk directly to external web dashboards.
-
-### 3. C# Revit Extensions
-> Heavy-duty, compiled `.addin` plugins utilizing the native Autodesk Revit API for complex computational geometry and deep data manipulation.
-
-* **Language:** C# (.NET Framework / .NET Core)
-* **Core Focus:** Custom dockable panels, event-driven model listeners, and high-performance geometry extraction.
-* **Key Feature:** Multithreaded external events that modify models safely without freezing the Revit user interface.
+![Revit](https://img.shields.io/badge/Autodesk%20Revit-2022%2B-blue)
+![pyRevit](https://img.shields.io/badge/pyRevit-6.10.0%2B-brightgreen)
+![Python](https://img.shields.io/badge/Python-CPython3%20%7C%20IronPython2-yellow)
 
 ---
 
-## 🛠️ Prerequisites & Tech Stack
+## ✨ Tools Overview
 
-To run, compile, or modify these projects locally, you will need:
+The extension adds an **AnonGee** tab inside Revit with four panels:
 
-* **Autodesk Revit:** Version 2021 or newer.
-* **IDE:** Visual Studio 2022 (for C#) & VS Code (for Python/Server).
-* **Frameworks:** pyRevit CLI tool, .NET Framework 4.8 (or .NET 8 for Revit 2025+).
-* **SDK:** Revit API binaries (`RevitAPI.dll`, `RevitAPIUI.dll`).
+### 🟢 Essential Panel
+| Tool | Description |
+|------|-------------|
+| **Obscured Rebar** | Set rebars as unobscured and solid across selected views. Adjusts view detail level (Fine for 3D, Medium for plan/section). |
+| **Copy Rebar Visibility** | Copy rebar visibility / graphic settings from one view to others. |
+| **Export Schedule** | Export Revit schedules to Excel / CSV format. |
+| **Bulk Rename** | Rename multiple elements (views, sheets, families, etc.) with naming patterns. |
+| **Bulk Delete** | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more. |
+
+### 🔵 Advance Panel
+| Tool | Description |
+|------|-------------|
+| **One Filter Parameter** | Filter Revit elements by a single parameter condition, preview matches in a table, then batch-edit a parameter (Set / Prefix / Suffix / Replace / Delete). |
+| **Multi Filter Parameter** | Filter Revit elements by multiple parameter conditions (All/Any logic), then batch-edit parameters in one transaction. |
+| **Parameter Combine** | Combine or split parameter values across multiple elements. |
+
+### 🔴 Core Panel
+| Tool | Description |
+|------|-------------|
+| **BIM Generation** | Build a structural Revit model from a PLANWIN / FRAMEWIN **INP** file. Creates levels, columns, beams, and floors with auto-sized type duplicates. |
+| **CAD to BIM** | Import a **DXF** file, link it with unit + positioning settings, then auto-generate Revit grids, columns, and beams from the DXF geometry and text marks. Uses hybrid extraction (Revit link + ezdxf). |
+| **FramewinToBIM** | Convert FRAMEWIN structural data directly into Revit elements. |
+
+### 🟠 Dev Panel
+| Tool | Description |
+|------|-------------|
+| **BBS Generator** | **Bar Bending Schedule** generator. Reads native `DB.Rebar` elements and exports formatted Excel workbooks (BBS, Calculation, Summary sheets). Supports **IS 2502:2019**, **BS 8666:2020**, and **ACI 318-19 / CRSI** standards. Includes revision tracking. |
+| **Brand Guidelines** | Live component gallery showing the AnonGee design system — brand colors, typography, buttons, inputs, toggles, and status badges. |
+| **CPython3 engine** | Check / test the CPython 3 engine configuration. |
+| **Create Button** | Quick scaffolding utility for creating new pyRevit buttons. |
 
 ---
 
-## 📦 Local Setup Instructions
+## 🎨 Design System
 
-### 1. Clone the Ecosystem
+All tools use a **custom WPF design system** with:
+- Brand color palette & theming (`Colors.xaml`, `AnonGeeTheme.xaml`)
+- Reusable WPF controls (`Controls.xaml`)
+- SVG/vector icons (`Icons.xaml`)
+- Consistent typography (`Typography.xaml`)
+- Panel layout templates (`Panels.xaml`)
+
+Preview the full system in Revit via **AnonGee > Dev > Brand Guidelines**.
+
+---
+
+## 📦 Installation (End User)
+
+### Prerequisites
+- **Autodesk Revit** 2022 or newer
+- **pyRevit** 6.10.0 or newer ([Download pyRevit](https://github.com/eirannejad/pyRevit/releases))
+
+### Step-by-Step
+
+1. **Clone or download** this repository:
+   ```bash
+   git clone https://github.com/Zxaidman/pyRevit-addons.git
+   ```
+
+2. **Add the extension to pyRevit:**
+   - Open Revit → click the **pyRevit** tab → **pyRevit** → **Extensions** → **Add Extension**.
+   - Browse to the cloned folder (`pyRevit-addons`) and select it.
+   - *Alternatively*, use the CLI:
+     ```bash
+     pyrevit extend add pyRevit-addons
+     ```
+
+3. **Restart Revit.**  
+   The **AnonGee** tab will now appear in the Revit ribbon with all tools ready to use.
+
+> ✅ **No additional Python packages or dependency setup required.** All libraries are pre-bundled in the extension.
+
+---
+
+## 🛠️ Development (For Contributors)
+
+If you're modifying or extending the tools, you may need to install or update Python dependencies:
+
 ```bash
-git clone https://github.com
-cd Zxaidman/Projects
+# From the repository root
+cd tools
+pip install -r requirements.txt
+python auto_provision.py
 ```
 
-### 2. Install pyRevit Tools
-Copy or link the toolkit folder into your custom pyRevit extension path:
-```bash
-pyrevit extensions extend Zxiadman/Projects ./pyRevit_Toolkit
-```
+This installs `numpy`, `openpyxl`, `pythonnet`, and `ezdxf` into the extension's bundled library folders (`lib/py3/` and `lib/py2/`).
 
-### 3. Build the C# Addins
-1. Open the `.sln` file in Visual Studio.
-2. Restore NuGet dependencies.
-3. Update assembly references to point to your local Revit installation folder.
-4. Build in Visual Studio under Debug or Release configuration.
+### Project Structure
+```
+AnonGee.extension/
+├── AnonGee.tab/           # Revit ribbon tab definition
+│   ├── Essential.panel/   # Essential panel tools
+│   ├── Advance.panel/     # Advance panel tools
+│   ├── Core.panel/        # Core panel tools
+│   └── Dev.panel/         # Dev panel tools
+├── lib/                   # Bundled Python libraries
+│   ├── py2/               # IronPython 2 libraries
+│   └── py3/               # CPython 3 libraries
+├── Resources/             # WPF design system (XAML)
+│   ├── AnonGeeTheme.xaml  # Main theme
+│   ├── Colors.xaml        # Brand colors
+│   ├── Controls.xaml      # Reusable controls
+│   ├── Icons.xaml         # SVG icons
+│   ├── Panels.xaml        # Panel templates
+│   └── Typography.xaml    # Typography styles
+└── path_resolver.py       # Library path resolver
+```
 
 ---
 
 ## 🤝 Contributing
 
 1. Fork this repository.
-2. Create a feature branch (`git checkout -b feature/NewFeature`).
-3. Commit your modifications (`git commit -m 'Add new Revit tool'`).
-4. Push to the branch (`git push origin feature/NewFeature`).
+2. Create a feature branch (`git checkout -b feature/NewTool`).
+3. Commit your changes (`git commit -m 'Add new Revit tool'`).
+4. Push to the branch (`git push origin feature/NewTool`).
 5. Open a Pull Request.
+
+---
+
+## 🪪 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">Built with ❤️ for the Revit BIM community</p>
