@@ -10,10 +10,10 @@ import json
 import math
 from collections import defaultdict, Counter
 
-from . import shapes
-from . import marks
+from .geom import shapes
+from .classify import marks
 from . import config
-from .layers import CATEGORY_COLUMN, CATEGORY_BEAM
+from .classify.layers import CATEGORY_COLUMN, CATEGORY_BEAM
 
 _MM = config.MM_PER_FT
 

@@ -1,6 +1,6 @@
 # AnonGee Toolkit — Public API Reference
 
-**Version:** 1.0.0  
+**Version:** 1.1.0  
 **Runtime:** CPython 3 (pyRevit engine)  
 **Target:** Autodesk Revit 2024 / 2025  
 
@@ -29,6 +29,12 @@
 6. [io — External I/O](#io)
 7. [operations — Bulk Operations](#operations)
 8. [utils — Utilities](#utils)
+9. [cad2bim — CAD-to-BIM Pipeline](#cad2bim)
+   - [Root modules](#cad2bim-root)
+   - [geom — geometry](#cad2bimgeom)
+   - [classify — text & layers](#cad2bimclassify)
+   - [readers — extraction](#cad2bimreaders)
+   - [builders — Revit elements](#cad2bimbuilders)
 
 ---
 
@@ -1082,4 +1088,157 @@ extract_bracket_int("no bracket")                 # → None
 
 ---
 
-*AnonGee Toolkit v1.0.0 — © AnonGee BIM Tools*
+## `cad2bim`
+
+The pipeline behind the **CAD to BIM** pushbutton: read a DXF (or a linked CAD),
+classify layers, parse member outlines and size labels, then create Revit grids,
+columns and beams. Unlike the rest of the toolkit it is a single-consumer
+pipeline, but its pure modules are Revit-free and unit-tested (`cad2bim/tests/`).
+
+Modules are grouped by role; subpackage names avoid clashing with the sibling
+toolkit packages.
+
+```
+cad2bim/
+  config.py  model.py  compat.py  unit_convert.py  report.py   # root (shared)
+  geom/        shapes.py  transform.py  compare.py             # Revit-free geometry
+  classify/    marks.py  layers.py                             # Revit-free text/layers
+  readers/     dxf_reader.py  geometry_reader.py               # extraction
+               cad_links.py  dxf_linker.py
+  builders/    columns.py  beams.py  grids.py  txn_failures.py # Revit element creation
+```
+
+Import the pure modules anywhere; the `readers`/`builders` modules require the
+Revit API (run under the pyRevit CPython 3 engine):
+
+```python
+from anongee_toolkit.cad2bim.geom import shapes
+from anongee_toolkit.cad2bim.classify import marks, layers
+from anongee_toolkit.cad2bim.readers import dxf_reader
+from anongee_toolkit.cad2bim.builders import columns, grids
+```
+
+<a name="cad2bim-root"></a>
+### Root modules
+
+| Module | Public API | Purpose |
+|---|---|---|
+| `config` | `DEFAULTS`, `mm_to_ft(mm)`, `merged(overrides)` | Central tunables — acceptance limits (`col_b_min_mm`, …) and tolerances. `merged()` overlays caller overrides on `DEFAULTS`. |
+| `model` | `CurveRecord`, `TextRecord`, `DxfReadResult`, `ReadResult` | Plain data holders shared by readers, geometry and report. |
+| `compat` | `element_id_value(id)`, `get_element_name(el)`, `runtime_summary()` | Revit 2024/2025 version-robustness helpers (the `ElementId` Int32→Int64 change, etc.). |
+| `unit_convert` | `mm_to_internal(mm)`, `internal_to_mm(ft)` | mm ↔ Revit internal feet via `ForgeTypeId`/`UnitTypeId`. |
+| `report` | `build_column_sections`, `correct_columns_with_text`, `build_beam_segments`, `format_console`, `export_json`, … | Orchestration: turn parsed records into placed/dropped sections, refine sizes from text, and emit the console summary + JSON report. |
+
+<a name="cad2bimgeom"></a>
+### `cad2bim.geom` — Revit-free geometry
+
+`shapes.py` parses and recovers column footprints; `transform.py` maps DXF
+coordinates to internal feet; `compare.py` diffs Revit-link vs DXF geometry.
+
+**Shape classes:** `Rectangle` (axis-aligned), `OrientedRect` (rotated), and
+`min_area_rect(ring, z=0.0) -> OrientedRect` (minimum-area enclosing box).
+
+#### `parse_column_polyline(points)`
+
+```python
+def parse_column_polyline(points) -> dict
+# -> {"status": "rectangle"|"composite"|"oriented_rect"|"degenerate",
+#     "rectangles": [Rectangle|OrientedRect, ...], "approx": bool}
+```
+
+Parse one closed column outline. Axis-aligned rings are decomposed into
+rectangles (`rectangle`/`composite`); rotated or irregular rings (incl. triangles)
+are boxed as a single `oriented_rect`; outlines under 3 corners are `degenerate`.
+
+#### `recover_oriented_columns(fragments, gap_ft, min_fragments=2, close_gap_ft=None)`
+
+```python
+def recover_oriented_columns(fragments, gap_ft,
+                             min_fragments=2, close_gap_ft=None) -> list  # [OrientedRect]
+```
+
+Recover columns whose outline the CAD import broke into pieces at a junction:
+clusters fragments within `gap_ft` and fits a min-area box. A lone fragment is
+recovered only when its own ends nearly meet (within `close_gap_ft`).
+
+#### `recover_rectilinear_columns(paths, z=0.0)`
+
+```python
+def recover_rectilinear_columns(paths, z=0.0, snap_ft=..., bridge_ft=...) -> tuple
+# -> (rectangles, consumed_ids)
+```
+
+Recover columns from fused/unclosed **axis-aligned** wall outlines (a long wall
+drawn as one comb with its perpendicular legs, or a clipped wall): stitches the
+pieces into closed rectilinear rings and decomposes them. Returns the rectangles
+plus the indices of consumed input paths (so the oriented pass cannot re-use them).
+
+#### `build_circular_columns(arc_records, min_dia_ft=None, max_dia_ft=None)`
+
+```python
+def build_circular_columns(arc_records,
+                           min_dia_ft=None, max_dia_ft=None) -> list  # [Circle]
+```
+
+Fit circular columns from arc/circle records (3-point circumcircle; handles a
+full circle imported as a closed tessellation). Diameters outside the range drop.
+
+Other helpers: `decompose_to_rectangles(ring, z=0.0)`, `assemble_rectilinear_rings`,
+`build_line_spines`, `simplify_ring`, `is_rectilinear`, `snap_to_standard`.
+
+<a name="cad2bimclassify"></a>
+### `cad2bim.classify` — text & layers
+
+#### `marks.parse_schedule(texts)`
+
+```python
+def parse_schedule(texts) -> dict   # {mark: (b_mm, h_mm)}
+```
+
+Build a `mark → size` lookup from a column schedule's text cells so a plan label
+carrying only a mark (`"C9"`) can be sized. Co-located column/beam/slab tables on
+one layer are read as **independent** tables (each header owns the rows beneath it).
+
+Other `marks` API: `parse_mark(text) -> (name, b_mm, h_mm)`, `parse_texts(texts)`
+(stamps `.mark/.b_mm/.h_mm` in place), `sized_texts(texts)`,
+`nearest_sized_text(cx, cy, candidates, radius_ft)`.
+
+#### `layers.classify_layer(layer_name, overrides=None)`
+
+```python
+def classify_layer(layer_name, overrides=None) -> str   # CATEGORY_*
+def classify_text_layer(layer_name) -> str              # CATEGORY_*_TEXT / SCHEDULE / IGNORE
+```
+
+Convention-based routing of a geometry or text layer to a category. Geometry
+categories: `CATEGORY_GRID/COLUMN/BEAM/SLAB_EDGE/UNMAPPED`. Text categories:
+`CATEGORY_COLUMN_TEXT/BEAM_TEXT/GRID_TEXT/COLUMN_SCHEDULE/TEXT_IGNORE`.
+`build_default_mapping(keys)` / `build_default_text_mapping(keys)` pre-fill the
+override dialog.
+
+<a name="cad2bimreaders"></a>
+### `cad2bim.readers` — extraction (Revit/ezdxf)
+
+| Function | Purpose |
+|---|---|
+| `dxf_reader.read_dxf(path) -> DxfReadResult` | Read geometry + text from a DXF with ezdxf (ASCII/binary, OCS→WCS, MTEXT, block ATTRIBs). `ezdxf_available()` probes the import. |
+| `geometry_reader.read_link(...) -> ReadResult` | Extract curves + text from a linked CAD `ImportInstance` in the Revit model (project coordinates), mirroring the DXF reader's record shape. |
+| `cad_links.find_cad_links(doc)` / `describe_link(doc, inst)` | Locate and describe linked-DWG import instances. |
+| `dxf_linker.link_dxf(...)` | Link a picked DXF programmatically (the Link CAD dialog), with `UNIT_CHOICES` / `PLACEMENT_CHOICES`. |
+
+<a name="cad2bimbuilders"></a>
+### `cad2bim.builders` — Revit element creation
+
+Each `place_*` / `create_*` runs inside a Revit transaction and returns an
+outcome summary (created / skipped / errors).
+
+| Function | Creates |
+|---|---|
+| `columns.place_columns(...)` / `columns.place_circular_columns(...)` | Rectangular and circular structural columns (with `structural_column_symbols`, `levels`). |
+| `beams.place_beams(...)` | Structural framing (beams), via `structural_framing_symbols`. |
+| `grids.create_grids(...)` | Revit grids, named through `build_grid_namer` (`GridNamer` / `TextGridNamer` recover the drawing's own grid labels). |
+| `txn_failures.attach_warning_swallower(txn)` | Attaches `WarningSwallower` so batch creation does not stall on modal warning dialogs. |
+
+---
+
+*AnonGee Toolkit v1.1.0 — © AnonGee BIM Tools*

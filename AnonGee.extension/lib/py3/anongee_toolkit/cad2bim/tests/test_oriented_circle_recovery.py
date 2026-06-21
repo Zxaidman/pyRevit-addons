@@ -21,18 +21,23 @@ _PKG = os.path.dirname(_HERE)
 
 
 def _load_shapes():
-    pkg = types.ModuleType("_ag2")
-    pkg.__path__ = []
-    sys.modules.setdefault("_ag2", pkg)
-    out = {}
-    for name in ("config", "shapes"):
+    # Mirror the package tree so shapes' `from .. import config` resolves.
+    for name in ("_ag2", "_ag2.geom"):
+        if name not in sys.modules:
+            mod = types.ModuleType(name)
+            mod.__path__ = []
+            sys.modules[name] = mod
+
+    def _load(full, *parts):
         spec = importlib.util.spec_from_file_location(
-            "_ag2.%s" % name, os.path.join(_PKG, "%s.py" % name))
+            full, os.path.join(_PKG, *parts))
         mod = importlib.util.module_from_spec(spec)
-        sys.modules["_ag2.%s" % name] = mod
+        sys.modules[full] = mod
         spec.loader.exec_module(mod)
-        out[name] = mod
-    return out["shapes"]
+        return mod
+
+    _load("_ag2.config", "config.py")
+    return _load("_ag2.geom.shapes", "geom", "shapes.py")
 
 
 shapes = _load_shapes()

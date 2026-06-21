@@ -20,13 +20,15 @@ _PKG = os.path.dirname(_HERE)
 
 
 def _load_marks():
-    pkg = types.ModuleType("_agm")
-    pkg.__path__ = []
-    sys.modules.setdefault("_agm", pkg)
+    for name in ("_agm", "_agm.classify"):
+        if name not in sys.modules:
+            mod = types.ModuleType(name)
+            mod.__path__ = []
+            sys.modules[name] = mod
     spec = importlib.util.spec_from_file_location(
-        "_agm.marks", os.path.join(_PKG, "marks.py"))
+        "_agm.classify.marks", os.path.join(_PKG, "classify", "marks.py"))
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["_agm.marks"] = mod
+    sys.modules["_agm.classify.marks"] = mod
     spec.loader.exec_module(mod)
     return mod
 

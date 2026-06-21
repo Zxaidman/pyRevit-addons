@@ -84,9 +84,11 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, geometry_reader, layers, report, grids,
-                     txn_failures, columns, beams, dxf_linker, dxf_reader,
-                     transform, compare, marks, config)
+from anongee_toolkit.cad2bim import compat, config, report
+from anongee_toolkit.cad2bim.geom import transform, compare
+from anongee_toolkit.cad2bim.classify import layers, marks
+from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
+from anongee_toolkit.cad2bim.builders import columns, beams, grids, txn_failures
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")

@@ -16,7 +16,7 @@ to Revit internal feet.
 import math
 import os
 
-from .model import CurveRecord, TextRecord, DxfReadResult
+from ..model import CurveRecord, TextRecord, DxfReadResult
 
 # ezdxf is vendored under lib/py3. Import LAZILY (not at module load): the CPython3
 # engine caches sys.modules across runs, so a module-load import that failed once
