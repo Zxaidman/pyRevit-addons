@@ -35,6 +35,6 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.14.3"  # name circular columns from the nearest label mark
-#                         (apply_circle_marks) -- round columns were placed but
-#                         never got their P-marks
+__version__ = "0.15.0"  # recover thin WALL columns (lift/stair cores) from clipped
+#                         fragments by pairing near-parallel edges ~one wall-thickness
+#                         apart (recover_wall_columns), before the oriented blob pass

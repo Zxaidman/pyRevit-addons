@@ -272,6 +272,34 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     # whose first len(fragments) entries are the fragments themselves).
     fragments = [frag for i, frag in enumerate(fragments) if i not in recl_consumed]
 
+    # Recover thin WALL columns (lift/stair cores) from the leftover fragments by
+    # pairing near-parallel clipped edges ~one wall-thickness apart -- BEFORE the
+    # oriented-cluster pass, otherwise a hollow core's ring of fragments blobs into
+    # one solid oversized rectangle over its opening. Each pair becomes one wall.
+    wall_rects_raw, wall_consumed = shapes.recover_wall_columns(
+        fragments,
+        min_width_ft=config.mm_to_ft(tol["pair_min_width_mm"]),
+        max_width_ft=config.mm_to_ft(tol["pair_max_width_mm"]),
+        min_overlap_ft=config.mm_to_ft(tol["pair_min_overlap_mm"]),
+        sin_tol=math.sin(math.radians(tol["parallel_angle_deg"])))
+    wall_rects = []
+    for rect in wall_rects_raw:
+        cx, cy, _cz = rect.center
+        if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
+            continue
+        wall_rects.append(rect)
+    if wall_rects:
+        status_counts["recovered_wall"] += len(wall_rects)
+        total_rectangles += len(wall_rects)
+        leg_rectangles.extend(wall_rects)
+        entries.append({
+            "layer": "(recovered)",
+            "status": "recovered_wall",
+            "approx": True,
+            "rectangles": [rect.to_dict() for rect in wall_rects],
+        })
+    fragments = [frag for i, frag in enumerate(fragments) if i not in wall_consumed]
+
     # Recover columns whose Revit outline was clipped into disconnected fragments
     # at a junction (e.g. angled F9): cluster the leftover pieces and fit an
     # oriented rectangle. Skip any that land inside an already-placed column.
