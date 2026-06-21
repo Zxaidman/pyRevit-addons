@@ -138,84 +138,51 @@ def format_summary(result, mapping):
 
 
 # Fragmented lift/stair-core detection (advisory only -- never places geometry).
-# A core's walls are LONG (>= _CORE_WALL_MIN_LEN_MM); ordinary column edges are short
-# (<= ~900 mm), so the length gate separates a clipped core from real columns.
-_CORE_WALL_MIN_LEN_MM = 1800.0     # a wall face this long is core-scale, not a column edge
-_CORE_PAIR_MIN_OVERLAP_MM = 1500.0  # paired faces must share at least this much run
-_CORE_CLUSTER_MM = 6000.0          # walls within this span are one core
-_CORE_MIN_WALLS = 2                # need >= 2 walls to call it a core (avoids stray pairs)
+# A core drawn as a proper closed polyline becomes a column and leaves NO open path;
+# one drawn as disconnected segments comes through (in Revit the inner wall faces fuse
+# into a single open polyline) as a big UNCLOSED ring that never places. The gate below
+# separates that ring (~19 m^2, 4700x4400) from the thin edge strips a working plan
+# leaves behind (<= ~3 m^2, one bbox side ~300 mm) with a wide margin.
+_CORE_MIN_BBOX_MM = 1800.0     # smaller side of the outline's bbox; thin strips fall out
+_CORE_MIN_AREA_MM2 = 3.0e6     # enclosed area (>= 3 m^2) of a real shaft outline
 
 
-def detect_fragmented_cores(line_points, placed_rects=None):
-    """Flag a likely fragmented lift/stair core: a cluster of LONG parallel column
-    lines ~one wall-thickness apart that never closed into a placeable column.
+def detect_fragmented_cores(unplaced_raw, placed_rects=None):
+    """Flag a likely fragmented lift/stair core: a large UNCLOSED outline left on the
+    column layer that never placed -- redraw it as a closed polyline so it places.
 
-    Detection only -- returns advisory warnings (redraw the core as a closed polyline
-    so it places), never geometry. `line_points`: column-layer lines (feet).
-    `placed_rects`: already-placed columns (legs/spines/recovered) -- a candidate wall
-    whose midpoint lies inside one of these is part of a column that DID place, so it
-    is not a fragment and is skipped (this is what keeps working plans quiet). Returns
-    a list of {"center_mm": [x, y], "walls": n}.
+    Detection only -- returns advisory warnings, never geometry. `unplaced_raw`: the
+    column-layer geometry that produced no rectangle ({kind, status, pts} in mm, exactly
+    the JSON's dropped_raw). `placed_rects`: already-placed columns (feet); an outline
+    whose centroid sits on one is part of a column that DID place and is skipped. Returns
+    a list of {"center_mm": [x, y], "area_m2": a}.
     """
     placed_rects = placed_rects or []
-    tol_ft = config.mm_to_ft(2.0)
-    min_len = config.mm_to_ft(_CORE_WALL_MIN_LEN_MM)
-    min_ov = config.mm_to_ft(_CORE_PAIR_MIN_OVERLAP_MM)
-    gmin = config.mm_to_ft(config.DEFAULTS["pair_min_width_mm"])
-    gmax = config.mm_to_ft(config.DEFAULTS["pair_max_width_mm"])
-    cluster = config.mm_to_ft(_CORE_CLUSTER_MM)
-
-    segs = []   # (axis, const_coord, lo, hi); axis 'v' = vertical, 'h' = horizontal
-    for pts in line_points:
-        if not pts or len(pts) < 2:
-            continue
-        x0, y0 = pts[0][0], pts[0][1]
-        x1, y1 = pts[-1][0], pts[-1][1]
-        if abs(x1 - x0) < tol_ft and abs(y1 - y0) >= min_len:
-            segs.append(("v", x0, min(y0, y1), max(y0, y1)))
-        elif abs(y1 - y0) < tol_ft and abs(x1 - x0) >= min_len:
-            segs.append(("h", y0, min(x0, x1), max(x0, x1)))
-
-    walls = []
-    used = [False] * len(segs)
-    for i in range(len(segs)):
-        if used[i]:
-            continue
-        ai, ci, loi, hii = segs[i]
-        for j in range(i + 1, len(segs)):
-            if used[j]:
-                continue
-            aj, cj, loj, hij = segs[j]
-            if ai != aj or not (gmin <= abs(ci - cj) <= gmax):
-                continue
-            if min(hii, hij) - max(loi, loj) < min_ov:
-                continue
-            mid_c = (ci + cj) / 2.0
-            mid_e = (max(loi, loj) + min(hii, hij)) / 2.0
-            wx, wy = (mid_c, mid_e) if ai == "v" else (mid_e, mid_c)
-            used[i] = used[j] = True
-            if _inside_rectangles(wx, wy, placed_rects):
-                break   # this wall is part of a column that actually placed
-            walls.append((wx, wy))
-            break
-
     warnings = []
-    seen = [False] * len(walls)
-    for i in range(len(walls)):
-        if seen[i]:
+    for geom in unplaced_raw:
+        if geom.get("kind") != "polyline" or geom.get("status") != "open_path":
             continue
-        group = [walls[i]]
-        seen[i] = True
-        for j in range(i + 1, len(walls)):
-            if (not seen[j] and abs(walls[j][0] - walls[i][0]) <= cluster
-                    and abs(walls[j][1] - walls[i][1]) <= cluster):
-                group.append(walls[j])
-                seen[j] = True
-        if len(group) >= _CORE_MIN_WALLS:
-            cx = sum(g[0] for g in group) / len(group)
-            cy = sum(g[1] for g in group) / len(group)
-            warnings.append({"center_mm": [int(round(cx * _MM)), int(round(cy * _MM))],
-                             "walls": len(group)})
+        pts = geom.get("pts") or []
+        if len(pts) < 4:
+            continue
+        xs = [p[0] for p in pts]
+        ys = [p[1] for p in pts]
+        if min(max(xs) - min(xs), max(ys) - min(ys)) < _CORE_MIN_BBOX_MM:
+            continue
+        area = 0.0   # shoelace, auto-closing the open ring back to its first point
+        for i in range(len(pts)):
+            x0, y0 = pts[i]
+            x1, y1 = pts[(i + 1) % len(pts)]
+            area += x0 * y1 - x1 * y0
+        area = abs(area) / 2.0
+        if area < _CORE_MIN_AREA_MM2:
+            continue
+        cx = sum(xs) / len(xs)
+        cy = sum(ys) / len(ys)
+        if _inside_rectangles(cx / _MM, cy / _MM, placed_rects):
+            continue   # outline sits on a column that actually placed
+        warnings.append({"center_mm": [int(round(cx)), int(round(cy))],
+                         "area_m2": round(area / 1e6, 1)})
     return warnings
 
 
@@ -392,7 +359,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         "status_counts": dict(status_counts),
         "total_rectangles": total_rectangles,
         "entries": entries,
-        "warnings": detect_fragmented_cores(line_points, leg_rectangles),
+        "warnings": detect_fragmented_cores(unplaced_raw, leg_rectangles),
         "line_members": line_members,
         "line_spines": [spine.to_dict() for spine in spines],
         "circles": [circle.to_dict() for circle in circles],
@@ -652,8 +619,8 @@ def format_column_sections(sections):
                      "redraw as a closed polyline:")
         for warn in warnings:
             cx, cy = warn["center_mm"]
-            lines.append("   near ({0}, {1}) mm: {2} unpaired wall-lines".format(
-                cx, cy, warn["walls"]))
+            lines.append("   near ({0}, {1}) mm: unclosed ~{2:.1f} m2 outline".format(
+                cx, cy, warn["area_m2"]))
 
     composites = [e for e in sections["entries"] if e["status"] == "composite"]
     if composites:

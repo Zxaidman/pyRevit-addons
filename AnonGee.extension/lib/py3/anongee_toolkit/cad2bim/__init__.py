@@ -35,6 +35,8 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.16.0"  # detect (advisory only, no placement) likely fragmented
-#                         lift/stair cores: clusters of long parallel column lines
-#                         ~one wall apart that never closed -- detect_fragmented_cores
+__version__ = "0.16.1"  # detect fragmented lift/stair cores from the REAL in-Revit
+#                         signal: a large unclosed open-path outline on the column
+#                         layer (>= 3 m^2, min bbox >= 1800) that never placed. The
+#                         0.16.0 line-pair signal did not exist in Revit (the inner
+#                         faces fuse into one open polyline). Advisory only, no placement.
