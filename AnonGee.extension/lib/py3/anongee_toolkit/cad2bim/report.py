@@ -137,7 +137,7 @@ def format_summary(result, mapping):
     return lines
 
 
-# Fragmented lift/stair-core detection (advisory only -- never places geometry).
+# Fragmented lift/stair-core detection + recovery.
 # A core drawn as a proper closed polyline becomes a column and leaves NO open path;
 # one drawn as disconnected segments comes through (in Revit the inner wall faces fuse
 # into a single open polyline) as a big UNCLOSED ring that never places. The gate below
@@ -145,20 +145,19 @@ def format_summary(result, mapping):
 # leaves behind (<= ~3 m^2, one bbox side ~300 mm) with a wide margin.
 _CORE_MIN_BBOX_MM = 1800.0     # smaller side of the outline's bbox; thin strips fall out
 _CORE_MIN_AREA_MM2 = 3.0e6     # enclosed area (>= 3 m^2) of a real shaft outline
+_CORE_WALL_MAX_MM = 600.0      # pair faces up to this far apart into a wall (thickness)
+_CORE_WALL_OVERLAP_MM = 600.0  # paired faces must share at least this much run
+_CORE_WALL_PAD_MM = 400.0      # grow the core bbox so the outer faces (one wall out) join
 
 
-def detect_fragmented_cores(unplaced_raw, placed_rects=None):
-    """Flag a likely fragmented lift/stair core: a large UNCLOSED outline left on the
-    column layer that never placed -- redraw it as a closed polyline so it places.
-
-    Detection only -- returns advisory warnings, never geometry. `unplaced_raw`: the
-    column-layer geometry that produced no rectangle ({kind, status, pts} in mm, exactly
-    the JSON's dropped_raw). `placed_rects`: already-placed columns (feet); an outline
-    whose centroid sits on one is part of a column that DID place and is skipped. Returns
-    a list of {"center_mm": [x, y], "area_m2": a}.
+def _find_core_outlines(unplaced_raw):
+    """Locate large UNCLOSED outlines (likely fragmented lift/stair cores) among the
+    unplaced column-layer geometry. Returns a list of
+    {"center_mm": [x, y], "area_m2": a, "bbox_mm": [x0, y0, x1, y1]} -- one per open-path
+    polyline whose enclosed area >= _CORE_MIN_AREA_MM2 and whose smaller bbox side
+    >= _CORE_MIN_BBOX_MM (a real shaft vs. the thin strips a working plan leaves behind).
     """
-    placed_rects = placed_rects or []
-    warnings = []
+    cores = []
     for geom in unplaced_raw:
         if geom.get("kind") != "polyline" or geom.get("status") != "open_path":
             continue
@@ -177,12 +176,31 @@ def detect_fragmented_cores(unplaced_raw, placed_rects=None):
         area = abs(area) / 2.0
         if area < _CORE_MIN_AREA_MM2:
             continue
-        cx = sum(xs) / len(xs)
-        cy = sum(ys) / len(ys)
+        cores.append({
+            "center_mm": [int(round(sum(xs) / len(xs))), int(round(sum(ys) / len(ys)))],
+            "area_m2": round(area / 1e6, 1),
+            "bbox_mm": [min(xs), min(ys), max(xs), max(ys)],
+        })
+    return cores
+
+
+def detect_fragmented_cores(unplaced_raw, placed_rects=None):
+    """Flag a likely fragmented lift/stair core: a large UNCLOSED outline left on the
+    column layer that never placed -- redraw it as a closed polyline so it places.
+
+    Detection only -- returns advisory warnings, never geometry. `unplaced_raw`: the
+    column-layer geometry that produced no rectangle ({kind, status, pts} in mm, exactly
+    the JSON's dropped_raw). `placed_rects`: already-placed columns (feet); an outline
+    whose centroid sits on one is part of a column that DID place and is skipped. Returns
+    a list of {"center_mm": [x, y], "area_m2": a}.
+    """
+    placed_rects = placed_rects or []
+    warnings = []
+    for core in _find_core_outlines(unplaced_raw):
+        cx, cy = core["center_mm"]
         if _inside_rectangles(cx / _MM, cy / _MM, placed_rects):
             continue   # outline sits on a column that actually placed
-        warnings.append({"center_mm": [int(round(cx)), int(round(cy))],
-                         "area_m2": round(area / 1e6, 1)})
+        warnings.append({"center_mm": core["center_mm"], "area_m2": core["area_m2"]})
     return warnings
 
 
@@ -210,6 +228,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     line_members = []
     arc_records = []
     polyline_records = []
+    open_paths = []     # unclosed column-layer polylines (a core's inner ring lives here)
     unplaced_raw = []   # debug: column-layer geometry that produced no rectangle
     fragments = []      # small leftover pieces to reassemble into clipped columns
     for record in records:
@@ -252,6 +271,7 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
             unplaced_raw.append({"kind": record.kind, "layer": record.layer,
                                  "status": "open_path",
                                  "pts": _pts_mm(record.points)})
+            open_paths.append(record.points)
             fragments.append(record.points)
             status_counts["open_fragment"] += 1
             continue
@@ -343,6 +363,38 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
             "rectangles": [rect.to_dict() for rect in recovered_rects],
         })
 
+    # Recover a FRAGMENTED lift/stair core: its walls survive only as loose, never-closed
+    # faces, so within each DETECTED core region pair opposing faces into thin wall rects
+    # (openings have no opposing face -> no wall, so only solid walls place). Gated to the
+    # detected cores, so a working plan -- which has no such region -- is never touched.
+    cores = _find_core_outlines(unplaced_raw)
+    core_paths = open_paths + line_points
+    pad_ft = config.mm_to_ft(_CORE_WALL_PAD_MM)
+    for core in cores:
+        x0, y0, x1, y1 = (v / _MM for v in core["bbox_mm"])
+        walls = shapes.recover_core_walls(
+            core_paths, (x0 - pad_ft, y0 - pad_ft, x1 + pad_ft, y1 + pad_ft),
+            config.mm_to_ft(tol["pair_min_width_mm"]),
+            config.mm_to_ft(_CORE_WALL_MAX_MM),
+            config.mm_to_ft(_CORE_WALL_OVERLAP_MM), z=recl_z)
+        kept = []
+        for rect in walls:
+            cx, cy, _cz = rect.center
+            if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
+                continue
+            kept.append(rect)
+        core["recovered_walls"] = len(kept)
+        if kept:
+            status_counts["recovered_core_wall"] += len(kept)
+            total_rectangles += len(kept)
+            leg_rectangles.extend(kept)
+            entries.append({
+                "layer": "(recovered core)",
+                "status": "recovered_core_wall",
+                "approx": True,
+                "rectangles": [rect.to_dict() for rect in kept],
+            })
+
     refined = _apply_column_marks(entries, texts,
                                   config.mm_to_ft(tol["mark_radius_mm"]))
     if refined:
@@ -359,7 +411,8 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
         "status_counts": dict(status_counts),
         "total_rectangles": total_rectangles,
         "entries": entries,
-        "warnings": detect_fragmented_cores(unplaced_raw, leg_rectangles),
+        "warnings": [{"center_mm": c["center_mm"], "area_m2": c["area_m2"],
+                      "recovered_walls": c.get("recovered_walls", 0)} for c in cores],
         "line_members": line_members,
         "line_spines": [spine.to_dict() for spine in spines],
         "circles": [circle.to_dict() for circle in circles],
@@ -615,12 +668,15 @@ def format_column_sections(sections):
     warnings = sections.get("warnings", [])
     if warnings:
         lines.append("")
-        lines.append("!! Possible FRAGMENTED lift/stair core(s) -- not placed; "
-                     "redraw as a closed polyline:")
+        lines.append("!! FRAGMENTED lift/stair core(s) detected (unclosed outline) -- "
+                     "VERIFY; redraw as a closed polyline if incomplete:")
         for warn in warnings:
             cx, cy = warn["center_mm"]
-            lines.append("   near ({0}, {1}) mm: unclosed ~{2:.1f} m2 outline".format(
-                cx, cy, warn["area_m2"]))
+            recovered = warn.get("recovered_walls", 0)
+            outcome = ("recovered {0} wall(s)".format(recovered) if recovered
+                       else "not placed")
+            lines.append("   near ({0}, {1}) mm: ~{2:.1f} m2 outline -> {3}".format(
+                cx, cy, warn["area_m2"], outcome))
 
     composites = [e for e in sections["entries"] if e["status"] == "composite"]
     if composites:

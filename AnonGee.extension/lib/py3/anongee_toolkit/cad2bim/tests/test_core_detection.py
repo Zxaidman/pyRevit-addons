@@ -122,5 +122,45 @@ class FragmentedCoreDetection(unittest.TestCase):
         self.assertAlmostEqual(warns[0]["area_m2"], 4.0, delta=0.1)
 
 
+def _ftpath(pts_mm):
+    return [(x * _FT, y * _FT, 0.0) for x, y in pts_mm]
+
+
+class CoreWallRecovery(unittest.TestCase):
+    """shapes.recover_core_walls pairs the real fragmented Test18 core's opposing faces
+    (inner open ring + outer face lines) into the 3 solid 300-thick walls; the stair-side
+    opening (a 900 gap, no opposing face) correctly yields no wall."""
+
+    # The core's inner ring (one open polyline) plus its three outer face lines.
+    RING = _ftpath([[4850, 3450], [7850, 3450], [7850, 7850], [3150, 7850],
+                    [3150, 5450], [3750, 5450], [3750, 4550], [3150, 4550]])
+    OUTER = [_ftpath([[3150, 8150], [7850, 8150]]),   # top, 300 above inner y=7850
+             _ftpath([[8150, 7850], [8150, 3150]]),   # right, 300 right of inner x=7850
+             _ftpath([[2850, 4550], [2850, 7850]])]   # left, 300 left of inner x=3150
+
+    def _recover(self):
+        pad = report._CORE_WALL_PAD_MM * _FT
+        bbox = (3150 * _FT - pad, 3450 * _FT - pad, 7850 * _FT + pad, 7850 * _FT + pad)
+        return report.shapes.recover_core_walls(
+            [self.RING] + self.OUTER, bbox,
+            80.0 * _FT, report._CORE_WALL_MAX_MM * _FT,
+            report._CORE_WALL_OVERLAP_MM * _FT)
+
+    def test_three_solid_walls_recovered(self):
+        walls = self._recover()
+        self.assertEqual(len(walls), 3)
+        sizes = sorted((round(r.width_ft * 304.8 / 100) * 100,
+                        round(r.height_ft * 304.8 / 100) * 100) for r in walls)
+        # top 4700x300, right 300x4400, left 300x2400 (order-independent)
+        self.assertEqual(sizes, [(300, 2400), (300, 4400), (4700, 300)])
+        for r in walls:                       # every wall is one thickness (300) thin
+            self.assertAlmostEqual(min(r.width_ft, r.height_ft) * 304.8, 300, delta=1)
+
+    def test_opening_side_yields_no_wall(self):
+        # No wall spans the stair opening (inner y=3450 to outer y=2550 is a 900 gap).
+        walls = self._recover()
+        self.assertFalse(any(r.y_min < 3000 * _FT for r in walls))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

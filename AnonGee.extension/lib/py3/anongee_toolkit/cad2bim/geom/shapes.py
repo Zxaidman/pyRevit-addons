@@ -483,6 +483,58 @@ def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
     return rects, consumed
 
 
+def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=0.0):
+    """Recover a fragmented lift/stair core's walls by pairing opposing faces.
+
+    A core drawn as disconnected segments never closes, so its inner ring and outer
+    faces survive only as loose lines. Within `bbox` (a detected core region, feet),
+    break every path into axis-aligned faces and pair each with the parallel face one
+    wall-thickness away (gap in [wall_min_ft, wall_max_ft], shared run >= overlap_min_ft)
+    into a thin wall Rectangle. An opening has no opposing face and so yields no wall,
+    leaving the solid walls only. Returns a list of axis-aligned Rectangle (feet).
+    """
+    x0b, y0b, x1b, y1b = bbox
+    tol = 2.0 / 304.8   # ~2 mm: treat a face this close to an axis as axis-aligned
+    faces = []          # (axis, const, lo, hi); axis 'V' = const x, 'H' = const y
+    for pts in paths:
+        if not pts or len(pts) < 2:
+            continue
+        for a, b in zip(pts, pts[1:]):
+            ax, ay, bx, by = a[0], a[1], b[0], b[1]
+            mx, my = (ax + bx) / 2.0, (ay + by) / 2.0
+            if not (x0b <= mx <= x1b and y0b <= my <= y1b):
+                continue
+            if abs(ax - bx) <= tol and abs(ay - by) > tol:
+                faces.append(("V", (ax + bx) / 2.0, min(ay, by), max(ay, by)))
+            elif abs(ay - by) <= tol and abs(ax - bx) > tol:
+                faces.append(("H", (ay + by) / 2.0, min(ax, bx), max(ax, bx)))
+
+    rects = []
+    used = [False] * len(faces)
+    for i in range(len(faces)):
+        if used[i]:
+            continue
+        ai, ci, loi, hii = faces[i]
+        for j in range(i + 1, len(faces)):
+            if used[j]:
+                continue
+            aj, cj, loj, hij = faces[j]
+            if ai != aj:
+                continue
+            gap = abs(ci - cj)
+            if gap < wall_min_ft or gap > wall_max_ft:
+                continue
+            lo, hi = max(loi, loj), min(hii, hij)
+            if hi - lo < overlap_min_ft:
+                continue
+            c0, c1 = min(ci, cj), max(ci, cj)
+            rects.append(Rectangle(c0, lo, c1, hi, z) if ai == "V"
+                         else Rectangle(lo, c0, hi, c1, z))
+            used[i] = used[j] = True
+            break
+    return rects
+
+
 def snap_to_standard(value_ft, standards_ft, tol_ft):
     """Snap a measurement to the nearest standard size if within tolerance."""
     if not standards_ft:

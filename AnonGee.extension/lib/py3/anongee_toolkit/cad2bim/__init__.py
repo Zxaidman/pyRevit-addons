@@ -35,8 +35,10 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.16.1"  # detect fragmented lift/stair cores from the REAL in-Revit
-#                         signal: a large unclosed open-path outline on the column
-#                         layer (>= 3 m^2, min bbox >= 1800) that never placed. The
-#                         0.16.0 line-pair signal did not exist in Revit (the inner
-#                         faces fuse into one open polyline). Advisory only, no placement.
+__version__ = "0.17.0"  # RECOVER a fragmented lift/stair core: within each detected
+#                         core region (0.16.x detection), pair opposing wall faces
+#                         (inner open ring + outer face lines) one thickness apart into
+#                         thin wall rectangles and PLACE them. Openings have no opposing
+#                         face -> no wall, so only solid walls place. Gated to detected
+#                         cores, so a working plan is never touched. The advisory warning
+#                         remains, annotated with how many walls were recovered.
