@@ -35,10 +35,15 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.17.0"  # RECOVER a fragmented lift/stair core: within each detected
-#                         core region (0.16.x detection), pair opposing wall faces
-#                         (inner open ring + outer face lines) one thickness apart into
-#                         thin wall rectangles and PLACE them. Openings have no opposing
-#                         face -> no wall, so only solid walls place. Gated to detected
-#                         cores, so a working plan is never touched. The advisory warning
-#                         remains, annotated with how many walls were recovered.
+__version__ = "0.18.0"  # core recovery faithfulness + label ownership. (1) Core members
+#                         now span the UNION of their two faces (not the overlap), so a
+#                         member notched short on one side lands on its true centre (fixes
+#                         the ~450 mm offset); pairing is SMALLEST-GAP-FIRST so a wall
+#                         claims its outer face before a far face spans a notch (no phantom
+#                         members); and the pair window grew to 1200 mm (below the ~1500 mm
+#                         stair opening), so deep members (the 900-deep bottom + notch) are
+#                         recovered too -- the Test18 core now rebuilds all 5 members.
+#                         (2) correct_columns_with_text: each rectangle belongs to its
+#                         NEAREST label, so a long member's label no longer swallows a
+#                         distinct neighbour that has its own closer label (the text pass
+#                         no longer drops/offsets columns vs. geometry-only).

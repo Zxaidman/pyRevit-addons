@@ -127,16 +127,18 @@ def _ftpath(pts_mm):
 
 
 class CoreWallRecovery(unittest.TestCase):
-    """shapes.recover_core_walls pairs the real fragmented Test18 core's opposing faces
-    (inner open ring + outer face lines) into the 3 solid 300-thick walls; the stair-side
-    opening (a 900 gap, no opposing face) correctly yields no wall."""
+    """shapes.recover_core_walls rebuilds the real fragmented Test18 core's FIVE members
+    from its loose faces (inner open ring + four outer face lines): the three perimeter
+    walls (C6/C8/C10), the deep bottom member (C12, a 900 gap), and the notch member (C7).
+    Each lands on its true centre (union span) and the stair opening stays empty."""
 
-    # The core's inner ring (one open polyline) plus its three outer face lines.
+    # Inner ring (one open polyline) + the four outer face lines, one column-depth out.
     RING = _ftpath([[4850, 3450], [7850, 3450], [7850, 7850], [3150, 7850],
                     [3150, 5450], [3750, 5450], [3750, 4550], [3150, 4550]])
-    OUTER = [_ftpath([[3150, 8150], [7850, 8150]]),   # top, 300 above inner y=7850
-             _ftpath([[8150, 7850], [8150, 3150]]),   # right, 300 right of inner x=7850
-             _ftpath([[2850, 4550], [2850, 7850]])]   # left, 300 left of inner x=3150
+    OUTER = [_ftpath([[3150, 8150], [7850, 8150]]),   # top  (C6), 300 above inner y=7850
+             _ftpath([[8150, 7850], [8150, 3150]]),   # right (C10), 300 right of x=7850
+             _ftpath([[2850, 4550], [2850, 7850]]),   # left (C8), 300 left of x=3150
+             _ftpath([[4850, 2550], [7850, 2550]])]   # bottom (C12), 900 below y=3450
 
     def _recover(self):
         pad = report._CORE_WALL_PAD_MM * _FT
@@ -146,20 +148,34 @@ class CoreWallRecovery(unittest.TestCase):
             80.0 * _FT, report._CORE_WALL_MAX_MM * _FT,
             report._CORE_WALL_OVERLAP_MM * _FT)
 
-    def test_three_solid_walls_recovered(self):
-        walls = self._recover()
-        self.assertEqual(len(walls), 3)
-        sizes = sorted((round(r.width_ft * 304.8 / 100) * 100,
-                        round(r.height_ft * 304.8 / 100) * 100) for r in walls)
-        # top 4700x300, right 300x4400, left 300x2400 (order-independent)
-        self.assertEqual(sizes, [(300, 2400), (300, 4400), (4700, 300)])
-        for r in walls:                       # every wall is one thickness (300) thin
-            self.assertAlmostEqual(min(r.width_ft, r.height_ft) * 304.8, 300, delta=1)
+    def _members(self):
+        out = set()
+        for r in self._recover():
+            small = round(min(r.width_ft, r.height_ft) * 304.8 / 50) * 50
+            big = round(max(r.width_ft, r.height_ft) * 304.8 / 50) * 50
+            cx = round((r.x_min + r.x_max) / 2.0 * 304.8 / 50) * 50
+            cy = round((r.y_min + r.y_max) / 2.0 * 304.8 / 50) * 50
+            out.add((small, big, cx, cy))
+        return out
 
-    def test_opening_side_yields_no_wall(self):
-        # No wall spans the stair opening (inner y=3450 to outer y=2550 is a 900 gap).
+    def test_five_members_recovered_on_true_centres(self):
+        got = self._members()
+        self.assertEqual(len(got), 5)
+        # (small, big, cx, cy): union span centres each member where the schedule wants
+        self.assertIn((300, 4700, 5500, 8000), got)   # C6 top
+        self.assertIn((300, 3300, 3000, 6200), got)   # C8 left  (not y=6650: union span)
+        self.assertIn((300, 4700, 8000, 5500), got)   # C10 right (not y=5650)
+        self.assertIn((600, 900, 3450, 5000), got)    # C7 notch member
+        self.assertIn((900, 3000, 6350, 3000), got)   # C12 deep bottom member
+
+    def test_stair_opening_stays_empty_no_phantom(self):
+        # The stair opening (bottom-left, x 3150..4850) has no inner face: no member may
+        # cover it, and no far face may span a notch into a phantom (smallest-gap-first).
         walls = self._recover()
-        self.assertFalse(any(r.y_min < 3000 * _FT for r in walls))
+        for r in walls:
+            cx = (r.x_min + r.x_max) / 2.0
+            cy = (r.y_min + r.y_max) / 2.0
+            self.assertFalse(3150 * _FT < cx < 4850 * _FT and cy < 3450 * _FT)
 
 
 if __name__ == "__main__":

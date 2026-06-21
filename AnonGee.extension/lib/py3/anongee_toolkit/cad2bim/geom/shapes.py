@@ -484,14 +484,19 @@ def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
 
 
 def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=0.0):
-    """Recover a fragmented lift/stair core's walls by pairing opposing faces.
+    """Recover a fragmented lift/stair core's columns by pairing opposing faces.
 
     A core drawn as disconnected segments never closes, so its inner ring and outer
     faces survive only as loose lines. Within `bbox` (a detected core region, feet),
-    break every path into axis-aligned faces and pair each with the parallel face one
-    wall-thickness away (gap in [wall_min_ft, wall_max_ft], shared run >= overlap_min_ft)
-    into a thin wall Rectangle. An opening has no opposing face and so yields no wall,
-    leaving the solid walls only. Returns a list of axis-aligned Rectangle (feet).
+    break every path into axis-aligned faces and pair each with the parallel face up to
+    one column-depth away (gap in [wall_min_ft, wall_max_ft], shared run >= overlap_min_ft)
+    into a Rectangle. An opening wider than wall_max_ft has no opposing face within range
+    and so yields no rectangle, leaving the solid members only.
+
+    Two refinements keep the result faithful: pairs are bound SMALLEST-GAP-FIRST, so a
+    thin wall claims its outer face before a far face can reach across a notch (no phantom
+    spanning members); and each rectangle spans the UNION of its two faces, so a member
+    notched short on one side still lands on its true centre. Returns Rectangles (feet).
     """
     x0b, y0b, x1b, y1b = bbox
     tol = 2.0 / 304.8   # ~2 mm: treat a face this close to an axis as axis-aligned
@@ -509,29 +514,33 @@ def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=
             elif abs(ay - by) <= tol and abs(ax - bx) > tol:
                 faces.append(("H", (ay + by) / 2.0, min(ax, bx), max(ax, bx)))
 
-    rects = []
-    used = [False] * len(faces)
+    candidates = []     # (gap, i, j) for every parallel, overlapping, in-range face pair
     for i in range(len(faces)):
-        if used[i]:
-            continue
         ai, ci, loi, hii = faces[i]
         for j in range(i + 1, len(faces)):
-            if used[j]:
-                continue
             aj, cj, loj, hij = faces[j]
             if ai != aj:
                 continue
             gap = abs(ci - cj)
             if gap < wall_min_ft or gap > wall_max_ft:
                 continue
-            lo, hi = max(loi, loj), min(hii, hij)
-            if hi - lo < overlap_min_ft:
+            if min(hii, hij) - max(loi, loj) < overlap_min_ft:
                 continue
-            c0, c1 = min(ci, cj), max(ci, cj)
-            rects.append(Rectangle(c0, lo, c1, hi, z) if ai == "V"
-                         else Rectangle(lo, c0, hi, c1, z))
-            used[i] = used[j] = True
-            break
+            candidates.append((gap, i, j))
+    candidates.sort()   # smallest gap first -> walls bind before deep members
+
+    rects = []
+    used = [False] * len(faces)
+    for _gap, i, j in candidates:
+        if used[i] or used[j]:
+            continue
+        ai, ci, loi, hii = faces[i]
+        _aj, cj, loj, hij = faces[j]
+        lo, hi = min(loi, loj), max(hii, hij)   # span the union (true extent)
+        c0, c1 = min(ci, cj), max(ci, cj)
+        rects.append(Rectangle(c0, lo, c1, hi, z) if ai == "V"
+                     else Rectangle(lo, c0, hi, c1, z))
+        used[i] = used[j] = True
     return rects
 
 

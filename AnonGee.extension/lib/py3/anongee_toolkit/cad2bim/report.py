@@ -145,9 +145,11 @@ def format_summary(result, mapping):
 # leaves behind (<= ~3 m^2, one bbox side ~300 mm) with a wide margin.
 _CORE_MIN_BBOX_MM = 1800.0     # smaller side of the outline's bbox; thin strips fall out
 _CORE_MIN_AREA_MM2 = 3.0e6     # enclosed area (>= 3 m^2) of a real shaft outline
-_CORE_WALL_MAX_MM = 600.0      # pair faces up to this far apart into a wall (thickness)
-_CORE_WALL_OVERLAP_MM = 600.0  # paired faces must share at least this much run
-_CORE_WALL_PAD_MM = 400.0      # grow the core bbox so the outer faces (one wall out) join
+_CORE_WALL_MAX_MM = 1200.0     # pair faces up to this far apart (a member's depth); below
+#                                the ~1500 mm stair opening, so a real opening stays open
+_CORE_WALL_OVERLAP_MM = 500.0  # paired faces must share at least this much run
+_CORE_WALL_PAD_MM = 1200.0     # grow the core bbox by one depth so a deep member's outer
+#                                face (one column-depth beyond the inner ring) is included
 
 
 def _find_core_outlines(unplaced_raw):
@@ -454,9 +456,26 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
     used = set()
     outputs = []
     r2 = radius_ft * radius_ft
+
+    # Each rectangle belongs to its NEAREST label. A long member's label reaches far
+    # (radius is fixed at mark_radius_mm), so without this a 300x3300 wall's label would
+    # swallow a distinct 600x900 column 465 mm away as a "split pair" -- its merge window
+    # is the labelled long side (3300). Ownership lets a closer label keep its own column.
+    owner = {}
+    for rect in rects:
+        rcx, rcy = rect["center"][0], rect["center"][1]
+        best, best_d2 = None, r2
+        for text in labels:
+            d2 = ((text.point_internal[0] - rcx) ** 2
+                  + (text.point_internal[1] - rcy) ** 2)
+            if d2 < best_d2:
+                best, best_d2 = text, d2
+        owner[id(rect)] = best
+
     for text in labels:
         tx, ty = text.point_internal[0], text.point_internal[1]
         near = [rect for rect in rects if id(rect) not in used
+                and owner.get(id(rect)) is text
                 and (rect["center"][0] - tx) ** 2 + (rect["center"][1] - ty) ** 2 <= r2]
         if not near or len(near) > 2:
             continue   # none, or a multi-leg lift/stair core: leave the geometry
