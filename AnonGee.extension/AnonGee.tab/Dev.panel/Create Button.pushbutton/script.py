@@ -28,8 +28,6 @@ from System.IO import FileStream, FileMode, FileAccess
 from System import Uri, UriKind
 from Microsoft.Win32 import OpenFileDialog
 
-from pyrevit import HOST_APP
-
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # 1. Dynamically find the EXACT extension path this tool lives in
@@ -222,13 +220,11 @@ if __name__ == '__main__':
     app = ButtonGeneratorApp()
 
     if app.success:
-        reload_cmd = None
-        for cmd_id in HOST_APP.uiapp.GetRevitCommandIds():
-            if "pyrevit" in cmd_id.Name.ToLower() and "reload" in cmd_id.Name.ToLower():
-                reload_cmd = cmd_id
-                break
-
-        if reload_cmd:
-            HOST_APP.uiapp.PostCommand(reload_cmd)
-        else:
-            MessageBox.Show("Button generated! Please click 'Reload' on the pyRevit ribbon.", "Success")
+        try:
+            # Reload pyRevit through its own session manager (same call the
+            # ribbon's "Reload" button uses) so the new button appears.
+            from pyrevit.loader import sessionmgr
+            sessionmgr.reload_pyrevit()
+        except Exception:
+            MessageBox.Show("Button generated! Please click 'Reload' on the pyRevit ribbon.",
+                            "Success", MessageBoxButton.OK, MessageBoxImage.Information)
