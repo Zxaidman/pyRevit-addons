@@ -27,6 +27,9 @@ _FRAG_GAP_MM = 600.0         # fragments within this gap belong to the same colu
 #                              (a beam cut across an angled column can leave its two
 #                              halves ~450 mm apart; still well under the ~1500 mm
 #                              spacing of separate columns, so they do not fuse)
+_FRAG_CLOSE_GAP_MM = 900.0   # a LONE outline left open this wide at a junction cut is
+#                              still one column (rotated corner columns clip to ~600-800);
+#                              recovered rects are deduped so this cannot double a column
 _CLOSE_TOL_FT = 1.0e-3       # ~0.3 mm: ring is closed when its ends meet this close
 
 
@@ -349,12 +352,14 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     # at a junction (e.g. angled F9): cluster the leftover pieces and fit an
     # oriented rectangle. Skip any that land inside an already-placed column.
     recovered = shapes.recover_oriented_columns(
-        fragments, gap_ft=config.mm_to_ft(_FRAG_GAP_MM))
+        fragments, gap_ft=config.mm_to_ft(_FRAG_GAP_MM),
+        close_gap_ft=config.mm_to_ft(_FRAG_CLOSE_GAP_MM))
     recovered_rects = []
     for rect in recovered:
         cx, cy, _cz = rect.center
-        if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
-            continue
+        if (_inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles)
+                or _inside_rectangles(cx, cy, recovered_rects)):
+            continue   # already a placed column, or a sibling fragment of one just kept
         recovered_rects.append(rect)
     if recovered_rects:
         status_counts["recovered_rect"] += len(recovered_rects)

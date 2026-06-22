@@ -35,12 +35,13 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.19.0"  # core recovery: bridge doors. A doorway punched through a core
-#                         wall leaves its outer face drawn as two collinear stubs; the
-#                         recovery now MERGES collinear faces on one line across gaps up to
-#                         700 mm before pairing, so the wall is one member spanning both
-#                         stubs (its true depth) instead of clipping to the inner-ring span.
-#                         Fixes the right-wall member recovering 600 mm short (and, with a
-#                         schedule, landing 300 mm off-centre). The opposite corner where a
-#                         wall is capped by a perpendicular "lid" stays at the clear span
-#                         from geometry alone -- the schedule supplies its full length.
+__version__ = "0.20.0"  # recover clipped rotated CORNER columns. A rotated corner column
+#                         clipped at a beam junction comes through as one open outline left
+#                         ~600-800 mm open -- just past the 600 mm lone-fragment close gap,
+#                         so it was dropped. The lone-fragment close gap widens to 900 mm,
+#                         BUT only for few-vertex (<= 6) polygons, so a many-vertex round
+#                         column tessellated as a polyline is never rect-fitted into a
+#                         phantom; recovered rects are also deduped against placed columns
+#                         and each other, so a fragment cannot double an existing column.
+#                         Isolation-checked: this adds only the two clipped corners and
+#                         leaves Test10 untouched.

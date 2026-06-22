@@ -220,7 +220,10 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2,
         if len(xy) >= 2:
             frags.append(xy)
             end_gap = math.hypot(xy[0][0] - xy[-1][0], xy[0][1] - xy[-1][1])
-            near_closed.append(end_gap <= close_gap_ft and len(set(xy)) >= 4)
+            # A lone fragment is recovered only if it is a FEW-vertex polygon (a clipped
+            # rotated rectangle, <= 6 distinct corners). A round column comes through as a
+            # many-vertex polyline arc; rect-fitting it would fabricate a phantom column.
+            near_closed.append(end_gap <= close_gap_ft and 4 <= len(set(xy)) <= 6)
     count = len(frags)
     if count == 0:
         return []
