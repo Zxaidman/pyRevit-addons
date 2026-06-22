@@ -566,6 +566,108 @@ def apply_circle_marks(sections, column_texts, radius_ft):
     return count
 
 
+# A small column cast hard against a bigger one fragments so badly that recovery
+# folds its pieces into the neighbour; these tune recovering it from its label.
+_ABSORB_RADIUS_MM = 2000.0   # the orphaned label and its leftover pieces lie within this
+_ABSORB_PAD_MM = 60.0        # a fragment point this far inside a placed column is "its"
+_ABSORB_MIN_PTS = 3          # need at least this much leftover geometry as evidence
+
+
+def _aabb_overlaps(cx, cy, w_ft, h_ft, rects, margin_ft):
+    """True if an axis-aligned w x h box at (cx, cy) overlaps any rect's footprint."""
+    for r in rects:
+        if (abs(cx - r["center"][0]) < (w_ft + r["width_ft"]) / 2.0 - margin_ft and
+                abs(cy - r["center"][1]) < (h_ft + r["height_ft"]) / 2.0 - margin_ft):
+            return True
+    return False
+
+
+def recover_unplaced_labeled_columns(sections, column_texts, schedule,
+                                     grid_x=None, grid_y=None, grid_snap_ft=None,
+                                     limits=None):
+    """Place a labelled column that geometry recovery ABSORBED into a larger neighbour.
+
+    A small column cast against a bigger one (e.g. a 300x600 beside a 600x900) can
+    fragment so badly that recovery merges its pieces into the neighbour and drops
+    the rest, orphaning its plan label. For a mark that has a schedule size but no
+    placed column, the leftover fragments NOT already inside a placed column are
+    clustered; if they sit beside a placed neighbour, a schedule-sized column is
+    placed at their grid-snapped centroid and named.
+
+    Conservative by construction, so a stray label can never fabricate a column:
+      * the mark must be unplaced AND carry a schedule size,
+      * a placed neighbour must sit within _ABSORB_RADIUS (a real column region),
+      * >= _ABSORB_MIN_PTS leftover points outside every placed footprint must remain
+        (hard geometry evidence the column was really drawn there),
+      * the result must land in range and overlap nothing already placed.
+    Returns the count placed.
+    """
+    entries = sections.get("entries", [])
+    placed = [r for e in entries for r in e["rectangles"]]
+    if not placed:
+        return 0
+    placed_marks = set(r.get("mark") for r in placed if r.get("mark"))
+    placed_marks |= set(c.get("mark") for c in (sections.get("circles") or [])
+                        if c.get("mark"))
+    limits = limits or DEFAULT_LIMITS
+    absorb = config.mm_to_ft(_ABSORB_RADIUS_MM)
+    pad = config.mm_to_ft(_ABSORB_PAD_MM)
+    frag_pts = [(config.mm_to_ft(p[0]), config.mm_to_ft(p[1]))
+                for g in (sections.get("dropped_raw") or []) for p in g.get("pts", [])]
+
+    def inside_placed(px, py):
+        for r in placed:
+            if (abs(px - r["center"][0]) <= r["width_ft"] / 2.0 + pad and
+                    abs(py - r["center"][1]) <= r["height_ft"] / 2.0 + pad):
+                return True
+        return False
+
+    new_rects = []
+    for text in column_texts or []:
+        if not text.mark or text.mark in placed_marks:
+            continue
+        if text.mark not in schedule or not text.point_internal:
+            continue
+        lx, ly = text.point_internal[0], text.point_internal[1]
+        if not any((r["center"][0] - lx) ** 2 + (r["center"][1] - ly) ** 2 <= absorb * absorb
+                   for r in placed):
+            continue   # no placed neighbour: not a known column region, skip
+        iso = [(px, py) for (px, py) in frag_pts
+               if (px - lx) ** 2 + (py - ly) ** 2 <= absorb * absorb
+               and not inside_placed(px, py)]
+        if len(iso) < _ABSORB_MIN_PTS:
+            continue   # no leftover geometry as evidence -> never fabricate a column
+        b_mm, h_mm = schedule[text.mark]
+        small, big = min(b_mm, h_mm), max(b_mm, h_mm)
+        if not (limits["col_b_min_mm"] <= small <= limits["col_b_max_mm"] and
+                limits["col_h_min_mm"] <= big <= limits["col_h_max_mm"]):
+            continue
+        cx = sum(p[0] for p in iso) / len(iso)
+        cy = sum(p[1] for p in iso) / len(iso)
+        if grid_snap_ft:
+            cx = _snap(cx, grid_x, grid_snap_ft)
+            cy = _snap(cy, grid_y, grid_snap_ft)
+        w_ft, h_ft = small / _MM, big / _MM
+        if _aabb_overlaps(cx, cy, w_ft, h_ft, placed, config.mm_to_ft(_ABSORB_PAD_MM)):
+            continue   # would sit on top of an existing column -> skip, never duplicate
+        rect = {"center": [cx, cy, placed[0]["center"][2]],
+                "width_ft": w_ft, "height_ft": h_ft,
+                "width_mm": small, "height_mm": big,
+                "long_axis_deg": 90.0, "mark": text.mark}
+        new_rects.append(rect)
+        placed.append(rect)
+        placed_marks.add(text.mark)
+
+    if not new_rects:
+        return 0
+    entries.append({"layer": "(label-recovered)", "status": "label_recovered",
+                    "approx": True, "rectangles": new_rects})
+    counts = sections.setdefault("status_counts", {})
+    counts["label_recovered"] = counts.get("label_recovered", 0) + len(new_rects)
+    sections["total_rectangles"] = sections.get("total_rectangles", 0) + len(new_rects)
+    return len(new_rects)
+
+
 def _is_split_pair(rects, size):
     """True when two near rectangles are two fragments of ONE clipped column
     (safe to merge), False when they are two complete, separate columns that a
