@@ -683,8 +683,7 @@ def main():
     # recovery folds it into the neighbour, orphaning its label. Recover it from its
     # schedule size + leftover geometry (never overlapping an already-placed column).
     recovered_labeled = report.recover_unplaced_labeled_columns(
-        sections, column_texts, schedule,
-        grid_x=grid_x, grid_y=grid_y, grid_snap_ft=grid_snap_ft, limits=limits)
+        sections, column_texts, schedule, limits=limits)
     if recovered_labeled:
         print("columns: recovered {0} absorbed labelled column(s) from "
               "schedule+geometry".format(recovered_labeled))

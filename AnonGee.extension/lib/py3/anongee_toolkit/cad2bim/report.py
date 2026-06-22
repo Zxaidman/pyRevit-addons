@@ -573,26 +573,38 @@ _ABSORB_PAD_MM = 60.0        # a fragment point this far inside a placed column 
 _ABSORB_MIN_PTS = 3          # need at least this much leftover geometry as evidence
 
 
-def _aabb_overlaps(cx, cy, w_ft, h_ft, rects, margin_ft):
-    """True if an axis-aligned w x h box at (cx, cy) overlaps any rect's footprint."""
+def _bbox_half(rect):
+    """Axis-aligned half-extents (hx, hy) in feet of a possibly-rotated column rect."""
+    theta = math.radians(rect.get("long_axis_deg", 90.0))
+    long_ft, short_ft = rect["height_ft"], rect["width_ft"]
+    hx = (abs(math.cos(theta)) * long_ft + abs(math.sin(theta)) * short_ft) / 2.0
+    hy = (abs(math.sin(theta)) * long_ft + abs(math.cos(theta)) * short_ft) / 2.0
+    return hx, hy
+
+
+def _aabb_overlaps(cx, cy, hx, hy, rects, margin_ft):
+    """True if the box with half-extents (hx, hy) at (cx, cy) overlaps any rect."""
     for r in rects:
-        if (abs(cx - r["center"][0]) < (w_ft + r["width_ft"]) / 2.0 - margin_ft and
-                abs(cy - r["center"][1]) < (h_ft + r["height_ft"]) / 2.0 - margin_ft):
+        rhx, rhy = _bbox_half(r)
+        if (abs(cx - r["center"][0]) < hx + rhx - margin_ft and
+                abs(cy - r["center"][1]) < hy + rhy - margin_ft):
             return True
     return False
 
 
-def recover_unplaced_labeled_columns(sections, column_texts, schedule,
-                                     grid_x=None, grid_y=None, grid_snap_ft=None,
-                                     limits=None):
+def recover_unplaced_labeled_columns(sections, column_texts, schedule, limits=None):
     """Place a labelled column that geometry recovery ABSORBED into a larger neighbour.
 
     A small column cast against a bigger one (e.g. a 300x600 beside a 600x900) can
     fragment so badly that recovery merges its pieces into the neighbour and drops
     the rest, orphaning its plan label. For a mark that has a schedule size but no
     placed column, the leftover fragments NOT already inside a placed column are
-    clustered; if they sit beside a placed neighbour, a schedule-sized column is
-    placed at their grid-snapped centroid and named.
+    clustered; the schedule-sized column is then placed ABUTTING its nearest placed
+    neighbour edge-to-edge -- the side, and the centre on the shared face, come from
+    the leftover bits. The abutment fixes the coordinate across the shared face
+    exactly; the other coordinate comes from the leftover centroid, clamped so the
+    column still meets the neighbour. These columns sit deliberately off-axis against
+    their partner, so they are NOT snapped to the structural grid.
 
     Conservative by construction, so a stray label can never fabricate a column:
       * the mark must be unplaced AND carry a schedule size,
@@ -617,8 +629,8 @@ def recover_unplaced_labeled_columns(sections, column_texts, schedule,
 
     def inside_placed(px, py):
         for r in placed:
-            if (abs(px - r["center"][0]) <= r["width_ft"] / 2.0 + pad and
-                    abs(py - r["center"][1]) <= r["height_ft"] / 2.0 + pad):
+            rhx, rhy = _bbox_half(r)
+            if abs(px - r["center"][0]) <= rhx + pad and abs(py - r["center"][1]) <= rhy + pad:
                 return True
         return False
 
@@ -642,18 +654,36 @@ def recover_unplaced_labeled_columns(sections, column_texts, schedule,
         if not (limits["col_b_min_mm"] <= small <= limits["col_b_max_mm"] and
                 limits["col_h_min_mm"] <= big <= limits["col_h_max_mm"]):
             continue
-        cx = sum(p[0] for p in iso) / len(iso)
-        cy = sum(p[1] for p in iso) / len(iso)
-        if grid_snap_ft:
-            cx = _snap(cx, grid_x, grid_snap_ft)
-            cy = _snap(cy, grid_y, grid_snap_ft)
-        w_ft, h_ft = small / _MM, big / _MM
-        if _aabb_overlaps(cx, cy, w_ft, h_ft, placed, config.mm_to_ft(_ABSORB_PAD_MM)):
+        big_ft, small_ft = big / _MM, small / _MM
+        ccx = sum(p[0] for p in iso) / len(iso)
+        ccy = sum(p[1] for p in iso) / len(iso)
+        # The neighbour these leftover bits abut: the placed column nearest the cluster.
+        nb = min(placed, key=lambda r: (r["center"][0] - ccx) ** 2
+                 + (r["center"][1] - ccy) ** 2)
+        nbx, nby, nbz = nb["center"]
+        nb_hx, nb_hy = _bbox_half(nb)
+        if abs(ccy - nby) >= abs(ccx - nbx):
+            # abut below/above: long side spans away from the shared horizontal face.
+            # y is fixed by the abutment (edge-to-edge); x is the leftover centroid,
+            # clamped so the column still meets the neighbour's face.
+            sgn = 1.0 if ccy >= nby else -1.0
+            cy = nby + sgn * (nb_hy + big_ft / 2.0)
+            lim = nb_hx + small_ft / 2.0
+            cx = min(max(ccx, nbx - lim), nbx + lim)
+            hx, hy, deg = small_ft / 2.0, big_ft / 2.0, 90.0
+        else:
+            # abut left/right: long side spans away from the shared vertical face.
+            sgn = 1.0 if ccx >= nbx else -1.0
+            cx = nbx + sgn * (nb_hx + big_ft / 2.0)
+            lim = nb_hy + small_ft / 2.0
+            cy = min(max(ccy, nby - lim), nby + lim)
+            hx, hy, deg = big_ft / 2.0, small_ft / 2.0, 0.0
+        if _aabb_overlaps(cx, cy, hx, hy, placed, config.mm_to_ft(_ABSORB_PAD_MM)):
             continue   # would sit on top of an existing column -> skip, never duplicate
-        rect = {"center": [cx, cy, placed[0]["center"][2]],
-                "width_ft": w_ft, "height_ft": h_ft,
+        rect = {"center": [cx, cy, nbz],
+                "width_ft": small_ft, "height_ft": big_ft,
                 "width_mm": small, "height_mm": big,
-                "long_axis_deg": 90.0, "mark": text.mark}
+                "long_axis_deg": deg, "mark": text.mark}
         new_rects.append(rect)
         placed.append(rect)
         placed_marks.add(text.mark)

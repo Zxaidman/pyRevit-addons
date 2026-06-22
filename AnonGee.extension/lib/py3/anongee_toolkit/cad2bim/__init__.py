@@ -35,17 +35,25 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.23.0"  # recover a labelled column the geometry ABSORBED into a neighbour.
-#                         A small column cast hard against a bigger one (C16/C17, 300x600,
-#                         beside a 600x900) fragments so badly that recovery folds its pieces
-#                         into the neighbour and drops the rest, orphaning its label. A new
-#                         last-resort pass replaces it from its SCHEDULE size + the leftover
-#                         fragments not already inside a placed column, grid-snapped beside
-#                         the neighbour. Heavily gated -- needs a placed neighbour, hard
-#                         geometry evidence, in-range size, and zero overlap -- so a stray
-#                         label can never fabricate a column (verified: feeding all 43 Test18
-#                         labels recovers only C16 and C17). EXPERIMENTAL: validate in Revit;
-#                         revert with the cad2bim-v0.22.0-known-good checkpoint if needed.
+__version__ = "0.23.1"  # place the recovered column by ABUTMENT, not grid-snap. The 0.23.0
+#                         recovery landed C16/C17 but grid-snapped them onto the neighbour's
+#                         axis (200-450 mm out) -- wrong, because an absorbed column sits
+#                         deliberately off-axis against its partner. It now abuts the nearest
+#                         placed neighbour edge-to-edge: the across-face coordinate is taken
+#                         from the abutment (exact), the other from the leftover centroid
+#                         clamped to stay against the neighbour, with no grid-snap. On Test18
+#                         this lands fragmented C16/C17 exactly and redrawn-fix within 50 mm
+#                         (Y exact); the residual cross-offset is unrecoverable because the
+#                         small column's geometry is tucked entirely under its partner.
+
+# 0.23.0  recover a labelled column the geometry ABSORBED into a neighbour. A small column
+#         cast hard against a bigger one (C16/C17, 300x600, beside a 600x900) fragments so
+#         badly that recovery folds its pieces into the neighbour and drops the rest,
+#         orphaning its label. A last-resort pass replaces it from its SCHEDULE size + the
+#         leftover fragments not already inside a placed column. Heavily gated -- needs a
+#         placed neighbour, hard geometry evidence, in-range size, and zero overlap -- so a
+#         stray label can never fabricate a column (feeding all 43 Test18 labels recovers
+#         only C16 and C17). Revert with the cad2bim-v0.22.0-known-good checkpoint if needed.
 
 
 # Historic notes:

@@ -89,13 +89,21 @@ class LabelRecovery(unittest.TestCase):
                      for r in e["rectangles"]]
         return n, recovered
 
-    def test_absorbed_column_recovered_from_label_and_geometry(self):
+    def test_absorbed_column_recovered_abutting_neighbour(self):
         n, rec = self._run([_C15], _C16_BITS, [_C16_LABEL], _SCHED)
         self.assertEqual(n, 1)
-        self.assertEqual(rec[0]["mark"], "C16")
-        self.assertEqual(sorted((rec[0]["width_mm"], rec[0]["height_mm"])), [300, 600])
-        # placed below the neighbour, abutting, not on top of it
-        self.assertLess(rec[0]["center"][1], _C15["center"][1])
+        r = rec[0]
+        self.assertEqual(r["mark"], "C16")
+        self.assertEqual(sorted((r["width_mm"], r["height_mm"])), [300, 600])
+        # Abuts C15's bottom edge exactly: edge = centre(-300) - half(450) = -750 mm;
+        # the 600-long side hangs below it -> centre = -750 - 300 = -1050 mm. The abut
+        # coordinate is fixed by geometry, not guessed from sparse fragment centroids.
+        edge = _C15["center"][1] - _C15["height_ft"] / 2.0
+        self.assertAlmostEqual(r["center"][1], edge - (600 * _FT) / 2.0, places=4)
+        # The cross coordinate stays clamped against the neighbour (columns abut, never
+        # drift away) and it is NOT snapped onto the neighbour's grid axis.
+        self.assertLessEqual(abs(r["center"][0] - _C15["center"][0]),
+                             (_C15["width_ft"] + 300 * _FT) / 2.0 + 1e-6)
 
     def test_no_leftover_geometry_places_nothing(self):
         # Evidence gate: a label with no nearby leftover fragments cannot fabricate one.
