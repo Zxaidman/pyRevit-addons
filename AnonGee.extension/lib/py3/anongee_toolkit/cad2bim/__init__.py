@@ -35,7 +35,20 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.23.1"  # place the recovered column by ABUTMENT, not grid-snap. The 0.23.0
+__version__ = "0.23.2"  # defer a STACKED text-correction to the abutment pass. In the
+#                         redrawn Test18, C17 (300x600 cast against C9, a 600x900) survives
+#                         Revit's import only as a mis-centred sliver; text-correction resized
+#                         that sliver to the schedule size and kept its centre, landing C17
+#                         INSIDE C9 -- two stacked columns, 450 mm off. Text-correction now
+#                         detects a corrected column whose centre falls inside a larger placed
+#                         neighbour, drops the absorbed sliver and leaves the mark unplaced so
+#                         the proven abutment recovery places it edge-to-edge (as it already
+#                         did for the same column in the fragmented DXF, and for C16). Redrawn
+#                         C17 goes from 150 mm right + 450 mm up to Y-exact, ~50 mm in X. The
+#                         centre-inside-larger test fires on exactly this one case across every
+#                         Test1-19 output, so no good placement is disturbed.
+
+# 0.23.1  place the recovered column by ABUTMENT, not grid-snap. The 0.23.0
 #                         recovery landed C16/C17 but grid-snapped them onto the neighbour's
 #                         axis (200-450 mm out) -- wrong, because an absorbed column sits
 #                         deliberately off-axis against its partner. It now abuts the nearest

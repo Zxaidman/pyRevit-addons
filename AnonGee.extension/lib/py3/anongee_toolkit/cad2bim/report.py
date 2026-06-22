@@ -526,6 +526,17 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
         if grid_snap_ft:                       # we moved/resized -> snap onto the grid
             rect["center"][0] = _snap(rect["center"][0], grid_x, grid_snap_ft)
             rect["center"][1] = _snap(rect["center"][1], grid_y, grid_snap_ft)
+        # A small column cast hard against a bigger one (C17 beside a 600x900) can
+        # survive Revit's import only as a mis-centred sliver. Resizing that sliver to
+        # the label size lands the column's CENTRE inside its larger neighbour -- two
+        # stacked columns. Don't claim it here: drop the absorbed sliver and leave the
+        # mark unplaced so the abutment pass (recover_unplaced_labeled_columns) places
+        # it edge-to-edge, exactly as it already does for the same column when the DXF
+        # is more fragmented. Only defer a mark the abutment pass can re-place (it needs
+        # a schedule size); otherwise keep the placement rather than drop the column.
+        if (_center_inside_larger(rect, rects, near) and
+                text.mark and text.mark in schedule):
+            continue
         outputs.append(rect)
     if not outputs:
         return 0
@@ -764,6 +775,29 @@ def _copy_rect(rect):
     out = dict(rect)
     out["center"] = list(rect["center"])
     return out
+
+
+def _center_inside_larger(rect, rects, exclude):
+    """True when rect's centre sits INSIDE a strictly larger placed rectangle.
+
+    A real column centre never lies within another column; when it does, rect is a
+    sliver of a column absorbed into a bigger neighbour rather than a column of its
+    own. `exclude` are the pieces rect was built from (its own geometry), skipped by
+    identity so a split-pair never reads as inside one of its own halves.
+    """
+    cx, cy = rect["center"][0], rect["center"][1]
+    area = rect["width_mm"] * rect["height_mm"]
+    skip = set(id(r) for r in exclude)
+    for other in rects:
+        if id(other) in skip or id(other) == id(rect):
+            continue
+        if other["width_mm"] * other["height_mm"] <= area:
+            continue                           # only a LARGER neighbour absorbs
+        ohx, ohy = _bbox_half(other)
+        if (abs(cx - other["center"][0]) < ohx and
+                abs(cy - other["center"][1]) < ohy):
+            return True
+    return False
 
 
 def _snap(value, positions, tol_ft):

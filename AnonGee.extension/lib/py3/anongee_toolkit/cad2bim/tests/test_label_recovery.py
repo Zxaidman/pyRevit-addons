@@ -141,5 +141,60 @@ class LabelRecovery(unittest.TestCase):
         self.assertEqual(n, 0)
 
 
+class StackedSliverDeferredToAbutment(unittest.TestCase):
+    """Redrawn-Test18 C17: a 300x600 cast hard against a 600x900 (C9) survives Revit's
+    import only as a mis-centred sliver. Resizing that sliver to the schedule size used
+    to land C17's CENTRE inside C9 -- two stacked columns, 450 mm off. Text-correction
+    must now DEFER such a stacked result so the abutment pass places it edge-to-edge,
+    exactly as it already does for C17 when the DXF is more fragmented.
+    """
+
+    # Faithful redrawn-Test18 geometry (mm): the placed neighbour C9 and the absorbed
+    # sliver text-correction would otherwise claim as C17, plus C17's leftover outline.
+    C9 = _rect(7615, -2624, 600, 900, mark="C9")
+    C9["long_axis_deg"] = 90.0
+    SLIVER = _rect(7615, -2924, 300, 300)          # clipped piece, no mark
+    SLIVER["long_axis_deg"] = 90.0
+    C9_LABEL = _Lbl("C9", 7745, -1962)
+    C17_LABEL = _Lbl("C17", 7802, -3817)
+    C17_BITS = [_frag((7615, -3674), (7315, -3674), (7315, -3374)),
+                _frag((7915, -2774), (7915, -3074), (7615, -3074))]
+    SCHED = {"C9": (600, 900), "C17": (300, 600)}
+
+    def _pipeline(self):
+        sec = {"entries": [{"layer": "geom", "status": "x",
+                            "rectangles": [dict(self.C9, center=list(self.C9["center"])),
+                                           dict(self.SLIVER,
+                                                center=list(self.SLIVER["center"]))]}],
+               "circles": [], "dropped_raw": [dict(g) for g in self.C17_BITS],
+               "status_counts": {}}
+        radius = 1300.0 * _FT
+        report.correct_columns_with_text(sec, [self.C9_LABEL, self.C17_LABEL], radius,
+                                         schedule=self.SCHED,
+                                         grid_x=None, grid_y=None, grid_snap_ft=None)
+        report.recover_unplaced_labeled_columns(sec, [self.C9_LABEL, self.C17_LABEL],
+                                                self.SCHED, limits=report.DEFAULT_LIMITS)
+        return [r for e in sec["entries"] for r in e["rectangles"]]
+
+    def test_c17_abutted_not_stacked(self):
+        placed = self._pipeline()
+        c17 = [r for r in placed if r.get("mark") == "C17"]
+        self.assertEqual(len(c17), 1)                       # placed exactly once
+        r = c17[0]
+        self.assertEqual(sorted((r["width_mm"], r["height_mm"])), [300, 600])
+        # Abuts C9's bottom edge: edge = -2624 - 450 = -3074; the 600 side hangs below
+        # -> centre y = -3074 - 300 = -3374 (was the stacked -2924, 450 mm too high).
+        self.assertAlmostEqual(r["center"][1], -3374 * _FT, places=3)
+        # Its centre is no longer inside C9's footprint (no stacked columns).
+        self.assertFalse(report._center_inside_larger(r, [self.C9], []))
+
+    def test_absorbed_sliver_left_no_phantom(self):
+        placed = self._pipeline()
+        # The discarded sliver must not survive as an unmarked column inside C9.
+        ghosts = [r for r in placed if not r.get("mark")
+                  and report._center_inside_larger(r, [self.C9], [])]
+        self.assertEqual(ghosts, [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
