@@ -94,5 +94,38 @@ class Ownership(unittest.TestCase):
         self.assertEqual(sorted((out[0]["width_mm"], out[0]["height_mm"])), [300, 3300])
 
 
+class ClippedSizeSnap(unittest.TestCase):
+    """A label's size is authoritative: a clipped column is resized up to it, but an
+    already-correct column (within geometry noise) is left exactly as drawn."""
+
+    def test_clipped_column_resized_up_to_schedule_size(self):
+        # C14: a 270x600 sliver of a scheduled 300x600 column. The 30 mm shortfall sits
+        # inside the 80 mm 'close enough' band, yet must snap UP to the schedule size.
+        clipped = _rect(-300, -300, 270, 600)
+        out = _run([clipped], [_Lbl("C14", -300, -300)], {"C14": (300, 600)})
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["mark"], "C14")
+        self.assertEqual(sorted((out[0]["width_mm"], out[0]["height_mm"])), [300, 600])
+
+    def test_rotated_clip_keeps_its_angle(self):
+        clipped = _rect(0, 0, 270, 600)
+        clipped["long_axis_deg"] = 150.0
+        out = _run([clipped], [_Lbl("C14", 0, 0)], {"C14": (300, 600)})
+        self.assertEqual(sorted((out[0]["width_mm"], out[0]["height_mm"])), [300, 600])
+        self.assertAlmostEqual(out[0]["long_axis_deg"], 150.0)
+
+    def test_correctly_sized_column_left_as_drawn(self):
+        ok = _rect(0, 0, 600, 900)
+        out = _run([ok], [_Lbl("C1", 0, 0)], {"C1": (600, 900)})
+        self.assertEqual(out[0]["mark"], "C1")
+        self.assertEqual(sorted((out[0]["width_mm"], out[0]["height_mm"])), [600, 900])
+
+    def test_minor_undersize_within_tolerance_not_snapped(self):
+        # A 5 mm shortfall is geometry noise, not a clip: kept as drawn, not resized.
+        noise = _rect(0, 0, 595, 900)
+        out = _run([noise], [_Lbl("C1", 0, 0)], {"C1": (600, 900)})
+        self.assertEqual(min(out[0]["width_mm"], out[0]["height_mm"]), 595)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

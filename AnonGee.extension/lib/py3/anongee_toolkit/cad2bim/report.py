@@ -436,6 +436,8 @@ def _pts_mm(points):
 
 
 _TEXT_SIZE_OK_MM = 80.0   # a single column already this close to its label is left as-is
+_CLIP_TOL_MM = 20.0       # ...unless geometry is shorter than the label by more than this
+#                           (a real clip), in which case it is resized up to the label
 _SPLIT_CENTRE_SLACK_MM = 80.0      # split fragments' centres lie within (long side + this)
 _SPLIT_NO_SIZE_MAX_CENTRE_MM = 800.0   # no label size: only fuse pieces this close
 
@@ -506,12 +508,15 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
             outputs.append(out)
             continue
         if size is not None and len(near) == 1:
-            if _fills_size(near[0], size):
+            if _fills_size(near[0], size) and not _is_clipped(near[0], size):
                 out = _copy_rect(near[0])      # already right size: just name it
                 out["mark"] = text.mark
                 used.add(id(near[0]))
                 outputs.append(out)
                 continue
+            # else fall through: a clipped column (geometry shorter than its known
+            # size, e.g. a 270 mm sliver of a scheduled 300 mm column) is resized up
+            # to the authoritative label size below, keeping its orientation+centre.
         if size is None:                       # split pieces, no size: use footprint
             size = _union_size(near)
 
@@ -586,6 +591,20 @@ def _fills_size(rect, size):
     big_g = max(rect["width_mm"], rect["height_mm"])
     return (abs(small_g - size[0]) <= _TEXT_SIZE_OK_MM and
             abs(big_g - size[1]) <= _TEXT_SIZE_OK_MM)
+
+
+def _is_clipped(rect, size):
+    """True when geometry is CLIPPED below the labelled size on either dimension.
+
+    A label's size is authoritative, so a clipped column -- e.g. a 270 mm sliver of
+    a scheduled 300 mm column, a shortfall that still lands inside the _fills_size
+    'close enough' band -- must be resized UP to the label instead of kept as drawn.
+    Only a real shortfall past _CLIP_TOL_MM counts, so geometry noise on an already
+    correct column does not trigger a needless resize.
+    """
+    small_g = min(rect["width_mm"], rect["height_mm"])
+    big_g = max(rect["width_mm"], rect["height_mm"])
+    return (small_g < size[0] - _CLIP_TOL_MM or big_g < size[1] - _CLIP_TOL_MM)
 
 
 def _label_size(text, schedule):

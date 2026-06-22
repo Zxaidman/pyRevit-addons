@@ -35,7 +35,16 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.20.0"  # recover clipped rotated CORNER columns. A rotated corner column
+__version__ = "0.21.0"  # a label's SIZE is authoritative for clipped columns. A column
+#                         drawn short of its scheduled/labelled size by 20-80 mm (e.g. C14,
+#                         a 270 mm sliver of a 300 mm column) used to fall inside the 80 mm
+#                         "close enough" band and was left clipped; it now snaps UP to the
+#                         label size, keeping its orientation and centre. Columns already at
+#                         size (within 20 mm geometry noise) are still left exactly as drawn.
+
+
+# Historic notes:
+# 0.20.0  recover clipped rotated CORNER columns. A rotated corner column
 #                         clipped at a beam junction comes through as one open outline left
 #                         ~600-800 mm open -- just past the 600 mm lone-fragment close gap,
 #                         so it was dropped. The lone-fragment close gap widens to 900 mm,
