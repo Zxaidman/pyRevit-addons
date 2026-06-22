@@ -151,5 +151,36 @@ class PlanLabelsAreNotATable(unittest.TestCase):
             {"C9": (400.0, 600.0)})
 
 
+class MarkToken(unittest.TestCase):
+    """parse_mark must read the mark even when it butts straight against the size
+    with an underscore (Test19 plan labels: "C16_300 X 600"). An underscore is a
+    regex word char, so the old trailing \\b never fired there and the mark was lost
+    -- which silently disabled mark-driven recovery and column naming for the plan."""
+
+    def test_underscore_between_mark_and_size(self):
+        self.assertEqual(marks.parse_mark("C16_300 X 600"), ("C16", 300.0, 600.0))
+        self.assertEqual(marks.parse_mark("C8_300 X 3300"), ("C8", 300.0, 3300.0))
+        self.assertEqual(marks.parse_mark("C12_900 X 3000"), ("C12", 900.0, 3000.0))
+
+    def test_underscore_mark_without_parseable_size(self):
+        # A diameter label ("750D") yields no BxH, but the mark must still parse.
+        self.assertEqual(marks.parse_mark("C7_750D"), ("C7", None, None))
+
+    def test_markless_size_label_stays_markless(self):
+        self.assertEqual(marks.parse_mark("300 X 600"), (None, 300.0, 600.0))
+
+    def test_existing_space_and_bare_formats_unchanged(self):
+        self.assertEqual(marks.parse_mark("C1 400x400"), ("C1", 400.0, 400.0))
+        self.assertEqual(marks.parse_mark("C9"), ("C9", None, None))
+        self.assertEqual(marks.parse_mark("RB12"), ("RB12", None, None))
+        self.assertEqual(marks.parse_mark("C1A"), ("C1A", None, None))
+
+    def test_underscore_schedule_inline(self):
+        # The underscore inline label also flows through parse_schedule.
+        self.assertEqual(
+            marks.parse_schedule([_Cell("C16_300 X 600", 0, 0)], allow_split=False),
+            {"C16": (300.0, 600.0)})
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

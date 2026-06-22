@@ -35,7 +35,16 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.23.2"  # defer a STACKED text-correction to the abutment pass. In the
+__version__ = "0.23.3"  # parse a column MARK joined to its size by an underscore. Test19's
+#                         plan labels read "C16_300 X 600"; an underscore is a regex word
+#                         char, so the mark token's trailing \b never fired and EVERY mark on
+#                         the plan came back empty -- silently disabling mark-driven recovery
+#                         and column naming. The mark token now ends on a negative lookahead
+#                         (not another letter/digit) instead of \b, so "_", a space or end all
+#                         close it. Geometry is byte-identical on Tests9-18 (space-format marks
+#                         already parsed); Test19 goes from 0 to 15 marks parsed.
+
+# 0.23.2  defer a STACKED text-correction to the abutment pass. In the
 #                         redrawn Test18, C17 (300x600 cast against C9, a 600x900) survives
 #                         Revit's import only as a mis-centred sliver; text-correction resized
 #                         that sliver to the schedule size and kept its centre, landing C17

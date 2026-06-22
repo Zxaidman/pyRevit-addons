@@ -13,8 +13,12 @@ import re
 
 # size token: 400x400, 230 x 500, 400X600, 400*600 (b first, h second -- order kept)
 _SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)")
-# mark token: one to three letters then digits, optional trailing letter (C1, RB12, C1A)
-_MARK_RE = re.compile(r"\b([A-Za-z]{1,3}\d+[A-Za-z]?)\b")
+# mark token: one to three letters then digits, optional trailing letter (C1, RB12, C1A).
+# The token may butt directly against a size with an underscore ("C16_300 X 600"): an
+# underscore is a regex word char, so a trailing \b would NOT fire there and the mark was
+# lost. A negative lookahead instead just forbids the token running on into another
+# letter/digit, so "_", a space, or end-of-string all close it.
+_MARK_RE = re.compile(r"\b([A-Za-z]{1,3}\d+[A-Za-z]?)(?![A-Za-z0-9])")
 
 
 def parse_mark(text):
