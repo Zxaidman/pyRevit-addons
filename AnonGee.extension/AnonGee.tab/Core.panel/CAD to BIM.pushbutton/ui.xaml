@@ -93,8 +93,8 @@
             <TabItem Header="Build">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="8">
-                        <CheckBox x:Name="chk_grids"   Content="Create grids from grid lines" IsChecked="True"/>
-                        <CheckBox x:Name="chk_columns" Content="Create columns from column outlines" IsChecked="True" Margin="0,8,0,0"/>
+                        <CheckBox x:Name="chk_grids"   Content="Create grids (from grid lines)" IsChecked="True"/>
+                        <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True" Margin="0,8,0,0"/>
                         <Grid Margin="23,4,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -106,9 +106,9 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Family / Type" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Column family" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Height="24" Margin="0,2"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Circular family" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Round family" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Height="24" Margin="0,2"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Base level" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Height="24" Margin="0,2"/>
@@ -131,7 +131,7 @@
                                        TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </Grid>
                         <CheckBox x:Name="chk_slabs"   Content="Create slabs (coming soon)" IsEnabled="False" Margin="0,8,0,0"/>
-                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" Margin="0,8,0,0"/>
+                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
