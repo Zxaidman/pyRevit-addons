@@ -441,6 +441,217 @@ _CLIP_TOL_MM = 20.0       # ...unless geometry is shorter than the label by more
 _SPLIT_CENTRE_SLACK_MM = 80.0      # split fragments' centres lie within (long side + this)
 _SPLIT_NO_SIZE_MAX_CENTRE_MM = 800.0   # no label size: only fuse pieces this close
 
+# --- label-guided core-wall placement --------------------------------------
+_CORE_LABEL_MARGIN_MM = 600.0   # a wall's label may sit this far outside the blob
+_CORE_DIM_TOL_MM = 80.0         # a cell-rectangle must match the label size this closely
+_CORE_EDGE_EPS_MM = 2.0         # merge cell grid edges closer than this (float noise)
+
+
+def recover_core_walls_from_labels(sections, column_texts, schedule=None):
+    """Re-place fused CORE walls from their size labels, before text-correction.
+
+    A lift/stair core drawn as loose wall lines is assembled into one blob and
+    decomposed greedily; the greedy cut mis-assigns the shared corners, so each
+    thin wall comes out the right THICKNESS but clipped/extended along its length
+    and offset by the stolen corner (e.g. a 5300 right wall placed as 4700, its
+    centre 600 mm low). text-correction would then resize it to the label but keep
+    that wrong centre.
+
+    Here each fused blob is re-tiled from the labels instead: the blob's
+    exact-cover pieces define a cell grid, and walls are carved LONGEST first,
+    each claiming the label-sized run of still-unclaimed cells nearest its label.
+    Applied only when the labels tile the WHOLE blob cleanly -- otherwise the blob
+    is left exactly as decomposed, so a working plan is never disturbed.
+    Returns the number of blobs re-tiled.
+    """
+    entries = sections.get("entries", [])
+    # Mark-driven: only a labelled (marked) wall with a resolvable size (inline label
+    # or schedule[mark]) re-places geometry, so a markless size label on a working wall
+    # is never disturbed. Each kept label is paired with its (small, big) mm size.
+    labels = []
+    for text in (column_texts or []):
+        if not (text.point_internal and text.mark):
+            continue
+        size = _label_size(text, schedule or {})
+        if size is not None:
+            labels.append((text, size))
+    if not labels:
+        return 0
+    # Only the greedy decompositions that can mis-cut a fused outline are candidates.
+    cand_status = ("composite", "recovered_strip")
+    pieces = [rect for entry in entries if entry.get("status") in cand_status
+              for rect in entry["rectangles"]]
+    if not pieces:
+        return 0
+    consumed = set()
+    carved = []
+    retiled = 0
+    for comp in _connected_blobs(pieces):
+        if len(comp) < 3:
+            continue                       # a lone wall: nothing fused to re-cut
+        walls = _carve_blob_from_labels(comp, _labels_for_blob(comp, labels))
+        if walls is None:
+            continue                       # not a clean label tiling: leave as-is
+        for rect in comp:
+            consumed.add(id(rect))
+        carved.extend(walls)
+        retiled += 1
+    if not retiled:
+        return 0
+    for entry in entries:
+        if entry.get("status") in cand_status:
+            entry["rectangles"] = [r for r in entry["rectangles"]
+                                   if id(r) not in consumed]
+    entries.append({"layer": "(label core)", "status": "label_core_wall",
+                    "approx": True, "rectangles": carved})
+    sections["entries"] = [e for e in entries if e["rectangles"]]
+    counts = sections.setdefault("status_counts", {})
+    counts["label_core_wall"] = counts.get("label_core_wall", 0) + len(carved)
+    return retiled
+
+
+def _rect_bounds_mm(rect):
+    """(x_min, y_min, x_max, y_max) of an axis-aligned rect dict, in mm."""
+    cx, cy = rect["center"][0] * _MM, rect["center"][1] * _MM
+    return (cx - rect["width_mm"] / 2.0, cy - rect["height_mm"] / 2.0,
+            cx + rect["width_mm"] / 2.0, cy + rect["height_mm"] / 2.0)
+
+
+def _connected_blobs(rects):
+    """Group rectangles into edge-adjacent components (a fused outline = one blob)."""
+    n = len(rects)
+    bounds = [_rect_bounds_mm(r) for r in rects]
+    parent = list(range(n))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    eps = 1.0
+    for i in range(n):
+        ax0, ay0, ax1, ay1 = bounds[i]
+        for j in range(i + 1, n):
+            bx0, by0, bx1, by1 = bounds[j]
+            if (ax0 - eps <= bx1 and bx0 - eps <= ax1 and
+                    ay0 - eps <= by1 and by0 - eps <= ay1):
+                parent[find(i)] = find(j)
+    groups = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(rects[i])
+    return list(groups.values())
+
+
+def _labels_for_blob(comp, labels):
+    """(mark, small, big, lx, ly) for each sized label inside the blob's grown bbox.
+
+    `labels` are (TextRecord, (small, big) mm) pairs; the bbox is grown by
+    _CORE_LABEL_MARGIN_MM so a wall's label that sits just outside the outline counts.
+    """
+    bounds = [_rect_bounds_mm(r) for r in comp]
+    x0 = min(b[0] for b in bounds) - _CORE_LABEL_MARGIN_MM
+    y0 = min(b[1] for b in bounds) - _CORE_LABEL_MARGIN_MM
+    x1 = max(b[2] for b in bounds) + _CORE_LABEL_MARGIN_MM
+    y1 = max(b[3] for b in bounds) + _CORE_LABEL_MARGIN_MM
+    out = []
+    for text, (small, big) in labels:
+        lx, ly = text.point_internal[0] * _MM, text.point_internal[1] * _MM
+        if x0 <= lx <= x1 and y0 <= ly <= y1:
+            out.append((text.mark, small, big, lx, ly))
+    return out
+
+
+def _unique_edges(values):
+    """Sorted grid edges with near-duplicates (float noise) merged."""
+    out = []
+    for v in sorted(values):
+        if not out or v - out[-1] > _CORE_EDGE_EPS_MM:
+            out.append(v)
+    return out
+
+
+def _dims_match(w, h, b_mm, h_mm):
+    """True when a w x h cell-rectangle matches the (b, h) label in either orientation."""
+    t = _CORE_DIM_TOL_MM
+    return ((abs(w - b_mm) <= t and abs(h - h_mm) <= t) or
+            (abs(w - h_mm) <= t and abs(h - b_mm) <= t))
+
+
+def _carve_blob_from_labels(comp, comp_labels):
+    """Re-tile one fused blob into label-sized walls, or None if labels can't tile it.
+
+    The blob's exact-cover pieces give a cell grid; each label carves the nearest
+    matching run of unclaimed inside-cells, longest wall first. Returns the carved
+    wall rects only when EVERY inside cell is claimed (a clean tiling), so an
+    ambiguous or partially labelled blob falls back to the original decomposition.
+    """
+    if not comp_labels:
+        return None
+    bounds = [_rect_bounds_mm(r) for r in comp]
+    xs = _unique_edges([b[0] for b in bounds] + [b[2] for b in bounds])
+    ys = _unique_edges([b[1] for b in bounds] + [b[3] for b in bounds])
+    nc, nr = len(xs) - 1, len(ys) - 1
+    if nc < 1 or nr < 1:
+        return None
+    inside = [[False] * nc for _ in range(nr)]
+    for r in range(nr):
+        cy = (ys[r] + ys[r + 1]) / 2.0
+        for c in range(nc):
+            cx = (xs[c] + xs[c + 1]) / 2.0
+            inside[r][c] = any(b[0] < cx < b[2] and b[1] < cy < b[3] for b in bounds)
+    claimed = [[False] * nc for _ in range(nr)]
+    z = comp[0]["center"][2]
+    walls = []
+    for mark, b_mm, h_mm, lx, ly in sorted(comp_labels,
+                                           key=lambda L: -max(L[1], L[2])):
+        best, best_d = None, None
+        for c0 in range(nc):
+            for c1 in range(c0, nc):
+                w = xs[c1 + 1] - xs[c0]
+                for r0 in range(nr):
+                    for r1 in range(r0, nr):
+                        ht = ys[r1 + 1] - ys[r0]
+                        if not _dims_match(w, ht, b_mm, h_mm):
+                            continue
+                        if not _cells_free(inside, claimed, r0, r1, c0, c1):
+                            continue
+                        mx = (xs[c0] + xs[c1 + 1]) / 2.0
+                        my = (ys[r0] + ys[r1 + 1]) / 2.0
+                        d = (mx - lx) ** 2 + (my - ly) ** 2
+                        if best_d is None or d < best_d:
+                            best, best_d = (r0, r1, c0, c1), d
+        if best is None:
+            return None
+        r0, r1, c0, c1 = best
+        for r in range(r0, r1 + 1):
+            for c in range(c0, c1 + 1):
+                claimed[r][c] = True
+        walls.append(_wall_rect(xs[c0], ys[r0], xs[c1 + 1], ys[r1 + 1], z, mark))
+    for r in range(nr):
+        for c in range(nc):
+            if inside[r][c] and not claimed[r][c]:
+                return None                # an unlabelled cell left over: not confident
+    return walls
+
+
+def _cells_free(inside, claimed, r0, r1, c0, c1):
+    """True when every cell in the range is inside the blob and not yet claimed."""
+    for r in range(r0, r1 + 1):
+        for c in range(c0, c1 + 1):
+            if not inside[r][c] or claimed[r][c]:
+                return False
+    return True
+
+
+def _wall_rect(x0, y0, x1, y1, z, mark):
+    """A wall rect dict (mm bounds -> internal-feet centre + mm size), long axis set."""
+    w_mm, h_mm = x1 - x0, y1 - y0
+    return {"center": [((x0 + x1) / 2.0) / _MM, ((y0 + y1) / 2.0) / _MM, z],
+            "width_mm": w_mm, "height_mm": h_mm,
+            "width_ft": w_mm / _MM, "height_ft": h_mm / _MM,
+            "long_axis_deg": 90.0 if h_mm >= w_mm else 0.0, "mark": mark}
+
 
 def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
                               grid_x=None, grid_y=None, grid_snap_ft=None):

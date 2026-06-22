@@ -669,6 +669,14 @@ def main():
     mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
                                                     config.DEFAULTS["mark_radius_mm"]))
     grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
+
+    # A fused lift/stair core (loose wall lines blobbed + greedily decomposed) mis-cuts
+    # its shared corners, so each wall is the right thickness but offset along its length.
+    # Re-tile each such blob from its mark+size labels first, so text-correction then just
+    # names the now-correctly-placed walls instead of resizing a mis-centred piece.
+    retiled = report.recover_core_walls_from_labels(sections, column_texts, schedule)
+    if retiled:
+        print("columns: re-tiled {0} fused core(s) from labels".format(retiled))
     fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
                                              schedule=schedule,
                                              grid_x=grid_x, grid_y=grid_y,

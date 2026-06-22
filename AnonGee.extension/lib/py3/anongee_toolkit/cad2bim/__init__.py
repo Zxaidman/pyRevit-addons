@@ -35,7 +35,20 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.23.3"  # parse a column MARK joined to its size by an underscore. Test19's
+__version__ = "0.24.0"  # place fused CORE walls from their labels. Test19's lift core is
+#                         drawn as loose wall lines, assembled into one blob and decomposed
+#                         greedily; the greedy cut mis-assigns the four shared corners, so each
+#                         thin wall keeps its thickness but is clipped/extended along its length
+#                         and offset by the stolen corner (the 5300 right wall placed as 4700,
+#                         600 mm low). report.recover_core_walls_from_labels now re-tiles each
+#                         fused blob from its mark+size labels BEFORE text-correction: the blob's
+#                         exact-cover pieces give a cell grid, and walls are carved longest-first,
+#                         each claiming the label-sized run of unclaimed cells nearest its label.
+#                         Gated to a CLEAN full tiling (every cell claimed) and to marked labels,
+#                         so a working plan is never touched: geometry is byte-identical on
+#                         Tests9-18, and Test19's C8/C9/C10/C12 move from mis-cut to true centres.
+
+# 0.23.3  parse a column MARK joined to its size by an underscore. Test19's
 #                         plan labels read "C16_300 X 600"; an underscore is a regex word
 #                         char, so the mark token's trailing \b never fired and EVERY mark on
 #                         the plan came back empty -- silently disabling mark-driven recovery
