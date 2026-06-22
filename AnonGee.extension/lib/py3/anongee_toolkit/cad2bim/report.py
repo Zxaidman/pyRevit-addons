@@ -148,6 +148,8 @@ _CORE_MIN_AREA_MM2 = 3.0e6     # enclosed area (>= 3 m^2) of a real shaft outlin
 _CORE_WALL_MAX_MM = 1200.0     # pair faces up to this far apart (a member's depth); below
 #                                the ~1500 mm stair opening, so a real opening stays open
 _CORE_WALL_OVERLAP_MM = 500.0  # paired faces must share at least this much run
+_CORE_WALL_DOOR_MM = 700.0     # merge collinear faces split by a gap this small (a door):
+#                                a doorway punched through a wall must not split the member
 _CORE_WALL_PAD_MM = 1200.0     # grow the core bbox by one depth so a deep member's outer
 #                                face (one column-depth beyond the inner ring) is included
 
@@ -378,7 +380,8 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
             core_paths, (x0 - pad_ft, y0 - pad_ft, x1 + pad_ft, y1 + pad_ft),
             config.mm_to_ft(tol["pair_min_width_mm"]),
             config.mm_to_ft(_CORE_WALL_MAX_MM),
-            config.mm_to_ft(_CORE_WALL_OVERLAP_MM), z=recl_z)
+            config.mm_to_ft(_CORE_WALL_OVERLAP_MM),
+            bridge_ft=config.mm_to_ft(_CORE_WALL_DOOR_MM), z=recl_z)
         kept = []
         for rect in walls:
             cx, cy, _cz = rect.center

@@ -35,15 +35,12 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.18.0"  # core recovery faithfulness + label ownership. (1) Core members
-#                         now span the UNION of their two faces (not the overlap), so a
-#                         member notched short on one side lands on its true centre (fixes
-#                         the ~450 mm offset); pairing is SMALLEST-GAP-FIRST so a wall
-#                         claims its outer face before a far face spans a notch (no phantom
-#                         members); and the pair window grew to 1200 mm (below the ~1500 mm
-#                         stair opening), so deep members (the 900-deep bottom + notch) are
-#                         recovered too -- the Test18 core now rebuilds all 5 members.
-#                         (2) correct_columns_with_text: each rectangle belongs to its
-#                         NEAREST label, so a long member's label no longer swallows a
-#                         distinct neighbour that has its own closer label (the text pass
-#                         no longer drops/offsets columns vs. geometry-only).
+__version__ = "0.19.0"  # core recovery: bridge doors. A doorway punched through a core
+#                         wall leaves its outer face drawn as two collinear stubs; the
+#                         recovery now MERGES collinear faces on one line across gaps up to
+#                         700 mm before pairing, so the wall is one member spanning both
+#                         stubs (its true depth) instead of clipping to the inner-ring span.
+#                         Fixes the right-wall member recovering 600 mm short (and, with a
+#                         schedule, landing 300 mm off-centre). The opposite corner where a
+#                         wall is capped by a perpendicular "lid" stays at the clear span
+#                         from geometry alone -- the schedule supplies its full length.
