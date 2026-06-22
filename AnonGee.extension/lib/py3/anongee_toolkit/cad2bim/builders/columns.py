@@ -164,7 +164,7 @@ def _resolve_symbol(doc, base_symbol, b_mm, h_mm, cache):
     key = (b_mm, h_mm)
     if key in cache:
         return cache[key]
-    type_name = "{0} x {1}".format(b_mm, h_mm)
+    type_name = "{0} X {1}".format(b_mm, h_mm)
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[key] = existing
@@ -180,7 +180,7 @@ def _resolve_circular_symbol(doc, base_symbol, diameter_mm, cache):
     """Return a FamilySymbol of the given diameter, duplicating+caching as needed."""
     if diameter_mm in cache:
         return cache[diameter_mm]
-    type_name = "{0} dia".format(diameter_mm)
+    type_name = "{0}D".format(diameter_mm)
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[diameter_mm] = existing

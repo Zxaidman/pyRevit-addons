@@ -86,8 +86,8 @@ def _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache):
     key = (width_mm, depth_mm)
     if key in cache:
         return cache[key]
-    type_name = ("{0} x {1}".format(width_mm, depth_mm) if depth_mm is not None
-                 else "{0} wide".format(width_mm))
+    type_name = ("{0} X {1}".format(width_mm, depth_mm) if depth_mm is not None
+                 else "{0}".format(width_mm))
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[key] = existing
