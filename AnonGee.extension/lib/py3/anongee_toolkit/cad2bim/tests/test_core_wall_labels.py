@@ -185,15 +185,37 @@ class CoreWallLabels(unittest.TestCase):
         self.assertEqual({round(walls["C16"]["width_mm"]),
                           round(walls["C16"]["height_mm"])}, {300, 600})
 
-    def test_stacked_pair_with_markless_lower_falls_back(self):
-        # The SAME shape but the lower column is markless (Test19's C17 over an
-        # unlabelled 300x600): only C17 carries a mark, so it cannot tile the whole
-        # blob -- the pass must bail and leave the geometry for text-correction, which
-        # keeps C17 and drops the markless piece (the desired outcome).
+    def test_stacked_pair_with_markless_lower_both_placed(self):
+        # The SAME shape but the lower column is markless-but-sized (Test19's C17 over a
+        # "300x600" stub). The blob holds a marked label (C17), so it IS re-tiled, and
+        # the markless stub gets its own cell -- placed UNNAMED -- instead of being
+        # swallowed into C17.
         pieces = [_rect(8150, -300, 300, 900),
                   _rect(7850, -600, 300, 1500)]
         labels = [_Lbl("C17", 600, 900, 7711, 363),
                   _Lbl(None, 300, 600, 8187, -1887)]
+        sec = _sections(pieces)
+        n = report.recover_core_walls_from_labels(sec, labels)
+        self.assertEqual(n, 1)
+        carved = self._carved(sec)
+        named = {r["mark"]: r for r in carved if r.get("mark")}
+        markless = [r for r in carved if not r.get("mark")]
+        self.assertIn("C17", named)
+        self.assertAlmostEqual(named["C17"]["center"][0] / _FT, 8000, delta=1.0)
+        self.assertAlmostEqual(named["C17"]["center"][1] / _FT, -300, delta=1.0)
+        self.assertEqual(len(markless), 1)
+        self.assertAlmostEqual(markless[0]["center"][0] / _FT, 7850, delta=1.0)
+        self.assertAlmostEqual(markless[0]["center"][1] / _FT, -1050, delta=1.0)
+        self.assertEqual({round(markless[0]["width_mm"]),
+                          round(markless[0]["height_mm"])}, {300, 600})
+
+    def test_markless_only_core_left_untouched(self):
+        # A fused core whose pieces carry ONLY markless labels is a working plan's core:
+        # with no marked label present the pass must not fire (no re-tiling).
+        pieces = [_rect(8000, 1500, 300, 3300),
+                  _rect(8300, 3000, 300, 300)]
+        labels = [_Lbl(None, 300, 3300, 8000, 1500),
+                  _Lbl(None, 300, 300, 8300, 3000)]
         sec = _sections(pieces)
         n = report.recover_core_walls_from_labels(sec, labels)
         self.assertEqual(n, 0)

@@ -461,18 +461,22 @@ def recover_core_walls_from_labels(sections, column_texts, schedule=None):
 
     Here each fused blob is re-tiled from the labels instead: the blob's exact-cover
     pieces define a cell grid, and members are carved LONGEST first, each claiming
-    the label-sized run of still-unclaimed cells nearest its label. Applied only when
-    MARKED labels tile the WHOLE blob cleanly -- otherwise the blob is left exactly as
-    decomposed (so a working plan, or a marked column over an unlabelled stub, is
-    never disturbed). Returns the number of blobs re-tiled.
+    the label-sized run of still-unclaimed cells nearest its label. Applied only to a
+    blob that holds at least one MARKED label (so a working markless-only core is never
+    touched) and only when the labels -- marked and markless alike -- tile the WHOLE
+    blob cleanly; otherwise the blob is left exactly as decomposed. A markless-but-sized
+    stub packed into such a blob (Test19's "300x600" under C17) is placed unnamed.
+    Returns the number of blobs re-tiled.
     """
     entries = sections.get("entries", [])
-    # Mark-driven: only a labelled (marked) wall with a resolvable size (inline label
-    # or schedule[mark]) re-places geometry, so a markless size label on a working wall
-    # is never disturbed. Each kept label is paired with its (small, big) mm size.
+    # Every sized label (inline size or schedule[mark]) is a tiling candidate, INCLUDING
+    # markless ones -- a fused outline can pack a marked column over an unlabelled-but-
+    # sized stub (Test19's C17 over a "300x600"), and both need a cell. Each label is
+    # paired with its (small, big) mm size; a blob is only re-tiled when it holds at
+    # least one MARKED label (below), so a working markless-only core is never touched.
     labels = []
     for text in (column_texts or []):
-        if not (text.point_internal and text.mark):
+        if not text.point_internal:
             continue
         size = _label_size(text, schedule or {})
         if size is not None:
@@ -491,7 +495,10 @@ def recover_core_walls_from_labels(sections, column_texts, schedule=None):
     for comp in _connected_blobs(pieces):
         if len(comp) < 2:
             continue                       # a lone strip: nothing fused to re-cut
-        walls = _carve_blob_from_labels(comp, _labels_for_blob(comp, labels))
+        blob_labels = _labels_for_blob(comp, labels)
+        if not any(lbl[0] for lbl in blob_labels):
+            continue                       # only markless labels here: a working core
+        walls = _carve_blob_from_labels(comp, blob_labels)
         if walls is None:
             continue                       # not a clean label tiling: leave as-is
         for rect in comp:

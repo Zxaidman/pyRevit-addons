@@ -46,11 +46,13 @@ __version__ = "0.24.0"  # place fused-outline columns from their labels. When ab
 #                         blob from its mark+size labels BEFORE text-correction: the blob's
 #                         exact-cover pieces give a cell grid, and members are carved longest-first,
 #                         each claiming the label-sized run of unclaimed cells nearest its label.
-#                         Gated to a CLEAN full tiling by MARKED labels, so a working plan -- or a
-#                         marked column over an unlabelled stub (C17 over a markless 300x600, left
-#                         as-is) -- is never disturbed: geometry is byte-identical on Tests9-18 and
-#                         the messy plans; Test19's C8/C9/C10/C12 move to true centres and C16,
-#                         previously swallowed by C15, is now placed.
+#                         A blob is re-tiled only when it holds at least one MARKED label and its
+#                         labels -- marked and markless-but-sized alike -- tile it cleanly, so a
+#                         working markless-only core is never touched; a sized stub packed into a
+#                         marked blob (C17's "300x600") is placed unnamed instead of swallowed.
+#                         Geometry is byte-identical on Tests9-18 and the messy plans; in Test19
+#                         C8/C9/C10/C12 move to true centres, C16 (swallowed by C15) is placed, and
+#                         the 300x600 under C17 is placed -- every column on the plan now lands.
 
 # 0.23.3  parse a column MARK joined to its size by an underscore. Test19's
 #                         plan labels read "C16_300 X 600"; an underscore is a regex word
