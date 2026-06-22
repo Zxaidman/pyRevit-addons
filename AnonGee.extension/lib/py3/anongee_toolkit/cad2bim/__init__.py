@@ -35,18 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.24.0"  # place fused CORE walls from their labels. Test19's lift core is
-#                         drawn as loose wall lines, assembled into one blob and decomposed
-#                         greedily; the greedy cut mis-assigns the four shared corners, so each
-#                         thin wall keeps its thickness but is clipped/extended along its length
-#                         and offset by the stolen corner (the 5300 right wall placed as 4700,
-#                         600 mm low). report.recover_core_walls_from_labels now re-tiles each
-#                         fused blob from its mark+size labels BEFORE text-correction: the blob's
-#                         exact-cover pieces give a cell grid, and walls are carved longest-first,
+__version__ = "0.24.0"  # place fused-outline columns from their labels. When abutting
+#                         members share an outline -- Test19's lift core drawn as loose wall
+#                         lines, or one column cast hard against another (C16 under C15) -- the
+#                         pieces are assembled into one blob and decomposed greedily; the greedy
+#                         cut mis-assigns the shared corners/edges, so each member keeps its
+#                         thickness but is clipped/extended and offset by the stolen cell (the
+#                         5300 wall placed as 4700, 600 mm low; C16's footprint swallowed whole
+#                         into C15). report.recover_core_walls_from_labels now re-tiles each fused
+#                         blob from its mark+size labels BEFORE text-correction: the blob's
+#                         exact-cover pieces give a cell grid, and members are carved longest-first,
 #                         each claiming the label-sized run of unclaimed cells nearest its label.
-#                         Gated to a CLEAN full tiling (every cell claimed) and to marked labels,
-#                         so a working plan is never touched: geometry is byte-identical on
-#                         Tests9-18, and Test19's C8/C9/C10/C12 move from mis-cut to true centres.
+#                         Gated to a CLEAN full tiling by MARKED labels, so a working plan -- or a
+#                         marked column over an unlabelled stub (C17 over a markless 300x600, left
+#                         as-is) -- is never disturbed: geometry is byte-identical on Tests9-18 and
+#                         the messy plans; Test19's C8/C9/C10/C12 move to true centres and C16,
+#                         previously swallowed by C15, is now placed.
 
 # 0.23.3  parse a column MARK joined to its size by an underscore. Test19's
 #                         plan labels read "C16_300 X 600"; an underscore is a regex word

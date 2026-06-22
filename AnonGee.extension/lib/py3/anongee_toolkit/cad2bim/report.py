@@ -442,27 +442,29 @@ _SPLIT_CENTRE_SLACK_MM = 80.0      # split fragments' centres lie within (long s
 _SPLIT_NO_SIZE_MAX_CENTRE_MM = 800.0   # no label size: only fuse pieces this close
 
 # --- label-guided core-wall placement --------------------------------------
-_CORE_LABEL_MARGIN_MM = 600.0   # a wall's label may sit this far outside the blob
+_CORE_LABEL_MARGIN_MM = 1100.0  # a wall's label may sit this far outside the blob
+#                                 (bottom-row columns carry their text well below them)
 _CORE_DIM_TOL_MM = 80.0         # a cell-rectangle must match the label size this closely
 _CORE_EDGE_EPS_MM = 2.0         # merge cell grid edges closer than this (float noise)
 
 
 def recover_core_walls_from_labels(sections, column_texts, schedule=None):
-    """Re-place fused CORE walls from their size labels, before text-correction.
+    """Re-place fused-outline columns from their size labels, before text-correction.
 
-    A lift/stair core drawn as loose wall lines is assembled into one blob and
-    decomposed greedily; the greedy cut mis-assigns the shared corners, so each
-    thin wall comes out the right THICKNESS but clipped/extended along its length
-    and offset by the stolen corner (e.g. a 5300 right wall placed as 4700, its
-    centre 600 mm low). text-correction would then resize it to the label but keep
-    that wrong centre.
+    When abutting members share an outline -- a lift/stair core drawn as loose wall
+    lines, or one column cast hard against another (Test19's C16 under C15) -- the
+    pieces are assembled into one blob and decomposed greedily. The greedy cut
+    mis-assigns the shared corners/edges, so each member keeps its THICKNESS but is
+    clipped/extended along its length and offset by the stolen cell (a 5300 wall
+    placed as 4700, 600 mm low; or C16's whole footprint swallowed into C15).
+    text-correction would then resize/merge to the labels but keep that wrong split.
 
-    Here each fused blob is re-tiled from the labels instead: the blob's
-    exact-cover pieces define a cell grid, and walls are carved LONGEST first,
-    each claiming the label-sized run of still-unclaimed cells nearest its label.
-    Applied only when the labels tile the WHOLE blob cleanly -- otherwise the blob
-    is left exactly as decomposed, so a working plan is never disturbed.
-    Returns the number of blobs re-tiled.
+    Here each fused blob is re-tiled from the labels instead: the blob's exact-cover
+    pieces define a cell grid, and members are carved LONGEST first, each claiming
+    the label-sized run of still-unclaimed cells nearest its label. Applied only when
+    MARKED labels tile the WHOLE blob cleanly -- otherwise the blob is left exactly as
+    decomposed (so a working plan, or a marked column over an unlabelled stub, is
+    never disturbed). Returns the number of blobs re-tiled.
     """
     entries = sections.get("entries", [])
     # Mark-driven: only a labelled (marked) wall with a resolvable size (inline label
@@ -487,8 +489,8 @@ def recover_core_walls_from_labels(sections, column_texts, schedule=None):
     carved = []
     retiled = 0
     for comp in _connected_blobs(pieces):
-        if len(comp) < 3:
-            continue                       # a lone wall: nothing fused to re-cut
+        if len(comp) < 2:
+            continue                       # a lone strip: nothing fused to re-cut
         walls = _carve_blob_from_labels(comp, _labels_for_blob(comp, labels))
         if walls is None:
             continue                       # not a clean label tiling: leave as-is

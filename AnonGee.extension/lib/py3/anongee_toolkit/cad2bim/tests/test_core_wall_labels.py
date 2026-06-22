@@ -160,6 +160,45 @@ class CoreWallLabels(unittest.TestCase):
             sec, [_Lbl("CX", 300, 3300, 8000, 1500)])
         self.assertEqual(n, 0)
 
+    def test_stacked_adjacent_columns_split_correctly(self):
+        # Test19's C15 (600x900) with C16 (300x600) drawn hard against its underside:
+        # the two outlines fuse and the greedy cut splits them into a left 300x900
+        # strip + a tall 300x1500 strip, which text-correction would merge wholly into
+        # C15 -- consuming C16's geometry so the marked column vanishes. The carve must
+        # re-cut them into C15 (top) and C16 (bottom-right). C16's label sits well below
+        # the blob (bottom-row text offset), so the wider label margin must reach it.
+        pieces = [_rect(2850, -300, 300, 900),     # left half of C15
+                  _rect(3150, -600, 300, 1500)]    # right half of C15 fused with C16
+        labels = [_Lbl("C15", 600, 900, 2711, 363),
+                  _Lbl("C16", 300, 600, 2629, -2285)]
+        sec = _sections(pieces)
+        n = report.recover_core_walls_from_labels(sec, labels)
+        self.assertEqual(n, 1)
+        walls = {r["mark"]: r for r in self._carved(sec)}
+        self.assertEqual(set(walls), {"C15", "C16"})
+        self.assertAlmostEqual(walls["C15"]["center"][0] / _FT, 3000, delta=1.0)
+        self.assertAlmostEqual(walls["C15"]["center"][1] / _FT, -300, delta=1.0)
+        self.assertEqual({round(walls["C15"]["width_mm"]),
+                          round(walls["C15"]["height_mm"])}, {600, 900})
+        self.assertAlmostEqual(walls["C16"]["center"][0] / _FT, 3150, delta=1.0)
+        self.assertAlmostEqual(walls["C16"]["center"][1] / _FT, -1050, delta=1.0)
+        self.assertEqual({round(walls["C16"]["width_mm"]),
+                          round(walls["C16"]["height_mm"])}, {300, 600})
+
+    def test_stacked_pair_with_markless_lower_falls_back(self):
+        # The SAME shape but the lower column is markless (Test19's C17 over an
+        # unlabelled 300x600): only C17 carries a mark, so it cannot tile the whole
+        # blob -- the pass must bail and leave the geometry for text-correction, which
+        # keeps C17 and drops the markless piece (the desired outcome).
+        pieces = [_rect(8150, -300, 300, 900),
+                  _rect(7850, -600, 300, 1500)]
+        labels = [_Lbl("C17", 600, 900, 7711, 363),
+                  _Lbl(None, 300, 600, 8187, -1887)]
+        sec = _sections(pieces)
+        n = report.recover_core_walls_from_labels(sec, labels)
+        self.assertEqual(n, 0)
+        self.assertEqual(self._carved(sec), [])
+
 
 if __name__ == "__main__":
     unittest.main()
