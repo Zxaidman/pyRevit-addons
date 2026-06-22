@@ -220,7 +220,10 @@ def recover_oriented_columns(fragments, gap_ft, min_fragments=2,
         if len(xy) >= 2:
             frags.append(xy)
             end_gap = math.hypot(xy[0][0] - xy[-1][0], xy[0][1] - xy[-1][1])
-            near_closed.append(end_gap <= close_gap_ft and len(set(xy)) >= 4)
+            # A lone fragment is recovered only if it is a FEW-vertex polygon (a clipped
+            # rotated rectangle, <= 6 distinct corners). A round column comes through as a
+            # many-vertex polyline arc; rect-fitting it would fabricate a phantom column.
+            near_closed.append(end_gap <= close_gap_ft and 4 <= len(set(xy)) <= 6)
     count = len(frags)
     if count == 0:
         return []
@@ -483,7 +486,8 @@ def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
     return rects, consumed
 
 
-def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=0.0):
+def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft,
+                       bridge_ft=0.0, z=0.0):
     """Recover a fragmented lift/stair core's columns by pairing opposing faces.
 
     A core drawn as disconnected segments never closes, so its inner ring and outer
@@ -493,14 +497,16 @@ def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=
     into a Rectangle. An opening wider than wall_max_ft has no opposing face within range
     and so yields no rectangle, leaving the solid members only.
 
-    Two refinements keep the result faithful: pairs are bound SMALLEST-GAP-FIRST, so a
-    thin wall claims its outer face before a far face can reach across a notch (no phantom
-    spanning members); and each rectangle spans the UNION of its two faces, so a member
-    notched short on one side still lands on its true centre. Returns Rectangles (feet).
+    Three refinements keep the result faithful: collinear faces on one line are MERGED
+    across gaps up to bridge_ft first, so a door punched through a wall does not split it
+    into two short members; pairs are bound SMALLEST-GAP-FIRST, so a thin wall claims its
+    outer face before a far face can reach across a notch (no phantom spanning members);
+    and each rectangle spans the UNION of its two faces, so a member notched short on one
+    side still lands on its true centre. Returns Rectangles (feet).
     """
     x0b, y0b, x1b, y1b = bbox
     tol = 2.0 / 304.8   # ~2 mm: treat a face this close to an axis as axis-aligned
-    faces = []          # (axis, const, lo, hi); axis 'V' = const x, 'H' = const y
+    raw = []            # (axis, const, lo, hi); axis 'V' = const x, 'H' = const y
     for pts in paths:
         if not pts or len(pts) < 2:
             continue
@@ -510,9 +516,29 @@ def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft, z=
             if not (x0b <= mx <= x1b and y0b <= my <= y1b):
                 continue
             if abs(ax - bx) <= tol and abs(ay - by) > tol:
-                faces.append(("V", (ax + bx) / 2.0, min(ay, by), max(ay, by)))
+                raw.append(("V", (ax + bx) / 2.0, min(ay, by), max(ay, by)))
             elif abs(ay - by) <= tol and abs(ax - bx) > tol:
-                faces.append(("H", (ay + by) / 2.0, min(ax, bx), max(ax, bx)))
+                raw.append(("H", (ay + by) / 2.0, min(ax, bx), max(ax, bx)))
+
+    # Merge collinear segments on the same line across gaps up to bridge_ft: a door
+    # opening leaves a wall's outer face drawn as two stubs, but it is still one member.
+    lines = {}
+    for axis, const, lo, hi in raw:
+        key = (axis, int(round(const / tol)))
+        lines.setdefault(key, []).append((lo, hi, const))
+    faces = []
+    for (axis, _k), segs in lines.items():
+        segs.sort()
+        clo, chi, csum, cn = segs[0][0], segs[0][1], segs[0][2], 1
+        for lo, hi, const in segs[1:]:
+            if lo - chi <= bridge_ft:
+                chi = max(chi, hi)
+                csum += const
+                cn += 1
+            else:
+                faces.append((axis, csum / cn, clo, chi))
+                clo, chi, csum, cn = lo, hi, const, 1
+        faces.append((axis, csum / cn, clo, chi))
 
     candidates = []     # (gap, i, j) for every parallel, overlapping, in-range face pair
     for i in range(len(faces)):

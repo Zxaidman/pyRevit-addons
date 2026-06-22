@@ -27,6 +27,9 @@ _FRAG_GAP_MM = 600.0         # fragments within this gap belong to the same colu
 #                              (a beam cut across an angled column can leave its two
 #                              halves ~450 mm apart; still well under the ~1500 mm
 #                              spacing of separate columns, so they do not fuse)
+_FRAG_CLOSE_GAP_MM = 900.0   # a LONE outline left open this wide at a junction cut is
+#                              still one column (rotated corner columns clip to ~600-800);
+#                              recovered rects are deduped so this cannot double a column
 _CLOSE_TOL_FT = 1.0e-3       # ~0.3 mm: ring is closed when its ends meet this close
 
 
@@ -148,6 +151,8 @@ _CORE_MIN_AREA_MM2 = 3.0e6     # enclosed area (>= 3 m^2) of a real shaft outlin
 _CORE_WALL_MAX_MM = 1200.0     # pair faces up to this far apart (a member's depth); below
 #                                the ~1500 mm stair opening, so a real opening stays open
 _CORE_WALL_OVERLAP_MM = 500.0  # paired faces must share at least this much run
+_CORE_WALL_DOOR_MM = 700.0     # merge collinear faces split by a gap this small (a door):
+#                                a doorway punched through a wall must not split the member
 _CORE_WALL_PAD_MM = 1200.0     # grow the core bbox by one depth so a deep member's outer
 #                                face (one column-depth beyond the inner ring) is included
 
@@ -347,12 +352,14 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
     # at a junction (e.g. angled F9): cluster the leftover pieces and fit an
     # oriented rectangle. Skip any that land inside an already-placed column.
     recovered = shapes.recover_oriented_columns(
-        fragments, gap_ft=config.mm_to_ft(_FRAG_GAP_MM))
+        fragments, gap_ft=config.mm_to_ft(_FRAG_GAP_MM),
+        close_gap_ft=config.mm_to_ft(_FRAG_CLOSE_GAP_MM))
     recovered_rects = []
     for rect in recovered:
         cx, cy, _cz = rect.center
-        if _inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles):
-            continue
+        if (_inside_a_circle(rect) or _inside_rectangles(cx, cy, leg_rectangles)
+                or _inside_rectangles(cx, cy, recovered_rects)):
+            continue   # already a placed column, or a sibling fragment of one just kept
         recovered_rects.append(rect)
     if recovered_rects:
         status_counts["recovered_rect"] += len(recovered_rects)
@@ -378,7 +385,8 @@ def build_column_sections(records, limits=None, standards=None, texts=None,
             core_paths, (x0 - pad_ft, y0 - pad_ft, x1 + pad_ft, y1 + pad_ft),
             config.mm_to_ft(tol["pair_min_width_mm"]),
             config.mm_to_ft(_CORE_WALL_MAX_MM),
-            config.mm_to_ft(_CORE_WALL_OVERLAP_MM), z=recl_z)
+            config.mm_to_ft(_CORE_WALL_OVERLAP_MM),
+            bridge_ft=config.mm_to_ft(_CORE_WALL_DOOR_MM), z=recl_z)
         kept = []
         for rect in walls:
             cx, cy, _cz = rect.center

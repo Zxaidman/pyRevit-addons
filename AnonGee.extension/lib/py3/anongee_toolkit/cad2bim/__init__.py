@@ -35,15 +35,13 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.18.0"  # core recovery faithfulness + label ownership. (1) Core members
-#                         now span the UNION of their two faces (not the overlap), so a
-#                         member notched short on one side lands on its true centre (fixes
-#                         the ~450 mm offset); pairing is SMALLEST-GAP-FIRST so a wall
-#                         claims its outer face before a far face spans a notch (no phantom
-#                         members); and the pair window grew to 1200 mm (below the ~1500 mm
-#                         stair opening), so deep members (the 900-deep bottom + notch) are
-#                         recovered too -- the Test18 core now rebuilds all 5 members.
-#                         (2) correct_columns_with_text: each rectangle belongs to its
-#                         NEAREST label, so a long member's label no longer swallows a
-#                         distinct neighbour that has its own closer label (the text pass
-#                         no longer drops/offsets columns vs. geometry-only).
+__version__ = "0.20.0"  # recover clipped rotated CORNER columns. A rotated corner column
+#                         clipped at a beam junction comes through as one open outline left
+#                         ~600-800 mm open -- just past the 600 mm lone-fragment close gap,
+#                         so it was dropped. The lone-fragment close gap widens to 900 mm,
+#                         BUT only for few-vertex (<= 6) polygons, so a many-vertex round
+#                         column tessellated as a polyline is never rect-fitted into a
+#                         phantom; recovered rects are also deduped against placed columns
+#                         and each other, so a fragment cannot double an existing column.
+#                         Isolation-checked: this adds only the two clipped corners and
+#                         leaves Test10 untouched.

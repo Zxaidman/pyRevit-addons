@@ -132,11 +132,14 @@ class CoreWallRecovery(unittest.TestCase):
     walls (C6/C8/C10), the deep bottom member (C12, a 900 gap), and the notch member (C7).
     Each lands on its true centre (union span) and the stair opening stays empty."""
 
-    # Inner ring (one open polyline) + the four outer face lines, one column-depth out.
+    # Inner ring (one open polyline) + the outer face lines, one column-depth out. The
+    # right face (C10) is drawn as TWO collinear stubs split by a 300 mm door (y2850..3150)
+    # -- it must merge into one y2550..7850 member, not clip to the inner ring's span.
     RING = _ftpath([[4850, 3450], [7850, 3450], [7850, 7850], [3150, 7850],
                     [3150, 5450], [3750, 5450], [3750, 4550], [3150, 4550]])
     OUTER = [_ftpath([[3150, 8150], [7850, 8150]]),   # top  (C6), 300 above inner y=7850
-             _ftpath([[8150, 7850], [8150, 3150]]),   # right (C10), 300 right of x=7850
+             _ftpath([[8150, 7850], [8150, 3150]]),   # right (C10) upper stub
+             _ftpath([[8150, 2850], [8150, 2550]]),   # right (C10) lower stub (past door)
              _ftpath([[2850, 4550], [2850, 7850]]),   # left (C8), 300 left of x=3150
              _ftpath([[4850, 2550], [7850, 2550]])]   # bottom (C12), 900 below y=3450
 
@@ -146,7 +149,8 @@ class CoreWallRecovery(unittest.TestCase):
         return report.shapes.recover_core_walls(
             [self.RING] + self.OUTER, bbox,
             80.0 * _FT, report._CORE_WALL_MAX_MM * _FT,
-            report._CORE_WALL_OVERLAP_MM * _FT)
+            report._CORE_WALL_OVERLAP_MM * _FT,
+            bridge_ft=report._CORE_WALL_DOOR_MM * _FT)
 
     def _members(self):
         out = set()
@@ -164,7 +168,7 @@ class CoreWallRecovery(unittest.TestCase):
         # (small, big, cx, cy): union span centres each member where the schedule wants
         self.assertIn((300, 4700, 5500, 8000), got)   # C6 top
         self.assertIn((300, 3300, 3000, 6200), got)   # C8 left  (not y=6650: union span)
-        self.assertIn((300, 4700, 8000, 5500), got)   # C10 right (not y=5650)
+        self.assertIn((300, 5300, 8000, 5200), got)   # C10 right: door-stubs merged to 5300
         self.assertIn((600, 900, 3450, 5000), got)    # C7 notch member
         self.assertIn((900, 3000, 6350, 3000), got)   # C12 deep bottom member
 

@@ -122,6 +122,27 @@ class OrientedRecovery(unittest.TestCase):
         rects = shapes.recover_oriented_columns([a, b], gap_ft=self._GAP)
         self.assertEqual(len(rects), 2)
 
+    # Real Test18 bottom-right corner: a clipped ROTATED rectangle left open ~804 mm.
+    _CORNER = [_ring((11200, 46), (11290, 98), (11490, -248), (10710, -698), (10567, -450))]
+
+    def test_wide_open_corner_recovers_only_past_widened_gap(self):
+        # ~804 mm end-gap: ignored at the 600 mm gap, recovered once the lone-fragment
+        # close gap widens to 900 mm (the clipped rotated corner-column case).
+        self.assertEqual(
+            shapes.recover_oriented_columns(self._CORNER, gap_ft=self._GAP), [])
+        rects = shapes.recover_oriented_columns(
+            self._CORNER, gap_ft=self._GAP, close_gap_ft=900 * _FT)
+        self.assertEqual(len(rects), 1)
+
+    def test_many_vertex_arc_is_not_rect_fitted(self):
+        # A round column tessellated into a many-vertex near-closed polyline must NOT be
+        # rect-fitted into a phantom column, even with the widened close gap.
+        r, cx, cy = 450, 8000, 27700
+        arc = [_ring(*[(cx + r * math.cos(2 * math.pi * k / 16),
+                        cy + r * math.sin(2 * math.pi * k / 16)) for k in range(15)])]
+        self.assertEqual(shapes.recover_oriented_columns(
+            arc, gap_ft=self._GAP, close_gap_ft=900 * _FT), [])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
