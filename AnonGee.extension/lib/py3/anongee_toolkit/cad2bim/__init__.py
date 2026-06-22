@@ -35,22 +35,27 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.22.0"  # mark with no size -> fall back to GEOMETRY. Plan labels are not a
-#                         schedule table: a markless size label ("350x750") and an unrelated
-#                         mark ("C5") that merely share a row Y are different columns a bay
-#                         apart, yet schedule reconstruction split-paired them, so C5 (which
-#                         has no size of its own) inherited 350x750 instead of keeping its
-#                         450x450 geometry. Split-pairing is now OFF when reading plan labels
-#                         (inline "C9 400x600" sizes still apply); a real schedule table,
-#                         read from the schedule layer, still pairs headerless rows.
+__version__ = "0.23.0"  # recover a labelled column the geometry ABSORBED into a neighbour.
+#                         A small column cast hard against a bigger one (C16/C17, 300x600,
+#                         beside a 600x900) fragments so badly that recovery folds its pieces
+#                         into the neighbour and drops the rest, orphaning its label. A new
+#                         last-resort pass replaces it from its SCHEDULE size + the leftover
+#                         fragments not already inside a placed column, grid-snapped beside
+#                         the neighbour. Heavily gated -- needs a placed neighbour, hard
+#                         geometry evidence, in-range size, and zero overlap -- so a stray
+#                         label can never fabricate a column (verified: feeding all 43 Test18
+#                         labels recovers only C16 and C17). EXPERIMENTAL: validate in Revit;
+#                         revert with the cad2bim-v0.22.0-known-good checkpoint if needed.
 
 
 # Historic notes:
+# 0.22.0  mark with no size -> fall back to GEOMETRY. Plan labels are not a schedule table:
+#         a markless size label and an unrelated mark sharing a row Y are different columns a
+#         bay apart, so split-pairing is OFF when reading plan labels (inline sizes still apply).
 # 0.21.0  a label's SIZE is authoritative for clipped columns. A column drawn short of its
 #         scheduled/labelled size by 20-80 mm (e.g. C14, a 270 mm sliver of a 300 mm column)
-#         used to fall inside the 80 mm "close enough" band and was left clipped; it now
-#         snaps UP to the label size, keeping orientation+centre. Columns already at size
-#         (within 20 mm geometry noise) are still left exactly as drawn.
+#         now snaps UP to the label size, keeping orientation+centre; columns already at size
+#         (within 20 mm noise) are left exactly as drawn.
 # 0.20.0  recover clipped rotated CORNER columns. A rotated corner column
 #                         clipped at a beam junction comes through as one open outline left
 #                         ~600-800 mm open -- just past the 600 mm lone-fragment close gap,
