@@ -35,15 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.21.0"  # a label's SIZE is authoritative for clipped columns. A column
-#                         drawn short of its scheduled/labelled size by 20-80 mm (e.g. C14,
-#                         a 270 mm sliver of a 300 mm column) used to fall inside the 80 mm
-#                         "close enough" band and was left clipped; it now snaps UP to the
-#                         label size, keeping its orientation and centre. Columns already at
-#                         size (within 20 mm geometry noise) are still left exactly as drawn.
+__version__ = "0.22.0"  # mark with no size -> fall back to GEOMETRY. Plan labels are not a
+#                         schedule table: a markless size label ("350x750") and an unrelated
+#                         mark ("C5") that merely share a row Y are different columns a bay
+#                         apart, yet schedule reconstruction split-paired them, so C5 (which
+#                         has no size of its own) inherited 350x750 instead of keeping its
+#                         450x450 geometry. Split-pairing is now OFF when reading plan labels
+#                         (inline "C9 400x600" sizes still apply); a real schedule table,
+#                         read from the schedule layer, still pairs headerless rows.
 
 
 # Historic notes:
+# 0.21.0  a label's SIZE is authoritative for clipped columns. A column drawn short of its
+#         scheduled/labelled size by 20-80 mm (e.g. C14, a 270 mm sliver of a 300 mm column)
+#         used to fall inside the 80 mm "close enough" band and was left clipped; it now
+#         snaps UP to the label size, keeping orientation+centre. Columns already at size
+#         (within 20 mm geometry noise) are still left exactly as drawn.
 # 0.20.0  recover clipped rotated CORNER columns. A rotated corner column
 #                         clipped at a beam junction comes through as one open outline left
 #                         ~600-800 mm open -- just past the 600 mm lone-fragment close gap,

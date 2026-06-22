@@ -652,7 +652,10 @@ def main():
     # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
     # authoritative; any sized plan label supplements a mark the table omits.
     schedule = marks.parse_schedule(schedule_texts)
-    for mark, size in marks.parse_schedule(column_texts).items():
+    # Plan labels are NOT a table: only adopt an INLINE size ("C9 400x600") from one,
+    # never split-pair a markless size label with a far mark sharing its row (which
+    # mis-sized C5 from a neighbour's 350x750 a bay away).
+    for mark, size in marks.parse_schedule(column_texts, allow_split=False).items():
         schedule.setdefault(mark, size)
     if schedule:
         print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))

@@ -121,6 +121,35 @@ class FallbackLayouts(unittest.TestCase):
     def test_no_cells(self):
         self.assertEqual(marks.parse_schedule([]), {})
 
+    def test_split_pairs_a_real_table_row(self):
+        # A headerless table row -- mark cell beside a single size cell -- still pairs.
+        cells = [_Cell("C1", 0, 0), _Cell("400x600", 1500, 0)]
+        self.assertEqual(marks.parse_schedule(cells), {"C1": (400.0, 600.0)})
+
+
+class PlanLabelsAreNotATable(unittest.TestCase):
+    """Test17 C5: on the PLAN, a markless size label and an unrelated mark share a
+    Y but belong to columns a whole bay apart. Split-pairing must be OFF for plan
+    labels, so C5 (which has no size of its own) falls back to its geometry."""
+
+    def _plan(self):
+        # 'C5' at x=10300 and a markless '350x750' at x=5300 share y=12300 (5 m apart).
+        return [_Cell("350x750", 5300, 12300), _Cell("C5", 10300, 12300)]
+
+    def test_split_off_does_not_pair_far_plan_labels(self):
+        self.assertEqual(marks.parse_schedule(self._plan(), allow_split=False), {})
+
+    def test_split_on_would_pair_them(self):
+        # Documents why the guard is needed: with split on, C5 wrongly inherits 350x750.
+        self.assertEqual(marks.parse_schedule(self._plan(), allow_split=True),
+                         {"C5": (350.0, 750.0)})
+
+    def test_inline_plan_label_still_sizes_with_split_off(self):
+        # A genuine inline plan label keeps working without the split path.
+        self.assertEqual(
+            marks.parse_schedule([_Cell("C9 400x600", 0, 0)], allow_split=False),
+            {"C9": (400.0, 600.0)})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

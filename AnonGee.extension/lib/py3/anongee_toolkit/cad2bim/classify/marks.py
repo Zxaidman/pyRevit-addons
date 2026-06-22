@@ -61,7 +61,7 @@ def sized_texts(texts):
             if t.b_mm is not None and t.h_mm is not None and t.point_internal]
 
 
-def parse_schedule(texts):
+def parse_schedule(texts, allow_split=True):
     """Build a {mark: (b_mm, h_mm)} lookup from a column-schedule's text cells.
 
     A column schedule is a table; in DXF its cells are individual TEXT entities.
@@ -77,6 +77,11 @@ def parse_schedule(texts):
       * split -- a mark cell and a single size cell ("400x600") share a row.
     On a conflict the tabular reading wins, then inline, then the first split.
     Returns {} for no input. Sizes keep (b, h) order as written.
+
+    `allow_split` gates the split layout. It must be OFF when parsing PLAN labels
+    (not a table): there, a markless size label and an unrelated mark merely sharing
+    a Y are different columns metres apart, and pairing them mis-sizes a column from
+    a neighbour's label (e.g. C5 inheriting a 350x750 label a whole bay away).
     """
     schedule = {}
     if not texts:
@@ -97,6 +102,8 @@ def parse_schedule(texts):
             schedule.setdefault(mark, (b_mm, h_mm))
 
     # 3. Split cells: pair each size-only cell with its row's mark-only cell.
+    if not allow_split:
+        return schedule
     mark_cells = [(mark, xy) for mark, b_mm, h_mm, xy in parsed
                   if mark and b_mm is None and xy is not None]
     size_cells = [(b_mm, h_mm, xy) for mark, b_mm, h_mm, xy in parsed
