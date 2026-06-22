@@ -1,0 +1,5 @@
+title: Bulk Tool
+layout:
+  - Rebar
+  - Bulk Rename
+  - Bulk Delete

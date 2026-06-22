@@ -1,7 +1,5 @@
 title: Essential
 layout:
-  - Obscured Rebar
-  - Copy Rebar Visibility
   - Export Schedule
-  - Bulk Rename
-  - Bulk Delete
+  - Rotate Column
+  - Bulk Tool

@@ -1,0 +1,5 @@
+title: Bulk Delete
+layout:
+  - Delete LineStyles
+  - Delete LinePatterns
+  - Delete FillPatterns

@@ -23,18 +23,23 @@ _PKG = os.path.dirname(_HERE)
 
 
 def _load_shapes():
-    pkg = types.ModuleType("_ag")
-    pkg.__path__ = []
-    sys.modules.setdefault("_ag", pkg)
-    mods = {}
-    for name in ("config", "shapes"):
+    # Mirror the package tree so shapes' `from .. import config` resolves.
+    for name in ("_ag", "_ag.geom"):
+        if name not in sys.modules:
+            mod = types.ModuleType(name)
+            mod.__path__ = []
+            sys.modules[name] = mod
+
+    def _load(full, *parts):
         spec = importlib.util.spec_from_file_location(
-            "_ag.%s" % name, os.path.join(_PKG, "%s.py" % name))
+            full, os.path.join(_PKG, *parts))
         mod = importlib.util.module_from_spec(spec)
-        sys.modules["_ag.%s" % name] = mod
+        sys.modules[full] = mod
         spec.loader.exec_module(mod)
-        mods[name] = mod
-    return mods["shapes"]
+        return mod
+
+    _load("_ag.config", "config.py")
+    return _load("_ag.geom.shapes", "geom", "shapes.py")
 
 
 shapes = _load_shapes()
@@ -141,6 +146,73 @@ class DecomposeSanity(unittest.TestCase):
         result = shapes.parse_column_polyline(comb)
         self.assertEqual(result["status"], "composite")
         self.assertEqual(len(result["rectangles"]), 5)
+
+
+class BboxShellCompletion(unittest.TestCase):
+    """A wall whose far end cap was clipped at a junction (the Grid H 12300 wall):
+    its outline traces 3 sides + most of the 4th but never closes into a cycle, so
+    it is completed to its bounding box -- but only when the shape really is a
+    clipped rectangle, never an L / U / partial outline."""
+
+    # Real Test10 Grid H pieces: bottom edge + left cap + top edge (with a gap and a
+    # detached top segment); the right cap and top-right corner were never drawn.
+    _H_WALL = [
+        _ring((20150, 26150), (7850, 26150), (7850, 26450),
+              (11150, 26450), (16850, 26450)),
+        _ring((17150, 26450), (19850, 26450)),
+    ]
+
+    def test_clipped_wall_recovers_to_full_rectangle(self):
+        rects, consumed = shapes.recover_rectilinear_columns(self._H_WALL)
+        self.assertEqual([_wh_c(r) for r in rects], [(12300, 300, 14000, 26300)])
+        self.assertEqual(consumed, {0, 1})
+
+    def test_open_L_is_not_closed(self):
+        # Interior (reentrant) edges sit off the bounding box -> rejected.
+        open_l = _ring((600, 0), (600, 300), (300, 300), (300, 600), (0, 600))
+        self.assertEqual(shapes.recover_rectilinear_columns([open_l])[0], [])
+
+    def test_two_edge_corner_is_not_closed(self):
+        # Only two sides covered (< 3) -> never invents a rectangle from a corner.
+        corner = _ring((0, 0), (600, 0), (600, 600))
+        self.assertEqual(shapes.recover_rectilinear_columns([corner])[0], [])
+
+    def test_three_sided_missing_full_side_is_not_closed(self):
+        # Missing an entire long side traces only ~54% of the perimeter -> rejected,
+        # so we never fabricate a wall from half an outline.
+        three_sided = _ring((0, 0), (300, 0), (300, 3300), (0, 3300))
+        self.assertEqual(shapes.recover_rectilinear_columns([three_sided])[0], [])
+
+
+class IrregularProfiles(unittest.TestCase):
+    """parse_column_polyline keeps a triangular column (3 corners) as an oriented
+    box instead of dropping it, while degenerate slivers still drop and every other
+    shape is unchanged (no regression to placed columns)."""
+
+    def test_triangle_is_kept_as_oriented_box(self):
+        tri = _ring((14700, 11700), (15300, 11700), (15000, 12300))
+        res = shapes.parse_column_polyline(tri)
+        self.assertEqual(res["status"], "oriented_rect")
+        self.assertEqual(len(res["rectangles"]), 1)
+
+    def test_trapezoid_still_placed_as_bounding_box(self):
+        trap = _ring((19600, 11700), (20400, 11700), (20200, 12300), (19800, 12300))
+        res = shapes.parse_column_polyline(trap)
+        self.assertEqual(res["status"], "oriented_rect")
+        self.assertEqual([_wh_c(r)[:2] for r in res["rectangles"]], [(600, 800)])
+
+    def test_rectangle_and_composite_unchanged(self):
+        rect = shapes.parse_column_polyline(_ring((0, 0), (400, 0), (400, 900), (0, 900)))
+        self.assertEqual(rect["status"], "rectangle")
+        l = shapes.parse_column_polyline(
+            _ring((0, 0), (800, 0), (800, 200), (200, 200), (200, 600), (0, 600)))
+        self.assertEqual(l["status"], "composite")
+
+    def test_degenerate_slivers_still_drop(self):
+        line = shapes.parse_column_polyline(_ring((0, 0), (400, 0)))
+        self.assertEqual(line["status"], "degenerate")
+        collinear = shapes.parse_column_polyline(_ring((0, 0), (200, 0), (400, 0)))
+        self.assertEqual(collinear["status"], "degenerate")
 
 
 if __name__ == "__main__":

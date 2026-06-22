@@ -84,9 +84,11 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, geometry_reader, layers, report, grids,
-                     transactions, columns, beams, dxf_linker, dxf_reader,
-                     transform, compare, marks, config)
+from anongee_toolkit.cad2bim import compat, config, report
+from anongee_toolkit.cad2bim.geom import transform, compare
+from anongee_toolkit.cad2bim.classify import layers, marks
+from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
+from anongee_toolkit.cad2bim.builders import columns, beams, grids, txn_failures
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
@@ -329,7 +331,7 @@ class CadToBimWindow(object):
         for layer, count in layer_rows:
             row = WpfGrid()
             row.Margin = Thickness(0, 2, 0, 2)
-            for width in (None, 70, 150):   # None -> star column
+            for width in (None, 70, 180):   # None -> star column
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if width is None
                                 else GridLength(width))
@@ -650,7 +652,10 @@ def main():
     # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
     # authoritative; any sized plan label supplements a mark the table omits.
     schedule = marks.parse_schedule(schedule_texts)
-    for mark, size in marks.parse_schedule(column_texts).items():
+    # Plan labels are NOT a table: only adopt an INLINE size ("C9 400x600") from one,
+    # never split-pair a markless size label with a far mark sharing its row (which
+    # mis-sized C5 from a neighbour's 350x750 a bay away).
+    for mark, size in marks.parse_schedule(column_texts, allow_split=False).items():
         schedule.setdefault(mark, size)
     if schedule:
         print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
@@ -664,12 +669,32 @@ def main():
     mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
                                                     config.DEFAULTS["mark_radius_mm"]))
     grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
+
+    # A fused lift/stair core (loose wall lines blobbed + greedily decomposed) mis-cuts
+    # its shared corners, so each wall is the right thickness but offset along its length.
+    # Re-tile each such blob from its mark+size labels first, so text-correction then just
+    # names the now-correctly-placed walls instead of resizing a mis-centred piece.
+    retiled = report.recover_core_walls_from_labels(sections, column_texts, schedule)
+    if retiled:
+        print("columns: re-tiled {0} fused core(s) from labels".format(retiled))
     fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
                                              schedule=schedule,
                                              grid_x=grid_x, grid_y=grid_y,
                                              grid_snap_ft=grid_snap_ft)
     if fixed:
         print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
+    named_circles = report.apply_circle_marks(sections, column_texts, mark_radius_ft)
+    if named_circles:
+        print("columns: named {0} circular column(s) from labels".format(named_circles))
+
+    # Last resort: a small column cast against a bigger one can fragment so badly that
+    # recovery folds it into the neighbour, orphaning its label. Recover it from its
+    # schedule size + leftover geometry (never overlapping an already-placed column).
+    recovered_labeled = report.recover_unplaced_labeled_columns(
+        sections, column_texts, schedule, limits=limits)
+    if recovered_labeled:
+        print("columns: recovered {0} absorbed labelled column(s) from "
+              "schedule+geometry".format(recovered_labeled))
 
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
@@ -711,7 +736,7 @@ def _create_grids(doc, records, grid_texts=None):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = grids.create_grids(doc, grid_records, namer)
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
@@ -754,7 +779,7 @@ def _create_columns(doc, sections, selections):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = columns.place_columns(doc, sections, family_id, base_id, top_id,
                                        region_max_side_mm=region_max)
         circles = sections.get("circles", [])
@@ -807,7 +832,7 @@ def _create_beams(doc, beam_segments, selections):
     group.Start()
     transaction.Start()
     try:
-        transactions.attach_warning_swallower(transaction)
+        txn_failures.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()

@@ -1,0 +1,12 @@
+title: Obscured Rebar
+author: AnonGee
+tooltip: |
+  Set rebars as Unobscured and Solid across selected views.
+
+  If rebars are pre-selected, applies only to the selection.
+  Otherwise operates on all rebars in the document.
+
+  Also sets view detail level: Fine for 3D views, Medium for plan/section
+  views (skipped when a view template is assigned).
+
+  Version: 1.0.0

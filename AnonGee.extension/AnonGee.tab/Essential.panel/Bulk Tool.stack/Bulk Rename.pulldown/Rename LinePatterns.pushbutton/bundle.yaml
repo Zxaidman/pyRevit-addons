@@ -1,0 +1,16 @@
+title: Line Patterns
+author: AnonGee
+tooltip: |
+  Bulk find-and-replace across all Line Pattern names in the model.
+
+  How to use
+    1. Enter the text to find and the replacement text.
+    2. Toggle Match case if the search should be case-sensitive.
+    3. The footer shows a live match count as you type.
+    4. Click Rename — every matching line pattern is renamed in one transaction.
+
+  Notes
+    • Leave Replace empty to delete the found text from names.
+    • System-locked or duplicate-name patterns are skipped and reported.
+
+  Version: 1.0.0
