@@ -28,7 +28,7 @@
  },
  "columns": {
   "outcome": {
-   "rect": 15,
+   "rect": 17,
    "circular": 2,
    "skipped": 0,
    "errors": 0
@@ -39,8 +39,8 @@
    "oriented_rect": 4,
    "line_member": 2,
    "circle": 2,
-   "label_core_wall": 5,
-   "text_corrected": 15
+   "label_core_wall": 9,
+   "text_corrected": 16
   },
   "items": [
    {
@@ -157,6 +157,21 @@
     "x": 3450,
     "y": 5000,
     "mark": "C9",
+    "deg": 90.0
+   },
+   {
+    "b": 300,
+    "h": 600,
+    "x": 7850,
+    "y": -1050,
+    "deg": 90.0
+   },
+   {
+    "b": 300,
+    "h": 600,
+    "x": 3150,
+    "y": -1050,
+    "mark": "C16",
     "deg": 90.0
    }
   ],
