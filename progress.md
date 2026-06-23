@@ -125,14 +125,34 @@ work was Test19's fused lift core + (later) C16 + (later) the markless stub.
 - Final Test19 result: 16 rect columns (C1,C2,C3,C4,C5,C6,C8,C9,C10,C11,C12,C14,C15,C16,
   C17,C18) + 2 circles (C7,C13) + 1 markless 300x600 @(7850,-1050) = every column lands.
 
+## BEAM session (continuation, same session as columns)
+Investigated the beam pipeline + Test19 beams. Findings appended to findings.md "BEAMS".
+- Built beam harnesses in /tmp: `beams2.py` (faithful pipeline), `beamarc.py` (arc→circle
+  clustering), `beammap.py` (label→nearest-line). All use /tmp/boot.py + /tmp/pylibs.
+- KEY RESULT: Test19 places only **1 of 23 beams** (B23). status_counts (circles passed):
+  `{line_pair:1, bare_line_unpaired:13, arc_junction:36, curved_pair:1, arc_lone:38}`.
+- Test19 S-BEAM geometry = 15 lines + 76 arcs, 0 closed outlines.
+  - 36 arcs = junction fillets around round cols C7/C13 (correctly ignored).
+  - 39 arcs = a real CURVED beam (center 11000,5500 r2300) = B18/B19, detected but NOT placed.
+  - 15 lines = mostly perimeter single edge-lines (B11–B17,B20–B23) + a couple interior.
+- TWO root-cause gaps identified (see findings.md): (1) beam text NEVER routed in script.py
+  (`build_beam_segments(..., texts=None)`) so no depth/mark; (2) single-line / perimeter
+  beams not detected (only closed-outline + parallel-pair + curved-arc-pair are handled).
+- Updated task_plan.md Phase 5 with sub-phases 5a–5d.
+- NO beam CODE changed yet. Working tree only has the 3 updated .md files (uncommitted).
+
 ## THE VERY NEXT ACTION
-Begin **BEAM** work on branch `claude/ecstatic-dijkstra-rmvyl7`. Starting points:
-1. `report.build_beam_segments(...)` in `report.py` (called in script.py ~line 638).
-2. `builders/beams.py` (Revit placement of beams).
-3. Beam text layer is `S-BEAM-IDEN`; beam geometry layer `S-BEAM`. Test19 has ~23 beam
-   labels (B1..B23, format `Bn_WxH`, e.g. `B11_400 X 900`).
-4. No specific beam bug has been triaged yet — first step is to run the harness focused on
-   beams (mirror /tmp/pipe.py but for beam_segments) and compare to expected, OR ask the
-   user which beam fixture/symptom to target.
-NOTE: The label-guided carve technique (recover_core_walls_from_labels) may be reusable
-for fused beam outlines — keep it in mind.
+**Awaiting a user scope decision** (asked at end of beam investigation): confirm the beam
+drawing convention (perimeter beams = single EDGE lines extending inward by width? vs
+centrelines), expected #beams to place, and which sub-phase to do first.
+Recommended sequence once confirmed:
+1. **5a** wire beam-text routing in `script.py` (route `CATEGORY_BEAM_TEXT` → pass to
+   `build_beam_segments`; mirrors `column_texts`). Low risk, but verify against the
+   beam harness (only helps detected beams).
+2. **5b** single-line/perimeter beam detection (the 13 `bare_line_unpaired`).
+3. **5c** curved-beam placement (B18/B19).
+4. **5d** implied/far-label beams.
+Each step: implement → run /tmp/beams2.py (recreate harness first if /tmp is gone) →
+verify no regression on other fixtures → commit → push → update these 3 .md files.
+NOTE: the column label-guided carve is likely NOT reusable for beams (beams are lines+arcs,
+not fused closed outlines).

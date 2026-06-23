@@ -73,12 +73,35 @@ Beams are the NEXT major area of work** (to continue on the same branch).
 - [x] Merged via MERGE COMMIT (sha 9d52313) so main has all 50 column commits as
       ancestors → branch stays cleanly ahead for beams. Branch PRESERVED.
 
-### Phase 5 — BEAMS — ⏳ NOT STARTED (next session)
-- [ ] Assess current beam pipeline (`build_beam_segments` in `report.py`,
-      `builders/beams.py`, beam text layer `S-BEAM-IDEN`).
-- [ ] Identify beam fixtures/failures analogous to the column work.
-- [ ] Plan + implement beam detection/placement improvements on the SAME branch.
-- (No specific beam tasks were defined yet this session — this is greenfield.)
+### Phase 5 — BEAMS — ⏳ IN PROGRESS (investigation done; implementation NOT started)
 
-## Status: COLUMNS COMPLETE. Every column on Test19 (18 marked + 1 markless) now lands.
-Next focus is BEAMS.
+**Current state (Test19): only 1 of 23 beams (B23) is placed.** Beam detection is the
+big gap. Investigation found a MIXED drawing convention (see findings.md "BEAMS").
+
+Sub-phases (priority order TBD with user):
+- [ ] **5a. Wire beam-text routing** (clearly-needed infra, low risk, mirrors columns).
+      `script.py` calls `build_beam_segments(..., texts=None)` and NEVER routes
+      `CATEGORY_BEAM_TEXT`. So beam DEPTH (larger label dim — a 2D plan can't supply it)
+      and mark are never applied. Add `beam_texts = [t for t ... == CATEGORY_BEAM_TEXT]`
+      and pass to `build_beam_segments`. NOTE: `_apply_beam_marks` matches by segment
+      MIDPOINT→nearest sized text (geometric), unlike columns' layer-routed ownership.
+- [ ] **5b. Single-line / perimeter beam detection** (BIGGEST gap, ~13+ beams). Many beams
+      are drawn as ONE edge line (perimeter) or a single centerline, not closed outlines
+      or parallel pairs. Current detector only does closed-outline + parallel-pair +
+      curved-arc-pair, so these become `bare_line_unpaired` (13). Need a rule to turn a
+      single labelled line into a beam (width+depth from label; offset/centred correctly).
+      REQUIRES knowing whether the line is an EDGE (beam extends inward) or a CENTERLINE.
+- [ ] **5c. Curved beam placement** (B18/B19). The concentric-arc curved beam IS detected
+      (`curved_pair: 1`) but explicitly NOT placed ("placement to follow"). Implement
+      placement of a curved structural framing member.
+- [ ] **5d. Implied/spanning beams + far labels**. Several labels (B3,B5,B7,B8,B9,B10,B22,
+      B18,B19) sit 1200–2800 mm from any beam line — geometry may be implied (span between
+      columns) or drawn in a way not yet matched. Needs ground-truth clarification.
+
+**DECISION NEEDED FROM USER**: the expected beam output / drawing convention is ambiguous
+(unlike columns where the user gave ground truth per step). Confirm: are perimeter beams
+single EDGE lines (extend inward by width) or centrelines? How many beams should place?
+Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
+
+## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS investigation done, 1/23 placed.
+Awaiting scope/priority decision before implementing beam detection.

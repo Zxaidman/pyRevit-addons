@@ -150,3 +150,81 @@ height=y, long_axis_deg=90 if h>=w else 0) is provably identical to the auto-der
   PRE-EXISTING and unrelated (import-path quirks: `cannot import name 'marks' from
   anongee_toolkit.cad2bim`, `No module named anongee_toolkit.cad2bim.layers`). Confirmed
   identical on baseline.
+
+---
+
+# BEAMS — Investigation Findings (this session, post-column)
+
+## Beam pipeline locations
+- `report.build_beam_segments(records, circles, limits, standards, texts, tolerances)`
+  at `report.py:1155`. Sources: (1) closed thin outlines → centerline; (2) PARALLEL LINE
+  PAIRS ~one width apart → midline beam (`shapes.pair_parallel_lines`); (3) arcs: junction
+  fillets centred on a detected circle are dropped, concentric arc pairs = curved beams
+  (DETECTED ONLY, "placement to follow" — NOT placed).
+- A beam segment dict = `{start,end,length_mm,width_mm,layer,status}` (NO depth by default).
+  `_beam_segment()` at report.py ~ (search "def _beam_segment").
+- `report._apply_beam_marks(segments, texts, radius_ft)` adds `depth_mm`/`mark`: matches each
+  segment's MIDPOINT to nearest `marks.sized_texts` within `mark_radius_mm`. width=min(b,h),
+  depth=max(b,h). ONLY runs if texts passed.
+- `report._filter_beam_segments(...)` snaps width to standard, drops widths outside
+  `beam_width_min_mm`..`beam_width_max_mm`.
+- Builder: `builders/beams.py:40 place_beams(doc, segments, base_symbol_id, level_id)`;
+  `_resolve_beam_symbol` makes a type "{w} X {d}" (or "{w}" if depth None → family default
+  depth). Width param names `("b","width","w","Width","B","W")`; depth `_DEPTH_PARAM_NAMES`.
+- Beam text layer routes via `classify_text_layer` → `CATEGORY_BEAM_TEXT` (contains "beam"/
+  "girder"/"joist"). Test19 beam text layer = `S-BEAM-IDEN`. Geometry layer = `S-BEAM`.
+
+## ROOT-CAUSE BUG #1 (clear, low-risk): beam text never routed
+`script.py:638` calls `report.build_beam_segments(revit_result.records,
+sections.get("circles"), limits, standards, texts=None, tolerances=tolerances)` — **texts=None**.
+And script.py routes `column_texts`, `grid_texts`, `schedule_texts` but NOT `beam_texts`.
+=> No beam gets depth or mark; all placed beams use the family's DEFAULT depth.
+FIX (analogous to columns): route `beam_texts = [t for t in dxf_result.texts if
+text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]` and pass to build_beam_segments
+(or add a post-pass). Low risk, but only helps DETECTED beams.
+
+## ROOT-CAUSE BUG #2 (big): straight beams not detected (drawn as single lines)
+Test19 S-BEAM geometry = **15 lines + 76 arcs, 0 polylines** (no closed outlines).
+Faithful run (circles passed): `{line_pair:1, bare_line_unpaired:13, arc_junction:36,
+curved_pair:1, arc_lone:38}` → **only B23 placed (1/23)**.
+The 13 bare lines have no parallel partner, so `pair_parallel_lines` rejects them. The beams
+are drawn as SINGLE edge lines (perimeter) / centerlines, a source the detector doesn't handle.
+
+### Test19 beam-line inventory (15 lines, mm)
+Perimeter edges:
+- Left x=-500: V (-46..2550)=B15, V (3450..7775)=B14, V (8225..10538)=B13
+- Right x=11200: V (46..2596)=B16, V (8317..10917)=B17
+- Top y≈11200: H (104..2750)=B11, H (3250..7700)=B21, H (8300..10917)=B12
+- Bottom y=-450: H (-40..2700)=B1?, H (8300..10567)=B2?
+- Bottom interior: H y=-600 (3300..7700)=B20/B6 area, H y=-1050 (3300..7700)=B23 (the 1 placed),
+  H y=-1350 (3300..7700)
+- Interior: H (3150..4850) y=3450 =B4, V (3150,3450)->(3150,4550)
+
+### Arc clusters (76 arcs → circle fits)
+- center (11000,8000) r≈375 ×22  = fillets around round col C7 (750 dia) → junction, ignored
+- center (11000,3000) r≈450 ×14  = fillets around round col C13 (900 dia) → junction, ignored
+- center (11000,5500) r≈2300 ×39 = a GENUINE CURVED BEAM (concentric inner/outer) → B18/B19,
+  detected as curved_pair:1 but NOT placed.
+
+### Beam label→nearest-line distances (convention is MIXED / unclear)
+Close (<600mm, likely single-line beams): B4(274) B11(550) B12(550) B13/14/15(221)
+  B16/17(621) B21(221) B23(221).
+Far (1200–2800mm, geometry implied or curved): B3(2392) B5(1162) B6(1312) B7(1287) B8(2263)
+  B9(2541) B10(2541) B18(2778) B19(2298) B22(1490) B20(821).
+=> NOT a clean 1-line-per-beam mapping. Perimeter beams = single edge line; interior beams
+   often have NO close line (implied spans) — EXPECTED OUTPUT IS AMBIGUOUS, needs user input.
+
+## Approaches considered for beams (none implemented yet)
+- Reuse the column label-guided carve? Only if beams were closed fused outlines — they are
+  NOT (lines+arcs). Likely not directly reusable.
+- Single-line-to-beam: needs the EDGE-vs-CENTERLINE distinction + inward offset direction;
+  ambiguous without ground truth.
+- Curved beam placement: place along arc midline (radius = mean of concentric pair), width =
+  gap, depth from label. Builder needs a curved-framing creation path (not yet present).
+
+## Harness for beams (this session, in /tmp — NOT committed)
+- `/tmp/beams2.py` = faithful: build_column_sections → circles → build_beam_segments(records,
+  circles, None, None, texts=beam_texts). Prints status_counts + placed segments.
+- `/tmp/beamarc.py` = fits arcs to circles, clusters by center/radius; dumps all lines.
+- `/tmp/beammap.py` = maps each beam label to nearest beam-line distance.
+- All depend on /tmp/boot.py + /tmp/pylibs (see progress.md to recreate).
