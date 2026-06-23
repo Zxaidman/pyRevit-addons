@@ -174,7 +174,7 @@ height=y, long_axis_deg=90 if h>=w else 0) is provably identical to the auto-der
 - Beam text layer routes via `classify_text_layer` → `CATEGORY_BEAM_TEXT` (contains "beam"/
   "girder"/"joist"). Test19 beam text layer = `S-BEAM-IDEN`. Geometry layer = `S-BEAM`.
 
-## ROOT-CAUSE BUG #1 (clear, low-risk): beam text never routed
+## ROOT-CAUSE BUG #1 — FIXED in 5a (this session): beam text never routed
 `script.py:638` calls `report.build_beam_segments(revit_result.records,
 sections.get("circles"), limits, standards, texts=None, tolerances=tolerances)` — **texts=None**.
 And script.py routes `column_texts`, `grid_texts`, `schedule_texts` but NOT `beam_texts`.

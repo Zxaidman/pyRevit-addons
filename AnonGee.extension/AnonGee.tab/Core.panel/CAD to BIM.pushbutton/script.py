@@ -635,10 +635,6 @@ def main():
 
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
-    beam_segments = report.build_beam_segments(revit_result.records,
-                                               sections.get("circles"),
-                                               limits, standards,
-                                               texts=None, tolerances=tolerances)
 
     # Route text labels by their (user-confirmed) layer.
     text_mapping = selections.get("text_mapping") or {}
@@ -648,6 +644,19 @@ def main():
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
     schedule_texts = [t for t in dxf_result.texts
                       if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
+    beam_texts = [t for t in dxf_result.texts
+                  if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
+
+    # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
+    # beam is sized from its label ("B1 300x600"): width = smaller value, depth = larger.
+    # Pass the beam-text labels in so each detected segment gets its depth + mark.
+    beam_segments = report.build_beam_segments(revit_result.records,
+                                               sections.get("circles"),
+                                               limits, standards,
+                                               texts=beam_texts, tolerances=tolerances)
+    sized_beams = beam_segments["status_counts"].get("text_sized", 0)
+    if sized_beams:
+        print("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
 
     # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
     # authoritative; any sized plan label supplements a mark the table omits.

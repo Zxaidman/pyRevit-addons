@@ -141,18 +141,27 @@ Investigated the beam pipeline + Test19 beams. Findings appended to findings.md 
 - Updated task_plan.md Phase 5 with sub-phases 5a–5d.
 - NO beam CODE changed yet. Working tree only has the 3 updated .md files (uncommitted).
 
-## THE VERY NEXT ACTION
-**Awaiting a user scope decision** (asked at end of beam investigation): confirm the beam
-drawing convention (perimeter beams = single EDGE lines extending inward by width? vs
-centrelines), expected #beams to place, and which sub-phase to do first.
-Recommended sequence once confirmed:
-1. **5a** wire beam-text routing in `script.py` (route `CATEGORY_BEAM_TEXT` → pass to
-   `build_beam_segments`; mirrors `column_texts`). Low risk, but verify against the
-   beam harness (only helps detected beams).
-2. **5b** single-line/perimeter beam detection (the 13 `bare_line_unpaired`).
-3. **5c** curved-beam placement (B18/B19).
-4. **5d** implied/far-label beams.
-Each step: implement → run /tmp/beams2.py (recreate harness first if /tmp is gone) →
-verify no regression on other fixtures → commit → push → update these 3 .md files.
-NOTE: the column label-guided carve is likely NOT reusable for beams (beams are lines+arcs,
-not fused closed outlines).
+## 5a DONE (beam text routing) — committed this session
+User answered: first target = "Wire beam labels first"; convention = "Not sure / mixed"
+(I will infer the convention per-line from geometry + label position, verify vs harness).
+- `script.py`: moved `build_beam_segments` call BELOW the text-routing block; added
+  `beam_texts = [t for t in dxf_result.texts if text_mapping.get(t.layer_key) ==
+  layers.CATEGORY_BEAM_TEXT]`; pass `texts=beam_texts`; print "beams: sized N segment(s)".
+  (Reorder is safe — build_beam_segments has no forward dep on the moved-past code.)
+- Added `tests/test_beam_text_sizing.py` (3 tests, pass): depth+mark applied; no-label →
+  no depth; far-label (> mark_radius 1300mm) not applied.
+- Verified end-to-end via /tmp/beams2.py: B23 now 300x900 + mark (was family default).
+- All 9 test files pass. `script.py` py_compile OK. (script.py can't be import-run on Linux.)
+- `classify_text_layer("S-BEAM-IDEN")` -> CATEGORY_BEAM_TEXT (default mapping auto-detects).
+
+## THE VERY NEXT ACTION = 5b: single-line / perimeter beam detection
+Goal: turn the 13 `bare_line_unpaired` single lines into placed beams. Convention is
+"mixed" so INFER per line: is the line an EDGE (beam body offset inward by its label width)
+or a CENTRELINE (width straddles it)? Use the line's label (nearest beam_text gives width)
+and the line's position relative to the plan interior / nearby columns to decide offset
+direction. Implement in `build_beam_segments` (a new source branch for unpaired bare lines)
+or a follow-on pass. THEN verify with /tmp/beams2.py that Test19 placed count rises toward
+~22 straight beams, and regression-check other fixtures. Curved beam (5c, B18/B19) and
+implied beams (5d) come after.
+Recreate harness first if /tmp is gone (see top of this file): /tmp/boot.py, /tmp/pylibs,
+and rebuild /tmp/beams2.py per findings.md "Harness for beams".

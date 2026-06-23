@@ -79,12 +79,13 @@ Beams are the NEXT major area of work** (to continue on the same branch).
 big gap. Investigation found a MIXED drawing convention (see findings.md "BEAMS").
 
 Sub-phases (priority order TBD with user):
-- [ ] **5a. Wire beam-text routing** (clearly-needed infra, low risk, mirrors columns).
-      `script.py` calls `build_beam_segments(..., texts=None)` and NEVER routes
-      `CATEGORY_BEAM_TEXT`. So beam DEPTH (larger label dim — a 2D plan can't supply it)
-      and mark are never applied. Add `beam_texts = [t for t ... == CATEGORY_BEAM_TEXT]`
-      and pass to `build_beam_segments`. NOTE: `_apply_beam_marks` matches by segment
-      MIDPOINT→nearest sized text (geometric), unlike columns' layer-routed ownership.
+- [x] **5a. Wire beam-text routing** — DONE. `script.py` now routes `beam_texts =
+      [...CATEGORY_BEAM_TEXT]` and passes them to `build_beam_segments(texts=beam_texts)`
+      (moved the beam call below the text-routing block). Each detected segment gets
+      width=min(label), depth=max(label), mark via `_apply_beam_marks` (midpoint→nearest
+      sized label within mark_radius). Verified: Test19 B23 now sized 300x900 + mark
+      (was family-default depth). Added `tests/test_beam_text_sizing.py` (3 tests).
+      NOTE: only helps DETECTED beams — Test19 still 1/23 until 5b lands.
 - [ ] **5b. Single-line / perimeter beam detection** (BIGGEST gap, ~13+ beams). Many beams
       are drawn as ONE edge line (perimeter) or a single centerline, not closed outlines
       or parallel pairs. Current detector only does closed-outline + parallel-pair +
@@ -103,5 +104,6 @@ Sub-phases (priority order TBD with user):
 single EDGE lines (extend inward by width) or centrelines? How many beams should place?
 Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 
-## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS investigation done, 1/23 placed.
-Awaiting scope/priority decision before implementing beam detection.
+## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a (text routing) DONE.
+User chose: do 5a first; beam convention "not sure/mixed" (infer per-line, verify vs
+harness). NEXT = 5b single-line/perimeter beam detection (the 13 bare_line_unpaired).
