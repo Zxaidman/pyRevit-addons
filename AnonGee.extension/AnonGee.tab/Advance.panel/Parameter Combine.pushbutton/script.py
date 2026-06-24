@@ -20,7 +20,7 @@ clr.AddReference('System')
 clr.AddReference('System.Data')
 
 from System.Windows.Markup import XamlReader
-from System.Windows.Media import Brushes
+from System.Windows.Media import Color, SolidColorBrush
 from System.Windows.Documents import TextRange, TextElement, LogicalDirection, TextPointerContext
 from System.Windows import FontWeights, Visibility
 from System.IO import FileStream, FileMode, FileAccess
@@ -43,6 +43,20 @@ for k, v in base_math.items():
     SAFE_MATH[k] = v
     SAFE_MATH[k.capitalize()] = v
     SAFE_MATH[k.upper()] = v
+
+
+def _make_brush(r, g, b):
+    """Frozen SolidColorBrush from an RGB triple (AnonGee brand tokens)."""
+    brush = SolidColorBrush(Color.FromRgb(r, g, b))
+    brush.Freeze()
+    return brush
+
+
+# AnonGee brand brushes for run-time styling (see AnonGee_BIM_Tools_Brand_Guidelines.md §3)
+BRUSH_TEXT   = _make_brush(0x14, 0x14, 0x14)  # Charcoal Black — primary text / formula body
+BRUSH_MUTED  = _make_brush(0x6B, 0x72, 0x80)  # Mid Grey — secondary text / placeholders
+BRUSH_ERROR  = _make_brush(0xDC, 0x26, 0x26)  # Error Red — failures
+BRUSH_ACCENT = _make_brush(0xE0, 0x20, 0x20)  # Vivid Red — formula tokens / key highlight
 
 # ====================================================================
 # HELPER FUNCTIONS
@@ -319,7 +333,7 @@ class ParameterCombinerApp(object):
 
     def show_error(self, message, is_error=True):
         self.StatusBar.Text = message
-        self.StatusBar.Foreground = Brushes.Red if is_error else Brushes.Gray
+        self.StatusBar.Foreground = BRUSH_ERROR if is_error else BRUSH_MUTED
 
     # ====================================================================
     # QOL GRID ACTIONS
@@ -337,12 +351,12 @@ class ParameterCombinerApp(object):
     def on_filter_focus(self, sender, args):
         if self.FilterGridTextBox.Text == "Filter results...":
             self.FilterGridTextBox.Text = ""
-            self.FilterGridTextBox.Foreground = Brushes.Black
+            self.FilterGridTextBox.Foreground = BRUSH_TEXT
 
     def on_filter_lost_focus(self, sender, args):
         if not self.FilterGridTextBox.Text:
             self.FilterGridTextBox.Text = "Filter results..."
-            self.FilterGridTextBox.Foreground = Brushes.Gray
+            self.FilterGridTextBox.Foreground = BRUSH_MUTED
 
     def on_filter_changed(self, sender, args):
         search_text = self.FilterGridTextBox.Text.lower()
@@ -471,7 +485,7 @@ class ParameterCombinerApp(object):
     # ====================================================================
     def highlight_syntax(self):
         doc_range = TextRange(self.FormulaRichTextBox.Document.ContentStart, self.FormulaRichTextBox.Document.ContentEnd)
-        doc_range.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Black)
+        doc_range.ApplyPropertyValue(TextElement.ForegroundProperty, BRUSH_TEXT)
         doc_range.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal)
 
         ranges_to_highlight = []
@@ -488,7 +502,7 @@ class ParameterCombinerApp(object):
             ptr = ptr.GetNextContextPosition(LogicalDirection.Forward)
 
         for tr in ranges_to_highlight:
-            tr.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.DodgerBlue)
+            tr.ApplyPropertyValue(TextElement.ForegroundProperty, BRUSH_ACCENT)
             tr.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold)
 
     def on_rtb_text_changed(self, sender, args):
@@ -636,7 +650,7 @@ if __name__ == "__main__":
         app.window.ShowDialog()
 
         if app.apply_changes:
-            transaction = DB.Transaction(doc, "Combine Parameters")
+            transaction = DB.Transaction(doc, "AnonGee · Parameter Combination")
             transaction.Start()
             
             error_encountered = False
