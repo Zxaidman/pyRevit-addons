@@ -35,7 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.24.0"  # place fused-outline columns from their labels. When abutting
+__version__ = "0.25.0"  # BEAMS: size them from labels + place curved beams. (1) The push-
+#                         button called build_beam_segments with texts=None and never routed
+#                         the beam text layer, so beam DEPTH (the larger label dimension a 2D
+#                         plan can't supply) and the mark were dropped -- every beam used the
+#                         family's default depth. script.py now routes beam_texts and passes
+#                         them in (width=min(label)/depth=max(label)/mark per nearest label).
+#                         (2) A curved beam is drawn as two concentric arc-fragment edges one
+#                         width apart; they were only COUNTED ("placement to follow"). Now the
+#                         fragments are clustered into edges, an inner/outer pair becomes one
+#                         curved segment (centreline radius, width=gap, swept angle from the
+#                         largest angular gap, depth+mark from the nearest label), and
+#                         builders.beams.place_curved_beams places it along an Arc. Straight-beam
+#                         geometry is byte-identical on all fixtures; Test19 sizes B23 (300x900)
+#                         and places the B18 (400x900) curved beam.
+
+# 0.24.0  place fused-outline columns from their labels. When abutting
 #                         members share an outline -- Test19's lift core drawn as loose wall
 #                         lines, or one column cast hard against another (C16 under C15) -- the
 #                         pieces are assembled into one blob and decomposed greedily; the greedy

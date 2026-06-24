@@ -5,7 +5,7 @@
 - Toolkit root on sys.path: `AnonGee.extension/lib/py3`
 - cad2bim package: `AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/`
 - The pyRevit button entry: `AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/script.py`
-- Version string: `anongee_toolkit/cad2bim/__init__.py` line ~38 (`__version__ = "0.24.0"`).
+- Version string: `anongee_toolkit/cad2bim/__init__.py` line ~38 (`__version__ = "0.25.0"`).
 
 ## Critical environment gotcha (for running anything locally)
 - The vendored `numpy` and `ezdxf` under `lib/py3` are **Windows wheels** and FAIL to
