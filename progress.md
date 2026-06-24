@@ -154,6 +154,23 @@ User answered: first target = "Wire beam labels first"; convention = "Not sure /
 - All 9 test files pass. `script.py` py_compile OK. (script.py can't be import-run on Linux.)
 - `classify_text_layer("S-BEAM-IDEN")` -> CATEGORY_BEAM_TEXT (default mapping auto-detects).
 
+## 5c DONE (curved beam placement, B18) — committed this session
+User picked curved beams next (before 5b). Implemented end-to-end:
+- report.py: arc collection now stores endpoint angles+z. New helpers `_group_arc_edges`
+  (cluster fragments by centre+radius; consts `_ARC_EDGE_CENTER_TOL_MM=250`,
+  `_ARC_EDGE_RADIUS_TOL_MM=60`), `_curved_beams_from_edges` (pair inner/outer edges, gap in
+  beam width band), `_arc_span` (swept angle via largest circular gap), `_curved_segment`,
+  `_apply_curved_marks` (depth+mark from nearest label to mid-arc; width stays geometric).
+  `build_beam_segments` now returns `curved_segments`; `format_beam_segments` shows them.
+- builders/beams.py: `place_curved_beams` places each along `Arc.Create(center, radius,
+  start, start+sweep, BasisX, BasisY)`. script.py `_create_beams` calls it + folds tallies.
+- VERIFIED: Test19 B18 center(11000,5500) R2500 width400 depth900 span279->443 len7160.
+  Straight-beam counts BYTE-IDENTICAL across all 15 fixtures (regression diff: only curved
+  added). 3 Messy plans also gain curved beams; arc_lone -> ~0. 10 test files pass;
+  verify_toolkit 128 passed/3 pre-existing fails. Added tests/test_curved_beams.py (4).
+- NOTE: place_curved_beams is Revit API (Arc) -- syntax-checked (py_compile) but NOT
+  runtime-verified (no Revit on Linux). Watch the Arc.Create angle convention if issues.
+
 ## THE VERY NEXT ACTION = 5b: single-line / perimeter beam detection
 Goal: turn the 13 `bare_line_unpaired` single lines into placed beams. Convention is
 "mixed" so INFER per line: is the line an EDGE (beam body offset inward by its label width)

@@ -228,3 +228,29 @@ Far (1200–2800mm, geometry implied or curved): B3(2392) B5(1162) B6(1312) B7(1
 - `/tmp/beamarc.py` = fits arcs to circles, clusters by center/radius; dumps all lines.
 - `/tmp/beammap.py` = maps each beam label to nearest beam-line distance.
 - All depend on /tmp/boot.py + /tmp/pylibs (see progress.md to recreate).
+
+---
+
+# 5c IMPLEMENTED — Curved beam detection + placement (this session)
+- Curved beam = two concentric arc EDGES, each a chain of short arc fragments, one beam
+  width apart. Old code fit each fragment to a circle and counted concentric PAIRS crudely
+  (curved_pair) but discarded them ("placement to follow"), leaving most arcs `arc_lone`.
+- NEW (report.py): arc fits now keep endpoint angles + z. `_group_arc_edges` clusters
+  fragments into edges (centre tol 250mm, radius tol 60mm -- tight on radius so inner/outer
+  never merge). `_curved_beams_from_edges` pairs concentric edges whose radius gap is in the
+  beam width band (pair_min..pair_max = 80..700mm), biggest edges first. `_arc_span` finds
+  the swept angle as the complement of the LARGEST circular gap in endpoint angles (handles
+  wraparound; end_deg may exceed 360 so end>start = CCW sweep). `_curved_segment` dict:
+  {kind:curved, center:[cx,cy,z]ft, radius_mm, radius_ft, start_deg, end_deg, width_mm,
+  length_mm, layer, status:curved}. `_apply_curved_marks` sets depth=max(label)+mark from
+  nearest sized label to the mid-arc point; WIDTH stays the geometric edge gap.
+  `build_beam_segments` returns NEW key `curved_segments` (+ width-band filtered).
+- Builder (builders/beams.py): `place_curved_beams` mirrors place_beams but the curve is
+  `Arc.Create(XYZ(cx,cy,elev), radius_ft, start, start+sweep, XYZ.BasisX, XYZ.BasisY)`
+  (start normalised into [0,2pi)). script.py `_create_beams` now places straight + curved
+  and merges created/skipped/errors tallies. NOT runtime-verified (no Revit on Linux).
+- Test19 curved beam (B18): center(11000,5500), centreline R=2500mm, width=400 (edges
+  r2300 inner / r2700 outer), depth 900, span 279->443 deg (164 deg CCW, right side
+  connecting round cols C13 bottom & C7 top), length 7160mm.
+- Regression: straight-beam counts byte-identical on all 15 fixtures; 3 Messy plans also
+  gain curved beams (one +9); arc_lone collapses to ~0. tests/test_curved_beams.py (4 tests).

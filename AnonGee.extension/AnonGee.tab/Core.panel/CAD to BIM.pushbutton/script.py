@@ -832,7 +832,8 @@ def _create_beams(doc, beam_segments, selections):
         _alert("Beams skipped", "Choose a beam family and a top level.")
         return {"created": 0, "skipped": 0, "errors": 0}
     segments = beam_segments.get("segments", [])
-    if not segments:
+    curved = beam_segments.get("curved_segments", [])
+    if not segments and not curved:
         print("Beams -- no beam segments to place.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
@@ -843,6 +844,11 @@ def _create_beams(doc, beam_segments, selections):
     try:
         txn_failures.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
+        # Curved beams (concentric arc pairs, e.g. a curved perimeter member) are placed
+        # along an Arc; fold their outcome into the same result tallies.
+        curved_result = beams.place_curved_beams(doc, curved, beam_id, level_id)
+        for key in ("created", "skipped", "errors"):
+            result[key] = result[key] + curved_result[key]
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
     except Exception as creation_error:

@@ -1152,6 +1152,13 @@ def format_column_sections(sections):
     return lines
 
 
+# A curved beam's two edges are each drawn as a chain of many short arc fragments; the
+# tiny fragments' circle fits are noisy, so cluster them loosely on centre but tightly on
+# radius (so a beam's inner and outer edges -- one width apart -- never merge).
+_ARC_EDGE_CENTER_TOL_MM = 250.0   # arc fragments share an edge if their centres agree this far
+_ARC_EDGE_RADIUS_TOL_MM = 60.0    # ...and their radii agree this far (< any real beam width)
+
+
 def build_beam_segments(records, circles=None, limits=None, standards=None,
                         texts=None, tolerances=None):
     """Derive straight beam centerlines from beam-category geometry.
@@ -1197,7 +1204,10 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
                     (pts[0][0], pts[0][1]), (mid[0], mid[1]),
                     (pts[-1][0], pts[-1][1]))
                 if fit:
-                    arc_fits.append(fit)
+                    cx, cy, r = fit
+                    a0 = math.degrees(math.atan2(pts[0][1] - cy, pts[0][0] - cx)) % 360.0
+                    a1 = math.degrees(math.atan2(pts[-1][1] - cy, pts[-1][0] - cx)) % 360.0
+                    arc_fits.append((cx, cy, r, a0, a1, pts[0][2]))
             continue
         xy, z = shapes.to_xy(record.points)
         ring = shapes.simplify_ring(xy)
@@ -1234,9 +1244,13 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
         status["bare_line_unpaired"] += len(leftover)
         review.append("{0} bare lines without a parallel partner".format(len(leftover)))
 
-    # (3) Arcs: drop round-column junction fillets; detect concentric curved beams.
+    # (3) Arcs: drop round-column junction fillets; build concentric pairs into CURVED
+    # beams. A curved beam is drawn as two concentric edges, each a chain of many short
+    # arc fragments, so the fragments are first clustered into edges (by shared centre +
+    # radius), then an inner/outer edge pair (radius gap = the beam width) becomes one
+    # curved member spanning the chain's swept angle.
     def _is_junction(fit):
-        cx, cy, _r = fit
+        cx, cy = fit[0], fit[1]
         for circle in circles:
             ccx, ccy, _cz = circle["center"]
             if ((cx - ccx) ** 2 + (cy - ccy) ** 2) ** 0.5 < junction_tol_ft:
@@ -1245,40 +1259,157 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
 
     free_arcs = [f for f in arc_fits if not _is_junction(f)]
     status["arc_junction"] += (len(arc_fits) - len(free_arcs))
-    used = [False] * len(free_arcs)
-    curved_pairs = 0
-    for a in range(len(free_arcs)):
-        if used[a]:
-            continue
-        ax, ay, ar = free_arcs[a]
-        for b in range(a + 1, len(free_arcs)):
-            if used[b]:
-                continue
-            bx, by, br = free_arcs[b]
-            same_center = ((ax - bx) ** 2 + (ay - by) ** 2) ** 0.5 < concentric_tol_ft
-            gap = abs(ar - br)
-            if same_center and pair_min_ft < gap < pair_max_ft:
-                used[a] = used[b] = True
-                curved_pairs += 1
-                break
-    if curved_pairs:
-        status["curved_pair"] += curved_pairs
-        review.append("{0} curved-beam arc pairs detected (placement to follow)".format(curved_pairs))
-    lone = sum(1 for u in used if not u)
+    edges = _group_arc_edges(free_arcs,
+                             config.mm_to_ft(_ARC_EDGE_CENTER_TOL_MM),
+                             config.mm_to_ft(_ARC_EDGE_RADIUS_TOL_MM))
+    curved_segments, lone = _curved_beams_from_edges(
+        edges, pair_min_ft, pair_max_ft, concentric_tol_ft)
+    if curved_segments:
+        status["curved_pair"] += len(curved_segments)
     if lone:
         status["arc_lone"] += lone
 
     refined = _apply_beam_marks(segments, texts,
                                 config.mm_to_ft(tol["mark_radius_mm"]))
+    refined += _apply_curved_marks(curved_segments, texts,
+                                   config.mm_to_ft(tol["mark_radius_mm"]))
     if refined:
         status["text_sized"] = refined
 
     segments, dropped = _filter_beam_segments(segments, limits or DEFAULT_LIMITS,
                                               standards or {}, tol["snap_tol_mm"])
+    curved_segments, cdropped = _filter_beam_segments(
+        curved_segments, limits or DEFAULT_LIMITS, standards or {}, tol["snap_tol_mm"])
+    dropped += cdropped
     if dropped:
         status["width_out_of_range"] = dropped
+    if curved_segments:
+        review.append("{0} curved beam(s) detected".format(len(curved_segments)))
 
-    return {"segments": segments, "status_counts": dict(status), "review": review}
+    return {"segments": segments, "curved_segments": curved_segments,
+            "status_counts": dict(status), "review": review}
+
+
+def _group_arc_edges(arcs, center_tol_ft, radius_tol_ft):
+    """Cluster concentric, equal-radius arc fragments into edges.
+
+    `arcs` are (cx, cy, r, a0, a1, z) circle fits with the fragment's two endpoint
+    angles. Returns edge dicts {cx, cy, r, z, angles:[...], n} carrying the running-mean
+    centre/radius and every fragment's endpoint angles (for the swept-angle span).
+    """
+    edges = []
+    for cx, cy, r, a0, a1, z in arcs:
+        hit = None
+        for e in edges:
+            ecx, ecy, er = e["cx"] / e["n"], e["cy"] / e["n"], e["r"] / e["n"]
+            if (((cx - ecx) ** 2 + (cy - ecy) ** 2) ** 0.5 <= center_tol_ft
+                    and abs(r - er) <= radius_tol_ft):
+                hit = e
+                break
+        if hit is None:
+            edges.append({"cx": cx, "cy": cy, "r": r, "z": z,
+                          "angles": [a0, a1], "n": 1})
+        else:
+            hit["cx"] += cx
+            hit["cy"] += cy
+            hit["r"] += r
+            hit["n"] += 1
+            hit["angles"] += [a0, a1]
+    return edges
+
+
+def _curved_beams_from_edges(edges, pair_min_ft, pair_max_ft, center_tol_ft):
+    """Pair concentric inner/outer edges into curved beam segments.
+
+    Two edges sharing a centre whose radii differ by a real beam width (pair band) form
+    one curved member: centreline radius = mean of the two, width = the gap, swept angle =
+    the chain's populated arc. Returns (curved_segments, lone_fragment_count). Largest
+    edges (most fragments) pair first, so a long beam edge is not stolen by a stray arc.
+    """
+    order = sorted(range(len(edges)), key=lambda i: -edges[i]["n"])
+    paired = [False] * len(edges)
+    segs = []
+    for a_pos in range(len(order)):
+        i = order[a_pos]
+        if paired[i]:
+            continue
+        ei = edges[i]
+        cix, ciy, rin = ei["cx"] / ei["n"], ei["cy"] / ei["n"], ei["r"] / ei["n"]
+        for b_pos in range(a_pos + 1, len(order)):
+            j = order[b_pos]
+            if paired[j]:
+                continue
+            ej = edges[j]
+            cjx, cjy, rjn = ej["cx"] / ej["n"], ej["cy"] / ej["n"], ej["r"] / ej["n"]
+            if ((cix - cjx) ** 2 + (ciy - cjy) ** 2) ** 0.5 > center_tol_ft:
+                continue
+            gap = abs(rin - rjn)
+            if not (pair_min_ft < gap < pair_max_ft):
+                continue
+            cx, cy = (cix + cjx) / 2.0, (ciy + cjy) / 2.0
+            r_center = (rin + rjn) / 2.0
+            start_deg, end_deg = _arc_span(ei["angles"] + ej["angles"])
+            segs.append(_curved_segment(cx, cy, ei["z"], r_center, gap,
+                                        start_deg, end_deg))
+            paired[i] = paired[j] = True
+            break
+    lone = sum(edges[k]["n"] for k in range(len(edges)) if not paired[k])
+    return segs, lone
+
+
+def _arc_span(angles):
+    """(start_deg, end_deg) of the populated arc, sweeping CCW across the LARGEST gap.
+
+    The chain's fragment endpoint angles leave one big empty wedge (the un-drawn side);
+    the beam spans everything else. end_deg may exceed 360 so end > start (a CCW sweep).
+    """
+    pts = sorted(a % 360.0 for a in angles)
+    n = len(pts)
+    gi, gmax = 0, -1.0
+    for k in range(n):
+        gap = (pts[(k + 1) % n] - pts[k]) % 360.0
+        if gap > gmax:
+            gmax, gi = gap, k
+    start = pts[(gi + 1) % n]
+    end = pts[gi]
+    if end <= start:
+        end += 360.0
+    return start, end
+
+
+def _curved_segment(cx, cy, z, r_center_ft, width_ft, start_deg, end_deg):
+    """A placeable curved beam: centre, centreline radius, swept angle, width (mm/ft)."""
+    length_ft = math.radians(end_deg - start_deg) * r_center_ft
+    return {"kind": "curved",
+            "center": [cx, cy, z],
+            "radius_mm": r_center_ft * _MM, "radius_ft": r_center_ft,
+            "start_deg": start_deg, "end_deg": end_deg,
+            "width_mm": width_ft * _MM, "length_mm": length_ft * _MM,
+            "layer": "S-BEAM", "status": "curved"}
+
+
+def _apply_curved_marks(curved, texts, radius_ft):
+    """Size each curved beam from the nearest sized label to its mid-arc point.
+
+    Depth (the larger label value) and mark are taken from the label; the WIDTH stays the
+    geometric gap between the two edges (the 2D plan does carry a curved beam's width).
+    """
+    candidates = marks.sized_texts(texts or [])
+    if not candidates:
+        return 0
+    count = 0
+    for seg in curved:
+        cx, cy, _z = seg["center"]
+        mid = math.radians((seg["start_deg"] + seg["end_deg"]) / 2.0)
+        r = seg["radius_ft"]
+        hit = marks.nearest_sized_text(cx + r * math.cos(mid),
+                                       cy + r * math.sin(mid), candidates, radius_ft)
+        if hit is None:
+            continue
+        seg["depth_mm"] = max(hit.b_mm, hit.h_mm)
+        seg["mark"] = hit.mark
+        count += 1
+    return count
 
 
 def _apply_column_marks(entries, texts, radius_ft):
@@ -1365,12 +1496,15 @@ def _beam_segment(start, end, width_ft, z, layer, status):
 
 def format_beam_segments(beams):
     """Plain-text lines summarising beam derivation (no markup)."""
-    if not beams["segments"] and not beams["review"]:
+    curved = beams.get("curved_segments", [])
+    if not beams["segments"] and not curved and not beams["review"]:
         return []
     lines = ["Beam segments (centerline from outline):"]
     for status, count in sorted(beams["status_counts"].items()):
         lines.append("  {0:<16} {1}".format(status, count))
     lines.append("  {0:<16} {1}".format("-> segments", len(beams["segments"])))
+    if curved:
+        lines.append("  {0:<16} {1}".format("-> curved beams", len(curved)))
     widths = Counter(int(round(s["width_mm"])) for s in beams["segments"])
     if widths:
         lines.append("")

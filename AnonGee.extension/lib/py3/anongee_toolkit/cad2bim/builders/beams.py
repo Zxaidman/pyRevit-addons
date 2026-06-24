@@ -11,8 +11,10 @@ and cached.
 This module performs Revit writes and must run inside a Transaction.
 """
 
+import math
+
 from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
-                               FamilySymbol, XYZ, Line)
+                               FamilySymbol, XYZ, Line, Arc)
 from Autodesk.Revit.DB.Structure import StructuralType
 
 from ..unit_convert import mm_to_internal
@@ -70,6 +72,52 @@ def place_beams(doc, segments, base_symbol_id, level_id):
             curve = Line.CreateBound(XYZ(sx, sy, elevation), XYZ(ex, ey, elevation))
             instance = doc.Create.NewFamilyInstance(
                 curve, symbol, level, StructuralType.Beam)
+            result["created"].append(instance.Id)
+        except Exception as placement_error:
+            result["errors"].append(str(placement_error))
+    return result
+
+
+def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
+    """Place a curved beam for each concentric-arc-pair segment, driven by an Arc.
+
+    Mirrors place_beams (same per-size type duplication + cache, same width/depth rules);
+    only the driving curve differs -- an Arc from the segment's centre, centreline radius
+    and swept angle. Runs inside a caller-owned Transaction; one bad segment never fails
+    the batch.
+    """
+    base_symbol = doc.GetElement(base_symbol_id)
+    level = doc.GetElement(level_id)
+    if base_symbol is None or level is None:
+        raise ValueError("beam family or level could not be resolved")
+
+    elevation = level.Elevation
+    cache = {}
+    result = {"created": [], "skipped": [], "errors": []}
+
+    for segment in curved_segments or []:
+        try:
+            if segment["length_mm"] < _MIN_BEAM_LENGTH_MM:
+                result["skipped"].append(
+                    "tiny curved beam {0:.0f} mm".format(segment["length_mm"]))
+                continue
+            width_mm = int(round(segment["width_mm"]))
+            depth_mm = segment.get("depth_mm")
+            if depth_mm is not None:
+                depth_mm = int(round(depth_mm))
+            symbol = _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache)
+            if not symbol.IsActive:
+                symbol.Activate()
+                doc.Regenerate()
+            cx, cy, _cz = segment["center"]
+            # Keep startAngle in [0, 2pi) and sweep CCW by (end - start) <= 2pi, the form
+            # Arc.Create expects (angles measured CCW from the X axis about Z).
+            start = math.radians(segment["start_deg"]) % (2.0 * math.pi)
+            sweep = math.radians(segment["end_deg"] - segment["start_deg"])
+            arc = Arc.Create(XYZ(cx, cy, elevation), segment["radius_ft"],
+                             start, start + sweep, XYZ.BasisX, XYZ.BasisY)
+            instance = doc.Create.NewFamilyInstance(
+                arc, symbol, level, StructuralType.Beam)
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))

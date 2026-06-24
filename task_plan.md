@@ -92,9 +92,16 @@ Sub-phases (priority order TBD with user):
       curved-arc-pair, so these become `bare_line_unpaired` (13). Need a rule to turn a
       single labelled line into a beam (width+depth from label; offset/centred correctly).
       REQUIRES knowing whether the line is an EDGE (beam extends inward) or a CENTERLINE.
-- [ ] **5c. Curved beam placement** (B18/B19). The concentric-arc curved beam IS detected
-      (`curved_pair: 1`) but explicitly NOT placed ("placement to follow"). Implement
-      placement of a curved structural framing member.
+- [x] **5c. Curved beam placement** (B18) — DONE. Was detected (`curved_pair`) but discarded
+      ("placement to follow"). Now: arc fragments are clustered into concentric EDGES
+      (`_group_arc_edges`), inner/outer edge pairs become curved beam segments
+      (`_curved_beams_from_edges`) with centreline radius, width=gap, swept angle via
+      `_arc_span` (largest-gap), depth+mark from nearest label (`_apply_curved_marks`).
+      `build_beam_segments` now returns a `curved_segments` list. Builder
+      `beams.place_curved_beams` places each along an `Arc` (wired into script.py
+      `_create_beams`). Verified: Test19 B18 = center(11000,5500) R2500 width400 depth900
+      span 279->443 deg; straight-beam counts byte-identical on ALL fixtures; 3 Messy plans
+      also gain curved beams; arc_lone drops to ~0. Added `tests/test_curved_beams.py` (4).
 - [ ] **5d. Implied/spanning beams + far labels**. Several labels (B3,B5,B7,B8,B9,B10,B22,
       B18,B19) sit 1200–2800 mm from any beam line — geometry may be implied (span between
       columns) or drawn in a way not yet matched. Needs ground-truth clarification.
@@ -104,6 +111,7 @@ Sub-phases (priority order TBD with user):
 single EDGE lines (extend inward by width) or centrelines? How many beams should place?
 Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 
-## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a (text routing) DONE.
-User chose: do 5a first; beam convention "not sure/mixed" (infer per-line, verify vs
-harness). NEXT = 5b single-line/perimeter beam detection (the 13 bare_line_unpaired).
+## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a (text routing) + 5c (curved) DONE.
+Order done: 5a, then 5c (user picked curved first). NEXT = 5b single-line/perimeter beam
+detection (the 13 bare_line_unpaired) -- the biggest remaining gap; convention "mixed"
+(infer EDGE vs CENTRELINE per line). Then 5d implied/far-label beams.
