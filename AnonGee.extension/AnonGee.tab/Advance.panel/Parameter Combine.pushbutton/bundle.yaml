@@ -1,9 +1,8 @@
 title: Parameter Combination
 author: AnonGee
-context: selection
 tooltip: |
-  Write a value into a target parameter across the selected elements, built
-  from one of four operations with a live, per-element preview before you apply.
+  Write a value into a target parameter across model elements, built from one
+  of four operations with a live, per-element preview before you apply.
 
   Operations
     • Formula — combine source parameters (and optional math) into the target.
@@ -12,5 +11,7 @@ tooltip: |
     • Sequence — number elements from a start value and step.
 
   Notes
-    • Select elements before running; an output text case can be forced.
-    • Tick the rows to change in the preview; all edits run in one transaction.
+    • No selection needed — on launch, pick a scope (Active View or Whole Model)
+      and the categories to load.
+    • Tick the rows to change in the preview; an output text case can be forced.
+    • All edits run in a single transaction.

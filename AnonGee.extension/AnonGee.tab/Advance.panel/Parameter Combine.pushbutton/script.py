@@ -30,6 +30,7 @@ from System import String, Predicate, Object, Boolean
 from System.Collections.Generic import List
 from System.Windows.Data import CollectionViewSource
 from System.Windows.Input import Key
+from System.Windows.Controls import CheckBox, ListBoxItem, TextBlock
 from System.Data import DataTable
 
 # Safe Math Dictionary for eval()
@@ -630,22 +631,172 @@ class ParameterCombinerApp(object):
 
 
 # ====================================================================
+# SCOPE / CATEGORY PICKER (Stage 1)
+# ====================================================================
+
+class ScopePickerApp(object):
+    """First-stage popup: pick a scope (Active View / Whole Model) and the
+    element categories to load. No prior Revit selection is required."""
+
+    def __init__(self, xaml_path, uidoc, document):
+        self.uidoc = uidoc
+        self.document = document
+        self.selected_elements = []   # populated on Load Elements
+
+        stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
+        self.window = XamlReader.Load(stream)
+        stream.Close()
+        WindowInteropHelper(self.window).Owner = Process.GetCurrentProcess().MainWindowHandle
+
+        f = self.window.FindName
+        self.rb_view       = f("rb_view")
+        self.rb_whole      = f("rb_whole")
+        self.category_list = f("category_list")
+        self.cat_count     = f("cat_count")
+        self.status_text   = f("status_text")
+        self.btn_all       = f("btn_all")
+        self.btn_none      = f("btn_none")
+        self.btn_load      = f("btn_load")
+        self.btn_cancel    = f("btn_cancel")
+
+        self.rb_view.Checked  += self.on_scope_changed
+        self.rb_whole.Checked += self.on_scope_changed
+        self.btn_all.Click    += self.on_all
+        self.btn_none.Click   += self.on_none
+        self.btn_load.Click   += self.on_load
+        self.btn_cancel.Click += self.on_cancel
+
+        self.refresh_category_list()
+
+    # ── Revit collection helpers ────────────────────────────────────
+    def get_categories_by_scope(self):
+        cats = set()
+        try:
+            if self.rb_whole.IsChecked:
+                for c in self.document.Settings.Categories:
+                    if c.CategoryType == DB.CategoryType.Model and c.AllowsBoundParameters:
+                        try:
+                            cf = DB.ElementCategoryFilter(c.Id)
+                            if DB.FilteredElementCollector(self.document).WherePasses(cf) \
+                                    .WhereElementIsNotElementType().GetElementCount() > 0:
+                                cats.add(c.Name)
+                        except Exception:
+                            pass
+            else:
+                col = DB.FilteredElementCollector(self.document, self.document.ActiveView.Id) \
+                        .WhereElementIsNotElementType()
+                for e in col:
+                    if e.Category and e.Category.CategoryType == DB.CategoryType.Model:
+                        cats.add(e.Category.Name)
+        except Exception:
+            return []
+        return sorted(cats)
+
+    def get_elements_by_categories(self, category_names):
+        if not category_names:
+            return []
+        cat_ids = [c.Id for c in self.document.Settings.Categories if c.Name in category_names]
+        if not cat_ids:
+            return []
+        cat_list = List[DB.ElementId]()
+        for cid in cat_ids:
+            cat_list.Add(cid)
+        mf = DB.ElementMulticategoryFilter(cat_list)
+        if self.rb_whole.IsChecked:
+            collector = DB.FilteredElementCollector(self.document).WherePasses(mf)
+        else:
+            collector = DB.FilteredElementCollector(self.document, self.document.ActiveView.Id).WherePasses(mf)
+        return list(collector.WhereElementIsNotElementType().ToElements())
+
+    # ── Category list UI ────────────────────────────────────────────
+    def _checked_cat_names(self):
+        names = []
+        for item in self.category_list.Items:
+            chk = item.Content
+            if chk.IsChecked:
+                names.append(chk.Content.Text)
+        return names
+
+    def refresh_category_list(self):
+        self.category_list.Items.Clear()
+        cats = self.get_categories_by_scope()
+        for name in cats:
+            tb = TextBlock()
+            tb.Text = name
+            chk = CheckBox()
+            chk.Content = tb
+            chk.IsChecked = False
+            item = ListBoxItem()
+            item.Content = chk
+            self.category_list.Items.Add(item)
+
+        n = len(cats)
+        self.cat_count.Text = "{} categor{}".format(n, "y" if n == 1 else "ies")
+        if not cats:
+            self.set_status("No model categories found in this scope.", True)
+        else:
+            self.set_status("Tick categories to load, then Load Elements.")
+
+    def set_status(self, message, is_error=False):
+        self.status_text.Text = message
+        self.status_text.Foreground = BRUSH_ERROR if is_error else BRUSH_MUTED
+
+    # ── Events ──────────────────────────────────────────────────────
+    def on_scope_changed(self, sender, args):
+        self.refresh_category_list()
+
+    def on_all(self, sender, args):
+        for item in self.category_list.Items:
+            item.Content.IsChecked = True
+
+    def on_none(self, sender, args):
+        for item in self.category_list.Items:
+            item.Content.IsChecked = False
+
+    def on_cancel(self, sender, args):
+        self.selected_elements = []
+        self.window.Close()
+
+    def on_load(self, sender, args):
+        cats = self._checked_cat_names()
+        if not cats:
+            self.set_status("Select at least one category.", True)
+            return
+        try:
+            elements = self.get_elements_by_categories(cats)
+        except Exception as ex:
+            self.set_status("Could not collect elements: {}".format(ex), True)
+            return
+        if not elements:
+            self.set_status("No elements found in the selected categories.", True)
+            return
+        self.selected_elements = elements
+        self.window.Close()
+
+
+# ====================================================================
 # MAIN EXECUTION
 # ====================================================================
 
 if __name__ == "__main__":
     uidoc = __revit__.ActiveUIDocument
-    doc = uidoc.Document
+    selected_elements = []
 
-    selection_ids = uidoc.Selection.GetElementIds()
-    selected_elements = [doc.GetElement(e_id) for e_id in selection_ids]
-
-    if not selected_elements:
-        TaskDialog.Show("Error", "Please select elements before running this tool.")
+    if uidoc is None:
+        TaskDialog.Show("Parameter Combination", "Open a Revit model to run this tool.")
     else:
+        doc = uidoc.Document
         script_dir = os.path.dirname(__file__)
+        picker_path = os.path.join(script_dir, 'picker.xaml')
         xaml_path = os.path.join(script_dir, 'ui.xaml')
-        
+
+        # Stage 1 — scope & category picker (no prior selection required)
+        picker = ScopePickerApp(picker_path, uidoc, doc)
+        picker.window.ShowDialog()
+        selected_elements = picker.selected_elements
+
+    if selected_elements:
+        # Stage 2 — main parameter-combination window
         app = ParameterCombinerApp(xaml_path, selected_elements, doc)
         app.window.ShowDialog()
 
