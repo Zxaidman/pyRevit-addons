@@ -86,12 +86,18 @@ Sub-phases (priority order TBD with user):
       sized label within mark_radius). Verified: Test19 B23 now sized 300x900 + mark
       (was family-default depth). Added `tests/test_beam_text_sizing.py` (3 tests).
       NOTE: only helps DETECTED beams — Test19 still 1/23 until 5b lands.
-- [ ] **5b. Single-line / perimeter beam detection** (BIGGEST gap, ~13+ beams). Many beams
-      are drawn as ONE edge line (perimeter) or a single centerline, not closed outlines
-      or parallel pairs. Current detector only does closed-outline + parallel-pair +
-      curved-arc-pair, so these become `bare_line_unpaired` (13). Need a rule to turn a
-      single labelled line into a beam (width+depth from label; offset/centred correctly).
-      REQUIRES knowing whether the line is an EDGE (beam extends inward) or a CENTERLINE.
+- [x] **5b. Perimeter / floor-clipped beam detection** — DONE (the user's A-FLOR insight).
+      Revit clips a perimeter beam's inner edge against the floor (A-FLOR) outline, so only
+      ONE beam edge survives on S-BEAM; the other edge IS the floor edge. Fix: classify
+      `flor|floor` -> CATEGORY_SLAB_EDGE (was unmapped placeholder); `build_beam_segments`
+      collects floor_lines; new `_edge_pair_beams` pass pairs leftover beam lines + slab
+      edges into width-band candidates and keeps one ONLY where an unplaced beam label of
+      matching width sits across it (`_point_to_segment_dist` < mark_radius). Spatial dedup
+      (`_coincides_with_a_beam`, tol `_EDGE_DUP_TOL_MM=250`) drops an edge pair that
+      re-traces an already-placed beam (fixes Test9/10/11 where the floor outline duplicates
+      beams). Verified: existing line_pair/curved BYTE-IDENTICAL on all fixtures; Test19 1->21
+      of 23; Raheja +4. Added tests/test_perimeter_beams.py (5). KNOWN gaps: B20 (its -600
+      edge is consumed by B23's line_pair, validated correct) and B22 (900 wide > 600 limit).
 - [x] **5c. Curved beam placement** (B18) — DONE. Was detected (`curved_pair`) but discarded
       ("placement to follow"). Now: arc fragments are clustered into concentric EDGES
       (`_group_arc_edges`), inner/outer edge pairs become curved beam segments
@@ -111,7 +117,9 @@ Sub-phases (priority order TBD with user):
 single EDGE lines (extend inward by width) or centrelines? How many beams should place?
 Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 
-## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a (text routing) + 5c (curved) DONE.
-Order done: 5a, then 5c (user picked curved first). NEXT = 5b single-line/perimeter beam
-detection (the 13 bare_line_unpaired) -- the biggest remaining gap; convention "mixed"
-(infer EDGE vs CENTRELINE per line). Then 5d implied/far-label beams.
+## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a + 5c + 5b DONE (v0.26.0).
+Order done: 5a (text), 5c (curved), 5b (perimeter/floor-clipped). Test19 = 21/23 beams.
+NEXT (optional): 5d the 2 stragglers -- B22 (raise beam_width_max 600 -> ~1000 AND
+pair_max 700 to allow 900-wide beams; check regression) and B20 (shares its -600 edge with
+B23; needs a smarter pairing that respects label widths -- low priority). Otherwise beams
+are effectively done; confirm scope with user.

@@ -13,7 +13,7 @@ from collections import defaultdict, Counter
 from .geom import shapes
 from .classify import marks
 from . import config
-from .classify.layers import CATEGORY_COLUMN, CATEGORY_BEAM
+from .classify.layers import CATEGORY_COLUMN, CATEGORY_BEAM, CATEGORY_SLAB_EDGE
 
 _MM = config.MM_PER_FT
 
@@ -1157,6 +1157,7 @@ def format_column_sections(sections):
 # radius (so a beam's inner and outer edges -- one width apart -- never merge).
 _ARC_EDGE_CENTER_TOL_MM = 250.0   # arc fragments share an edge if their centres agree this far
 _ARC_EDGE_RADIUS_TOL_MM = 60.0    # ...and their radii agree this far (< any real beam width)
+_EDGE_DUP_TOL_MM = 250.0          # an edge-pair beam this close to a placed beam is a re-trace
 
 
 def build_beam_segments(records, circles=None, limits=None, standards=None,
@@ -1186,8 +1187,15 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     segments = []
     review = []
     bare_lines = []
+    floor_lines = []     # slab/floor edges -- the clipped partner edge of a perimeter beam
     arc_fits = []
     for record in records:
+        if record.category == CATEGORY_SLAB_EDGE:
+            if record.kind == "line" and len(record.points) >= 2:
+                pts = record.points
+                floor_lines.append(((pts[0][0], pts[0][1]),
+                                    (pts[-1][0], pts[-1][1]), pts[0][2]))
+            continue
         if record.category != CATEGORY_BEAM:
             continue
         if record.kind == "line":
@@ -1269,10 +1277,25 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     if lone:
         status["arc_lone"] += lone
 
-    refined = _apply_beam_marks(segments, texts,
-                                config.mm_to_ft(tol["mark_radius_mm"]))
-    refined += _apply_curved_marks(curved_segments, texts,
-                                   config.mm_to_ft(tol["mark_radius_mm"]))
+    radius_ft = config.mm_to_ft(tol["mark_radius_mm"])
+    refined = _apply_beam_marks(segments, texts, radius_ft)
+    refined += _apply_curved_marks(curved_segments, texts, radius_ft)
+
+    # (4) Perimeter / floor-clipped beams: a beam whose inner edge was clipped against the
+    # slab outline survives as a LONE beam line; pair the leftover beam lines and the slab
+    # edges, then keep a candidate only where a beam LABEL of matching width sits across it.
+    placed = set(s.get("mark") for s in segments if s.get("mark"))
+    placed |= set(s.get("mark") for s in curved_segments if s.get("mark"))
+    edge_beams = _edge_pair_beams(
+        leftover, floor_lines, texts, placed, segments,
+        pair_min_ft, pair_max_ft, config.mm_to_ft(tol["pair_min_overlap_mm"]),
+        math.sin(math.radians(tol["parallel_angle_deg"])),
+        config.mm_to_ft(tol["snap_tol_mm"]), radius_ft,
+        config.mm_to_ft(_EDGE_DUP_TOL_MM))
+    if edge_beams:
+        segments.extend(edge_beams)
+        status["edge_pair"] += len(edge_beams)
+        refined += len(edge_beams)
     if refined:
         status["text_sized"] = refined
 
@@ -1410,6 +1433,97 @@ def _apply_curved_marks(curved, texts, radius_ft):
         seg["mark"] = hit.mark
         count += 1
     return count
+
+
+def _edge_pair_beams(beam_leftover, floor_lines, texts, placed_marks, existing,
+                     pair_min_ft, pair_max_ft, min_overlap_ft, sin_tol,
+                     width_tol_ft, radius_ft, dup_tol_ft):
+    """Recover perimeter/floor-clipped beams: a lone beam line + the parallel slab edge.
+
+    Revit clips a perimeter beam's inner edge against the floor outline, so only one beam
+    edge survives on the beam layer and the other is on the slab/floor layer. Pair the
+    leftover beam lines AND the slab edges into width-band candidates, then KEEP one only
+    where a beam label (still unplaced) of matching width sits across it -- a slab edge on
+    its own (a real floor boundary) never becomes a beam. A candidate that lands on top of
+    an already-placed beam is dropped (where the floor outline simply re-traces a beam whose
+    two edges were both on the beam layer, that beam is already placed). Each candidate and
+    each label is used at most once. Returns the new (sized + marked) beam segments.
+    """
+    candidates = [t for t in marks.sized_texts(texts or [])
+                  if t.mark not in placed_marks]
+    if not candidates or len(beam_leftover) + len(floor_lines) < 2:
+        return []
+    pairs, _lo = shapes.pair_parallel_lines(
+        list(beam_leftover) + list(floor_lines), min_width_ft=pair_min_ft,
+        max_width_ft=pair_max_ft, min_overlap_ft=min_overlap_ft, sin_tol=sin_tol)
+    placed_lines = [(s["start"], s["end"]) for s in existing]
+    used = [False] * len(pairs)
+    out = []
+    for text in candidates:
+        w_small = min(text.b_mm, text.h_mm) / _MM
+        depth = max(text.b_mm, text.h_mm)
+        px, py = text.point_internal[0], text.point_internal[1]
+        best, best_d = None, None
+        for k, seg in enumerate(pairs):
+            if used[k] or abs(seg["width_ft"] - w_small) > width_tol_ft:
+                continue
+            d = _point_to_segment_dist(px, py, seg["start"], seg["end"])
+            if d > radius_ft:
+                continue
+            if best_d is None or d < best_d:
+                best_d, best = d, k
+        if best is None:
+            continue
+        seg = pairs[best]
+        if _coincides_with_a_beam(seg["start"], seg["end"], placed_lines, dup_tol_ft):
+            used[best] = True            # the floor outline re-traced an existing beam
+            continue
+        used[best] = True
+        beam = _beam_segment(seg["start"], seg["end"], w_small,
+                             seg["start"][2], "S-BEAM", "edge_pair")
+        beam["depth_mm"] = depth
+        beam["mark"] = text.mark
+        placed_lines.append((seg["start"], seg["end"]))
+        out.append(beam)
+    return out
+
+
+def _coincides_with_a_beam(start, end, placed_lines, perp_tol_ft):
+    """True when centreline start->end runs along an already-placed beam centreline.
+
+    Parallel (within ~5 deg) and the candidate's mid-point lies within perp_tol of the
+    placed centreline (clamped to its span) -- i.e. they are the same beam, drawn once on
+    the beam layer and again as the coincident floor edge.
+    """
+    mx, my = (start[0] + end[0]) / 2.0, (start[1] + end[1]) / 2.0
+    adx, ady = end[0] - start[0], end[1] - start[1]
+    la = (adx * adx + ady * ady) ** 0.5
+    if la == 0:
+        return False
+    for ps, pe in placed_lines:
+        bdx, bdy = pe[0] - ps[0], pe[1] - ps[1]
+        lb = (bdx * bdx + bdy * bdy) ** 0.5
+        if lb == 0:
+            continue
+        if abs(adx * bdy - ady * bdx) / (la * lb) > 0.087:   # not parallel (~5 deg)
+            continue
+        if _point_to_segment_dist(mx, my, ps, pe) <= perp_tol_ft:
+            return True
+    return False
+
+
+def _point_to_segment_dist(px, py, start, end):
+    """Planar distance from (px, py) to segment start->end (clamped to the segment)."""
+    ax, ay = start[0], start[1]
+    bx, by = end[0], end[1]
+    dx, dy = bx - ax, by - ay
+    length2 = dx * dx + dy * dy
+    if length2 == 0:
+        return ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+    t = ((px - ax) * dx + (py - ay) * dy) / length2
+    t = max(0.0, min(1.0, t))
+    cx, cy = ax + t * dx, ay + t * dy
+    return ((px - cx) ** 2 + (py - cy) ** 2) ** 0.5
 
 
 def _apply_column_marks(entries, texts, radius_ft):

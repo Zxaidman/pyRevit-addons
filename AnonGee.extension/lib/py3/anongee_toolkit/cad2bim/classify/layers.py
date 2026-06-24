@@ -33,13 +33,15 @@ EXCLUSION_PATTERNS = (
 )
 
 # Order matters: first regex (case-insensitive) to match wins.
-# 'floor' is intentionally NOT a slab token -- A-FLOR is architectural finish,
-# not a structural slab edge (structural slabs derive from the beam graph).
+# A perimeter beam's inner edge is clipped against the floor/slab outline at import, so the
+# floor edge (A-FLOR) IS the surviving partner edge for half the beams. It is routed to
+# slab_edge so the beam pass can pair a lone beam line against it (label-confirmed only --
+# a slab edge alone never becomes a beam).
 DEFAULT_CONVENTION = (
     (r"grid|axis", CATEGORY_GRID),
     (r"col", CATEGORY_COLUMN),
     (r"beam|girder|joist", CATEGORY_BEAM),
-    (r"slab", CATEGORY_SLAB_EDGE),
+    (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
 )
 
 ALL_CATEGORIES = (

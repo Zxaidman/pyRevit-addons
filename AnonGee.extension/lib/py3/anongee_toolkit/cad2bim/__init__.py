@@ -35,7 +35,20 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.25.0"  # BEAMS: size them from labels + place curved beams. (1) The push-
+__version__ = "0.26.0"  # BEAMS: recover perimeter / floor-clipped beams from the slab edge.
+#                         Revit clips a perimeter beam's inner edge against the floor (A-FLOR)
+#                         outline, so only ONE beam edge survives on the beam layer -- the
+#                         parallel-pair detector saw a lone line and dropped it (Test19 placed
+#                         1 of 23 beams). Floor layers now classify as slab_edge; a new pass
+#                         pairs each leftover beam line AND each slab edge into width-band
+#                         candidates and KEEPS one only where a beam label of matching width
+#                         sits across it (a slab edge alone never becomes a beam). An edge pair
+#                         that merely re-traces an already-placed beam is dropped (no doubles).
+#                         Existing line_pair/curved beams are byte-identical on every fixture;
+#                         Test19 goes from 1 to 21 of 23 placed (B20 shares its edge with B23;
+#                         B22 is 900 wide, past the 600 mm beam-width limit).
+
+# 0.25.0  BEAMS: size them from labels + place curved beams. (1) The push-
 #                         button called build_beam_segments with texts=None and never routed
 #                         the beam text layer, so beam DEPTH (the larger label dimension a 2D
 #                         plan can't supply) and the mark were dropped -- every beam used the

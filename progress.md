@@ -182,3 +182,35 @@ or a follow-on pass. THEN verify with /tmp/beams2.py that Test19 placed count ri
 implied beams (5d) come after.
 Recreate harness first if /tmp is gone (see top of this file): /tmp/boot.py, /tmp/pylibs,
 and rebuild /tmp/beams2.py per findings.md "Harness for beams".
+
+## 5b DONE (perimeter / floor-clipped beam recovery) + v0.26.0 — committed this session
+User's domain insight: Revit clips a perimeter beam's inner edge against the A-FLOR floor
+outline, so only ONE beam edge survives on S-BEAM; the floor edge is the other edge. Verified
+ALL 23 Test19 beam labels match a parallel pair (gap == label width exactly) from the combined
+S-BEAM + A-FLOR pool (BF perimeter, FF interior, BB = B23).
+- layers.py: `flor|floor` -> CATEGORY_SLAB_EDGE (was an unused placeholder category; the old
+  comment deliberately excluded floor -- replaced).
+- report.py: build_beam_segments collects floor_lines (CATEGORY_SLAB_EDGE). New pass (4)
+  `_edge_pair_beams(leftover_beam, floor, texts, placed_marks, existing, ...)`: pair the
+  combined pool via shapes.pair_parallel_lines, keep a candidate ONLY where an unplaced beam
+  label of matching width (snap_tol) is within mark_radius of the centreline
+  (`_point_to_segment_dist`). Spatial dedup `_coincides_with_a_beam` (parallel + midpoint
+  within `_EDGE_DUP_TOL_MM`=250 of a placed beam) drops floor re-traces of existing beams.
+  Each label + each candidate used once. status key `edge_pair`.
+- CRITICAL BUG caught + fixed during dev: without spatial dedup, Test9/10/11 (floor outline
+  traces the beams) DOUBLED 52 beams (edge_pair on top of line_pair). Dedup -> those plans
+  now add 0 edge beams (correct). Final regression: existing line_pair/curved BYTE-IDENTICAL
+  on ALL fixtures; only Test19 (+19 -> 21/23) and Raheja (+4) gain beams. No geometric dups.
+- 11 test files pass (added test_perimeter_beams.py, 5). verify_toolkit 129 passed/3 pre-existing.
+- KNOWN remaining (Test19): B20 unplaced (its y=-600 edge consumed by B23's line_pair, which
+  the user validated as correct) and B22 unplaced (900x900: width 900 > beam_width_max 600 AND
+  > pair_max 700). Both are edge cases, noted for user.
+
+## THE VERY NEXT ACTION = optional 5d (B20/B22) OR confirm beams done
+- B22: raise `beam_width_max_mm` (600 -> ~1000) AND `pair_max_width_mm` (700 -> ~1000) in
+  config.py to admit 900-wide beams; re-run beam regression (risk: wider false pairs).
+- B20: would need label-width-aware pairing in pass (2) so beam-beam greedy pairing doesn't
+  steal an edge a floor pairing needs; low priority / ambiguous.
+- If user is happy at 21/23, beams are effectively done -> consider a PR or continue.
+Harness (recreate if /tmp gone): /tmp/boot.py + /tmp/pylibs; /tmp/beamall.py (per-fixture
+status line), /tmp/beam5b.py (Test19 placed beams + missing), /tmp/dup.py (over-gen check).
