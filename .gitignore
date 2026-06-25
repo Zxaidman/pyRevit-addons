@@ -1,5 +1,4 @@
 # --- Your Existing Rules ---
-.claude
 .env
 __pycache__
 bin
