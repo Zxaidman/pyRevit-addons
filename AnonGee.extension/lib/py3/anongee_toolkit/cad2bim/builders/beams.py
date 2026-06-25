@@ -14,7 +14,7 @@ This module performs Revit writes and must run inside a Transaction.
 import math
 
 from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
-                               FamilySymbol, XYZ, Line, Arc)
+                               FamilySymbol, XYZ, Line, Arc, BuiltInParameter)
 from Autodesk.Revit.DB.Structure import StructuralType
 
 from ..unit_convert import mm_to_internal
@@ -23,6 +23,18 @@ from ..compat import get_element_name
 _WIDTH_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _DEPTH_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
 _MIN_BEAM_LENGTH_MM = 50.0   # ignore slivers shorter than this
+
+
+def _set_mark(instance, mark):
+    """Stamp the instance 'Mark' parameter (e.g. B1) when a mark was resolved."""
+    if not mark:
+        return
+    try:
+        parameter = instance.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)
+        if parameter is not None and not parameter.IsReadOnly:
+            parameter.Set(str(mark))
+    except Exception:
+        pass   # naming is best-effort; never fail placement over a mark
 
 
 def structural_framing_symbols(doc):
@@ -72,6 +84,7 @@ def place_beams(doc, segments, base_symbol_id, level_id):
             curve = Line.CreateBound(XYZ(sx, sy, elevation), XYZ(ex, ey, elevation))
             instance = doc.Create.NewFamilyInstance(
                 curve, symbol, level, StructuralType.Beam)
+            _set_mark(instance, segment.get("mark"))
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))
@@ -118,6 +131,7 @@ def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
                              start, start + sweep, XYZ.BasisX, XYZ.BasisY)
             instance = doc.Create.NewFamilyInstance(
                 arc, symbol, level, StructuralType.Beam)
+            _set_mark(instance, segment.get("mark"))
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))

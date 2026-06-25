@@ -48,11 +48,16 @@ report = _load_report()
 
 
 class _Rec(object):
-    def __init__(self, category, x0, y0, x1, y1):
-        self.kind = "line"
+    def __init__(self, category, *pts_mm):
+        # 2 points -> a line; more -> a polyline (the Revit link reader's floor outline).
+        self.kind = "line" if len(pts_mm) == 2 else "polyline"
         self.category = category
         self.layer = category
-        self.points = [(x0 * _FT, y0 * _FT, 0.0), (x1 * _FT, y1 * _FT, 0.0)]
+        self.points = [(x * _FT, y * _FT, 0.0) for (x, y) in pts_mm]
+
+
+def _line(category, x0, y0, x1, y1):
+    return _Rec(category, (x0, y0), (x1, y1))
 
 
 class _Lbl(object):
@@ -72,8 +77,8 @@ class PerimeterBeams(unittest.TestCase):
     def test_beam_from_lone_line_plus_floor_edge(self):
         # One surviving beam edge (y=400) + the parallel floor edge (y=0), 400 apart, with
         # a 400x900 label across them -> one edge_pair beam on the midline (y=200).
-        recs = [_Rec("beam", 0, 400, 4000, 400),
-                _Rec("slab_edge", 0, 0, 4000, 0)]
+        recs = [_line("beam", 0, 400, 4000, 400),
+                _line("slab_edge", 0, 0, 4000, 0)]
         label = _Lbl("B1", 400.0, 900.0, 2000, 200)
         out = report.build_beam_segments(recs, None, None, None, texts=[label])
         eb = _edge_beams(out)
@@ -86,22 +91,22 @@ class PerimeterBeams(unittest.TestCase):
 
     def test_no_label_means_no_perimeter_beam(self):
         # The same geometry without a label must NOT invent a beam from a floor edge.
-        recs = [_Rec("beam", 0, 400, 4000, 400),
-                _Rec("slab_edge", 0, 0, 4000, 0)]
+        recs = [_line("beam", 0, 400, 4000, 400),
+                _line("slab_edge", 0, 0, 4000, 0)]
         out = report.build_beam_segments(recs, None, None, None, texts=None)
         self.assertEqual(_edge_beams(out), [])
 
     def test_slab_edges_alone_make_no_beam_without_label(self):
         # Two floor edges a beam-width apart but no label -> a real floor boundary, not a beam.
-        recs = [_Rec("slab_edge", 0, 400, 4000, 400),
-                _Rec("slab_edge", 0, 0, 4000, 0)]
+        recs = [_line("slab_edge", 0, 400, 4000, 400),
+                _line("slab_edge", 0, 0, 4000, 0)]
         out = report.build_beam_segments(recs, None, None, None, texts=None)
         self.assertEqual(_edge_beams(out), [])
 
     def test_wrong_width_floor_edge_not_paired(self):
         # Floor edge 900 from the beam line but label width is 400 -> no match.
-        recs = [_Rec("beam", 0, 900, 4000, 900),
-                _Rec("slab_edge", 0, 0, 4000, 0)]
+        recs = [_line("beam", 0, 900, 4000, 900),
+                _line("slab_edge", 0, 0, 4000, 0)]
         label = _Lbl("B1", 400.0, 900.0, 2000, 450)
         out = report.build_beam_segments(recs, None, None, None, texts=[label])
         self.assertEqual(_edge_beams(out), [])
@@ -110,14 +115,49 @@ class PerimeterBeams(unittest.TestCase):
         # A beam drawn with BOTH edges on the beam layer (y=0 and y=400) -> one line_pair
         # beam. The floor outline re-traces the same two edges; the coincident edge pair
         # must be dropped, not placed as a second beam.
-        recs = [_Rec("beam", 0, 0, 4000, 0),
-                _Rec("beam", 0, 400, 4000, 400),
-                _Rec("slab_edge", 0, 0, 4000, 0),
-                _Rec("slab_edge", 0, 400, 4000, 400)]
+        recs = [_line("beam", 0, 0, 4000, 0),
+                _line("beam", 0, 400, 4000, 400),
+                _line("slab_edge", 0, 0, 4000, 0),
+                _line("slab_edge", 0, 400, 4000, 400)]
         label = _Lbl("B1", 400.0, 900.0, 2000, 200)
         out = report.build_beam_segments(recs, None, None, None, texts=[label])
         self.assertEqual(len(_edge_beams(out)), 0)
         self.assertEqual(out["status_counts"].get("line_pair"), 1)
+
+    def test_floor_edge_as_polyline_is_exploded(self):
+        # The Revit link reader returns the floor outline as ONE polyline, not loose lines.
+        # Its segments must still be available to pair with a lone beam line.
+        recs = [_line("beam", 0, 400, 4000, 400),
+                _Rec("slab_edge", (0, 0), (4000, 0), (4000, -3000))]   # L-shaped floor poly
+        label = _Lbl("B1", 400.0, 900.0, 2000, 200)
+        out = report.build_beam_segments(recs, None, None, None, texts=[label])
+        eb = _edge_beams(out)
+        self.assertEqual(len(eb), 1)             # paired with the polyline's y=0 segment
+        self.assertEqual(eb[0]["mark"], "B1")
+
+    def test_mark_only_beam_sized_from_schedule(self):
+        # A mark-only beam label ("B1", no inline size) is sized from the schedule.
+        recs = [_line("beam", 0, 0, 4000, 0),
+                _line("beam", 0, 300, 4000, 300)]   # line_pair, 300 wide
+        label = _Lbl("B1", None, None, 2000, 150)
+        out = report.build_beam_segments(recs, None, None, None, texts=[label],
+                                         schedule={"B1": (300.0, 600.0)})
+        s = out["segments"][0]
+        self.assertEqual(s["mark"], "B1")
+        self.assertAlmostEqual(s["depth_mm"], 600.0, delta=1.0)   # from schedule
+
+    def test_duplicate_mark_is_deduped(self):
+        # Two parallel beams with a single label between them must not BOTH take the mark.
+        recs = [_line("beam", 0, 0, 4000, 0),
+                _line("beam", 0, 300, 4000, 300),       # beam A (y=150)
+                _line("beam", 0, 1200, 4000, 1200),
+                _line("beam", 0, 1500, 4000, 1500)]     # beam B (y=1350)
+        label = _Lbl("B1", 300.0, 600.0, 2000, 200)     # nearest beam A
+        out = report.build_beam_segments(recs, None, None, None, texts=[label])
+        marked = [s for s in out["segments"] if s.get("mark") == "B1"]
+        self.assertEqual(len(marked), 1)                # only the nearer beam keeps B1
+        self.assertAlmostEqual((marked[0]["start"][1] + marked[0]["end"][1]) / 2.0 / _FT,
+                               150.0, delta=5.0)
 
 
 if __name__ == "__main__":

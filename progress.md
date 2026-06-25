@@ -214,3 +214,29 @@ S-BEAM + A-FLOR pool (BF perimeter, FF interior, BB = B23).
 - If user is happy at 21/23, beams are effectively done -> consider a PR or continue.
 Harness (recreate if /tmp gone): /tmp/boot.py + /tmp/pylibs; /tmp/beamall.py (per-fixture
 status line), /tmp/beam5b.py (Test19 placed beams + missing), /tmp/dup.py (over-gen check).
+
+## 5e DONE (Revit-run beam fixes from JSON) + v0.27.0 — committed this session
+User ran 0.26.0 in Revit on Test18 redrawn/fragmented + Test19, pushed JSON exports
+(.json/beam_test*_0.26.0_with_textmode.json). Found via the JSON (totals.by_category +
+beams.status_counts):
+- Revit `column`=57 but DXF reader sees 138 S-COLS -> the LINK READER returns geometry as
+  POLYLINES (geometry_reader.py:82 emits kind="polyline"). slab_edge=17 polylines (~55
+  segments). My floor_lines only took kind=="line" -> floor pool empty -> edge_pair=1, only
+  3 beams placed. FIX A: explode slab_edge line+polyline into segments.
+- Test18 beam labels are mark-only (b/h None); size is in the schedule (G-ANNO-SCHD). beam
+  sizing used inline-only sized_texts -> unsized. FIX B: pass `schedule` to build_beam_segments;
+  resolve via `_label_size`. SUB-BUG: beam schedule is Mark|W|H|L (H=depth, L=span) but
+  parse_schedule read (W,L) [role "l"=l/d/depth/length], giving depth=span(2960). Fixed
+  `_read_table` to read a BEAM mark's row as W x H (`_is_beam_mark`); columns stay W x L.
+- place_beams/place_curved_beams never set Mark. FIX C: `_set_mark` in beams.py (BuiltInParameter
+  .ALL_MODEL_MARK), called in both placers. Surfaced duplicate marks (B23 x2 in both Test18)
+  -> `_dedupe_marks` keeps mark on the segment nearest the label, clears others.
+- VERIFIED (DXF harness): Test19 21 beams all sized+marked (edge_pair 19 via DXF lines);
+  Test18 22 beams all sized from schedule W x H + marked, no duplicate marks. Columns
+  BYTE-IDENTICAL (shared parse_schedule change only affects B-marks). 11 test files pass;
+  verify_toolkit 129/3 pre-existing. Added schedule W x H tests + polyline/schedule/dedup
+  beam tests.
+- CAVEAT: A (polyline explode) and C (set mark) run on the Revit link path / Revit API -
+  verified by logic + DXF-line harness, NOT runtime in Revit. User should re-run 0.27.0 in
+  Revit to confirm Test19 places ~21 beams with correct marks/depths.
+- HELD per user: B20, B22.

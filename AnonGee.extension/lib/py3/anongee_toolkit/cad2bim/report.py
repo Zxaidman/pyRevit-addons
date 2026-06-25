@@ -1161,7 +1161,7 @@ _EDGE_DUP_TOL_MM = 250.0          # an edge-pair beam this close to a placed bea
 
 
 def build_beam_segments(records, circles=None, limits=None, standards=None,
-                        texts=None, tolerances=None):
+                        texts=None, tolerances=None, schedule=None):
     """Derive straight beam centerlines from beam-category geometry.
 
     When `texts` (sized DXF marks, internal feet) are given, each segment is
@@ -1191,10 +1191,14 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     arc_fits = []
     for record in records:
         if record.category == CATEGORY_SLAB_EDGE:
-            if record.kind == "line" and len(record.points) >= 2:
+            # A slab/floor outline often arrives as ONE polyline (the Revit link reader
+            # returns connected edges as a single polyline, not loose lines), so explode it
+            # into its straight segments -- each becomes a candidate partner edge for a beam.
+            if record.kind in ("line", "polyline"):
                 pts = record.points
-                floor_lines.append(((pts[0][0], pts[0][1]),
-                                    (pts[-1][0], pts[-1][1]), pts[0][2]))
+                for i in range(len(pts) - 1):
+                    floor_lines.append(((pts[i][0], pts[i][1]),
+                                        (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
             continue
         if record.category != CATEGORY_BEAM:
             continue
@@ -1277,9 +1281,13 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     if lone:
         status["arc_lone"] += lone
 
+    # A beam's DEPTH (and, for a mark-only label, its width) comes from the label: an inline
+    # "B1 300x600" or the schedule[mark] -- exactly as columns are sized. Resolve every beam
+    # label to a size once, then size segments / curved beams / edge pairs from it.
     radius_ft = config.mm_to_ft(tol["mark_radius_mm"])
-    refined = _apply_beam_marks(segments, texts, radius_ft)
-    refined += _apply_curved_marks(curved_segments, texts, radius_ft)
+    sized_labels = _sized_beam_labels(texts, schedule)
+    refined = _apply_beam_marks(segments, sized_labels, radius_ft)
+    refined += _apply_curved_marks(curved_segments, sized_labels, radius_ft)
 
     # (4) Perimeter / floor-clipped beams: a beam whose inner edge was clipped against the
     # slab outline survives as a LONE beam line; pair the leftover beam lines and the slab
@@ -1287,7 +1295,7 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     placed = set(s.get("mark") for s in segments if s.get("mark"))
     placed |= set(s.get("mark") for s in curved_segments if s.get("mark"))
     edge_beams = _edge_pair_beams(
-        leftover, floor_lines, texts, placed, segments,
+        leftover, floor_lines, sized_labels, placed, segments,
         pair_min_ft, pair_max_ft, config.mm_to_ft(tol["pair_min_overlap_mm"]),
         math.sin(math.radians(tol["parallel_angle_deg"])),
         config.mm_to_ft(tol["snap_tol_mm"]), radius_ft,
@@ -1411,31 +1419,31 @@ def _curved_segment(cx, cy, z, r_center_ft, width_ft, start_deg, end_deg):
             "layer": "S-BEAM", "status": "curved"}
 
 
-def _apply_curved_marks(curved, texts, radius_ft):
-    """Size each curved beam from the nearest sized label to its mid-arc point.
+def _apply_curved_marks(curved, sized_labels, radius_ft):
+    """Size each curved beam from the nearest beam label to its mid-arc point.
 
     Depth (the larger label value) and mark are taken from the label; the WIDTH stays the
     geometric gap between the two edges (the 2D plan does carry a curved beam's width).
     """
-    candidates = marks.sized_texts(texts or [])
-    if not candidates:
+    if not sized_labels:
         return 0
     count = 0
     for seg in curved:
         cx, cy, _z = seg["center"]
         mid = math.radians((seg["start_deg"] + seg["end_deg"]) / 2.0)
         r = seg["radius_ft"]
-        hit = marks.nearest_sized_text(cx + r * math.cos(mid),
-                                       cy + r * math.sin(mid), candidates, radius_ft)
+        hit = _nearest_sized_label(cx + r * math.cos(mid), cy + r * math.sin(mid),
+                                   sized_labels, radius_ft)
         if hit is None:
             continue
-        seg["depth_mm"] = max(hit.b_mm, hit.h_mm)
-        seg["mark"] = hit.mark
+        text, _small, big = hit
+        seg["depth_mm"] = big
+        seg["mark"] = text.mark
         count += 1
     return count
 
 
-def _edge_pair_beams(beam_leftover, floor_lines, texts, placed_marks, existing,
+def _edge_pair_beams(beam_leftover, floor_lines, sized_labels, placed_marks, existing,
                      pair_min_ft, pair_max_ft, min_overlap_ft, sin_tol,
                      width_tol_ft, radius_ft, dup_tol_ft):
     """Recover perimeter/floor-clipped beams: a lone beam line + the parallel slab edge.
@@ -1449,7 +1457,7 @@ def _edge_pair_beams(beam_leftover, floor_lines, texts, placed_marks, existing,
     two edges were both on the beam layer, that beam is already placed). Each candidate and
     each label is used at most once. Returns the new (sized + marked) beam segments.
     """
-    candidates = [t for t in marks.sized_texts(texts or [])
+    candidates = [(t, small, big) for (t, small, big) in sized_labels
                   if t.mark not in placed_marks]
     if not candidates or len(beam_leftover) + len(floor_lines) < 2:
         return []
@@ -1459,9 +1467,9 @@ def _edge_pair_beams(beam_leftover, floor_lines, texts, placed_marks, existing,
     placed_lines = [(s["start"], s["end"]) for s in existing]
     used = [False] * len(pairs)
     out = []
-    for text in candidates:
-        w_small = min(text.b_mm, text.h_mm) / _MM
-        depth = max(text.b_mm, text.h_mm)
+    for text, small, big in candidates:
+        w_small = small / _MM
+        depth = big
         px, py = text.point_internal[0], text.point_internal[1]
         best, best_d = None, None
         for k, seg in enumerate(pairs):
@@ -1553,26 +1561,86 @@ def _apply_column_marks(entries, texts, radius_ft):
     return count
 
 
-def _apply_beam_marks(segments, texts, radius_ft):
-    """Refine each beam segment from the nearest sized DXF mark, in place.
+def _sized_beam_labels(texts, schedule):
+    """[(text, small_mm, big_mm)] for beam labels with a resolvable size.
 
-    width = smaller mark value, depth = larger. Returns the count refined.
+    Size comes from the inline label ("B1 300x600") OR, for a mark-only label, from
+    schedule[mark] (a tabular beam schedule) -- the same precedence columns use. A label
+    with no size anywhere is dropped (a 2D outline cannot supply a beam's depth).
     """
-    candidates = marks.sized_texts(texts or [])
-    if not candidates:
+    out = []
+    for text in (texts or []):
+        if not text.point_internal:
+            continue
+        size = _label_size(text, schedule or {})
+        if size is not None:
+            out.append((text, size[0], size[1]))
+    return out
+
+
+def _nearest_sized_label(cx, cy, sized_labels, radius_ft):
+    """Nearest (text, small, big) within radius_ft of (cx, cy), or None."""
+    best, best_d2 = None, radius_ft * radius_ft
+    for text, small, big in sized_labels:
+        px, py = text.point_internal[0], text.point_internal[1]
+        d2 = (px - cx) ** 2 + (py - cy) ** 2
+        if d2 <= best_d2:
+            best, best_d2 = (text, small, big), d2
+    return best
+
+
+def _apply_beam_marks(segments, sized_labels, radius_ft):
+    """Size each beam segment from the nearest beam label (inline or schedule), in place.
+
+    width = smaller value, depth = larger, plus the mark. Returns the count sized.
+    """
+    if not sized_labels:
         return 0
     count = 0
     for segment in segments:
         cx = (segment["start"][0] + segment["end"][0]) / 2.0
         cy = (segment["start"][1] + segment["end"][1]) / 2.0
-        hit = marks.nearest_sized_text(cx, cy, candidates, radius_ft)
+        hit = _nearest_sized_label(cx, cy, sized_labels, radius_ft)
         if hit is None:
             continue
-        segment["width_mm"] = min(hit.b_mm, hit.h_mm)
-        segment["depth_mm"] = max(hit.b_mm, hit.h_mm)
-        segment["mark"] = hit.mark
+        text, small, big = hit
+        segment["width_mm"] = small
+        segment["depth_mm"] = big
+        segment["mark"] = text.mark
         count += 1
+    _dedupe_marks(segments, sized_labels)
     return count
+
+
+def _dedupe_marks(segments, sized_labels):
+    """A mark names ONE beam: when two segments both took the same label (it sits between
+    them), keep the mark on the segment nearest that label and clear it on the others.
+
+    The de-named segment keeps its size (a real member, just unnamed) -- placing two beams
+    with the same Mark would otherwise trip Revit's duplicate-mark warning.
+    """
+    label_pt = {}
+    for text, _small, _big in sized_labels:
+        if text.mark and text.mark not in label_pt:
+            label_pt[text.mark] = text.point_internal
+    by_mark = {}
+    for seg in segments:
+        m = seg.get("mark")
+        if m:
+            by_mark.setdefault(m, []).append(seg)
+    for mark, group in by_mark.items():
+        if len(group) < 2 or mark not in label_pt:
+            continue
+        px, py = label_pt[mark][0], label_pt[mark][1]
+
+        def _d2(seg):
+            cx = (seg["start"][0] + seg["end"][0]) / 2.0
+            cy = (seg["start"][1] + seg["end"][1]) / 2.0
+            return (cx - px) ** 2 + (cy - py) ** 2
+
+        group.sort(key=_d2)
+        for seg in group[1:]:
+            seg["mark"] = None
 
 
 def _filter_beam_segments(segments, limits, standards, snap_tol_mm):

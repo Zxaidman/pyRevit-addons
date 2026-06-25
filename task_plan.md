@@ -117,7 +117,17 @@ Sub-phases (priority order TBD with user):
 single EDGE lines (extend inward by width) or centrelines? How many beams should place?
 Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 
-## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a + 5c + 5b DONE (v0.26.0).
+- [x] **5e. Revit-run beam fixes (v0.27.0)** from the user's 0.26.0 JSON exports (3 issues):
+      (A) Revit link reader returns floor outlines as POLYLINES not lines -> floor pool empty,
+      only ~1 beam placed; now slab_edge polylines are exploded into segments. (B) mark-only
+      beam labels never sized -> build_beam_segments now takes `schedule`, sizes via
+      `_label_size`; beam schedule is Mark|W|H|L (H=depth, L=span) so `parse_schedule` reads a
+      BEAM row as W x H (columns stay W x L). (C) placed beams had no Mark -> both placers now
+      `_set_mark`; duplicate marks de-named to nearest (`_dedupe_marks`). Columns byte-identical;
+      added tests (schedule W x H, polyline floor, schedule sizing, dedup). NOTE: A/C are Revit
+      API / link-geometry paths -- verified by logic + DXF harness, not runtime in Revit.
+
+## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a+5c+5b+5e DONE (v0.27.0).
 Order done: 5a (text), 5c (curved), 5b (perimeter/floor-clipped). Test19 = 21/23 beams.
 NEXT (optional): 5d the 2 stragglers -- B22 (raise beam_width_max 600 -> ~1000 AND
 pair_max 700 to allow 900-wide beams; check regression) and B20 (shares its -600 edge with

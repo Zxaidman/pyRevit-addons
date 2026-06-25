@@ -647,19 +647,8 @@ def main():
     beam_texts = [t for t in dxf_result.texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
 
-    # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
-    # beam is sized from its label ("B1 300x600"): width = smaller value, depth = larger.
-    # Pass the beam-text labels in so each detected segment gets its depth + mark.
-    beam_segments = report.build_beam_segments(revit_result.records,
-                                               sections.get("circles"),
-                                               limits, standards,
-                                               texts=beam_texts, tolerances=tolerances)
-    sized_beams = beam_segments["status_counts"].get("text_sized", 0)
-    if sized_beams:
-        print("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
-
-    # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
-    # authoritative; any sized plan label supplements a mark the table omits.
+    # The schedule (mark -> size) sizes MARK-ONLY plan labels (columns AND beams). The
+    # table is authoritative; any sized plan label supplements a mark the table omits.
     schedule = marks.parse_schedule(schedule_texts)
     # Plan labels are NOT a table: only adopt an INLINE size ("C9 400x600") from one,
     # never split-pair a markless size label with a far mark sharing its row (which
@@ -668,6 +657,18 @@ def main():
         schedule.setdefault(mark, size)
     if schedule:
         print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
+
+    # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
+    # beam is sized from its label -- an inline "B1 300x600" OR a mark-only "B1" via the
+    # schedule. Pass beam labels + the schedule so each segment gets its width/depth + mark.
+    beam_segments = report.build_beam_segments(revit_result.records,
+                                               sections.get("circles"),
+                                               limits, standards,
+                                               texts=beam_texts, tolerances=tolerances,
+                                               schedule=schedule)
+    sized_beams = beam_segments["status_counts"].get("text_sized", 0)
+    if sized_beams:
+        print("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
 
     # Grid-line axis positions (internal feet) -> snap text-corrected column
     # centres onto the grid (columns sit on grid intersections).

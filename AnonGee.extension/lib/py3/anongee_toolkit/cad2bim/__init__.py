@@ -35,7 +35,20 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.26.0"  # BEAMS: recover perimeter / floor-clipped beams from the slab edge.
+__version__ = "0.27.0"  # BEAMS in Revit: fix three issues found in the 0.26.0 link run.
+#                         (A) The link reader returns the slab/floor outline as ONE polyline,
+#                         not loose lines, so the floor-edge pool was empty and only ~1 beam
+#                         placed -- slab edges are now exploded into segments. (B) A mark-only
+#                         beam label ("B1") was never sized: build_beam_segments now takes the
+#                         schedule and resolves each beam's size via _label_size (inline ->
+#                         schedule). The beam schedule is Mark|W|H|L (H = depth, L = span), so
+#                         parse_schedule now reads a BEAM row as W x H (was W x L = the span);
+#                         columns stay W x L. (C) Placed beams never carried their Mark -- both
+#                         beam placers now stamp it, and duplicate marks (two members sharing
+#                         one label between them) are de-named to the nearest. Columns are
+#                         byte-identical; beam geometry unchanged, now sized + named correctly.
+
+# 0.26.0  BEAMS: recover perimeter / floor-clipped beams from the slab edge.
 #                         Revit clips a perimeter beam's inner edge against the floor (A-FLOR)
 #                         outline, so only ONE beam edge survives on the beam layer -- the
 #                         parallel-pair detector saw a lone line and dropped it (Test19 placed

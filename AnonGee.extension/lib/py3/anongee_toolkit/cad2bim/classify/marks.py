@@ -222,18 +222,23 @@ def _parse_schedule_table(rows):
 def _read_table(header, data_rows, out):
     """Read one table's data rows into `out` using only that header's block x's.
 
-    Splits the header into side-by-side Mark|W|L (or Mark|Size) blocks and reads
-    each data row column by column; W x L is the plan size, any H column is ignored.
+    Splits the header into side-by-side Mark|W|L|H (or Mark|Size) blocks and reads each
+    data row column by column. The section is W x (its second dimension): for a COLUMN
+    that is W x L (footprint), the H column is the storey height and is ignored; for a
+    BEAM (a "B"-mark) the section is W x H (depth) and the L column is the SPAN, ignored.
+    A column schedule with the columns ordered "W H L" would otherwise read a beam's span
+    as its depth.
     """
-    blocks = []   # each: {"mark": x, "w": x, "l": x} or {"mark": x, "size": x}
+    blocks = []   # each: {"mark": x, "w": x, "l": x, "h": x} or {"mark": x, "size": x}
     current = None
     for x, role in header:
         if role == "mark":
             current = {"mark": x}
             blocks.append(current)
-        elif current is not None and role in ("w", "l", "size"):
+        elif current is not None and role in ("w", "l", "h", "size"):
             current.setdefault(role, x)
-    blocks = [b for b in blocks if ("w" in b and "l" in b) or "size" in b]
+    blocks = [b for b in blocks
+              if ("w" in b and ("l" in b or "h" in b)) or "size" in b]
     if not blocks:
         return
 
@@ -250,10 +255,20 @@ def _read_table(header, data_rows, out):
                 wh = _two_numbers(_cell_at(cells, block["size"], tol))
             else:
                 w = _number(_cell_at(cells, block["w"], tol))
-                l = _number(_cell_at(cells, block["l"], tol))
-                wh = (w, l) if (w is not None and l is not None) else None
+                l = _number(_cell_at(cells, block["l"], tol)) if "l" in block else None
+                h = _number(_cell_at(cells, block["h"], tol)) if "h" in block else None
+                if _is_beam_mark(name) and h is not None:
+                    second = h          # beam: depth is H; L is the span (ignore)
+                else:
+                    second = l if l is not None else h   # column: footprint W x L
+                wh = (w, second) if (w is not None and second is not None) else None
             if wh:
                 out.setdefault(name, wh)
+
+
+def _is_beam_mark(name):
+    """True for a beam mark like 'B1'/'B23' (a 'B' followed by a digit)."""
+    return bool(name) and name[:1].upper() == "B" and name[1:2].isdigit()
 
 
 def _cell_at(cells, target_x, tol):
