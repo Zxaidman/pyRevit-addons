@@ -11,6 +11,7 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 from Autodesk.Revit import DB
 from Autodesk.Revit.UI import TaskDialog
+from Autodesk.Revit.UI.Selection import ObjectType
 
 # Load .NET/WPF Libraries
 clr.AddReference('PresentationCore')
@@ -185,6 +186,7 @@ class ParameterCombinerApp(object):
         self.document = document
         self.is_updating = False
         self.apply_changes = False
+        self._suppress_recalc = False   # mute per-row Apply recalc during bulk edits
         
         stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
         self.window = XamlReader.Load(stream)
@@ -329,6 +331,10 @@ class ParameterCombinerApp(object):
         self.dt.ColumnChanged += self.on_dt_column_changed
 
     def on_dt_column_changed(self, sender, args):
+        # Muted during bulk edits (Select All/None, spacebar) so the preview is
+        # recomputed once afterwards instead of once per row (was O(n^2)).
+        if self._suppress_recalc:
+            return
         if args.Column.ColumnName == "Apply":
             self.update_previews()
 
@@ -340,13 +346,21 @@ class ParameterCombinerApp(object):
     # QOL GRID ACTIONS
     # ====================================================================
     def on_select_all(self, sender, args):
-        for row in self.dt.Rows: row["Apply"] = True
-        self.dt.AcceptChanges()
-        self.update_previews()
+        self._set_all_apply(True)
 
     def on_select_none(self, sender, args):
-        for row in self.dt.Rows: row["Apply"] = False
-        self.dt.AcceptChanges()
+        self._set_all_apply(False)
+
+    def _set_all_apply(self, value):
+        # Flip every row's Apply with the recalc handler muted, then recompute
+        # the preview a single time (one O(n) pass, not one per row).
+        self._suppress_recalc = True
+        try:
+            for row in self.dt.Rows:
+                row["Apply"] = value
+            self.dt.AcceptChanges()
+        finally:
+            self._suppress_recalc = False
         self.update_previews()
 
     def on_filter_focus(self, sender, args):
@@ -375,9 +389,13 @@ class ParameterCombinerApp(object):
             try:
                 first_row = self.ElementGrid.SelectedItems[0].Row
                 new_state = not first_row["Apply"]
-                for item in self.ElementGrid.SelectedItems:
-                    item.Row["Apply"] = new_state
-                self.dt.AcceptChanges()
+                self._suppress_recalc = True
+                try:
+                    for item in self.ElementGrid.SelectedItems:
+                        item.Row["Apply"] = new_state
+                    self.dt.AcceptChanges()
+                finally:
+                    self._suppress_recalc = False
                 self.update_previews()
                 args.Handled = True
             except: pass
@@ -642,6 +660,7 @@ class ScopePickerApp(object):
         self.uidoc = uidoc
         self.document = document
         self.selected_elements = []   # populated on Load Elements
+        self.pick_in_view = False     # set when the user chooses Select in View
 
         stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
         self.window = XamlReader.Load(stream)
@@ -656,6 +675,7 @@ class ScopePickerApp(object):
         self.status_text   = f("status_text")
         self.btn_all       = f("btn_all")
         self.btn_none      = f("btn_none")
+        self.btn_pick      = f("btn_pick")
         self.btn_load      = f("btn_load")
         self.btn_cancel    = f("btn_cancel")
 
@@ -663,6 +683,7 @@ class ScopePickerApp(object):
         self.rb_whole.Checked += self.on_scope_changed
         self.btn_all.Click    += self.on_all
         self.btn_none.Click   += self.on_none
+        self.btn_pick.Click   += self.on_pick_in_view
         self.btn_load.Click   += self.on_load
         self.btn_cancel.Click += self.on_cancel
 
@@ -753,6 +774,12 @@ class ScopePickerApp(object):
         for item in self.category_list.Items:
             item.Content.IsChecked = False
 
+    def on_pick_in_view(self, sender, args):
+        # Close first — the interactive pick needs Revit's UI thread, which is
+        # blocked while this modal dialog is open. main() runs the pick after.
+        self.pick_in_view = True
+        self.window.Close()
+
     def on_cancel(self, sender, args):
         self.selected_elements = []
         self.window.Close()
@@ -774,6 +801,24 @@ class ScopePickerApp(object):
         self.window.Close()
 
 
+def pick_elements_in_view(uidoc, document):
+    """Let the user pick elements directly in the active Revit view. Returns
+    the picked elements, or [] if the user cancels (Esc)."""
+    try:
+        refs = uidoc.Selection.PickObjects(
+            ObjectType.Element,
+            "Select elements for Parameter Combination, then click Finish (Esc to cancel)")
+    except Exception:
+        # OperationCanceledException on Esc, or a non-graphical active view
+        return []
+    out = []
+    for r in refs:
+        el = document.GetElement(r.ElementId)
+        if el is not None:
+            out.append(el)
+    return out
+
+
 # ====================================================================
 # MAIN EXECUTION
 # ====================================================================
@@ -793,7 +838,12 @@ if __name__ == "__main__":
         # Stage 1 — scope & category picker (no prior selection required)
         picker = ScopePickerApp(picker_path, uidoc, doc)
         picker.window.ShowDialog()
-        selected_elements = picker.selected_elements
+
+        if picker.pick_in_view:
+            # Manual pick in the Revit view (dialog already closed)
+            selected_elements = pick_elements_in_view(uidoc, doc)
+        else:
+            selected_elements = picker.selected_elements
 
     if selected_elements:
         # Stage 2 — main parameter-combination window
