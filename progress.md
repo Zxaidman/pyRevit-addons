@@ -259,3 +259,13 @@ beams.status_counts):
   (255 degenerate, 133 unpaired, slab_edge 0 -> floors absent/unmapped there).
 - CAVEAT: 6a snap + 6b swap are Revit-link-geometry effects; verified by logic + DXF harness
   + unit tests, NOT runtime in Revit. Re-run 0.28.0 in Revit to confirm.
+
+## 6f (v0.28.1) — beam open-polyline edges; Test15 root cause
+Test15 Revit: 315 placed but 255 DEGENERATE. Root: link reader gives a beam's surviving edge
+as a short OPEN polyline; build_beam_segments dropped ring<4 as degenerate. FIX: explode such
+polylines into bare_lines (the pairing pool). Regression: ONLY Mahalaxmi changed (placed 0->49;
+its beams are polylines too); all other fixtures byte-identical. 12 test files pass. Added
+open-beam-polyline test. This is the main Test15/Revit-polyline lever (can't run Revit; verify
+on re-run). DXF Test15 already placed 682 (its beams are lines), so DXF count unchanged there.
+PENDING still: 6d/6e (Revit-link-specific B4-near-core / B20-600->300; 6b+6c+6f may resolve --
+needs Revit re-run to confirm).

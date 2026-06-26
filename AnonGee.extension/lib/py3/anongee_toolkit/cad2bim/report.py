@@ -1269,6 +1269,13 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
         xy, z = shapes.to_xy(record.points)
         ring = shapes.simplify_ring(xy)
         if not ring or len(ring) < 4:
+            # An OPEN beam outline (the link reader gives a beam's surviving edge as a short
+            # polyline, not a closed quad) is not degenerate -- explode its segments into the
+            # line pool so they pair like any other beam edge, instead of being dropped.
+            pts = record.points
+            for i in range(len(pts) - 1):
+                bare_lines.append(((pts[i][0], pts[i][1]),
+                                   (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
             status["degenerate"] += 1
             continue
         if len(ring) == 4:

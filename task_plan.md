@@ -144,7 +144,7 @@ Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Te
 - [ ] **6d. BUG: real B4 near core unplaced** (likely resolved by 6b; verify).
 - [ ] **6e. BUG: Test18 B20 -> 300x900 unmarked** instead of 600x900 B20. Investigate
       (600 edge pair lost to a 300 line_pair; dedup cleared mark).
-- [ ] **6f. Test15 FULL analysis** (315 placed, 255 degenerate, 133 unpaired, 23 width_oor,
+- [x] **6f. Test15 FULL analysis** (315 placed, 255 degenerate, 133 unpaired, 23 width_oor,
       slab_edge 0). Sweep all beam cases; find systemic misses.
 
 ## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a+5c+5b+5e DONE (v0.27.0).

@@ -35,7 +35,14 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.28.0"  # BEAM polish: (6a) snap a beam END to a ROUND or ROTATED column
+__version__ = "0.28.1"  # BEAM open-polyline edges. The link reader returns a beam's
+#                         surviving edge as a short OPEN polyline (not a closed quad), which hit
+#                         the ring<4 "degenerate" branch and was dropped -- so a plan whose beams
+#                         are polylines placed ZERO beams (Messy/Mahalaxmi: 0->49; Revit Test15
+#                         had 255 degenerate). Those polylines now explode into the line pool and
+#                         pair like any beam edge. Only that one fixture changes; rest identical.
+
+# 0.28.0  BEAM polish: (6a) snap a beam END to a ROUND or ROTATED column
 #                         centre so the junction has no gap (axis-aligned cols untouched, mids
 #                         never move) via report.snap_beam_ends_to_columns. (6b) edge-pair
 #                         beams now own their candidate by NEAREST label, so two same-width

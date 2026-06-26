@@ -160,6 +160,17 @@ class PerimeterBeams(unittest.TestCase):
                                150.0, delta=5.0)
 
 
+    def test_open_beam_polyline_edge_is_paired_not_dropped(self):
+        # The link reader gives a beam's surviving edge as a short POLYLINE (kind polyline,
+        # 2 pts), not a closed quad. It must feed the line pool, not be dropped as degenerate.
+        beam_edge = _Rec("beam", (0, 400), (4000, 400))
+        beam_edge.kind = "polyline"            # force the polyline path
+        recs = [beam_edge, _line("slab_edge", 0, 0, 4000, 0)]
+        label = _Lbl("B1", 400.0, 900.0, 2000, 200)
+        out = report.build_beam_segments(recs, None, None, None, texts=[label])
+        self.assertEqual(len(_edge_beams(out)), 1)
+        self.assertEqual(_edge_beams(out)[0]["mark"], "B1")
+
     def test_same_width_labels_owned_by_nearest_not_first(self):
         # Two 300-wide edge beams + two 300x600 labels (B4 listed first). Each beam must go
         # to the label nearest IT, not be grabbed by whichever label is iterated first.
