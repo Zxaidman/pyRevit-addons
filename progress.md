@@ -269,3 +269,12 @@ open-beam-polyline test. This is the main Test15/Revit-polyline lever (can't run
 on re-run). DXF Test15 already placed 682 (its beams are lines), so DXF count unchanged there.
 PENDING still: 6d/6e (Revit-link-specific B4-near-core / B20-600->300; 6b+6c+6f may resolve --
 needs Revit re-run to confirm).
+
+## ERROR LOG — 0.29.0 features "not working" (reported 2x)
+| Attempt | Action | Result |
+|---|---|---|
+| 1 | Implemented A (disallow join) + B (deferred console+bar), committed 0.29.0, verified buffer/bar standalone, 12 tests pass | User: console still opens pre-Run, no bar, no disallow |
+| 2 | Diagnosed STALE build (HEAD==origin, no real print outside buffer); told user pull + RELOAD pyRevit (beams.py is cached imported module) | User: SAME symptom |
+| 3 | RETHINK: verified script.py:287 already sets window `version_text` = cad2bim.__version__ (xaml default "v0.13" is overridden). So the MAIN WINDOW already DISPLAYS the loaded version -> decisive stale-vs-fresh check. Likely root cause: Revit runs the extension from a DIFFERENT path than the git clone the user pulls (pyRevit extensions often live in %APPDATA%/pyRevit, not the repo). ACTION: ask user what version the window shows. |
+
+Key facts: all 3 features (disallow + deferred console + bar) absent together == none of 0.29.0 active == stale code, NOT a partial bug. script.py is re-read each click (no reload needed) yet console-defer absent -> the RUNNING script.py is not the committed one -> wrong/shadow copy path.
