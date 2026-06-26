@@ -5,4 +5,10 @@ cache/
 .graphify_*.json
 .chunk_*
 .needs_update
+needs_update
 .detect_err.txt
+# watcher runtime state
+.watch.log
+.watch.pid
+.pending_changes
+.rebuild.lock
