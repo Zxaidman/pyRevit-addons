@@ -23,7 +23,7 @@ def mm_to_ft(mm):
 DEFAULTS = {
     # --- acceptance limits (mm) ---------------------------------------------
     "beam_width_min_mm": 150,
-    "beam_width_max_mm": 600,
+    "beam_width_max_mm": 1000,
     "col_b_min_mm": 150,
     "col_b_max_mm": 1500,
     "col_h_min_mm": 150,

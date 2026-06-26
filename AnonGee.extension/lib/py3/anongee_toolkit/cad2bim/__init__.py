@@ -35,7 +35,17 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.27.0"  # BEAMS in Revit: fix three issues found in the 0.26.0 link run.
+__version__ = "0.28.0"  # BEAM polish: (6a) snap a beam END to a ROUND or ROTATED column
+#                         centre so the junction has no gap (axis-aligned cols untouched, mids
+#                         never move) via report.snap_beam_ends_to_columns. (6b) edge-pair
+#                         beams now own their candidate by NEAREST label, so two same-width
+#                         labels (B4,B5) no longer swap (the first no longer steals the other's
+#                         nearer beam). (6c) admit wide beams: beam_width_max 600->1000 and the
+#                         LABEL-CONFIRMED edge pass pairs up to that width (geometric line_pair
+#                         stays at pair_max 700), so a 900-wide B22 places without flooding
+#                         line_pair. Columns byte-identical; only intended beams added.
+
+# 0.27.0  BEAMS in Revit: fix three issues found in the 0.26.0 link run.
 #                         (A) The link reader returns the slab/floor outline as ONE polyline,
 #                         not loose lines, so the floor-edge pool was empty and only ~1 beam
 #                         placed -- slab edges are now exploded into segments. (B) A mark-only

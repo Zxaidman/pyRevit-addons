@@ -240,3 +240,22 @@ beams.status_counts):
   verified by logic + DXF-line harness, NOT runtime in Revit. User should re-run 0.27.0 in
   Revit to confirm Test19 places ~21 beams with correct marks/depths.
 - HELD per user: B20, B22.
+
+## Phase 6 partial (v0.28.0) — committed this session
+0.27.0 Revit JSON analysis -> 3 fixes done (6a,6b,6c); 6d/6e/6f pending.
+- 6a snap_beam_ends_to_columns(beam_segments, sections, circles): beam END within
+  round-radius / rotated-rect half-diagonal + 250mm pad -> moved to column centre. Wired in
+  script.py after recover_unplaced. Test19: 14 ends snapped (2 round, 4 rotated). Midspan
+  never moves; axis-aligned cols skipped. test_beam_snap.py (4).
+- 6b _edge_pair_beams now OWNERSHIP: each candidate owned by NEAREST matching-width label;
+  each label takes its nearest owned candidate. Fixes B4/B5 swap (Revit). DXF harness +
+  all edge counts BYTE-IDENTICAL. test_perimeter_beams ownership test added.
+- 6c beam_width_max_mm 600->1000 (config); edge pass pairs up to beam_width_max (label-
+  confirmed, safe) while line_pair stays pair_max 700. B22 (900x900) now placed in Test19 +
+  Test18; line_pair counts unchanged; only width_oor->kept deltas. Columns byte-identical.
+- 12 test files pass. verify_toolkit 130/3 pre-existing (expected).
+- PENDING: 6d real B4 near core (likely 6b helps; Revit-verify), 6e Test18 B20 -> 300x900
+  unmarked (Revit-polyline specific, can't repro in DXF harness), 6f Test15 full sweep
+  (255 degenerate, 133 unpaired, slab_edge 0 -> floors absent/unmapped there).
+- CAVEAT: 6a snap + 6b swap are Revit-link-geometry effects; verified by logic + DXF harness
+  + unit tests, NOT runtime in Revit. Re-run 0.28.0 in Revit to confirm.

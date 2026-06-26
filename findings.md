@@ -254,3 +254,40 @@ Far (1200–2800mm, geometry implied or curved): B3(2392) B5(1162) B6(1312) B7(1
   connecting round cols C13 bottom & C7 top), length 7160mm.
 - Regression: straight-beam counts byte-identical on all 15 fixtures; 3 Messy plans also
   gain curved beams (one +9); arc_lone collapses to ~0. tests/test_curved_beams.py (4 tests).
+
+---
+
+# BEAMS 0.27.0 Revit-run analysis (Phase 6 input)
+0.27.0 JSONs: .json/0.27.0_beam_test{15,18_*,19}_with_textmode.json
+Test19: created 21 (edge_pair 19). Test18 redrawn/fragmented: created 21 (edge_pair 9).
+Test15: created 315 (line_pair 301, bare_line_unpaired 133, degenerate 255, width_oor 23).
+
+## Bug 6b — B4/B5 mark SWAP (ownership)
+Test19: placed "B4" beam mid (3000,1350). B4 label (3318,3176) dist 1853; B5 label
+(2629,712) dist 738 -> beam is B5's, mismarked B4. Real B4 (label near core y~3450)
+unplaced; B5 unplaced. ROOT: `_edge_pair_beams` iterates LABELS, each claims nearest
+unused candidate (first-come). Two same-width labels (B4,B5 both 300x600) -> B4 grabs
+B5's nearer candidate. NEED candidate owned by NEAREST label (like column `owner` map),
+not label-claims-first. Same likely in `_apply_beam_marks` (segment->nearest label) but
+that's segment-centric; swap mainly from edge_pair label-centric claiming.
+
+## Bug 6c — B22 missing (900x900)
+B22 label 900x900. width 900 > beam_width_max_mm=600 AND > pair_max_width_mm=700 ->
+never paired, and filtered. Held earlier; user now wants it.
+
+## Bug 6e — Test18 B20 wrong
+Test18 redrawn: B20 (600x900) NOT placed; a None 300x900 beam at (5115,-2624). So B20's
+location got a 300-wide unmarked beam instead of 600x900 B20. (Test19 B20 600x900 OK.)
+Likely B20's 600-wide edge pair lost to a 300 line_pair + dedup cleared mark.
+
+## Feature 6a — beam end -> rotated/round column centre
+Beam end at a ROTATED column (oriented_rect) or ROUND column leaves a gap (beam stops at
+bbox/tangent, not centre). Want: snap beam END to column CENTRE when its end is at/near
+such a column. Needs column centres + rotated/round flags passed into beam building
+(currently build_beam_segments gets only `circles`, not oriented/rect column centres).
+Placement-time extend in builders/beams.py OR segment-time in report.py.
+
+## Test15 (analyze fully — most beams, 315 placed)
+by_category: beam 1027 curves, column 360. status: line_pair 301, bare_line_unpaired 133,
+degenerate 255, width_oor 23, NO edge_pair (slab_edge 0 -> floors not mapped/!present).
+255 degenerate + 133 unpaired = many beams missed. Marks up to B680. TODO: full case sweep.

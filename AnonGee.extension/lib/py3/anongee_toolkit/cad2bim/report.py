@@ -1160,6 +1160,51 @@ _ARC_EDGE_RADIUS_TOL_MM = 60.0    # ...and their radii agree this far (< any rea
 _EDGE_DUP_TOL_MM = 250.0          # an edge-pair beam this close to a placed beam is a re-trace
 
 
+_BEAM_END_SNAP_PAD_MM = 250.0   # a beam end this far outside a round/rotated column snaps in
+
+
+def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
+                              pad_ft=None):
+    """Pull a beam END onto a ROUND or ROTATED column's centre to close the junction gap.
+
+    A beam meeting an axis-aligned column butts cleanly against a flat edge, but a round
+    column (tangent contact) or a rotated column (skew edge) leaves an ugly gap. When a
+    beam endpoint lands inside such a column (within its radius + a small pad), the end is
+    moved to the column centre so the beam runs to the centre. Only ENDPOINTS move, never a
+    beam's midspan; axis-aligned columns are left alone. Returns the number of ends snapped.
+    """
+    if pad_ft is None:
+        pad_ft = config.mm_to_ft(_BEAM_END_SNAP_PAD_MM)
+    targets = []   # (cx, cy, reach_ft)
+    for circle in (circles or []):
+        cx, cy, _cz = circle["center"]
+        targets.append((cx, cy, circle["diameter_ft"] / 2.0 + pad_ft))
+    for entry in sections.get("entries", []):
+        for rect in entry["rectangles"]:
+            deg = rect.get("long_axis_deg")
+            if deg is None:
+                continue
+            skew = deg % 90.0
+            if min(skew, 90.0 - skew) <= 1.0:
+                continue                       # axis-aligned: clean butt joint, no gap
+            cx, cy, _cz = rect["center"]
+            w = rect["width_mm"] / _MM
+            h = rect["height_mm"] / _MM
+            targets.append((cx, cy, 0.5 * (w * w + h * h) ** 0.5 + pad_ft))
+    if not targets:
+        return 0
+    snapped = 0
+    for seg in beam_segments.get("segments", []):
+        for end in ("start", "end"):
+            ex, ey = seg[end][0], seg[end][1]
+            for cx, cy, reach in targets:
+                if (ex - cx) ** 2 + (ey - cy) ** 2 <= reach * reach:
+                    seg[end][0], seg[end][1] = cx, cy
+                    snapped += 1
+                    break
+    return snapped
+
+
 def build_beam_segments(records, circles=None, limits=None, standards=None,
                         texts=None, tolerances=None, schedule=None):
     """Derive straight beam centerlines from beam-category geometry.
@@ -1294,9 +1339,14 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     # edges, then keep a candidate only where a beam LABEL of matching width sits across it.
     placed = set(s.get("mark") for s in segments if s.get("mark"))
     placed |= set(s.get("mark") for s in curved_segments if s.get("mark"))
+    # The edge pass is label-confirmed (each pair must match a label's width + sit under it),
+    # so it can pair WIDER than the geometric line_pair pass without inviting false beams --
+    # admit up to the full beam-width limit so a wide member (e.g. a 900-wide B22) is found.
+    edge_max_ft = config.mm_to_ft(max(tol["pair_max_width_mm"],
+                                      (limits or DEFAULT_LIMITS)["beam_width_max_mm"]))
     edge_beams = _edge_pair_beams(
         leftover, floor_lines, sized_labels, placed, segments,
-        pair_min_ft, pair_max_ft, config.mm_to_ft(tol["pair_min_overlap_mm"]),
+        pair_min_ft, edge_max_ft, config.mm_to_ft(tol["pair_min_overlap_mm"]),
         math.sin(math.radians(tol["parallel_angle_deg"])),
         config.mm_to_ft(tol["snap_tol_mm"]), radius_ft,
         config.mm_to_ft(_EDGE_DUP_TOL_MM))
@@ -1465,34 +1515,40 @@ def _edge_pair_beams(beam_leftover, floor_lines, sized_labels, placed_marks, exi
         list(beam_leftover) + list(floor_lines), min_width_ft=pair_min_ft,
         max_width_ft=pair_max_ft, min_overlap_ft=min_overlap_ft, sin_tol=sin_tol)
     placed_lines = [(s["start"], s["end"]) for s in existing]
-    used = [False] * len(pairs)
-    out = []
-    for text, small, big in candidates:
-        w_small = small / _MM
-        depth = big
-        px, py = text.point_internal[0], text.point_internal[1]
-        best, best_d = None, None
-        for k, seg in enumerate(pairs):
-            if used[k] or abs(seg["width_ft"] - w_small) > width_tol_ft:
+    # OWNERSHIP: each candidate pair is owned by its NEAREST matching-width label (within
+    # radius), so two same-width labels (e.g. B4 and B5, both 300x600) can't have the first
+    # one claim the other's nearer beam. Then each label takes only its single nearest owned
+    # candidate -- one beam per label, assigned to whichever label is genuinely closest.
+    owners = {}                              # label index -> [(dist, pair index), ...]
+    for k, seg in enumerate(pairs):
+        sx = (seg["start"][0] + seg["end"][0]) / 2.0
+        sy = (seg["start"][1] + seg["end"][1]) / 2.0
+        best_i, best_d = None, None
+        for i, (text, small, _big) in enumerate(candidates):
+            if abs(seg["width_ft"] - small / _MM) > width_tol_ft:
                 continue
-            d = _point_to_segment_dist(px, py, seg["start"], seg["end"])
+            d = _point_to_segment_dist(text.point_internal[0], text.point_internal[1],
+                                       seg["start"], seg["end"])
             if d > radius_ft:
                 continue
             if best_d is None or d < best_d:
-                best_d, best = d, k
-        if best is None:
-            continue
-        seg = pairs[best]
-        if _coincides_with_a_beam(seg["start"], seg["end"], placed_lines, dup_tol_ft):
-            used[best] = True            # the floor outline re-traced an existing beam
-            continue
-        used[best] = True
-        beam = _beam_segment(seg["start"], seg["end"], w_small,
-                             seg["start"][2], "S-BEAM", "edge_pair")
-        beam["depth_mm"] = depth
-        beam["mark"] = text.mark
-        placed_lines.append((seg["start"], seg["end"]))
-        out.append(beam)
+                best_d, best_i = d, i
+        if best_i is not None:
+            owners.setdefault(best_i, []).append((best_d, k))
+    out = []
+    for i, owned in owners.items():
+        text, small, big = candidates[i]
+        for _d, k in sorted(owned):
+            seg = pairs[k]
+            if _coincides_with_a_beam(seg["start"], seg["end"], placed_lines, dup_tol_ft):
+                continue                     # floor outline re-traced an existing beam
+            beam = _beam_segment(seg["start"], seg["end"], small / _MM,
+                                 seg["start"][2], "S-BEAM", "edge_pair")
+            beam["depth_mm"] = big
+            beam["mark"] = text.mark
+            placed_lines.append((seg["start"], seg["end"]))
+            out.append(beam)
+            break                            # one beam per label (its nearest)
     return out
 
 

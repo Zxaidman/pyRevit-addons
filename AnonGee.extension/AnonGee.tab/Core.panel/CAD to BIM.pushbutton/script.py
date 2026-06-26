@@ -706,6 +706,13 @@ def main():
         print("columns: recovered {0} absorbed labelled column(s) from "
               "schedule+geometry".format(recovered_labeled))
 
+    # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
+    # end to the column centre (columns are now final). Axis-aligned columns are untouched.
+    snapped_ends = report.snap_beam_ends_to_columns(
+        beam_segments, sections, sections.get("circles"))
+    if snapped_ends:
+        print("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
+
     print("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
         print(line)

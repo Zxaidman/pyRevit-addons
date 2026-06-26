@@ -160,5 +160,18 @@ class PerimeterBeams(unittest.TestCase):
                                150.0, delta=5.0)
 
 
+    def test_same_width_labels_owned_by_nearest_not_first(self):
+        # Two 300-wide edge beams + two 300x600 labels (B4 listed first). Each beam must go
+        # to the label nearest IT, not be grabbed by whichever label is iterated first.
+        recs = [_line("beam", 0, 300, 4000, 300), _line("slab_edge", 0, 0, 4000, 0),
+                _line("beam", 0, 2300, 4000, 2300), _line("slab_edge", 0, 2000, 4000, 2000)]
+        b4 = _Lbl("B4", 300.0, 600.0, 2000, 2150)   # near the upper pair (y=2150)
+        b5 = _Lbl("B5", 300.0, 600.0, 2000, 150)    # near the lower pair (y=150)
+        out = report.build_beam_segments(recs, None, None, None, texts=[b4, b5])
+        eb = {s["mark"]: (s["start"][1] + s["end"][1]) / 2.0 / _FT for s in _edge_beams(out)}
+        self.assertAlmostEqual(eb["B4"], 2150.0, delta=5.0)
+        self.assertAlmostEqual(eb["B5"], 150.0, delta=5.0)
+
+
 if __name__ == "__main__":
     unittest.main()

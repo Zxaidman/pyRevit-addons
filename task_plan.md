@@ -127,6 +127,26 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
       added tests (schedule W x H, polyline floor, schedule sizing, dedup). NOTE: A/C are Revit
       API / link-geometry paths -- verified by logic + DXF harness, not runtime in Revit.
 
+
+### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
+Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).
+- [x] **6a. FEATURE: beam end -> rotated/round column CENTRE.** When a beam END junctions a
+      ROTATED column (oriented_rect) or ROUND column, beam end leaves a gap. Snap/extend the
+      beam endpoint to the column centre. Needs column centres + rotated/round flags into beam
+      step. Plan: new report pass `snap_beam_ends_to_columns(beam_segments, sections, circles)`
+      called in script.py after build_beam_segments (both available there).
+- [x] **6b. BUG: B4/B5 mark swap (ownership).** `_edge_pair_beams` labels claim nearest
+      candidate first-come; two same-width labels (B4,B5 300x600) -> B4 grabs B5's nearer
+      beam. Fix: candidate owned by NEAREST label (compute owner map), each label takes only
+      owned candidates. Real B4 (near core) then places; B5 keeps its own.
+- [x] **6c. BUG: B22 (900x900) missing.** width 900 > beam_width_max 600 & pair_max 700.
+      Raise limits to admit ~900-wide beams; re-check regression (wider false pairs risk).
+- [ ] **6d. BUG: real B4 near core unplaced** (likely resolved by 6b; verify).
+- [ ] **6e. BUG: Test18 B20 -> 300x900 unmarked** instead of 600x900 B20. Investigate
+      (600 edge pair lost to a 300 line_pair; dedup cleared mark).
+- [ ] **6f. Test15 FULL analysis** (315 placed, 255 degenerate, 133 unpaired, 23 width_oor,
+      slab_edge 0). Sweep all beam cases; find systemic misses.
+
 ## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a+5c+5b+5e DONE (v0.27.0).
 Order done: 5a (text), 5c (curved), 5b (perimeter/floor-clipped). Test19 = 21/23 beams.
 NEXT (optional): 5d the 2 stragglers -- B22 (raise beam_width_max 600 -> ~1000 AND
