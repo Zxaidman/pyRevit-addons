@@ -35,7 +35,17 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.28.1"  # BEAM open-polyline edges. The link reader returns a beam's
+__version__ = "0.29.0"  # Two pushbutton features. (A) DISALLOW beam end-joins: both ends of
+#                         every placed beam (straight + curved) get StructuralFramingUtils.
+#                         DisallowJoinAtEnd so Revit no longer auto-extends a beam into its
+#                         neighbours. (B) DEFERRED console + progress: the pyRevit output no
+#                         longer opens before Run -- all output is buffered and flushed only
+#                         after the main-window Run, after which a 10-cell [####------] bar
+#                         advances per phase (link, read, columns, beams, create x3). Plain
+#                         print() (no pyrevit import). (Also: ui.xaml missing-space hotfix that
+#                         broke window load.)
+
+# 0.28.1  BEAM open-polyline edges. The link reader returns a beam's
 #                         surviving edge as a short OPEN polyline (not a closed quad), which hit
 #                         the ring<4 "degenerate" branch and was dropped -- so a plan whose beams
 #                         are polylines placed ZERO beams (Messy/Mahalaxmi: 0->49; Revit Test15

@@ -94,6 +94,44 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
 
+# --- deferred console: nothing reaches the pyRevit output until the user hits Run on the
+# main window (the early link/read steps must not open the console). Output is buffered, then
+# flushed AFTER Run, after which a 10-cell [####------] progress bar advances per build phase.
+_REAL_PRINT = print   # the genuine print; only the buffer uses it
+
+
+class _DeferredOut(object):
+    def __init__(self):
+        self._buf = []
+        self.live = False
+
+    def say(self, msg=""):
+        if self.live:
+            _REAL_PRINT(msg)
+        else:
+            self._buf.append(msg)
+
+    def flush(self):
+        for msg in self._buf:
+            _REAL_PRINT(msg)
+        self._buf = []
+        self.live = True
+
+
+_OUT = _DeferredOut()
+
+
+def _say(msg=""):
+    _OUT.say(msg)
+
+
+def _progress(done, total, label):
+    """Print a 10-cell progress bar line: ``[####------]  40%  beams``."""
+    frac = (float(done) / total) if total else 1.0
+    fill = int(round(frac * 10))
+    _say("[{0}{1}] {2:3d}%  {3}".format("#" * fill, "-" * (10 - fill),
+                                        int(round(frac * 100)), label))
+
 # A size label within this distance of a member refines it; also the proximity the
 # comparison uses to decide "this is the same member" (~half a column).
 _COMPARE_TOL_FT = 300.0 / 304.8
@@ -127,7 +165,7 @@ def _rollback_alert(label, tstatus, gstatus):
         "at commit -- most often running into a project that already contains "
         "these elements. Try a fresh/empty project (or undo the previous run), "
         "then run again.".format(label, tstatus, gstatus))
-    print(message)
+    _say(message)
     _error("{0} not saved".format(label), message)
 
 
@@ -530,10 +568,10 @@ def main():
     doc = uidoc.Document
 
     module_dir = os.path.dirname(os.path.abspath(report.__file__))
-    print("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
-    print(compat.runtime_summary())
+    _say("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
+    _say(compat.runtime_summary())
     try:
-        print("Host: Revit {0}".format(__revit__.Application.VersionNumber))
+        _say("Host: Revit {0}".format(__revit__.Application.VersionNumber))
     except Exception:
         pass
 
@@ -552,6 +590,7 @@ def main():
     if not options.result:
         return
     path = options.result["path"]
+    _progress(1, 7, "link DXF")
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
                                        options.result["placement"],
@@ -563,6 +602,7 @@ def main():
     # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
     #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
     #    only, mapped into Revit coordinates by the link's own exact transform.
+    _progress(2, 7, "read link geometry")
     revit_result = geometry_reader.read_link(doc, instance)
     if revit_result.is_empty():
         _alert("Empty link", "The linked DXF produced no readable geometry in "
@@ -619,7 +659,11 @@ def main():
                             default_text_mapping)
     window.show()
     if not window.result:
-        return
+        return   # user cancelled -- nothing was flushed, console stays closed
+
+    # Run was clicked: now (and only now) reveal the console -- banner + the buffered
+    # link/read progress -- then keep printing live through the build phases.
+    _OUT.flush()
 
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
@@ -633,6 +677,7 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
+    _progress(3, 7, "build columns")
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
 
@@ -656,11 +701,12 @@ def main():
     for mark, size in marks.parse_schedule(column_texts, allow_split=False).items():
         schedule.setdefault(mark, size)
     if schedule:
-        print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
+        _say("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
 
     # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
     # beam is sized from its label -- an inline "B1 300x600" OR a mark-only "B1" via the
     # schedule. Pass beam labels + the schedule so each segment gets its width/depth + mark.
+    _progress(4, 7, "build beams")
     beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
@@ -668,7 +714,7 @@ def main():
                                                schedule=schedule)
     sized_beams = beam_segments["status_counts"].get("text_sized", 0)
     if sized_beams:
-        print("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
+        _say("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
 
     # Grid-line axis positions (internal feet) -> snap text-corrected column
     # centres onto the grid (columns sit on grid intersections).
@@ -686,16 +732,16 @@ def main():
     # names the now-correctly-placed walls instead of resizing a mis-centred piece.
     retiled = report.recover_core_walls_from_labels(sections, column_texts, schedule)
     if retiled:
-        print("columns: re-tiled {0} fused core(s) from labels".format(retiled))
+        _say("columns: re-tiled {0} fused core(s) from labels".format(retiled))
     fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
                                              schedule=schedule,
                                              grid_x=grid_x, grid_y=grid_y,
                                              grid_snap_ft=grid_snap_ft)
     if fixed:
-        print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
+        _say("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
     named_circles = report.apply_circle_marks(sections, column_texts, mark_radius_ft)
     if named_circles:
-        print("columns: named {0} circular column(s) from labels".format(named_circles))
+        _say("columns: named {0} circular column(s) from labels".format(named_circles))
 
     # Last resort: a small column cast against a bigger one can fragment so badly that
     # recovery folds it into the neighbour, orphaning its label. Recover it from its
@@ -703,7 +749,7 @@ def main():
     recovered_labeled = report.recover_unplaced_labeled_columns(
         sections, column_texts, schedule, limits=limits)
     if recovered_labeled:
-        print("columns: recovered {0} absorbed labelled column(s) from "
+        _say("columns: recovered {0} absorbed labelled column(s) from "
               "schedule+geometry".format(recovered_labeled))
 
     # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
@@ -711,20 +757,23 @@ def main():
     snapped_ends = report.snap_beam_ends_to_columns(
         beam_segments, sections, sections.get("circles"))
     if snapped_ends:
-        print("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
+        _say("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
 
-    print("### CAD to BIM {0}".format(cad2bim.__version__))
+    _say("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
-        print(line)
+        _say(line)
     for line in report.format_console(revit_result, selections["mapping"],
                                       sections, beam_segments):
-        print(line)
+        _say(line)
 
     outcomes = {}
+    _progress(5, 7, "create grids")
     if selections["create_grids"]:
         outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
+    _progress(6, 7, "create columns")
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
+    _progress(7, 7, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     if selections["export"]:
@@ -744,7 +793,7 @@ def _create_grids(doc, records, grid_texts=None):
     grid_records = [r for r in records
                     if r.category == layers.CATEGORY_GRID and r.kind in ("line", "arc")]
     if not grid_records:
-        print("Grids -- no grid-category lines to create.")
+        _say("Grids -- no grid-category lines to create.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
     namer = grids.build_grid_namer(grid_records, grid_texts)
@@ -769,10 +818,10 @@ def _create_grids(doc, records, grid_texts=None):
         _rollback_alert("Grids", tstatus, gstatus)
         return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
+    _say("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"]:
-        print("  grid: {0}".format(message))
+        _say("  grid: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
@@ -787,7 +836,7 @@ def _create_columns(doc, sections, selections):
         _alert("Columns skipped", "Choose a column family and base/top levels.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
     if not sections.get("entries"):
-        print("Columns -- no column sections to place.")
+        _say("Columns -- no column sections to place.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Columns")
@@ -806,7 +855,7 @@ def _create_columns(doc, sections, selections):
             circular = columns.place_circular_columns(
                 doc, circles, circular_id, base_id, top_id)
         elif circles:
-            print("  circular columns skipped: no circular family selected")
+            _say("  circular columns skipped: no circular family selected")
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
     except Exception as creation_error:
@@ -821,11 +870,11 @@ def _create_columns(doc, sections, selections):
         _rollback_alert("Columns", tstatus, gstatus)
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
+    _say("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
         len(result["created"]), len(circular["created"]),
         len(result["skipped"]), len(result["errors"]) + len(circular["errors"])))
     for message in result["errors"] + circular["errors"] + result["skipped"]:
-        print("  column: {0}".format(message))
+        _say("  column: {0}".format(message))
     return {"rect": len(result["created"]), "circular": len(circular["created"]),
             "skipped": len(result["skipped"]),
             "errors": len(result["errors"]) + len(circular["errors"])}
@@ -842,7 +891,7 @@ def _create_beams(doc, beam_segments, selections):
     segments = beam_segments.get("segments", [])
     curved = beam_segments.get("curved_segments", [])
     if not segments and not curved:
-        print("Beams -- no beam segments to place.")
+        _say("Beams -- no beam segments to place.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Beams")
@@ -871,10 +920,10 @@ def _create_beams(doc, beam_segments, selections):
         _rollback_alert("Beams", tstatus, gstatus)
         return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
+    _say("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"] + result["skipped"]:
-        print("  beam: {0}".format(message))
+        _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
@@ -887,7 +936,7 @@ def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comp
     try:
         report.export_json(target, read_result, mapping, sections, beam_segments,
                            outcomes, texts=texts, comparison=comparison)
-        print("Exported JSON (with report) -> {0}".format(target))
+        _say("Exported JSON (with report) -> {0}".format(target))
     except (IOError, OSError) as write_error:
         _error("JSON export failed", "Could not write the JSON file.", str(write_error))
 

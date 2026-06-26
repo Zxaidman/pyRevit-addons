@@ -15,10 +15,20 @@ import math
 
 from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
                                FamilySymbol, XYZ, Line, Arc, BuiltInParameter)
-from Autodesk.Revit.DB.Structure import StructuralType
+from Autodesk.Revit.DB.Structure import StructuralType, StructuralFramingUtils
 
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name
+
+
+def _disallow_joins(instance):
+    """Disallow the structural end-join at BOTH ends so Revit does not auto-extend the beam
+    into neighbouring framing. Best-effort: a join-setting failure never fails placement."""
+    for end in (0, 1):
+        try:
+            StructuralFramingUtils.DisallowJoinAtEnd(instance, end)
+        except Exception:
+            pass
 
 _WIDTH_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _DEPTH_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
@@ -85,6 +95,7 @@ def place_beams(doc, segments, base_symbol_id, level_id):
             instance = doc.Create.NewFamilyInstance(
                 curve, symbol, level, StructuralType.Beam)
             _set_mark(instance, segment.get("mark"))
+            _disallow_joins(instance)
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))
@@ -132,6 +143,7 @@ def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
             instance = doc.Create.NewFamilyInstance(
                 arc, symbol, level, StructuralType.Beam)
             _set_mark(instance, segment.get("mark"))
+            _disallow_joins(instance)
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))

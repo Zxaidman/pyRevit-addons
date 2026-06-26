@@ -128,6 +128,20 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
       API / link-geometry paths -- verified by logic + DXF harness, not runtime in Revit.
 
 
+
+### Phase 7 — Pushbutton features (v0.29.0) + XAML hotfix — DONE
+- [x] ui.xaml hotfix: missing space `IsChecked="True"Margin=` broke XamlReader.Load (window
+      failed to open after Link). One-char fix, committed separately.
+- [x] FEATURE A disallow beam end-joins: builders/beams.py `_disallow_joins(instance)` calls
+      StructuralFramingUtils.DisallowJoinAtEnd(inst,0/1), best-effort; called in both placers.
+- [x] FEATURE B deferred console + [####------] progress: script.py `_DeferredOut`/`_say`
+      buffer (all print()->_say), `_OUT.flush()` only AFTER main-window Run, `_progress(i,7,..)`
+      per phase (link, read, columns, beams, create x3). No pyrevit import. Buffer/bar verified
+      standalone; 12 test files pass. NOTE: Revit-API/UI paths -- verify on re-run.
+- Brainstorming spec: docs/superpowers/specs/2026-06-26-beam-join-and-deferred-console-design.md
+- NEXT (deferred bug batch): B22->C12, B20 300x900, Test10 grid-6, Test15 between-grid +
+  short-curve (zero-len) errors.
+
 ### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
 Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).
 - [x] **6a. FEATURE: beam end -> rotated/round column CENTRE.** When a beam END junctions a
