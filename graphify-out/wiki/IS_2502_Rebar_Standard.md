@@ -1,0 +1,31 @@
+# IS 2502 Rebar Standard
+
+> 7 nodes · cohesion 0.29
+
+## Key Concepts
+
+- **IS_2502_2019.py** (3 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **bend_deduction_per_bend()** (2 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **bend_diameter_mm()** (2 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **cutting_length_formula()** (2 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **Returns a multi-line formula string for the Calculation Sheet.     phi = bar dia** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **Returns minimum mandrel/bend diameter in mm.     Links/stirrups (is_link=True):** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+- **Deduction = multiplier * phi per individual bend.** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+
+## Relationships
+
+- No strong cross-community connections detected
+
+## Source Files
+
+- `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py`
+
+## Audit Trail
+
+- EXTRACTED: 12 (100%)
+- INFERRED: 0 (0%)
+- AMBIGUOUS: 0 (0%)
+
+---
+
+*Part of the graphify knowledge wiki. See [[index]] to navigate.*

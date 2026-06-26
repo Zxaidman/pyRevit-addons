@@ -1,0 +1,30 @@
+# ACI 315 Rebar Standard
+
+> 6 nodes · cohesion 0.33
+
+## Key Concepts
+
+- **ACI_315_2018.py** (4 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+- **standard_hook_length_mm()** (2 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+- **bend_deduction_per_bend()** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+- **bend_diameter_mm()** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+- **cutting_length_formula()** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+- **Returns the hook extension (straight portion after bend) in mm.     90° hook:  1** (1 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+
+## Relationships
+
+- No strong cross-community connections detected
+
+## Source Files
+
+- `AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py`
+
+## Audit Trail
+
+- EXTRACTED: 10 (100%)
+- INFERRED: 0 (0%)
+- AMBIGUOUS: 0 (0%)
+
+---
+
+*Part of the graphify knowledge wiki. See [[index]] to navigate.*
