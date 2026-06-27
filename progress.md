@@ -1,5 +1,23 @@
 # Progress Log — cad2bim Column Session
 
+## v0.30.0 — BEAM bug batch part 1 (8a) + raw-geometry diagnostic
+- **8a SHORT-CURVE crash FIXED.** `snap_beam_ends_to_columns` pulls a beam end onto a column
+  centre AFTER `length_mm` is stored, so a beam whose ends collapse onto one column kept a
+  stale long length, passed the <50 mm filter, and `Line.CreateBound(start==end)` threw
+  "Curve length too small" (2x Test15). `builders/beams.place_beams` now recomputes length
+  from the LIVE endpoints and skips the collapsed sliver. Builder-only; 12/12 tests pass.
+- **DIAGNOSTIC: `beams.raw_geometry` added to the JSON export** (`report._beam_geometry_dump`).
+  Beam detection is a Revit-LINK-POLYLINE phenomenon: the DXF source draws beams as loose
+  LINES, so the DXF harness places ZERO beams (Test10/15/18/19 all -> 0 segments) and cannot
+  reproduce 8b-8e. The export now dumps the exact beam/slab-edge geometry (mm) the link reader
+  returned. `tests/replay_beams.py <export.json> [mark]` rebuilds CurveRecords + re-runs the
+  real `build_beam_segments` OFFLINE -> the remaining beam misses are diagnosable from ONE run.
+- **NEXT:** user runs v0.30.0 on Test10/Test15/Test18 in text mode, shares the JSON; replay it
+  to fix 8b (between-grid), 8c (B22->C12), 8d (B20 600x900), 8e (Test10 grid-6 H->I).
+
+---
+
+
 ## NEXT SESSION SETUP — RUN THESE GIT COMMANDS FIRST, BEFORE ANYTHING ELSE
 ```
 git fetch origin

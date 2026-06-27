@@ -129,7 +129,7 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 
 
 
-### Phase 7 — Pushbutton features (v0.29.0) + XAML hotfix — DONE
+### Phase 7 — Pushbutton features (v0.29.0) + XAML hotfix — DONE (verified in Revit; bar kept simple, WPF circular later)
 - [x] ui.xaml hotfix: missing space `IsChecked="True"Margin=` broke XamlReader.Load (window
       failed to open after Link). One-char fix, committed separately.
 - [x] FEATURE A disallow beam end-joins: builders/beams.py `_disallow_joins(instance)` calls
@@ -141,6 +141,37 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
 - Brainstorming spec: docs/superpowers/specs/2026-06-26-beam-join-and-deferred-console-design.md
 - NEXT (deferred bug batch): B22->C12, B20 300x900, Test10 grid-6, Test15 between-grid +
   short-curve (zero-len) errors.
+
+
+### Phase 8 — BEAM BUG BATCH (from 0.28.1 Revit run) — IN PROGRESS (v0.30.0)
+- [x] 8a SHORT-CURVE errors (Test15, 2x "Curve length too small"). Cause: snap_beam_ends_to_columns
+      moves a beam END but does NOT recompute length_mm; a beam whose ends collapse onto one
+      column passes the <50mm filter (stale length) then Line.CreateBound(start==end) throws.
+      FIXED v0.30.0: place_beams recomputes length from the LIVE start/end (post-snap) and skips
+      the collapsed sliver. Builder-only change; 12/12 unit tests pass.
+
+  **DIAGNOSTIC (v0.30.0): beams.raw_geometry added to the JSON export.** The DXF source
+  carries beams as loose LINES, not the polylines Revit's link reader builds, so the DXF
+  harness places ZERO beams (verified: Test10/15/18/19 all -> 0 segments, every beam is
+  bare_line_unpaired) and CANNOT reproduce 8b-8e. The export now dumps the exact beam- and
+  slab-edge-layer geometry (mm) the link reader returned. `tests/replay_beams.py` rebuilds
+  CurveRecords from it and re-runs the real build_beam_segments OFFLINE -> 8b-8e diagnosable
+  from ONE export, no guess-and-check Revit runs.
+  >> NEXT RUN: user runs v0.30.0 on Test10/Test15/Test18 (text mode), shares JSON; then
+     `python3 tests/replay_beams.py <export.json> [mark]` reproduces each miss locally.
+
+  Symptom notes gathered from the 0.28.1 OUTPUT exports (pre-geometry-dump):
+  - 8e Test10: grid X-lines [-300,3000,8000,11000,14000,17000,20000,25000,28300]=grids 1..9
+    (grid 6 = x=17000). x=17000 verticals cover y up to 22850 then resume at 26450 -- the
+    y~=23000->24500 (H->I) bay segment is the miss; some neighbour lines share that gap.
+- [ ] 8b Test15 BETWEEN-GRID beams (K/J, T/S): beam drawn between two grids instead of on the
+      grid where the outline is. Likely edge-pair midline of two floor edges either side, or
+      degenerate-explode pairing wrong lines. (255 degenerate, 114 bare_line_unpaired in run.)
+- [ ] 8c B22 -> should attach to C12 column (stops short near B4/B5). 900x900; snap/extend wide
+      beam end to the core column. (snap_beam_ends only pulls to ROUND/ROTATED cols and only
+      when the end is already INSIDE -- B22 stops SHORT of an axis-aligned col: new case.)
+- [ ] 8d B20 (Test18) placed 300x900 UNMARKED instead of 600x900 B20 (Revit-polyline specific).
+- [ ] 8e Test10 vertical beam H->I on grid 6 MISSING (see symptom notes above).
 
 ### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
 Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).

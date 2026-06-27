@@ -35,7 +35,21 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.29.0"  # Two pushbutton features. (A) DISALLOW beam end-joins: both ends of
+__version__ = "0.30.0"  # BEAM bug batch, part 1. (8a) SHORT-CURVE crash fixed: place_beams
+#                         filtered on the STORED length_mm, but snap_beam_ends_to_columns pulls a
+#                         beam END onto a column centre AFTER that length is stored -- a beam whose
+#                         ends collapse onto one column kept its stale (long) length, slipped past
+#                         the <50 mm filter, and Line.CreateBound(start==end) threw "Curve length
+#                         too small" (2x in Test15). place_beams now recomputes length from the LIVE
+#                         endpoints and skips the collapsed sliver. (DIAG) the JSON export now carries
+#                         beams.raw_geometry -- the exact beam- and slab-edge-layer polylines/lines/
+#                         arcs (mm) the link reader returned -- so a MISSED beam (8b between-grid,
+#                         8c B22->C12, 8d B20, 8e Test10 grid-6) can be replayed and diagnosed offline
+#                         from one export. The DXF source carries beams as loose LINES, not the
+#                         polylines Revit's link reader builds, so the DXF harness places ZERO beams
+#                         and cannot reproduce these -- the raw dump is the only offline window in.
+
+# 0.29.0  Two pushbutton features. (A) DISALLOW beam end-joins: both ends of
 #                         every placed beam (straight + curved) get StructuralFramingUtils.
 #                         DisallowJoinAtEnd so Revit no longer auto-extends a beam into its
 #                         neighbours. (B) DEFERRED console + progress: the pyRevit output no

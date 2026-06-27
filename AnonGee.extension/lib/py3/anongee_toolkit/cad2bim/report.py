@@ -1820,6 +1820,27 @@ def _compact_circles(sections):
     return out
 
 
+def _beam_geometry_dump(result):
+    """Raw beam- and slab-edge-layer geometry (mm) as the link reader returned it.
+
+    build_beam_segments works off these records, but the rest of the export only carries
+    the PLACED beams -- so a beam that was never detected leaves no trace to debug. Dumping
+    the input geometry (the exact polylines/lines/arcs on the beam + floor layers) lets the
+    detection be replayed and a missed beam diagnosed OFFLINE, without another Revit run.
+    """
+    out = []
+    for record in result.records:
+        if record.category not in (CATEGORY_BEAM, CATEGORY_SLAB_EDGE):
+            continue
+        out.append({
+            "cat": "slab" if record.category == CATEGORY_SLAB_EDGE else "beam",
+            "kind": record.kind,
+            "layer": record.layer,
+            "pts": [[_mm(p[0]), _mm(p[1])] for p in record.points],
+        })
+    return out
+
+
 def _compact_beams(beams):
     out = []
     for seg in beams.get("segments", []):
@@ -1880,7 +1901,8 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
                     "dropped_raw": sections.get("dropped_raw", [])},
         "beams": {"outcome": outcomes.get("beams"),
                   "status_counts": beams.get("status_counts", {}),
-                  "items": _compact_beams(beams)},
+                  "items": _compact_beams(beams),
+                  "raw_geometry": _beam_geometry_dump(result)},
         "texts_sized": _compact_texts(texts),
         "review": beams.get("review", []),
     }

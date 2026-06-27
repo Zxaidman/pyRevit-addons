@@ -77,9 +77,15 @@ def place_beams(doc, segments, base_symbol_id, level_id):
 
     for segment in segments:
         try:
-            if segment["length_mm"] < _MIN_BEAM_LENGTH_MM:
-                result["skipped"].append(
-                    "tiny beam {0:.0f} mm".format(segment["length_mm"]))
+            sx, sy, _sz = segment["start"]
+            ex, ey, _ez = segment["end"]
+            # Recompute length from the LIVE endpoints: snap_beam_ends_to_columns may pull an
+            # end onto a column centre AFTER length_mm was stored, so the cached length is
+            # stale. A beam whose ends collapsed onto one column would slip past a stale-length
+            # filter, then Line.CreateBound(start==end) throws the short-curve error.
+            length_mm = ((ex - sx) ** 2 + (ey - sy) ** 2) ** 0.5 / mm_to_internal(1.0)
+            if length_mm < _MIN_BEAM_LENGTH_MM:
+                result["skipped"].append("tiny beam {0:.0f} mm".format(length_mm))
                 continue
             width_mm = int(round(segment["width_mm"]))
             depth_mm = segment.get("depth_mm")
@@ -89,8 +95,6 @@ def place_beams(doc, segments, base_symbol_id, level_id):
             if not symbol.IsActive:
                 symbol.Activate()
                 doc.Regenerate()
-            sx, sy, _sz = segment["start"]
-            ex, ey, _ez = segment["end"]
             curve = Line.CreateBound(XYZ(sx, sy, elevation), XYZ(ex, ey, elevation))
             instance = doc.Create.NewFamilyInstance(
                 curve, symbol, level, StructuralType.Beam)
