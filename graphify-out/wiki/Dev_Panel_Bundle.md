@@ -4,7 +4,7 @@
 
 ## Key Concepts
 
-- **Dev Panel Bundle** (0 connections) — `/home/user/pyRevit-addons/AnonGee.extension/AnonGee.tab/Dev.panel/bundle.yaml`
+- **Dev Panel Bundle** (0 connections) — `AnonGee.extension/AnonGee.tab/Dev.panel/bundle.yaml`
 
 ## Relationships
 
@@ -12,7 +12,7 @@
 
 ## Source Files
 
-- `/home/user/pyRevit-addons/AnonGee.extension/AnonGee.tab/Dev.panel/bundle.yaml`
+- `AnonGee.extension/AnonGee.tab/Dev.panel/bundle.yaml`
 
 ## Audit Trail
 

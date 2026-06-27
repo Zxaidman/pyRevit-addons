@@ -1,38 +1,51 @@
 # ParameterCombinerApp
 
-> God node · 30 connections · `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+> 41 nodes · cohesion 0.09
 
-**Community:** [[Parameter Combine Tool]]
+## Key Concepts
 
-## Connections by Relation
+- **ParameterCombinerApp** (30 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.update_previews()** (12 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **script.py** (11 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.insert_parameter()** (6 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **extract_parameter_value()** (5 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **get_element_parameters_dict()** (5 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.__init__()** (5 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **evaluate_parameter()** (4 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_rtb_text_changed()** (4 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **._set_all_apply()** (4 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **convert_to_display_units()** (3 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **get_unit_type()** (3 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.highlight_syntax()** (3 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_apply_click()** (3 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.setup_ui_data()** (3 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **convert_to_internal_units()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **is_yesno_parameter()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **_make_brush()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.get_rtb_text()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.handle_autosuggest()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_dt_column_changed()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_grid_keydown()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_insert_click()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_mode_changed()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- **.on_rtb_preview_keydown()** (2 connections) — `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+- *... and 16 more nodes in this community*
 
-### contains
-- [[script.py]] `EXTRACTED`
+## Relationships
 
-### inherits
-- [[object]] `EXTRACTED`
+- [[ScopePickerApp]] (1 shared connections)
+- [[object]] (1 shared connections)
+- [[.Load()]] (1 shared connections)
 
-### method
-- [[.update_previews()]] `EXTRACTED`
-- [[.insert_parameter()]] `EXTRACTED`
-- [[.__init__()]] `EXTRACTED`
-- [[.on_rtb_text_changed()]] `EXTRACTED`
-- [[._set_all_apply()]] `EXTRACTED`
-- [[.highlight_syntax()]] `EXTRACTED`
-- [[.on_apply_click()]] `EXTRACTED`
-- [[.setup_ui_data()]] `EXTRACTED`
-- [[.get_rtb_text()]] `EXTRACTED`
-- [[.handle_autosuggest()]] `EXTRACTED`
-- [[.on_dt_column_changed()]] `EXTRACTED`
-- [[.on_grid_keydown()]] `EXTRACTED`
-- [[.on_insert_click()]] `EXTRACTED`
-- [[.on_mode_changed()]] `EXTRACTED`
-- [[.on_rtb_preview_keydown()]] `EXTRACTED`
-- [[.on_select_all()]] `EXTRACTED`
-- [[.on_select_none()]] `EXTRACTED`
-- [[.on_suggest_doubleclick()]] `EXTRACTED`
-- [[.setup_data_table()]] `EXTRACTED`
-- [[.show_error()]] `EXTRACTED`
+## Source Files
+
+- `AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py`
+
+## Audit Trail
+
+- EXTRACTED: 145 (100%)
+- INFERRED: 0 (0%)
+- AMBIGUOUS: 0 (0%)
 
 ---
 

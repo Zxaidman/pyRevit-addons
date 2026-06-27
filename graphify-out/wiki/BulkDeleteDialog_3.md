@@ -1,39 +1,45 @@
 # BulkDeleteDialog
 
-> God node · 21 connections · `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LineStyles.pushbutton/script.py`
+> 19 nodes · cohesion 0.22
 
-**Community:** [[Bulk Delete Tool]]
+## Key Concepts
 
-## Connections by Relation
+- **BulkDeleteDialog** (21 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._do_delete()** (10 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._update_count()** (6 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **.__init__()** (5 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._populate()** (5 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._fill_list()** (4 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._on_delete()** (4 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._bind()** (3 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._set_ph()** (3 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._show_error()** (3 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._show_info()** (3 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._checked_items()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._flush_ui()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._on_all()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._on_none()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._on_search_changed()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._set_window_icon()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **._show_success()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+- **_fmt_exc()** (2 connections) — `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
 
-### calls
-- [[run()]] `EXTRACTED`
+## Relationships
 
-### contains
-- [[script.py]] `EXTRACTED`
+- [[script.py]] (4 shared connections)
+- [[object]] (1 shared connections)
+- [[.Show()]] (1 shared connections)
+- [[.Load()]] (1 shared connections)
 
-### inherits
-- [[object]] `EXTRACTED`
+## Source Files
 
-### method
-- [[._do_delete()]] `EXTRACTED`
-- [[._update_count()]] `EXTRACTED`
-- [[.__init__()]] `EXTRACTED`
-- [[._populate()]] `EXTRACTED`
-- [[._fill_list()]] `EXTRACTED`
-- [[._on_delete()]] `EXTRACTED`
-- [[._bind()]] `EXTRACTED`
-- [[._set_ph()]] `EXTRACTED`
-- [[._show_error()]] `EXTRACTED`
-- [[._show_info()]] `EXTRACTED`
-- [[._checked_items()]] `EXTRACTED`
-- [[._flush_ui()]] `EXTRACTED`
-- [[._on_all()]] `EXTRACTED`
-- [[._on_none()]] `EXTRACTED`
-- [[._on_search_changed()]] `EXTRACTED`
-- [[._set_window_icon()]] `EXTRACTED`
-- [[.show()]] `EXTRACTED`
-- [[._show_success()]] `EXTRACTED`
+- `AnonGee.extension/AnonGee.tab/Essential.panel/Bulk Tool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py`
+
+## Audit Trail
+
+- EXTRACTED: 83 (100%)
+- INFERRED: 0 (0%)
+- AMBIGUOUS: 0 (0%)
 
 ---
 
