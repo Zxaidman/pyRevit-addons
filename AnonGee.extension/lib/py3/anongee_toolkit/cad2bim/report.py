@@ -1702,26 +1702,52 @@ def _nearest_sized_label(cx, cy, sized_labels, radius_ft):
 
 
 def _apply_beam_marks(segments, sized_labels, radius_ft, width_max_mm=None):
-    """Size each beam segment from the nearest beam label (inline or schedule), in place.
+    """Size each beam segment from its beam label (inline or schedule), in place.
 
     width = smaller value, depth = larger, plus the mark. Returns the count sized.
-    A segment whose DRAWN width already exceeds `width_max_mm` is never sized: it is not
-    one beam's outline (e.g. a ring closed across the void between two grid beams), and
-    letting a label rewrite its width would launder it past the width filter -- and steal
-    that label's mark from the real member.
+
+    Assignment is label-OWNS-segment first (the same cure the edge-pair pass uses for
+    the B4/B5 swap): each label claims the one segment whose CENTERLINE it sits nearest
+    (point-to-segment distance), and a claimed segment is sized by its nearest owning
+    label. Segment-picks-nearest-label by MIDPOINT let a stacked neighbour's label win
+    -- B23's label (drawn between B20 and B23) was nearer B20's midpoint than B20's own
+    off-midspan label, so B20 took B23's 300-wide size and, after the duplicate-mark
+    sweep, lost its name. Unclaimed segments still fall back to the nearest label by
+    midpoint, so a bay whose label was claimed elsewhere keeps its size/depth.
+
+    A segment whose DRAWN width already exceeds `width_max_mm` is never sized: it is
+    not one beam's outline (e.g. a ring closed across the void between two grid beams),
+    and letting a label rewrite its width would launder it past the width filter -- and
+    steal that label's mark from the real member.
     """
     if not sized_labels:
         return 0
+    owners = {}
+    for text, small, big in sized_labels:
+        px, py = text.point_internal[0], text.point_internal[1]
+        best_i, best_d = None, radius_ft
+        for i, segment in enumerate(segments):
+            if width_max_mm is not None and segment["width_mm"] > width_max_mm:
+                continue
+            s, e = segment["start"], segment["end"]
+            d = _point_to_segment_dist(px, py, (s[0], s[1]), (e[0], e[1]))
+            if d <= best_d:
+                best_i, best_d = i, d
+        if best_i is not None:
+            owners.setdefault(best_i, []).append((best_d, text, small, big))
     count = 0
-    for segment in segments:
+    for i, segment in enumerate(segments):
         if width_max_mm is not None and segment["width_mm"] > width_max_mm:
             continue
-        cx = (segment["start"][0] + segment["end"][0]) / 2.0
-        cy = (segment["start"][1] + segment["end"][1]) / 2.0
-        hit = _nearest_sized_label(cx, cy, sized_labels, radius_ft)
-        if hit is None:
-            continue
-        text, small, big = hit
+        if i in owners:
+            _d, text, small, big = min(owners[i], key=lambda o: o[0])
+        else:
+            cx = (segment["start"][0] + segment["end"][0]) / 2.0
+            cy = (segment["start"][1] + segment["end"][1]) / 2.0
+            hit = _nearest_sized_label(cx, cy, sized_labels, radius_ft)
+            if hit is None:
+                continue
+            text, small, big = hit
         segment["width_mm"] = small
         segment["depth_mm"] = big
         segment["mark"] = text.mark
@@ -1913,8 +1939,8 @@ def _compact_beams(beams):
 def _compact_texts(texts):
     out = []
     for text in texts or []:
-        if text.b_mm is None:
-            continue
+        if text.b_mm is None and not getattr(text, "mark", None):
+            continue   # neither a size nor a mark: nothing to replay/debug from it
         point = text.point_internal
         out.append({"mark": text.mark, "layer": text.layer,
                     "b": text.b_mm, "h": text.h_mm,
