@@ -1163,6 +1163,26 @@ _EDGE_DUP_TOL_MM = 250.0          # an edge-pair beam this close to a placed bea
 _BEAM_END_SNAP_PAD_MM = 250.0   # a beam end this far outside a round/rotated column snaps in
 
 
+def _ring_keeps_all_points(xy, ring, tol_ft):
+    """True if every original polyline vertex sits on the simplified ring's boundary.
+
+    simplify_ring closes the vertex list implicitly, so an OPEN polyline gains a fabricated
+    closing edge -- and any real leg collinear with it is removed as "redundant". A removed
+    vertex that does NOT lie on the resulting ring means actual drawn geometry was lost, so
+    the ring cannot be trusted as this record's outline.
+    """
+    n = len(ring)
+    for px, py in xy:
+        on_ring = False
+        for i in range(n):
+            if _point_to_segment_dist(px, py, ring[i], ring[(i + 1) % n]) <= tol_ft:
+                on_ring = True
+                break
+        if not on_ring:
+            return False
+    return True
+
+
 def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
                               pad_ft=None):
     """Pull a beam END onto a ROUND or ROTATED column's centre to close the junction gap.
@@ -1268,6 +1288,19 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
             continue
         xy, z = shapes.to_xy(record.points)
         ring = shapes.simplify_ring(xy)
+        if ring and len(ring) >= 4 and not _ring_keeps_all_points(xy, ring, junction_tol_ft):
+            # simplify_ring treats every polyline as CLOSED (it wraps the vertex list), so an
+            # OPEN snake -- e.g. a horizontal beam edge that turns up into a vertical beam's
+            # edge -- gets a fabricated closing edge, and any leg collinear with that edge is
+            # silently deleted (Test10 lost the grid-6 vertical beam this way: its right edge
+            # was the polyline's last leg). If an ORIGINAL vertex lies off the simplified ring,
+            # the ring dropped real geometry: explode the polyline into the pair pool instead.
+            pts = record.points
+            for i in range(len(pts) - 1):
+                bare_lines.append(((pts[i][0], pts[i][1]),
+                                   (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
+            status["open_explode"] += 1
+            continue
         if not ring or len(ring) < 4:
             # An OPEN beam outline (the link reader gives a beam's surviving edge as a short
             # polyline, not a closed quad) is not degenerate -- explode its segments into the
