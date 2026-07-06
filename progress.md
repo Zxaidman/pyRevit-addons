@@ -1,5 +1,28 @@
 # Progress Log — cad2bim Column Session
 
+## v0.31.0 — BEAM bug batch part 2 (8b/8c/8d/8e ALL FIXED offline) + SLAB prototype
+All four bugs were diagnosed and fixed OFFLINE from the user's 0.30.0 raw-geometry
+exports (replayed via tests/replay_beams.py; every fix stash-diffed old-vs-new on
+identical input — no guess-and-check Revit cycles):
+- **8e** Test10 grid-6 H→I beam (grid 6 = x=20000, H→I = y 26300..27700): simplify_ring
+  closes every polyline, deleting an open snake's last leg (collinear with the fabricated
+  closing edge). Ring rejected when it drops a real vertex → polyline explodes → pairs.
+- **8b** Test15 phantom beams midway between J/K + S/T: U-polyline chaining two grid
+  beams' facing edges ring-closed into an 1800-wide "quad"; label rewrote width→300.
+  Too-wide quads explode (real on-grid beams re-pair; rows E/F+Q/R repaired too,
+  584→642 segments); a label can never rescue an out-of-range width.
+- **8d** Test18 B20 600x900 placed unmarked 300x900: B23's label (between the stacked
+  pair) beat B20's off-midspan label on midpoint distance. Marks now label-OWNS-segment
+  by centreline distance (B4/B5 cure), midpoint fallback for unclaimed segments.
+- **8c** B22 stops at B4/B5 instead of reaching C12: new label-free CONTINUATION pass —
+  leftover beam+slab edge pairs (≥1 beam edge) that collinearly continue a placed
+  same-width beam across ≤1200mm; depth inherited. Test18 both variants + Test19 now
+  run B22's far piece to C12's face.
+- **SLAB PROTOTYPE (held)**: slabs_proto.py + builders/slabs.py + 10 tests — see
+  task_plan Phase 9. A-FLOR rings, or beam-perimeter-graph fallback (endpoint-healed
+  planar faces). Test15 (no usable A-FLOR): 233 panels from 642 beams. Not wired.
+- **NEXT:** user re-runs v0.31.0 in Revit on Test10/15/18/19 to confirm in-model.
+
 ## v0.30.0 — BEAM bug batch part 1 (8a) + raw-geometry diagnostic
 - **8a SHORT-CURVE crash FIXED.** `snap_beam_ends_to_columns` pulls a beam end onto a column
   centre AFTER `length_mm` is stored, so a beam whose ends collapse onto one column kept a

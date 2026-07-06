@@ -58,6 +58,13 @@ __version__ = "0.31.0"  # BEAM bug batch, part 2 -- all four remaining bugs, fix
 #                         keeps a pair that collinearly continues a placed beam of the same width
 #                         across a crossing member (<=1200 mm); depth inherited, mark left empty.
 #                         (Also: texts_sized in the JSON export now includes mark-only labels.)
+#                         PLUS (held prototype, not wired): slabs_proto.py + builders/slabs.py --
+#                         slab outlines from the A-FLOR layer when present, else from the BEAM
+#                         PERIMETER GRAPH (endpoint-healed planar faces of the placed beam
+#                         centrelines); mark+thickness from "S1 150 THK" labels / schedule, like
+#                         columns and beams. Proven on real exports: Test15 has NO usable A-FLOR
+#                         loops but yields 233 slab panels from its 642 beams. Beams stay the
+#                         active workstream; slabs get wired after the beam case study closes.
 
 # 0.30.0  BEAM bug batch, part 1. (8a) SHORT-CURVE crash fixed: place_beams
 #                         filtered on the STORED length_mm, but snap_beam_ends_to_columns pulls a

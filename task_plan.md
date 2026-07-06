@@ -188,6 +188,24 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
   tests/replay_beams.py + stash-diff (old vs new on identical input).
   >> NEXT: user re-runs v0.31.0 in Revit on Test10/15/18/19 to confirm in-model.
 
+### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
+- [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
+      drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK
+      when no slab layer: BEAM PERIMETER GRAPH -- beam centrelines endpoint-HEALED (each end
+      extended <=600mm onto the nearest carrier, so centrelines meet at column centres),
+      split at X/T crossings, planar faces walked half-edge (max-CCW turn); bounded faces
+      >=1 m2 = slab panels. Labels/sizing like columns+beams: "S1 150 THK" inside the loop
+      names+sizes it; mark-only "S3" resolves thickness via schedule; unlabelled -> type default.
+- [x] builders/slabs.py skeleton: Floor.Create(CurveLoop) per loop, type duplicated per
+      thickness ("150 THK") + cached, Mark stamped. NOT imported by script.py.
+- [x] tests/test_slabs_proto.py (10 tests, all pass).
+- [x] Proven on real 0.30.0 exports: Test10 46 loops (A-FLOR) / 40 (graph); Test18/19 9 / 3-5
+      (graph loses outer bays where the CURVED beam breaks the ring -- known proto limit);
+      Test15: A-FLOR unusable (0 loops) but graph -> 233 panels from 642 beams = exactly the
+      fallback case. Demo: /tmp/demo_slabs.py pattern in progress.md.
+- [ ] LATER (when wiring): include curved beams as arc edges in the graph; slab openings
+      (stair/lift voids as inner loops); slab text layer routing in the UI; level/offset.
+
 ### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
 Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).
 - [x] **6a. FEATURE: beam end -> rotated/round column CENTRE.** When a beam END junctions a
