@@ -1413,6 +1413,17 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     if refined:
         status["text_sized"] = refined
 
+    # (5) Continuations: the far piece of a beam interrupted by a crossing member (its one
+    # label sits over the near piece), e.g. B22 continuing past B4/B5 to the C12 core.
+    continuation = _continuation_beams(
+        leftover, floor_lines, segments, pair_min_ft, edge_max_ft,
+        config.mm_to_ft(tol["pair_min_overlap_mm"]),
+        math.sin(math.radians(tol["parallel_angle_deg"])),
+        config.mm_to_ft(tol["snap_tol_mm"]), config.mm_to_ft(_EDGE_DUP_TOL_MM))
+    if continuation:
+        segments.extend(continuation)
+        status["continuation"] += len(continuation)
+
     segments, dropped = _filter_beam_segments(segments, limits or DEFAULT_LIMITS,
                                               standards or {}, tol["snap_tol_mm"])
     curved_segments, cdropped = _filter_beam_segments(
@@ -1606,6 +1617,113 @@ def _edge_pair_beams(beam_leftover, floor_lines, sized_labels, placed_marks, exi
             out.append(beam)
             break                            # one beam per label (its nearest)
     return out
+
+
+_CONTINUATION_GAP_MAX_MM = 1200.0   # widest crossing member a beam may continue past
+
+
+def _continuation_beams(beam_leftover, floor_lines, existing, pair_min_ft, pair_max_ft,
+                        min_overlap_ft, sin_tol, width_tol_ft, dup_tol_ft):
+    """Recover the far piece of a beam interrupted by a crossing member, label-free.
+
+    A wide beam drawn across a junction is broken there (B22, 900 wide, stops at the
+    B4/B5 crossing), and the far piece often has no label of its own -- the one label
+    sits over the near piece -- so neither the geometric pair pass (width-capped) nor
+    the label-confirmed edge pass will place it. Pair the leftover beam lines AND the
+    slab edges (the far piece's inner edge may survive only as the floor outline, as
+    Test19's B22 does) up to the full beam width, and keep a candidate only when
+    (a) at least one of its edges is on the BEAM layer -- slab edges alone never make
+    a beam -- and (b) it collinearly CONTINUES an already-detected beam: same width,
+    same centreline, separated along the axis by no more than a crossing member's
+    width. The continued beam is the evidence; its depth is inherited. Marks are left
+    empty (the near piece keeps the name).
+    """
+    if not existing or len(beam_leftover) < 1 or len(beam_leftover) + len(floor_lines) < 2:
+        return []
+    pairs, _lo = shapes.pair_parallel_lines(
+        list(beam_leftover) + list(floor_lines), min_width_ft=pair_min_ft,
+        max_width_ft=pair_max_ft, min_overlap_ft=min_overlap_ft, sin_tol=sin_tol)
+    placed_lines = [(s["start"], s["end"]) for s in existing]
+    gap_max_ft = config.mm_to_ft(_CONTINUATION_GAP_MAX_MM)
+    out = []
+    for seg in pairs:
+        if _coincides_with_a_beam(seg["start"], seg["end"], placed_lines, dup_tol_ft):
+            continue                         # re-pairing of an already-placed beam
+        if not _pair_has_beam_edge(seg, beam_leftover, sin_tol, width_tol_ft):
+            continue                         # both edges are floor outline: not a beam
+        hit = None
+        for ex in existing:
+            if abs(seg["width_ft"] - ex["width_mm"] / _MM) > width_tol_ft:
+                continue
+            if _collinear_continuation(seg, ex, sin_tol, width_tol_ft, gap_max_ft):
+                hit = ex
+                break
+        if hit is None:
+            continue
+        beam = _beam_segment(seg["start"], seg["end"], seg["width_ft"],
+                             seg["start"][2], "S-BEAM", "continuation")
+        if hit.get("depth_mm") is not None:
+            beam["depth_mm"] = hit["depth_mm"]
+        placed_lines.append((seg["start"], seg["end"]))
+        out.append(beam)
+    return out
+
+
+def _pair_has_beam_edge(seg, beam_lines, sin_tol, tol_ft):
+    """True if one of the pair's two edges lies along a BEAM-layer line.
+
+    An edge sits half the pair's width from the centreline: accept a beam line that is
+    parallel to the candidate and whose midpoint sits within width/2 + tol of the
+    candidate centreline (and not beyond half width -- i.e. actually along an edge).
+    """
+    half_w = seg["width_ft"] / 2.0
+    ax, ay = seg["start"][0], seg["start"][1]
+    bx, by = seg["end"][0], seg["end"][1]
+    vx, vy = bx - ax, by - ay
+    lv = (vx * vx + vy * vy) ** 0.5
+    if lv == 0:
+        return False
+    for (ls, le, _z) in beam_lines:
+        dx, dy = le[0] - ls[0], le[1] - ls[1]
+        ld = (dx * dx + dy * dy) ** 0.5
+        if ld == 0 or abs(vx * dy - vy * dx) / (lv * ld) > sin_tol:
+            continue
+        mx, my = (ls[0] + le[0]) / 2.0, (ls[1] + le[1]) / 2.0
+        d = _point_to_segment_dist(mx, my, (ax, ay), (bx, by))
+        if abs(d - half_w) <= tol_ft:
+            return True
+    return False
+
+
+def _collinear_continuation(seg, existing, sin_tol, lat_tol_ft, gap_max_ft):
+    """True when candidate `seg` continues `existing` along the SAME centreline.
+
+    Parallel within sin_tol, BOTH candidate endpoints within lat_tol of the existing
+    centreline extended (an offset parallel neighbour never qualifies), and the two
+    axial spans disjoint by 0..gap_max (the crossing member's width). Touching or a
+    hair of overlap is tolerated; a large overlap is a duplicate, not a continuation.
+    """
+    px, py = existing["start"][0], existing["start"][1]
+    qx, qy = existing["end"][0], existing["end"][1]
+    vx, vy = qx - px, qy - py
+    length = (vx * vx + vy * vy) ** 0.5
+    if length == 0:
+        return False
+    ux, uy = vx / length, vy / length
+    ax, ay = seg["start"][0], seg["start"][1]
+    bx, by = seg["end"][0], seg["end"][1]
+    wx, wy = bx - ax, by - ay
+    lw = (wx * wx + wy * wy) ** 0.5
+    if lw == 0 or abs(wx * uy - wy * ux) / lw > sin_tol:
+        return False
+    for cx, cy in ((ax, ay), (bx, by)):
+        if abs((cx - px) * uy - (cy - py) * ux) > lat_tol_ft:
+            return False
+    t0 = (ax - px) * ux + (ay - py) * uy
+    t1 = (bx - px) * ux + (by - py) * uy
+    lo, hi = min(t0, t1), max(t0, t1)
+    gap = max(lo - length, 0.0 - hi)         # positive when spans are disjoint
+    return -lat_tol_ft <= gap <= gap_max_ft
 
 
 def _coincides_with_a_beam(start, end, placed_lines, perp_tol_ft):

@@ -164,14 +164,29 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
   - 8e Test10: grid X-lines [-300,3000,8000,11000,14000,17000,20000,25000,28300]=grids 1..9
     (grid 6 = x=17000). x=17000 verticals cover y up to 22850 then resume at 26450 -- the
     y~=23000->24500 (H->I) bay segment is the miss; some neighbour lines share that gap.
-- [ ] 8b Test15 BETWEEN-GRID beams (K/J, T/S): beam drawn between two grids instead of on the
-      grid where the outline is. Likely edge-pair midline of two floor edges either side, or
-      degenerate-explode pairing wrong lines. (255 degenerate, 114 bare_line_unpaired in run.)
-- [ ] 8c B22 -> should attach to C12 column (stops short near B4/B5). 900x900; snap/extend wide
-      beam end to the core column. (snap_beam_ends only pulls to ROUND/ROTATED cols and only
-      when the end is already INSIDE -- B22 stops SHORT of an axis-aligned col: new case.)
-- [ ] 8d B20 (Test18) placed 300x900 UNMARKED instead of 600x900 B20 (Revit-polyline specific).
-- [ ] 8e Test10 vertical beam H->I on grid 6 MISSING (see symptom notes above).
+- [x] 8b FIXED v0.31.0. Cause: U-polyline chains two grid beams' facing edges; simplify_ring
+      closed it into an 1800-wide "quad" on the midline; nearest label rewrote width->300
+      (laundering past the width filter + stealing the mark). Fix: too-wide quads explode into
+      the pair pool (real on-grid beams re-pair); label can't rescue out-of-range width.
+      Offline replay: 14 phantoms (y=30650 J/K, y=60675 S/T) gone; rows E/F+Q/R repaired too.
+- [x] 8c FIXED v0.31.0. B22's far piece has no label (label sits over near piece) + its inner
+      edge survives only as floor outline. New label-free CONTINUATION pass: leftover beam+slab
+      edge pairs (>=1 beam edge) that collinearly continue a placed same-width beam across a
+      crossing member (<=1200mm gap); depth inherited. Verified: Test18 both variants
+      (2765..4465,676) + Test19 (3150..4850,3000) reach C12's face; nothing else changes.
+- [x] 8d FIXED v0.31.0. B23's label (drawn between stacked B20/B23) out-scored B20's own
+      off-midspan label by MIDPOINT distance. Marks now label-OWNS-segment by centreline
+      distance (edge-pair B4/B5 cure), midpoint fallback for unclaimed. B20=600x900 both
+      Test18s, all B1-B23 marks correct; Test15 marks redistribute only where provably wrong
+      (B101 sits 6mm ON the horizontal it now names).
+- [x] 8e FIXED v0.31.0 (was: grid 6 = x=20000, H->I = y 26300..27700). simplify_ring wraps the
+      vertex list, so the open snake's last leg (vertical beam edge, collinear with the
+      fabricated closing edge) was deleted. Ring rejected when it loses a real vertex ->
+      polyline explodes -> beam pairs. Only Test10 changes; +grid-6 beam.
+
+  ALL FIXES VERIFIED OFFLINE against the five 0.30.0 raw-geometry exports via
+  tests/replay_beams.py + stash-diff (old vs new on identical input).
+  >> NEXT: user re-runs v0.31.0 in Revit on Test10/15/18/19 to confirm in-model.
 
 ### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
 Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).

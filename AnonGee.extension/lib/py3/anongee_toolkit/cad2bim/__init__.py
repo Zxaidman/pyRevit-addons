@@ -35,7 +35,31 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.30.0"  # BEAM bug batch, part 1. (8a) SHORT-CURVE crash fixed: place_beams
+__version__ = "0.31.0"  # BEAM bug batch, part 2 -- all four remaining bugs, fixed from the
+#                         0.30.0 raw-geometry exports OFFLINE (replayed, not guessed):
+#                         (8e) Test10 grid-6 H-I beam: simplify_ring closes every polyline, so an
+#                         open snake's last leg (the vertical beam's edge, collinear with the
+#                         fabricated closing edge) was silently deleted. A ring that loses a real
+#                         vertex is now rejected and the polyline explodes into the pair pool.
+#                         (8b) Test15 phantom beams MIDWAY between grids J/K, S/T: a U-polyline
+#                         chaining two grid beams' facing edges ring-closed into an 1800-wide
+#                         "quad" whose label then rewrote the width to 300. Too-wide quads now
+#                         explode (the real on-grid beams re-pair from the freed edges; also
+#                         repaired rows E/F + Q/R in both towers, 584->642 segments) and a label
+#                         can never rescue an out-of-range width.
+#                         (8d) Test18 B20 600x900 placed as unmarked 300x900: B23's label sits
+#                         between the stacked B20/B23, out-scoring B20's own off-midspan label by
+#                         midpoint distance. Marks now assign label-OWNS-segment (nearest
+#                         centreline), with the midpoint rule as fallback for unclaimed segments.
+#                         (8c) B22 (900 wide) stopped at the B4/B5 crossing instead of reaching
+#                         the C12 core: the far piece's only label sits over the near piece, and
+#                         its inner edge may survive only as the floor outline. A new label-free
+#                         CONTINUATION pass pairs leftover beam+slab edges (>=1 beam edge) and
+#                         keeps a pair that collinearly continues a placed beam of the same width
+#                         across a crossing member (<=1200 mm); depth inherited, mark left empty.
+#                         (Also: texts_sized in the JSON export now includes mark-only labels.)
+
+# 0.30.0  BEAM bug batch, part 1. (8a) SHORT-CURVE crash fixed: place_beams
 #                         filtered on the STORED length_mm, but snap_beam_ends_to_columns pulls a
 #                         beam END onto a column centre AFTER that length is stored -- a beam whose
 #                         ends collapse onto one column kept its stale (long) length, slipped past
