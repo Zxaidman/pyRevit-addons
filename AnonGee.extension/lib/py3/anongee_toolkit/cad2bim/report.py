@@ -1247,6 +1247,8 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     concentric_tol_ft = config.mm_to_ft(tol["concentric_tol_mm"])
     pair_min_ft = config.mm_to_ft(tol["pair_min_width_mm"])
     pair_max_ft = config.mm_to_ft(tol["pair_max_width_mm"])
+    beam_width_max_mm = (limits or DEFAULT_LIMITS)["beam_width_max_mm"]
+    quad_width_max_ft = config.mm_to_ft(beam_width_max_mm + tol["snap_tol_mm"])
     circles = circles or []
     status = defaultdict(int)
     segments = []
@@ -1315,6 +1317,19 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
             result = shapes.beam_centerline_from_quad(ring)
             if result:
                 start, end, width = result
+                if width > quad_width_max_ft:
+                    # A "quad" wider than any beam is NOT one member's outline. It is an OPEN
+                    # U-polyline chaining the facing edges of TWO grid beams (plus a leg of a
+                    # cross beam) that simplify_ring closed across the void between them --
+                    # Test15 placed phantom beams on the MIDLINE between grids J/K and S/T
+                    # this way. Its legs are real beam edges: explode them into the pair pool
+                    # so the actual on-grid beams are rebuilt from their edge pairs.
+                    pts = record.points
+                    for i in range(len(pts) - 1):
+                        bare_lines.append(((pts[i][0], pts[i][1]),
+                                           (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
+                    status["quad_too_wide_explode"] += 1
+                    continue
                 segments.append(_beam_segment(start, end, width, z, record.layer, "rect"))
                 status["rect"] += 1
         elif shapes.is_rectilinear(ring):
@@ -1371,7 +1386,8 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
     # label to a size once, then size segments / curved beams / edge pairs from it.
     radius_ft = config.mm_to_ft(tol["mark_radius_mm"])
     sized_labels = _sized_beam_labels(texts, schedule)
-    refined = _apply_beam_marks(segments, sized_labels, radius_ft)
+    refined = _apply_beam_marks(segments, sized_labels, radius_ft,
+                                width_max_mm=beam_width_max_mm + tol["snap_tol_mm"])
     refined += _apply_curved_marks(curved_segments, sized_labels, radius_ft)
 
     # (4) Perimeter / floor-clipped beams: a beam whose inner edge was clipped against the
@@ -1685,15 +1701,21 @@ def _nearest_sized_label(cx, cy, sized_labels, radius_ft):
     return best
 
 
-def _apply_beam_marks(segments, sized_labels, radius_ft):
+def _apply_beam_marks(segments, sized_labels, radius_ft, width_max_mm=None):
     """Size each beam segment from the nearest beam label (inline or schedule), in place.
 
     width = smaller value, depth = larger, plus the mark. Returns the count sized.
+    A segment whose DRAWN width already exceeds `width_max_mm` is never sized: it is not
+    one beam's outline (e.g. a ring closed across the void between two grid beams), and
+    letting a label rewrite its width would launder it past the width filter -- and steal
+    that label's mark from the real member.
     """
     if not sized_labels:
         return 0
     count = 0
     for segment in segments:
+        if width_max_mm is not None and segment["width_mm"] > width_max_mm:
+            continue
         cx = (segment["start"][0] + segment["end"][0]) / 2.0
         cy = (segment["start"][1] + segment["end"][1]) / 2.0
         hit = _nearest_sized_label(cx, cy, sized_labels, radius_ft)
