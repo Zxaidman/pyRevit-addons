@@ -35,7 +35,25 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.33.0"  # BEAM end-snap corrections from the 0.32.0 run (Test11 + B648).
+__version__ = "0.34.0"  # BEAM: sloped beams keep their slope + a stress-test fixture.
+#                         (A) Test11 grid-I regression from 0.33.0: the 4-degree bays between
+#                         rotated columns arrive as ONE non-rectilinear snake holding the beam's
+#                         two angled edges; the bbox fallback flattened them onto the horizontal
+#                         axis (0.32.0 only LOOKED right because the old teleport-snap dragged
+#                         the ends to the column centres). A non-rectilinear ring whose longest
+#                         edge is >2 deg off the axes now explodes into the pair pool, where the
+#                         two angled edges pair into the correctly SLOPED beam; the axial snap
+#                         then runs it centre-to-centre. Replay: both bays at 4.00 deg, only
+#                         those two segments change across all six exports.
+#                         (B) STRESS FIXTURE: fixtures/make_stress_plan.py generates
+#                         cad/StressPlan-Beams.dxf -- one synthetic plan packing every failure
+#                         mode found in Test9-19 (baseline ring w/ rotated labels, 4-deg sloped,
+#                         45-deg diagonal, 900-wide + continuation merge, floor-clipped
+#                         perimeter, stacked-label mark theft, curved arc chains, junk that must
+#                         fabricate nothing) + tests/test_beam_stress.py (14 asserts incl. the
+#                         link-reader polyline snakes fed straight into detection). 14/14 files.
+
+# 0.33.0  BEAM end-snap corrections from the 0.32.0 run (Test11 + B648).
 #                         (A) NO MORE SIDEWAYS DRIFT: snap_beam_ends_to_columns moved a beam end
 #                         ONTO the round/rotated column's centre point -- a column deliberately
 #                         drawn OFF the beam's axis (Test11's grid-I columns) dragged the end

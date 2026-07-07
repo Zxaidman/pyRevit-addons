@@ -217,8 +217,25 @@ with phantom 300 gap.
       first-match sent both to the SAME centre -> zero length -> skipped. Ends now snap to
       the NEAREST column each -> stub stretches to the full bay (B648 = 1500, S->O). Zero
       collapsed segments post-snap; detection byte-identical everywhere; 13/13 tests.
->> NEXT: user runs v0.33.0 in Revit (pull + RESTART; window must show v0.33.0) on
-   Test11 + Test14 + Test15 (confirm drift gone, B648 drawn, nothing else moved).
+>> 0.33.0 run: ALL tests good except one regression -> fixed in v0.34.0:
+
+### Phase 8+++ — 0.33.0 feedback + STRESS SUITE (v0.34.0) — DONE
+- [x] SLOPED BEAMS FLATTENED (Test11 grid-I 6->7, 7->8): the 4-deg bays arrive as ONE
+      non-rectilinear snake (two angled edges + diamond-face jogs); the bbox fallback
+      flattened them horizontal. 0.32.0 only looked right because teleport-snap dragged ends
+      to the centres. FIX: non-rect ring with longest edge >2 deg off-axis explodes
+      (skew_outline_explode); angled edges pair -> sloped beam; axial snap runs it
+      centre-to-centre. Replay: both bays 4.00 deg; ONLY those 2 segments change anywhere.
+- [x] STRESS FIXTURE (user request): fixtures/make_stress_plan.py -> cad/StressPlan-Beams.dxf.
+      Zones: Z1 baseline ring + ROTATED vertical labels; Z2 4-deg sloped; Z3 45-deg diagonal;
+      Z4 900-wide + crossing + continuation MERGE (one piece); Z5 floor-clipped perimeter
+      (A-FLOR partner edge); Z6 stacked-label mark-theft (B20/B23 trap); Z7 curved arc chains;
+      Z8 junk (duplicate line, zero-length line, 20mm sliver, orphan label, "125 THK." note) --
+      must fabricate NOTHING. tests/test_beam_stress.py: 14 tests = full DXF pipeline asserts
+      + link-reader POLYLINE snakes (U-snake, collinear-leg open snake, skew snake) fed
+      straight into build_beam_segments. ALL PASS. Suite now 14 files, all green.
+>> BEAMS effectively CLOSED pending user's v0.34.0 Revit confirm on Test11. NEXT: SLABS
+   (Phase 9 prototype is ready to wire).
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

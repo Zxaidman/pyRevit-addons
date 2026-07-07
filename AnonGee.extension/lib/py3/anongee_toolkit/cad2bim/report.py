@@ -1163,6 +1163,29 @@ _EDGE_DUP_TOL_MM = 250.0          # an edge-pair beam this close to a placed bea
 _BEAM_END_SNAP_PAD_MM = 250.0   # a beam end this far outside a round/rotated column snaps in
 
 
+_SKEW_OUTLINE_MAX_DEG = 2.0   # bbox a non-rectilinear ring only when this close to the axes
+
+
+def _ring_longest_edge_skew_deg(ring):
+    """Angle (deg) of the ring's LONGEST edge off the nearest axis.
+
+    The longest edge of a beam outline runs along the beam, so its skew tells whether
+    an axis-aligned bounding box can stand in for the outline (near 0) or would flatten
+    a sloped beam onto the wrong axis (several degrees).
+    """
+    best_len2, best_deg = -1.0, 0.0
+    n = len(ring)
+    for i in range(n):
+        ax, ay = ring[i]
+        bx, by = ring[(i + 1) % n]
+        dx, dy = bx - ax, by - ay
+        len2 = dx * dx + dy * dy
+        if len2 > best_len2:
+            deg = abs(math.degrees(math.atan2(dy, dx))) % 90.0
+            best_len2, best_deg = len2, min(deg, 90.0 - deg)
+    return best_deg
+
+
 def _ring_keeps_all_points(xy, ring, tol_ft):
     """True if every original polyline vertex sits on the simplified ring's boundary.
 
@@ -1372,6 +1395,14 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
             start, end, width = shapes.beam_centerline_from_rect(bbox)
             if width > quad_width_max_ft:
                 _explode_too_wide("outline_too_wide_explode")
+                continue
+            if _ring_longest_edge_skew_deg(ring) > _SKEW_OUTLINE_MAX_DEG:
+                # The bbox fallback assumes a near-axis-aligned outline. A SLOPED beam
+                # (Test11's 4-degree grid-I bays between rotated columns) arrives as a
+                # non-rectilinear snake, and its axis-aligned bbox flattens the beam
+                # onto the wrong axis (an angled beam placed horizontal). Explode it:
+                # the two angled edges are parallel one width apart and pair correctly.
+                _explode_too_wide("skew_outline_explode")
                 continue
             segments.append(_beam_segment(start, end, width, z, record.layer, "non_rectilinear"))
             status["non_rectilinear"] += 1
