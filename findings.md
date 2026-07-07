@@ -1,5 +1,41 @@
 # Findings — cad2bim Column Session
 
+## BEAM-ERA FINDINGS (added after the beam campaign closed at v0.35.0)
+- **Beam detection is a Revit-LINK-POLYLINE phenomenon.** The DXF draws beams as loose
+  LINES; Revit's link reader merges them into POLYLINES (snakes/quads). The DXF harness
+  places ZERO beams — offline debugging needs `beams.raw_geometry` from the JSON export,
+  replayed via `tests/replay_beams.py`. Every beam bug was pinned this way.
+- **simplify_ring implicitly CLOSES every polyline** (wraps the vertex list). Open snakes
+  gain a fabricated closing edge → collinear legs silently deleted (8e), phantom quads
+  between grids (8b), whole bays swallowed as 2950-wide bboxes (0.32.0). Cure: explode a
+  ring that loses a real vertex / is too wide / is skew >2° into the pair pool.
+- **Labels run ALONG their beam** (drafting convention). MTEXT rotation is the
+  `text_direction` VECTOR ((0,1,0)=vertical), NOT `dxf.rotation`. Label→beam matching is
+  ownership-based (label claims nearest centreline) + orientation-gated (±20°).
+- **Snap ends ALONG the beam axis** to the NEAREST round/rotated column's station —
+  never onto the centre point (off-axis columns would drag the beam sideways), never
+  first-match (two columns in reach collapsed B648 to zero).
+- **DXF→Revit text alignment**: grid-anchored bbox fit; when no grid layer exists,
+  anchor on ALL shared geometry. NEVER trust GetTotalTransform alone — Revit can bake
+  the unit scale into imported geometry and report an identity instance transform.
+- **pythonnet gotcha**: Revit API IList<T> parameters do NOT accept Python lists —
+  Floor.Create needs System.Collections.Generic.List[CurveLoop].
+- **Stress fixture**: `tests/fixtures/make_stress_plan.py` regenerates Test20
+  ("StructuralPlan-Test20-Beam Stress test.dxf", $INSUNITS=mm); asserted by
+  `tests/test_beam_stress.py` (14 tests).
+
+## SLAB PIPELINE (current state at v0.36.0)
+- `slabs_proto.py`: loops from A-FLOR rings (chained if loose), else the beam-perimeter
+  GRAPH (ends healed ≤600mm onto carriers, split at X/T crossings, max-CCW face walk,
+  bounded faces ≥1 m²). `apply_slab_labels`: "S1 150 THK"/"150 THK." inside the loop;
+  mark-only via schedule.
+- `builders/slabs.py`: Floor.Create(List[CurveLoop]); nested loops → holes
+  (_nest_openings); type duplicated per thickness ("150 THK"); structural flag; Mark.
+- `script.py::_create_slabs`: gated on chk_slabs + cb_floor_type picker; level = top
+  level; own transaction group; "slabs" in console + JSON export.
+- QUEUED: curved beams as graph edges; slab level picker; slab schedule; dedicated
+  slab-text layer routing.
+
 ## Repository / Environment
 - Primary dir: `/home/user/pyRevit-addons`
 - Toolkit root on sys.path: `AnonGee.extension/lib/py3`

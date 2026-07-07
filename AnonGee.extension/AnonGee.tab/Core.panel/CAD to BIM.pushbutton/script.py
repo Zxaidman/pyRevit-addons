@@ -375,7 +375,7 @@ class CadToBimWindow(object):
         to combo_store so the caller can read the chosen mapping back."""
         for layer, count in layer_rows:
             row = WpfGrid()
-            row.Margin = Thickness(0, 2, 0, 2)
+            row.Margin = Thickness(0, 1, 0, 1)
             for width in (None, 70, 180):   # None -> star column
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if width is None
@@ -393,6 +393,7 @@ class CadToBimWindow(object):
             WpfGrid.SetColumn(count_block, 1)
 
             combo = ComboBox()
+            combo.Height = 22.0
             for category in categories:
                 combo.Items.Add(category)
             combo.SelectedItem = default_mapping.get(layer)

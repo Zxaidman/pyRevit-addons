@@ -1,5 +1,45 @@
 # Progress Log — cad2bim Column Session
 
+## MILESTONE: GRID + COLUMN + BEAM = 100% of known issues SOLVED (user confirmed at 0.35.0)
+Fixtures complete: Test9–Test19 + Test20 (the generated stress plan) all clean for
+grids, columns and beams. Messy plans intentionally untested for now. The insurance
+for future field bugs: beams.raw_geometry in every JSON export + tests/replay_beams.py
+(offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
+regression test left behind by every fix.
+
+## v0.36.0 — SLABS round 2: Floor.Create fixed + UI pickers + openings (+ compact UI)
+- Floor.Create failed everywhere: pythonnet does NOT convert a Python list to
+  IList<CurveLoop>. Loops now packed into System.Collections.Generic.List[CurveLoop];
+  floors flagged structural (best-effort).
+- UI: chk_slabs is LIVE with a cb_floor_type picker (auto-disabled if the model has no
+  floor type); slab creation gated on its own checkbox, uses the picked type.
+- OPENINGS: a loop fully inside another becomes the enclosing floor's inner CurveLoop
+  (stair/lift void), not a stacked slab (builders/slabs._nest_openings).
+- UI COMPACTED (user request): window 780x600→640x560, tighter margins/rows (22px
+  combos, 24px tolerance rows), helper captions small+gray, shorter layer scroll boxes.
+
+## v0.35.0 — Test20 text-anchor fix + SLABS step 1 wired
+- Test20 lost ALL label sizing/marks (+ B7/B8, the label-required beams): text alignment
+  is GRID-anchored and Test20 has no grid layer → fell back to the link transform, which
+  Revit reported as IDENTITY (scale baked into geometry) → labels 304.8x off. Alignment
+  now anchors on ALL shared geometry when no grids ("geometry_anchored"); link transform
+  only when both anchors empty. Stress DXF declares $INSUNITS=4 (mm).
+- SLABS step 1: _create_slabs after beams — A-FLOR rings, else beam-perimeter-graph
+  faces; thickness/mark from "S1 150 THK"/"150 THK." notes inside the loop; progress 8
+  phases; "slabs" in console + JSON export.
+
+## v0.32.0–0.34.0 — BEAM feedback rounds (all offline-verified via replay)
+- 0.34.0: sloped 4° grid-I beams no longer flattened (skew non-rect outlines explode →
+  angled edges pair); STRESS FIXTURE created (make_stress_plan.py → Test20, 8 zones + 14
+  tests incl. polyline snakes).
+- 0.33.0: snap slides ends ALONG the beam axis (no sideways drift to off-axis columns);
+  each end snaps to its NEAREST column (B648 stub stretches across the full bay; fixed
+  identically-markless Test14).
+- 0.32.0: MTEXT rotation = text_direction VECTOR (not dxf.rotation) → orientation-gated
+  label matching (labels run ALONG their beam; ±20°) fixed Test15's wrong/missing marks
+  (682/682 perfect); too-wide outlines explode from ALL 3 branches (undrawn perimeter
+  bays recovered); B22 continuation EXTENDS the placed beam (one piece, no phantom gap).
+
 ## v0.31.0 — BEAM bug batch part 2 (8b/8c/8d/8e ALL FIXED offline) + SLAB prototype
 All four bugs were diagnosed and fixed OFFLINE from the user's 0.30.0 raw-geometry
 exports (replayed via tests/replay_beams.py; every fix stash-diffed old-vs-new on

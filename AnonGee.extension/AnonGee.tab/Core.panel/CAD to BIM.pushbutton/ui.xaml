@@ -1,8 +1,8 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="cad2bim"
-        Height="780" Width="600"
-        MinHeight="600" MinWidth="520"
+        Height="640" Width="560"
+        MinHeight="520" MinWidth="500"
         WindowStartupLocation="CenterScreen"
         ResizeMode="CanResize"
         Background="White"
@@ -11,12 +11,12 @@
     <DockPanel LastChildFill="True">
 
         <!-- Header -->
-        <Grid DockPanel.Dock="Top" Margin="16,12,16,8">
+        <Grid DockPanel.Dock="Top" Margin="12,8,12,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="CAD2BIM" FontSize="16" FontWeight="Bold"
+            <TextBlock Grid.Column="0" Text="CAD2BIM" FontSize="14" FontWeight="Bold"
                        VerticalAlignment="Center"/>
             <TextBlock Grid.Column="1" x:Name="version_text" Text="v0.13"
                        VerticalAlignment="Center"/>
@@ -24,7 +24,7 @@
         <Separator DockPanel.Dock="Top"/>
 
         <!-- Footer -->
-        <Grid DockPanel.Dock="Bottom" Margin="16,8,16,12">
+        <Grid DockPanel.Dock="Bottom" Margin="12,6,12,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -32,19 +32,19 @@
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" x:Name="status_text" Text="Ready"
                        VerticalAlignment="Center"/>
-            <Button Grid.Column="1" x:Name="btn_run" Content="Run" Width="130" Height="26"
+            <Button Grid.Column="1" x:Name="btn_run" Content="Run" Width="120" Height="24"
                     ToolTip="Apply the layer mapping and build the selected elements"/>
-            <Button Grid.Column="2" x:Name="btn_cancel" Content="Cancel" Width="84" Height="26"
+            <Button Grid.Column="2" x:Name="btn_cancel" Content="Cancel" Width="76" Height="24"
                     Margin="8,0,0,0"/>
         </Grid>
 
         <!-- Body: tabbed -->
-        <TabControl Margin="12,8,12,8">
+        <TabControl Margin="8,4,8,4">
 
             <!-- TAB 1: Layers -->
             <TabItem Header="Layers">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="8">
+                    <StackPanel Orientation="Vertical" Margin="6">
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                             <TextBlock Text="Source: " FontWeight="Bold"/>
                             <TextBlock x:Name="source_text" Text="-" Margin="4,0,0,0"/>
@@ -62,14 +62,14 @@
                             <TextBlock Grid.Column="1" Text="Curves"/>
                             <TextBlock Grid.Column="2" Text="Category"/>
                         </Grid>
-                        <Border BorderBrush="Gray" BorderThickness="1" Padding="6" MaxHeight="300">
+                        <Border BorderBrush="Gray" BorderThickness="1" Padding="4" MaxHeight="240">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <StackPanel x:Name="layer_rows" Orientation="Vertical"/>
                             </ScrollViewer>
                         </Border>
 
                         <TextBlock Text="Text layers -> size-mark routing" FontWeight="Bold"
-                                   Margin="0,12,0,4"/>
+                                   Margin="0,8,0,2"/>
                         <Grid Margin="0,2,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
@@ -80,7 +80,7 @@
                             <TextBlock Grid.Column="1" Text="Labels"/>
                             <TextBlock Grid.Column="2" Text="Routing"/>
                         </Grid>
-                        <Border BorderBrush="Gray" BorderThickness="1" Padding="6" MaxHeight="220">
+                        <Border BorderBrush="Gray" BorderThickness="1" Padding="4" MaxHeight="170">
                             <ScrollViewer VerticalScrollBarVisibility="Auto">
                                 <StackPanel x:Name="text_rows" Orientation="Vertical"/>
                             </ScrollViewer>
@@ -92,10 +92,10 @@
             <!-- TAB 2: Build -->
             <TabItem Header="Build">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="8">
+                    <StackPanel Orientation="Vertical" Margin="6">
                         <CheckBox x:Name="chk_grids"   Content="Create grids (from grid lines)" IsChecked="True"/>
-                        <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True" Margin="0,8,0,0"/>
-                        <Grid Margin="23,4,0,2">
+                        <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True" Margin="0,6,0,0"/>
+                        <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
                                 <ColumnDefinition Width="*"/>
@@ -107,16 +107,16 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Column family" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Round family" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Base level" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="22" Margin="0,1"/>
                         </Grid>
-                        <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,8,0,0"/>
-                        <Grid Margin="23,4,0,2">
+                        <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,6,0,0"/>
+                        <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
                                 <ColumnDefinition Width="*"/>
@@ -126,12 +126,12 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Beam family" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_beam_family" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_beam_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level. Depth from text marks where found, else from the chosen type."
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_slabs"   Content="Create slabs (from slab outline or beam layout)" IsChecked="True" Margin="0,8,0,0"/>
-                        <Grid Margin="23,4,0,2">
+                        <CheckBox x:Name="chk_slabs"   Content="Create slabs (from slab outline or beam layout)" IsChecked="True" Margin="0,6,0,0"/>
+                        <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
                                 <ColumnDefinition Width="*"/>
@@ -141,11 +141,11 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Floor type" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_floor_type" Height="24" Margin="0,2"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_floor_type" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
-                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,8,0,0"/>
+                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -153,7 +153,7 @@
             <!-- TAB 3: Units & Tolerances -->
             <TabItem Header="Units &amp; Tolerances">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="8">
+                    <StackPanel Orientation="Vertical" Margin="6">
 
                         <TextBlock Text="Acceptance limits (mm)" FontWeight="Bold" Margin="0,0,0,4"/>
                         <Grid>
@@ -166,46 +166,46 @@
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="min" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Row="0" Grid.Column="3" Text="max" HorizontalAlignment="Center"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Beam width" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_beam_min" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_beam_min" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="1" Grid.Column="2" x:Name="sl_beam_min" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_beam_max" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_beam_max" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="1" Grid.Column="4" x:Name="sl_beam_max" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Column b" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_colb_min" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_colb_min" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="2" Grid.Column="2" x:Name="sl_colb_min" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_colb_max" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_colb_max" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="2" Grid.Column="4" x:Name="sl_colb_max" Minimum="0" Maximum="2000" Margin="6,0" VerticalAlignment="Center"/>
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Column h" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_colh_min" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_colh_min" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="3" Grid.Column="2" x:Name="sl_colh_min" Minimum="0" Maximum="20000" Margin="6,0" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_colh_max" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_colh_max" Height="22" Margin="0,1"/>
                             <Slider    Grid.Row="3" Grid.Column="4" x:Name="sl_colh_max" Minimum="0" Maximum="20000" Margin="6,0" VerticalAlignment="Center"/>
                         </Grid>
 
-                        <TextBlock Text="Standard sizes (mm)" FontWeight="Bold" Margin="0,12,0,4"/>
+                        <TextBlock Text="Standard sizes (mm)" FontWeight="Bold" Margin="0,8,0,2"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="86"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Columns b x h" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_std_columns" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_std_columns" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Beam widths" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_std_beams" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_std_beams" Height="22" Margin="0,1"/>
                         </Grid>
 
-                        <TextBlock Text="Tolerances (mm unless noted)" FontWeight="Bold" Margin="0,12,0,4"/>
+                        <TextBlock Text="Tolerances (mm unless noted)" FontWeight="Bold" Margin="0,8,0,2"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
@@ -214,27 +214,27 @@
                                 <ColumnDefinition Width="80"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
-                                <RowDefinition Height="28"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Std snap tolerance" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_snap" Height="24" Margin="0,2,8,2"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_snap" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="Text mark radius" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_markrad" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_markrad" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Compare match radius" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_compare" Height="24" Margin="0,2,8,2"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_compare" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="Column region max side" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_region" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_region" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Circle dia min" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_circ_min" Height="24" Margin="0,2,8,2"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_circ_min" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="2" Grid.Column="2" Text="Circle dia max" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_circ_max" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_circ_max" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Beam pair width min" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_pair_min" Height="24" Margin="0,2,8,2"/>
+                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_pair_min" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="3" Grid.Column="2" Text="Beam pair width max" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_pair_max" Height="24" Margin="0,2"/>
+                            <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_pair_max" Height="22" Margin="0,1"/>
                         </Grid>
 
                     </StackPanel>

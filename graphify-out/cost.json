@@ -11,8 +11,15 @@
       "input_tokens": 55375,
       "output_tokens": 0,
       "files": 248
+    },
+    {
+      "date": "2026-07-07T18:26:47.680006+00:00",
+      "input_tokens": 88000,
+      "output_tokens": 4000,
+      "files": 51,
+      "note": "incremental: beam campaign close + slab pipeline"
     }
   ],
-  "total_input_tokens": 383665,
-  "total_output_tokens": 0
+  "total_input_tokens": 471665,
+  "total_output_tokens": 4000
 }
