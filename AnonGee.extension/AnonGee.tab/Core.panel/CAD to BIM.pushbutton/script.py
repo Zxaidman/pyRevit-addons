@@ -277,7 +277,7 @@ class CadToBimWindow(object):
     """
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
-                 column_symbols, level_options, beam_symbols,
+                 column_symbols, level_options, beam_symbols, floor_type_options=None,
                  text_layer_rows=None, text_categories=None, default_text_mapping=None):
         self.result = None
         self._combos = []
@@ -310,6 +310,8 @@ class CadToBimWindow(object):
             self.cb_top_level.SelectedIndex = 1
         self._beam_ids = self._fill_combo(self.cb_beam_family, beam_symbols)
         _select_containing(self.cb_beam_family, ["rect"])
+        self.cb_floor_type = find("cb_floor_type")
+        self._floor_ids = self._fill_combo(self.cb_floor_type, floor_type_options or [])
 
         self.chk_grids = find("chk_grids")
         self.chk_columns = find("chk_columns")
@@ -350,6 +352,10 @@ class CadToBimWindow(object):
             self.chk_beams.IsChecked = False
             self.chk_beams.IsEnabled = False
             self.chk_beams.Content = "Create beams (load a structural framing family first)"
+        if not floor_type_options:
+            self.chk_slabs.IsChecked = False
+            self.chk_slabs.IsEnabled = False
+            self.chk_slabs.Content = "Create slabs (the model has no floor type)"
 
         find("btn_run").Click += self.on_run
         find("btn_cancel").Click += self.on_cancel
@@ -516,6 +522,8 @@ class CadToBimWindow(object):
             "create_grids": bool(self.chk_grids.IsChecked),
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
+            "create_slabs": bool(self.chk_slabs.IsChecked),
+            "floor_type_id": self._floor_ids.get(self.cb_floor_type.SelectedItem),
             "column_family_id": self._family_ids.get(self.cb_family.SelectedItem),
             "circular_family_id": self._family_ids.get(self.cb_circular_family.SelectedItem),
             "beam_family_id": self._beam_ids.get(self.cb_beam_family.SelectedItem),
@@ -653,6 +661,7 @@ def main():
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
+    floor_type_options = slabs.floor_types(doc)
 
     # Text layers (size marks) come from the DXF, routed separately from geometry.
     text_layer_counts = {}
@@ -665,6 +674,7 @@ def main():
     window = CadToBimWindow(dxf_result.source_name, layer_rows,
                             list(layers.ALL_CATEGORIES), default_mapping,
                             column_symbols, level_options, beam_symbols,
+                            floor_type_options,
                             text_layer_rows, list(layers.TEXT_CATEGORIES),
                             default_text_mapping)
     window.show()
@@ -790,7 +800,7 @@ def main():
     # falling back to the BEAM PERIMETER GRAPH when the DWG has no slab layer;
     # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
     _progress(8, 8, "create slabs")
-    if selections["create_beams"]:
+    if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, beam_segments,
                                           dxf_result.texts, selections)
     if selections["export"]:
@@ -951,13 +961,17 @@ def _create_slabs(doc, records, beam_segments, texts, selections):
     Outline source 1: closed rings on the slab-edge (A-FLOR) layer, as drawn.
     Source 2 (fallback, no slab layer): bounded faces of the placed beam centreline
     graph. Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
-    INSIDE the loop -- content-driven, any text layer. The floor type is the model's
-    first floor type, duplicated per thickness; the level is the beams' level.
+    INSIDE the loop -- content-driven, any text layer. The floor type is the one
+    picked in the window, duplicated per thickness; the level is the beams' level.
     """
     from Autodesk.Revit.DB import Transaction, TransactionGroup
     level_id = selections.get("top_level_id")
     if level_id is None:
         _say("Slabs -- skipped (no top level chosen).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    base_type_id = selections.get("floor_type_id")
+    if base_type_id is None:
+        _say("Slabs -- skipped (no floor type chosen).")
         return {"created": 0, "skipped": 0, "errors": 0}
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
@@ -968,11 +982,6 @@ def _create_slabs(doc, records, beam_segments, texts, selections):
         _say("Slabs -- no closed slab outline found (either source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}
     slab_defs = slabs_proto.apply_slab_labels(loops, texts)
-    types = slabs.floor_types(doc)
-    if not types:
-        _say("Slabs -- skipped (the model has no floor type to duplicate).")
-        return {"created": 0, "skipped": 0, "errors": 0, "source": source}
-    base_type_id = types[0][1]
 
     group = TransactionGroup(doc, "CAD to BIM: Slabs")
     transaction = Transaction(doc, "Create slabs")

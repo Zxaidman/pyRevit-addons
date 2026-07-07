@@ -130,7 +130,21 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level. Depth from text marks where found, else from the chosen type."
                                        TextWrapping="Wrap" Margin="0,2,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_slabs"   Content="Create slabs (coming soon)" IsEnabled="False" Margin="0,8,0,0"/>
+                        <CheckBox x:Name="chk_slabs"   Content="Create slabs (from slab outline or beam layout)" IsChecked="True" Margin="0,8,0,0"/>
+                        <Grid Margin="23,4,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Floor type" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_floor_type" Height="24" Margin="0,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
+                                       TextWrapping="Wrap" Margin="0,2,0,0"/>
+                        </Grid>
                         <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,8,0,0"/>
                     </StackPanel>
                 </ScrollViewer>

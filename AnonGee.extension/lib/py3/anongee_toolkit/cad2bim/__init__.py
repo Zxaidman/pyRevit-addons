@@ -35,7 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.35.0"  # Test20 text-anchor fix + SLABS step 1 wired into the pushbutton.
+__version__ = "0.36.0"  # SLABS round 2: Floor.Create fixed + UI pickers + openings.
+#                         (A) "No method matches given arguments for Floor.Create": the API
+#                         needs a .NET IList<CurveLoop>; a CPython3/pythonnet Python list does
+#                         not convert. Loops are now packed into System.Collections.Generic.
+#                         List[CurveLoop] (per the Revit 2025 API signature Floor.Create(doc,
+#                         IList<CurveLoop>, floorTypeId, levelId)); placed floors are flagged
+#                         structural (FLOOR_PARAM_IS_STRUCTURAL, best-effort).
+#                         (B) UI: the "Create slabs" checkbox is live (auto-disabled when the
+#                         model has no floor type) with a FLOOR TYPE picker; slab creation is
+#                         gated on its own checkbox and uses the picked type -- no longer the
+#                         model's first type behind beams' back.
+#                         (C) OPENINGS: a loop lying fully inside another loop is now that
+#                         floor's HOLE (stair/lift void) -- appended as an inner CurveLoop of
+#                         the enclosing slab instead of stacking a second floor over it.
+
+# 0.35.0  Test20 text-anchor fix + SLABS step 1 wired into the pushbutton.
 #                         (A) Test20 lost ALL label sizing/marks (and the two label-required
 #                         beams B7/B8): the DXF->Revit text alignment is GRID-anchored, and the
 #                         stress plan has no grid layer, so it fell back to the link's own

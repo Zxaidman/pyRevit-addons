@@ -252,9 +252,24 @@ with phantom 300 gap.
       Own transaction group; console line + "slabs" in the JSON export; progress bar 7->8
       phases. KNOWN step-1 limits: no UI pickers (type/level), no openings, curved beams not
       in the graph, no slab schedule.
->> NEXT: user runs v0.35.0 (pull + RESTART Revit -- lib changed) on Test20 (re-link the
-   REGENERATED DXF) + one classic test (Test11/15) to see slabs appear. Then slab feedback
-   drives Phase 11.
+>> 0.35.0 run: GRID+COLUMN+BEAM = 100% of known issues SOLVED (user confirmed).
+   Slabs failed to place -> fixed in v0.36.0:
+
+### Phase 11 — SLABS round 2 (v0.36.0) — DONE, AWAITING REVIT CONFIRM
+- [x] Floor.Create "No method matches given arguments (Document, list, ElementId,
+      ElementId)": pythonnet does NOT convert a Python list to IList<CurveLoop>. Loops now
+      packed into System.Collections.Generic.List[CurveLoop] (Revit 2025 API sig:
+      Floor.Create(doc, IList<CurveLoop>, floorTypeId, levelId)). Floors flagged structural
+      (FLOOR_PARAM_IS_STRUCTURAL, best-effort).
+- [x] UI pickers (queued item): chk_slabs is LIVE ("Create slabs (from slab outline or beam
+      layout)", auto-disabled when the model has no floor type) + cb_floor_type combo; slab
+      creation gated on its own checkbox; uses selections["floor_type_id"].
+- [x] OPENINGS (queued item): _nest_openings -- a loop fully inside another becomes the
+      enclosing floor's inner CurveLoop (hole), not a stacked slab.
+- Remaining queued: curved beams as slab-graph edges; slab schedule; slab level picker
+  (currently the beams' top level); slab marks S1/S2 from a dedicated slab-text layer.
+>> NEXT: user runs v0.36.0 (pull + RESTART Revit) -- expect floors to appear on every
+   fixture; check THK notes size them and voids appear where outlines nest.
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

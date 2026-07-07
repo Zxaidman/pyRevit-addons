@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
-"""PROTOTYPE: place floor slabs from derived slab loops (see slabs_proto.py).
+"""Place floor slabs from derived slab loops (see slabs_proto.py).
 
-Status: prototype, NOT wired into the pushbutton -- beams first. Mirrors the
-column/beam builders: a base floor type is duplicated per thickness ("150 THK")
-and cached; a loop with no thickness inherits the picked type. Runs inside a
-caller-owned Transaction; one bad loop never fails the batch.
+Mirrors the column/beam builders: a base floor type is duplicated per thickness
+("150 THK") and cached; a loop with no thickness inherits the picked type. A loop
+lying fully INSIDE another becomes that floor's OPENING (a hole), not its own slab.
+Runs inside a caller-owned Transaction; one bad loop never fails the batch.
 """
+
+from System.Collections.Generic import List
 
 from Autodesk.Revit.DB import (FilteredElementCollector, XYZ, Line, CurveLoop,
                                Floor, FloorType, BuiltInParameter)
@@ -22,37 +24,121 @@ def floor_types(doc):
 
 
 def place_slabs(doc, slabs, base_type_id, level_id):
-    """Place one floor per slab dict {ring, z, mark, thickness_mm}.
+    """Place one floor per outer slab dict {ring, z, mark, thickness_mm}.
 
     ring: [(x, y), ...] internal feet, closed implicitly. thickness_mm duplicates
-    the base type sized to that thickness; None keeps the base type as-is.
+    the base type sized to that thickness; None keeps the base type as-is. A slab
+    whose ring lies fully inside another slab's ring is treated as an OPENING of
+    the enclosing slab (stair/lift void) and appended as an inner CurveLoop.
+
+    Floor.Create requires a .NET IList<CurveLoop> -- a Python list does not
+    convert under CPython3/pythonnet ("No method matches given arguments"), so
+    the loops are packed into System.Collections.Generic.List[CurveLoop].
     """
     base_type = doc.GetElement(base_type_id)
     level = doc.GetElement(level_id)
     if base_type is None or level is None:
         raise ValueError("floor type or level could not be resolved")
 
+    outers, openings = _nest_openings(slabs)
     cache = {}
     result = {"created": [], "skipped": [], "errors": []}
-    for slab in slabs:
+    for index, slab in enumerate(outers):
         try:
             ring = slab["ring"]
             if len(ring) < 3:
                 result["skipped"].append("degenerate loop")
                 continue
-            loop = CurveLoop()
-            n = len(ring)
-            for i in range(n):
-                x1, y1 = ring[i]
-                x2, y2 = ring[(i + 1) % n]
-                loop.Append(Line.CreateBound(XYZ(x1, y1, 0.0), XYZ(x2, y2, 0.0)))
+            loops = List[CurveLoop]()
+            loops.Add(_curve_loop(ring))
+            for hole in openings.get(index, []):
+                loops.Add(_curve_loop(hole["ring"]))
             floor_type = _resolve_type(doc, base_type, slab.get("thickness_mm"), cache)
-            instance = Floor.Create(doc, [loop], floor_type.Id, level.Id)
+            instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+            _set_structural(instance)
             _set_mark(instance, slab.get("mark"))
             result["created"].append(instance.Id)
         except Exception as placement_error:
             result["errors"].append(str(placement_error))
     return result
+
+
+def _curve_loop(ring):
+    loop = CurveLoop()
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        loop.Append(Line.CreateBound(XYZ(x1, y1, 0.0), XYZ(x2, y2, 0.0)))
+    return loop
+
+
+def _nest_openings(slabs):
+    """Split loops into (outer slabs, {outer index: [opening slabs]}).
+
+    A loop whose every vertex lies inside another loop is that loop's opening --
+    the way a stair/lift void is drawn inside the floor outline. Nesting one level
+    deep only (an island inside a void becomes its own slab again is NOT handled;
+    none of the fixtures draws one)."""
+    outers = []
+    openings = {}
+    order = sorted(range(len(slabs)),
+                   key=lambda i: -abs(_ring_area(slabs[i]["ring"])))
+    placed = []                       # indices into `outers`, biggest first
+    for i in order:
+        ring = slabs[i]["ring"]
+        host = None
+        for j in placed:
+            if _ring_inside(ring, outers[j]["ring"]):
+                host = j
+                break
+        if host is None:
+            placed.append(len(outers))
+            outers.append(slabs[i])
+        else:
+            openings.setdefault(host, []).append(slabs[i])
+    return outers, openings
+
+
+def _ring_area(ring):
+    s = 0.0
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return s / 2.0
+
+
+def _ring_inside(inner, outer):
+    for x, y in inner:
+        if not _point_in_ring(x, y, outer):
+            return False
+    return True
+
+
+def _point_in_ring(x, y, ring):
+    inside = False
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        if (y1 > y) != (y2 > y):
+            xi = x1 + (y - y1) * (x2 - x1) / (y2 - y1)
+            if x < xi:
+                inside = not inside
+    return inside
+
+
+def _set_structural(instance):
+    """Flag the floor structural (this is a structural toolkit); best-effort."""
+    try:
+        parameter = instance.get_Parameter(
+            BuiltInParameter.FLOOR_PARAM_IS_STRUCTURAL)
+        if parameter is not None and not parameter.IsReadOnly:
+            parameter.Set(1)
+    except Exception:
+        pass
 
 
 def _resolve_type(doc, base_type, thickness_mm, cache):
