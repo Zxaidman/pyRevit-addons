@@ -188,6 +188,25 @@ Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
   tests/replay_beams.py + stash-diff (old vs new on identical input).
   >> NEXT: user re-runs v0.31.0 in Revit on Test10/15/18/19 to confirm in-model.
 
+### Phase 8+ — 0.31.0 Revit feedback round (v0.32.0) — DONE, AWAITING REVIT CONFIRM
+User's 0.31.0 run: Test10 PERFECT; Test15 rows fixed but marks wrong/missing + some beams
+undrawn (user screenshots = exactly the missing set); Test18/19 B20 fixed, B22 = two pieces
+with phantom 300 gap.
+- [x] MARKS: beam labels are MTEXT whose rotation is the text_direction VECTOR ((0,1,0) =
+      vertical), not dxf.rotation -- all 682 labels read rot=0, so rotated (vertical) labels
+      (anchor at one END of the text run, often ~60-210mm from the crossing row's centreline)
+      claimed horizontal beams row after row. Reader now captures rotation; ownership/fallback/
+      edge-pair label matching is orientation-gated (+-20 deg, labels run ALONG their beam);
+      dedupe keeps by centreline distance. texts_sized exports "rot".
+- [x] UNDRAWN BEAMS: whole bays traced as nearly-closed 5-pt snakes -> skew closing edge ->
+      non_rectilinear bbox 2950 wide -> width-filtered, real edges CONSUMED. Too-wide outlines
+      now explode from ALL 3 branches (quad/composite/non-rect). Test15 offline: 682 labels ->
+      682 segments, 100% marked correct, 0 undrawn, 0 mismatch.
+- [x] B22 ONE PIECE: continuation now EXTENDS the placed beam across the crossing (was: second
+      piece + gap). Test18 x2 + Test19 verified single span to C12's face.
+- [x] Regression: Test10/18 byte-identical; 13/13 unit tests.
+>> NEXT: user runs v0.32.0 in Revit (pull + RESTART Revit; window must show v0.32.0).
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

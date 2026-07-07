@@ -30,8 +30,9 @@ MM = config.MM_PER_FT
 FT = 1.0 / MM
 
 class T:  # minimal TextRecord stand-in for build_beam_segments (it reads point_internal/mark/b_mm/h_mm)
-    def __init__(self, mark, x, y, b, h, layer):
+    def __init__(self, mark, x, y, b, h, layer, rot=None):
         self.mark = mark; self.b_mm = b; self.h_mm = h; self.layer = layer
+        self.rotation_deg = rot
         self.point_internal = (x * FT, y * FT, 0.0) if x is not None else None
 
 def records_from_raw(raw):
@@ -54,7 +55,8 @@ def main():
     beam_texts = []
     for t in d.get("texts_sized", []):
         if layers.classify_text_layer(t.get("layer") or "") == layers.CATEGORY_BEAM_TEXT:
-            beam_texts.append(T(t.get("mark"), t.get("x"), t.get("y"), t.get("b"), t.get("h"), t.get("layer")))
+            beam_texts.append(T(t.get("mark"), t.get("x"), t.get("y"), t.get("b"),
+                                t.get("h"), t.get("layer"), t.get("rot")))
     # circles from the columns dump (for arc-junction filtering + end snap)
     circles = []
     for c in d["columns"].get("circles", []):

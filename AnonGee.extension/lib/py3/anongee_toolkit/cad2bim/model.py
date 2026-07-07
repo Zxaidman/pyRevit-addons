@@ -48,10 +48,11 @@ class TextRecord(object):
     are populated later by marks.parse_mark (e.g. "C1 400x400").
     """
 
-    def __init__(self, text, layer, point):
+    def __init__(self, text, layer, point, rotation_deg=0.0):
         self.text = text                # raw string, formatting already stripped
         self.layer = layer              # CAD layer name, or None
         self.point = point              # (x, y, z) in DXF coords
+        self.rotation_deg = rotation_deg  # text angle; beam labels run ALONG their beam
         self.point_internal = None      # (x, y, z) in Revit internal feet
         self.mark = None                # parsed mark name, e.g. "C1"
         self.b_mm = None                # parsed width, mm
@@ -71,6 +72,7 @@ class TextRecord(object):
             "mark": self.mark,
             "b_mm": self.b_mm,
             "h_mm": self.h_mm,
+            "rotation_deg": self.rotation_deg,
         }
 
     def __repr__(self):

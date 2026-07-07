@@ -1313,33 +1313,45 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
                                    (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
             status["degenerate"] += 1
             continue
+        # An outline WIDER than any beam is never one member's outline: it is either an
+        # open U-polyline chaining the facing edges of TWO grid beams that simplify_ring
+        # closed across the void (Test15's phantom midline beams between J/K, S/T), or a
+        # whole BAY traced as one nearly-closed snake whose slightly-skew closing edge
+        # defeats is_rectilinear (Test15's undrawn perimeter rows: the bay bbox segment
+        # was emitted 2950 wide, silently dropped by the width filter, and the real beam
+        # edges inside it were CONSUMED). In every such case the polyline's legs are real
+        # beam edges -- explode them into the pair pool so the actual beams re-pair.
+        def _explode_too_wide(status_key):
+            pts = record.points
+            for i in range(len(pts) - 1):
+                bare_lines.append(((pts[i][0], pts[i][1]),
+                                   (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
+            status[status_key] += 1
+
         if len(ring) == 4:
             result = shapes.beam_centerline_from_quad(ring)
             if result:
                 start, end, width = result
                 if width > quad_width_max_ft:
-                    # A "quad" wider than any beam is NOT one member's outline. It is an OPEN
-                    # U-polyline chaining the facing edges of TWO grid beams (plus a leg of a
-                    # cross beam) that simplify_ring closed across the void between them --
-                    # Test15 placed phantom beams on the MIDLINE between grids J/K and S/T
-                    # this way. Its legs are real beam edges: explode them into the pair pool
-                    # so the actual on-grid beams are rebuilt from their edge pairs.
-                    pts = record.points
-                    for i in range(len(pts) - 1):
-                        bare_lines.append(((pts[i][0], pts[i][1]),
-                                           (pts[i + 1][0], pts[i + 1][1]), pts[i][2]))
-                    status["quad_too_wide_explode"] += 1
+                    _explode_too_wide("quad_too_wide_explode")
                     continue
                 segments.append(_beam_segment(start, end, width, z, record.layer, "rect"))
                 status["rect"] += 1
         elif shapes.is_rectilinear(ring):
-            for rect in shapes.decompose_to_rectangles(ring):
-                start, end, width = shapes.beam_centerline_from_rect(rect)
+            pieces = [shapes.beam_centerline_from_rect(rect)
+                      for rect in shapes.decompose_to_rectangles(ring)]
+            if any(width > quad_width_max_ft for _s, _e, width in pieces):
+                _explode_too_wide("composite_too_wide_explode")
+                continue
+            for start, end, width in pieces:
                 segments.append(_beam_segment(start, end, width, z, record.layer, "segment"))
             status["composite"] += 1
         else:
             bbox = shapes.bounding_rectangle(ring, z)
             start, end, width = shapes.beam_centerline_from_rect(bbox)
+            if width > quad_width_max_ft:
+                _explode_too_wide("outline_too_wide_explode")
+                continue
             segments.append(_beam_segment(start, end, width, z, record.layer, "non_rectilinear"))
             status["non_rectilinear"] += 1
 
@@ -1421,8 +1433,7 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
         math.sin(math.radians(tol["parallel_angle_deg"])),
         config.mm_to_ft(tol["snap_tol_mm"]), config.mm_to_ft(_EDGE_DUP_TOL_MM))
     if continuation:
-        segments.extend(continuation)
-        status["continuation"] += len(continuation)
+        status["continuation"] += continuation   # beams EXTENDED in place, none added
 
     segments, dropped = _filter_beam_segments(segments, limits or DEFAULT_LIMITS,
                                               standards or {}, tol["snap_tol_mm"])
@@ -1594,6 +1605,8 @@ def _edge_pair_beams(beam_leftover, floor_lines, sized_labels, placed_marks, exi
         for i, (text, small, _big) in enumerate(candidates):
             if abs(seg["width_ft"] - small / _MM) > width_tol_ft:
                 continue
+            if not _label_matches_orientation(text, seg):
+                continue                     # a label always runs ALONG its beam
             d = _point_to_segment_dist(text.point_internal[0], text.point_internal[1],
                                        seg["start"], seg["end"])
             if d > radius_ft:
@@ -1635,17 +1648,21 @@ def _continuation_beams(beam_leftover, floor_lines, existing, pair_min_ft, pair_
     (a) at least one of its edges is on the BEAM layer -- slab edges alone never make
     a beam -- and (b) it collinearly CONTINUES an already-detected beam: same width,
     same centreline, separated along the axis by no more than a crossing member's
-    width. The continued beam is the evidence; its depth is inherited. Marks are left
-    empty (the near piece keeps the name).
+    width. The continued beam is the evidence.
+
+    The matched beam is EXTENDED in place over the candidate's span (returns the
+    number of extensions): the drawing merely breaks the member's linework at the
+    crossing, but it is ONE beam -- placing two pieces left a phantom gap in the
+    model that read like a column that isn't there. Mark, size and depth stay.
     """
     if not existing or len(beam_leftover) < 1 or len(beam_leftover) + len(floor_lines) < 2:
-        return []
+        return 0
     pairs, _lo = shapes.pair_parallel_lines(
         list(beam_leftover) + list(floor_lines), min_width_ft=pair_min_ft,
         max_width_ft=pair_max_ft, min_overlap_ft=min_overlap_ft, sin_tol=sin_tol)
     placed_lines = [(s["start"], s["end"]) for s in existing]
     gap_max_ft = config.mm_to_ft(_CONTINUATION_GAP_MAX_MM)
-    out = []
+    extended = 0
     for seg in pairs:
         if _coincides_with_a_beam(seg["start"], seg["end"], placed_lines, dup_tol_ft):
             continue                         # re-pairing of an already-placed beam
@@ -1660,13 +1677,28 @@ def _continuation_beams(beam_leftover, floor_lines, existing, pair_min_ft, pair_
                 break
         if hit is None:
             continue
-        beam = _beam_segment(seg["start"], seg["end"], seg["width_ft"],
-                             seg["start"][2], "S-BEAM", "continuation")
-        if hit.get("depth_mm") is not None:
-            beam["depth_mm"] = hit["depth_mm"]
+        _extend_segment_over(hit, seg)
         placed_lines.append((seg["start"], seg["end"]))
-        out.append(beam)
-    return out
+        extended += 1
+    return extended
+
+
+def _extend_segment_over(existing, seg):
+    """Stretch `existing` along its own axis so its span also covers `seg`'s."""
+    p, q = existing["start"], existing["end"]
+    vx, vy = q[0] - p[0], q[1] - p[1]
+    length = (vx * vx + vy * vy) ** 0.5
+    if length == 0:
+        return
+    ux, uy = vx / length, vy / length
+    ts = [0.0, length]
+    for cx, cy in ((seg["start"][0], seg["start"][1]), (seg["end"][0], seg["end"][1])):
+        ts.append((cx - p[0]) * ux + (cy - p[1]) * uy)
+    t_lo, t_hi = min(ts), max(ts)
+    z = p[2]
+    existing["start"] = [p[0] + ux * t_lo, p[1] + uy * t_lo, z]
+    existing["end"] = [p[0] + ux * t_hi, p[1] + uy * t_hi, z]
+    existing["length_mm"] = (t_hi - t_lo) * _MM
 
 
 def _pair_has_beam_edge(seg, beam_lines, sin_tol, tol_ft):
@@ -1847,6 +1879,8 @@ def _apply_beam_marks(segments, sized_labels, radius_ft, width_max_mm=None):
         for i, segment in enumerate(segments):
             if width_max_mm is not None and segment["width_mm"] > width_max_mm:
                 continue
+            if not _label_matches_orientation(text, segment):
+                continue
             s, e = segment["start"], segment["end"]
             d = _point_to_segment_dist(px, py, (s[0], s[1]), (e[0], e[1]))
             if d <= best_d:
@@ -1860,9 +1894,7 @@ def _apply_beam_marks(segments, sized_labels, radius_ft, width_max_mm=None):
         if i in owners:
             _d, text, small, big = min(owners[i], key=lambda o: o[0])
         else:
-            cx = (segment["start"][0] + segment["end"][0]) / 2.0
-            cy = (segment["start"][1] + segment["end"][1]) / 2.0
-            hit = _nearest_sized_label(cx, cy, sized_labels, radius_ft)
+            hit = _nearest_fallback_label(segment, sized_labels, radius_ft)
             if hit is None:
                 continue
             text, small, big = hit
@@ -1872,6 +1904,45 @@ def _apply_beam_marks(segments, sized_labels, radius_ft, width_max_mm=None):
         count += 1
     _dedupe_marks(segments, sized_labels)
     return count
+
+
+def _nearest_fallback_label(segment, sized_labels, radius_ft):
+    """Midpoint-nearest label for a segment no label claimed, orientation-gated."""
+    cx = (segment["start"][0] + segment["end"][0]) / 2.0
+    cy = (segment["start"][1] + segment["end"][1]) / 2.0
+    best, best_d2 = None, radius_ft * radius_ft
+    for text, small, big in sized_labels:
+        if not _label_matches_orientation(text, segment):
+            continue
+        px, py = text.point_internal[0], text.point_internal[1]
+        d2 = (px - cx) ** 2 + (py - cy) ** 2
+        if d2 <= best_d2:
+            best, best_d2 = (text, small, big), d2
+    return best
+
+
+_LABEL_ANGLE_TOL_DEG = 20.0
+
+
+def _label_matches_orientation(text, segment):
+    """True when the label's text runs ALONG the segment (drafting convention).
+
+    A beam's label is always written parallel to its beam, so a rotated (vertical)
+    label can never belong to a horizontal beam. This matters because a rotated
+    label's INSERTION point sits at one end of its text run -- often just past the
+    beam's end, closer to the crossing row's centreline than to its own beam --
+    which let vertical labels claim horizontal beams (Test15: wrong marks across
+    whole rows). Labels without a rotation (non-DXF sources) match everything.
+    """
+    rot = getattr(text, "rotation_deg", None)
+    if rot is None:
+        return True
+    sx, sy = segment["start"][0], segment["start"][1]
+    ex, ey = segment["end"][0], segment["end"][1]
+    seg_deg = math.degrees(math.atan2(ey - sy, ex - sx))
+    diff = abs((seg_deg - rot) % 180.0)
+    diff = min(diff, 180.0 - diff)
+    return diff <= _LABEL_ANGLE_TOL_DEG
 
 
 def _dedupe_marks(segments, sized_labels):
@@ -1895,12 +1966,12 @@ def _dedupe_marks(segments, sized_labels):
             continue
         px, py = label_pt[mark][0], label_pt[mark][1]
 
-        def _d2(seg):
-            cx = (seg["start"][0] + seg["end"][0]) / 2.0
-            cy = (seg["start"][1] + seg["end"][1]) / 2.0
-            return (cx - px) ** 2 + (cy - py) ** 2
+        def _d(seg):
+            # centreline distance, matching the ownership metric -- a midpoint
+            # metric here could overturn a correct ownership assignment
+            return _point_to_segment_dist(px, py, seg["start"], seg["end"])
 
-        group.sort(key=_d2)
+        group.sort(key=_d)
         for seg in group[1:]:
             seg["mark"] = None
 
@@ -2063,7 +2134,8 @@ def _compact_texts(texts):
         out.append({"mark": text.mark, "layer": text.layer,
                     "b": text.b_mm, "h": text.h_mm,
                     "x": _mm(point[0]) if point else None,
-                    "y": _mm(point[1]) if point else None})
+                    "y": _mm(point[1]) if point else None,
+                    "rot": getattr(text, "rotation_deg", None)})
     return out
 
 

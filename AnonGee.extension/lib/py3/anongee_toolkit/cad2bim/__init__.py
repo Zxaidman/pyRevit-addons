@@ -35,7 +35,34 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.31.0"  # BEAM bug batch, part 2 -- all four remaining bugs, fixed from the
+__version__ = "0.32.0"  # BEAM: Test15 marks + missing perimeter beams; B22 single piece.
+#                         From the user's 0.31.0 Revit run (Test10 perfect; Test15 rows fixed
+#                         but many marks wrong/missing and some beams undrawn; B22 placed as two
+#                         pieces with a phantom 300 gap):
+#                         (A) WRONG/MISSING MARKS -- a beam label is written ALONG its beam, but
+#                         a rotated (vertical) label's MTEXT anchor sits at one end of its text
+#                         run, often nearer the crossing row's centreline than its own beam, so
+#                         vertical labels claimed horizontal beams row after row. The DXF reader
+#                         now reads MTEXT text_direction (a vertical label is the (0,1,0) vector,
+#                         NOT rotation=90) into TextRecord.rotation_deg, and every label-to-beam
+#                         assignment (ownership, fallback, edge-pair) is orientation-gated: a
+#                         label only matches a beam it runs parallel to (+-20 deg). The duplicate-
+#                         mark sweep now keeps by CENTRELINE distance (same metric as ownership).
+#                         (B) UNDRAWN BEAMS (B120/B672/B256/B270 bay; B123-B126; B675-B677; edge
+#                         rows) -- a whole BAY traced as one nearly-closed snake has a slightly
+#                         skew closing edge, defeating is_rectilinear; the bbox segment it became
+#                         (2950 wide) was silently width-filtered and the REAL beam edges inside
+#                         it were consumed. Too-wide outlines now explode into the pair pool from
+#                         ALL three outline branches (quad/composite/non-rectilinear), so the
+#                         edges re-pair. Offline replay of Test15: 682 labels -> 682 segments,
+#                         every one marked with its own label, zero undrawn, zero mismatches.
+#                         (C) B22 ONE PIECE -- a continuation now EXTENDS the placed beam over
+#                         the crossing (mark/size kept) instead of adding a second piece with a
+#                         gap that read like a column that isn't there. Test18 both variants:
+#                         B22 -385..4465; Test19: -100..4850 (to C12's face). Test10/18 byte-
+#                         identical throughout; 13/13 unit tests.
+
+# 0.31.0  BEAM bug batch, part 2 -- all four remaining bugs, fixed from the
 #                         0.30.0 raw-geometry exports OFFLINE (replayed, not guessed):
 #                         (8e) Test10 grid-6 H-I beam: simplify_ring closes every polyline, so an
 #                         open snake's last leg (the vertical beam's edge, collinear with the
