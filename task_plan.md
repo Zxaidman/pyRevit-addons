@@ -234,8 +234,27 @@ with phantom 300 gap.
       must fabricate NOTHING. tests/test_beam_stress.py: 14 tests = full DXF pipeline asserts
       + link-reader POLYLINE snakes (U-snake, collinear-leg open snake, skew snake) fed
       straight into build_beam_segments. ALL PASS. Suite now 14 files, all green.
->> BEAMS effectively CLOSED pending user's v0.34.0 Revit confirm on Test11. NEXT: SLABS
-   (Phase 9 prototype is ready to wire).
+>> 0.34.0 run: fixtures COMPLETE (stress plan renamed Test20). Test20 revealed one
+   infrastructure bug -> fixed in v0.35.0, which also ships SLABS STEP 1:
+
+### Phase 10 — Test20 text-anchor fix + SLABS wired (v0.35.0) — DONE
+- [x] Test20: NO label sizing/marks at all + B7/B8 (the label-required beams) undrawn.
+      Cause: text alignment is GRID-anchored; Test20 has no grid layer -> fell back to the
+      link's GetTotalTransform, which Revit reported as IDENTITY (unit scale baked into the
+      imported geometry, not the instance transform) -> every label 304.8x off -> nothing
+      within mark_radius. FIX: anchor on ALL shared geometry when no grids (method
+      "geometry_anchored"); link transform only when both anchors empty. Stress DXF now
+      declares $INSUNITS=4 (mm) + regenerated under its Test20 name.
+- [x] SLABS STEP 1 (user request): _create_slabs wired after beams (runs when beams run).
+      Outlines: closed A-FLOR rings, else beam-perimeter-graph faces. Thickness/mark from
+      "S1 150 THK"/"150 THK." notes INSIDE the loop (content-driven, any text layer).
+      Floor type: model's first, duplicated per thickness ("150 THK"); level = beams' level.
+      Own transaction group; console line + "slabs" in the JSON export; progress bar 7->8
+      phases. KNOWN step-1 limits: no UI pickers (type/level), no openings, curved beams not
+      in the graph, no slab schedule.
+>> NEXT: user runs v0.35.0 (pull + RESTART Revit -- lib changed) on Test20 (re-link the
+   REGENERATED DXF) + one classic test (Test11/15) to see slabs appear. Then slab feedback
+   drives Phase 11.
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

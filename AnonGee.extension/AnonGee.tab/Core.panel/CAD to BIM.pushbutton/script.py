@@ -84,11 +84,12 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import compat, config, report
+from anongee_toolkit.cad2bim import compat, config, report, slabs_proto
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
-from anongee_toolkit.cad2bim.builders import columns, beams, grids, txn_failures
+from anongee_toolkit.cad2bim.builders import (columns, beams, grids, slabs,
+                                              txn_failures)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
@@ -590,7 +591,7 @@ def main():
     if not options.result:
         return
     path = options.result["path"]
-    _progress(1, 7, "link DXF")
+    _progress(1, 8, "link DXF")
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
                                        options.result["placement"],
@@ -602,7 +603,7 @@ def main():
     # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
     #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
     #    only, mapped into Revit coordinates by the link's own exact transform.
-    _progress(2, 7, "read link geometry")
+    _progress(2, 8, "read link geometry")
     revit_result = geometry_reader.read_link(doc, instance)
     if revit_result.is_empty():
         _alert("Empty link", "The linked DXF produced no readable geometry in "
@@ -616,17 +617,26 @@ def main():
 
     # Map DXF coords -> Revit feet using the GRID lines as anchors: they are the
     # same lines in both the Revit and DXF extractions, so aligning their bounding
-    # boxes is exact (no symbol-space unit guessing). Fall back to the link's own
-    # transform only if no grid geometry is available.
+    # boxes is exact (no symbol-space unit guessing). A plan with NO grid layer
+    # (Test20 stress plan) anchors on ALL shared geometry instead -- the two reads
+    # are the same drawing, so their overall bboxes align the same way. Only when
+    # both anchors are empty do we trust the link's own transform: Revit can bake
+    # the unit scale into the imported geometry and report an identity instance
+    # transform, which threw every Test20 label 304.8x off and killed all sizing.
     rev_grids = [r for r in revit_result.records
                  if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
     dxf_grids = [r for r in dxf_result.records
                  if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
     rev_bbox = transform.bbox_of_records(rev_grids)
     dxf_bbox = transform.bbox_of_records(dxf_grids)
+    rev_all = transform.bbox_of_records(revit_result.records)
+    dxf_all = transform.bbox_of_records(dxf_result.records)
     if rev_bbox and dxf_bbox:
         text_affine = transform.empirical_affine(dxf_bbox, rev_bbox)
         transform_method = "grid_anchored"
+    elif rev_all and dxf_all:
+        text_affine = transform.empirical_affine(dxf_all, rev_all)
+        transform_method = "geometry_anchored"
     else:
         text_affine = transform.from_link(instance)
         transform_method = "link_GetTotalTransform"
@@ -677,7 +687,7 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
-    _progress(3, 7, "build columns")
+    _progress(3, 8, "build columns")
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
 
@@ -706,7 +716,7 @@ def main():
     # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
     # beam is sized from its label -- an inline "B1 300x600" OR a mark-only "B1" via the
     # schedule. Pass beam labels + the schedule so each segment gets its width/depth + mark.
-    _progress(4, 7, "build beams")
+    _progress(4, 8, "build beams")
     beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
@@ -767,15 +777,22 @@ def main():
         _say(line)
 
     outcomes = {}
-    _progress(5, 7, "create grids")
+    _progress(5, 8, "create grids")
     if selections["create_grids"]:
         outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
-    _progress(6, 7, "create columns")
+    _progress(6, 8, "create columns")
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
-    _progress(7, 7, "create beams")
+    _progress(7, 8, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
+    # SLABS, step 1 (prototype wired): outlines from the slab-edge (A-FLOR) rings,
+    # falling back to the BEAM PERIMETER GRAPH when the DWG has no slab layer;
+    # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
+    _progress(8, 8, "create slabs")
+    if selections["create_beams"]:
+        outcomes["slabs"] = _create_slabs(doc, revit_result.records, beam_segments,
+                                          dxf_result.texts, selections)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
                 outcomes, dxf_result.texts, comparison)
@@ -926,6 +943,68 @@ def _create_beams(doc, beam_segments, selections):
         _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
+
+
+def _create_slabs(doc, records, beam_segments, texts, selections):
+    """Place floor slabs (PROTOTYPE step 1) after the beams, in a transaction group.
+
+    Outline source 1: closed rings on the slab-edge (A-FLOR) layer, as drawn.
+    Source 2 (fallback, no slab layer): bounded faces of the placed beam centreline
+    graph. Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
+    INSIDE the loop -- content-driven, any text layer. The floor type is the model's
+    first floor type, duplicated per thickness; the level is the beams' level.
+    """
+    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    level_id = selections.get("top_level_id")
+    if level_id is None:
+        _say("Slabs -- skipped (no top level chosen).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    loops = slabs_proto.slab_loops_from_edges(records)
+    source = "slab_edges"
+    if not loops:
+        loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))
+        source = "beam_graph"
+    if not loops:
+        _say("Slabs -- no closed slab outline found (either source).")
+        return {"created": 0, "skipped": 0, "errors": 0, "source": source}
+    slab_defs = slabs_proto.apply_slab_labels(loops, texts)
+    types = slabs.floor_types(doc)
+    if not types:
+        _say("Slabs -- skipped (the model has no floor type to duplicate).")
+        return {"created": 0, "skipped": 0, "errors": 0, "source": source}
+    base_type_id = types[0][1]
+
+    group = TransactionGroup(doc, "CAD to BIM: Slabs")
+    transaction = Transaction(doc, "Create slabs")
+    group.Start()
+    transaction.Start()
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        result = slabs.place_slabs(doc, slab_defs, base_type_id, level_id)
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
+    except Exception as creation_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        if group.HasStarted() and not group.HasEnded():
+            group.RollBack()
+        _error("Slab creation failed", "Slab creation failed.", str(creation_error))
+        return {"created": 0, "skipped": 0, "errors": 1, "source": source}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Slabs", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True,
+                "source": source}
+
+    sized = sum(1 for sd in slab_defs if sd.get("thickness_mm") is not None)
+    _say("Slabs (prototype) -- source: {0}, loops: {1}, thickness-noted: {2}, "
+         "created: {3}, skipped: {4}, errors: {5}".format(
+             source, len(slab_defs), sized, len(result["created"]),
+             len(result["skipped"]), len(result["errors"])))
+    for message in result["errors"]:
+        _say("  slab: {0}".format(message))
+    return {"created": len(result["created"]), "skipped": len(result["skipped"]),
+            "errors": len(result["errors"]), "source": source, "loops": len(slab_defs)}
 
 
 def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):

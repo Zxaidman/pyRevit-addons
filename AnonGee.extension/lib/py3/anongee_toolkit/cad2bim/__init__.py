@@ -35,7 +35,25 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.34.0"  # BEAM: sloped beams keep their slope + a stress-test fixture.
+__version__ = "0.35.0"  # Test20 text-anchor fix + SLABS step 1 wired into the pushbutton.
+#                         (A) Test20 lost ALL label sizing/marks (and the two label-required
+#                         beams B7/B8): the DXF->Revit text alignment is GRID-anchored, and the
+#                         stress plan has no grid layer, so it fell back to the link's own
+#                         transform -- which Revit reported as identity (unit scale baked into
+#                         the geometry), throwing every label 304.8x away. The alignment now
+#                         anchors on ALL shared geometry when there are no grids (same drawing
+#                         on both sides), and only trusts the link transform when both anchors
+#                         are empty. The stress DXF also now declares $INSUNITS=mm.
+#                         (B) SLABS, step 1: after the beams, the pushbutton now derives slab
+#                         outlines -- closed A-FLOR rings as drawn, else the bounded faces of
+#                         the placed beam centreline graph (endpoint-healed planar faces) --
+#                         sizes/names each loop from "S1 150 THK"/"150 THK." notes lying inside
+#                         it (any text layer), duplicates the model's first floor type per
+#                         thickness, and places one floor per loop at the beams' level
+#                         (builders/slabs.place_slabs, own transaction group; slab outcome
+#                         joins the console report and the JSON export as "slabs").
+
+# 0.34.0  BEAM: sloped beams keep their slope + a stress-test fixture.
 #                         (A) Test11 grid-I regression from 0.33.0: the 4-degree bays between
 #                         rotated columns arrive as ONE non-rectilinear snake holding the beam's
 #                         two angled edges; the bbox fallback flattened them onto the horizontal

@@ -2,7 +2,7 @@
 """Beam STRESS suite -- every failure mode from Test9-19 in one synthetic plan.
 
 Part 1 runs the REAL pipeline (dxf_reader -> layers -> build_beam_segments) over
-fixtures/cad/StressPlan-Beams.dxf (regenerate with fixtures/make_stress_plan.py) and
+fixtures/cad/StructuralPlan-Test20-Beam Stress test.dxf (fixtures/make_stress_plan.py) and
 asserts each zone's beam arrives with the right geometry, size and mark:
     Z1 baseline ring w/ rotated vertical labels        Z5 perimeter beam via A-FLOR
     Z2 sloped 4-deg beam (bbox once flattened it)      Z6 stacked-label mark theft
@@ -24,7 +24,8 @@ import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
-_DXF = os.path.join(_HERE, "fixtures", "cad", "StressPlan-Beams.dxf")
+_DXF = os.path.join(_HERE, "fixtures", "cad",
+                    "StructuralPlan-Test20-Beam Stress test.dxf")
 _MM = 304.8
 _FT = 1.0 / _MM
 

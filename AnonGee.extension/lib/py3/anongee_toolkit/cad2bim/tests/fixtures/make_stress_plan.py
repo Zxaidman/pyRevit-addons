@@ -36,9 +36,14 @@ sys.path.insert(0, "/tmp/pylibs")
 import ezdxf
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                   "cad", "StressPlan-Beams.dxf")
+                   "cad", "StructuralPlan-Test20-Beam Stress test.dxf")
 
 doc = ezdxf.new("R2013")
+# Declare MILLIMETRES: without $INSUNITS Revit auto-detect can link the DXF at the
+# wrong scale AND report an identity instance transform (scale baked into geometry),
+# which threw every label 304.8x off in the first Test20 run.
+doc.header["$INSUNITS"] = 4      # 4 = millimetres
+doc.header["$MEASUREMENT"] = 1   # metric
 msp = doc.modelspace()
 for name, color in (("S-BEAM", 1), ("A-FLOR", 8), ("S-BEAM-IDEN", 2)):
     doc.layers.add(name, color=color)
