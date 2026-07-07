@@ -1185,13 +1185,16 @@ def _ring_keeps_all_points(xy, ring, tol_ft):
 
 def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
                               pad_ft=None):
-    """Pull a beam END onto a ROUND or ROTATED column's centre to close the junction gap.
+    """Run a beam END up to a ROUND or ROTATED column's centre to close the junction gap.
 
     A beam meeting an axis-aligned column butts cleanly against a flat edge, but a round
     column (tangent contact) or a rotated column (skew edge) leaves an ugly gap. When a
     beam endpoint lands inside such a column (within its radius + a small pad), the end is
-    moved to the column centre so the beam runs to the centre. Only ENDPOINTS move, never a
-    beam's midspan; axis-aligned columns are left alone. Returns the number of ends snapped.
+    slid ALONG THE BEAM'S OWN AXIS to the point abeam of the column centre -- never onto
+    the centre itself: a column deliberately drawn OFF the beam's axis (Test11's grid-I
+    columns) would otherwise drag the end sideways and skew the whole beam off its CAD
+    outline. Only ENDPOINTS move, never a beam's midspan; axis-aligned columns are left
+    alone. Returns the number of ends snapped.
     """
     if pad_ft is None:
         pad_ft = config.mm_to_ft(_BEAM_END_SNAP_PAD_MM)
@@ -1215,13 +1218,31 @@ def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
         return 0
     snapped = 0
     for seg in beam_segments.get("segments", []):
-        for end in ("start", "end"):
+        for end, other in (("start", "end"), ("end", "start")):
             ex, ey = seg[end][0], seg[end][1]
+            ox, oy = seg[other][0], seg[other][1]
+            vx, vy = ex - ox, ey - oy
+            length = (vx * vx + vy * vy) ** 0.5
+            if length == 0:
+                continue
+            ux, uy = vx / length, vy / length   # axis direction, towards this end
+            # NEAREST target, not first-in-list: a short stub clipped between TWO
+            # rotated columns has both ends inside both columns' reach, and first-match
+            # sent both ends to the same column, collapsing the beam (Test15's B648).
+            # Nearest sends each end to its own column, stretching the stub across
+            # the full bay.
+            best = None
             for cx, cy, reach in targets:
-                if (ex - cx) ** 2 + (ey - cy) ** 2 <= reach * reach:
-                    seg[end][0], seg[end][1] = cx, cy
-                    snapped += 1
-                    break
+                d2 = (ex - cx) ** 2 + (ey - cy) ** 2
+                if d2 <= reach * reach and (best is None or d2 < best[0]):
+                    best = (d2, cx, cy)
+            if best is not None:
+                _d2, cx, cy = best
+                # project the column centre onto the beam's carrier line and move the
+                # end THERE: extended to the centre's station, still on the beam's axis
+                t = (cx - ox) * ux + (cy - oy) * uy
+                seg[end][0], seg[end][1] = ox + ux * t, oy + uy * t
+                snapped += 1
     return snapped
 
 

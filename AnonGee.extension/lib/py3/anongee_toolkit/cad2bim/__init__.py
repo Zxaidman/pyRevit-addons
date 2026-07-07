@@ -35,7 +35,24 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.32.0"  # BEAM: Test15 marks + missing perimeter beams; B22 single piece.
+__version__ = "0.33.0"  # BEAM end-snap corrections from the 0.32.0 run (Test11 + B648).
+#                         (A) NO MORE SIDEWAYS DRIFT: snap_beam_ends_to_columns moved a beam end
+#                         ONTO the round/rotated column's centre point -- a column deliberately
+#                         drawn OFF the beam's axis (Test11's grid-I columns) dragged the end
+#                         sideways and skewed the whole beam off its CAD outline. The end now
+#                         slides ALONG THE BEAM'S OWN AXIS to the station abeam of the column
+#                         centre (projection), so the beam stays on its outline and still meets
+#                         the column. Test11 replay: 22 snaps, all axial, zero lateral drift.
+#                         (B) B648 (Test15+Test14): the bay between two large rotated columns
+#                         (C315/C319, 750x1200) leaves only a 301 mm edge-overlap stub, and BOTH
+#                         stub ends fell inside BOTH columns' reach -- first-match sent both ends
+#                         to the SAME column, collapsing the beam to zero (skipped as a sliver).
+#                         Each end now snaps to its NEAREST column, stretching the stub across
+#                         the full bay (B648 = 1500 span, S->O). Same fix recovers the identical
+#                         markless beam in Test14. Zero collapsed segments after snap; detection
+#                         byte-identical on every export; 13/13 test files.
+
+# 0.32.0  BEAM: Test15 marks + missing perimeter beams; B22 single piece.
 #                         From the user's 0.31.0 Revit run (Test10 perfect; Test15 rows fixed
 #                         but many marks wrong/missing and some beams undrawn; B22 placed as two
 #                         pieces with a phantom 300 gap):

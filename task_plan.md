@@ -205,7 +205,20 @@ with phantom 300 gap.
 - [x] B22 ONE PIECE: continuation now EXTENDS the placed beam across the crossing (was: second
       piece + gap). Test18 x2 + Test19 verified single span to C12's face.
 - [x] Regression: Test10/18 byte-identical; 13/13 unit tests.
->> NEXT: user runs v0.32.0 in Revit (pull + RESTART Revit; window must show v0.32.0).
+>> 0.32.0 Revit run: Test10/18/19 CLEAN. Two new items -> fixed in v0.33.0:
+
+### Phase 8++ — 0.32.0 feedback (v0.33.0) — DONE, AWAITING REVIT CONFIRM
+- [x] SNAP DRIFT (Test11, verticals H->I): snap moved the end ONTO the column centre; grid-I
+      columns are deliberately OFF the beam axis -> beam skewed off its CAD outline. End now
+      slides ALONG THE BEAM'S AXIS to the station abeam of the centre (projection). Replay:
+      22 snaps, all axial, 0 lateral drift. New unit test (off-axis column).
+- [x] B648 UNDRAWN (Test15 + same beam markless in Test14): bay between C315/C319 (750x1200
+      rotated) leaves a 301mm edge-overlap stub; BOTH ends inside BOTH columns' reach and
+      first-match sent both to the SAME centre -> zero length -> skipped. Ends now snap to
+      the NEAREST column each -> stub stretches to the full bay (B648 = 1500, S->O). Zero
+      collapsed segments post-snap; detection byte-identical everywhere; 13/13 tests.
+>> NEXT: user runs v0.33.0 in Revit (pull + RESTART; window must show v0.33.0) on
+   Test11 + Test14 + Test15 (confirm drift gone, B648 drawn, nothing else moved).
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

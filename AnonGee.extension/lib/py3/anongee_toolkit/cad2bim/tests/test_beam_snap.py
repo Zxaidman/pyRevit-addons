@@ -89,6 +89,18 @@ class BeamEndSnap(unittest.TestCase):
         self.assertEqual(n, 0)
         self.assertAlmostEqual(bs["segments"][0]["end"][0] / _FT, 4800.0, delta=1.0)
 
+    def test_off_axis_column_extends_along_beam_axis(self):
+        # A rotated column deliberately drawn OFF the beam's axis (Test11 grid I):
+        # the end must slide ALONG the beam to the centre's station -- x stays put,
+        # never onto the centre itself (that skewed the whole beam off its outline).
+        sections = self._sections([_rect(5300, 10000, 400, 900, 45.0)])
+        bs = {"segments": [_seg(5000, 5000, 5000, 9700)]}
+        n = report.snap_beam_ends_to_columns(bs, sections, [])
+        self.assertEqual(n, 1)
+        end = bs["segments"][0]["end"]
+        self.assertAlmostEqual(end[0] / _FT, 5000.0, delta=1.0)    # on its own axis
+        self.assertAlmostEqual(end[1] / _FT, 10000.0, delta=1.0)   # at the centre's station
+
     def test_midspan_not_moved(self):
         # A beam passing THROUGH a rotated column (both ends far) keeps its endpoints.
         sections = self._sections([_rect(5000, 5000, 400, 900, 45.0)])
