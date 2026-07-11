@@ -7,6 +7,17 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.37.0 — SLABS round 3: three outline sources + schedule/label fixes (Test0-7 set)
+- Fixture reset: Test0 (messy) + Test1-7; column-only fixtures culled; stress DXF
+  regenerated from its generator after the rename removed it.
+- Slab-beam overlap (test4/5): beam-graph faces inset per edge by that beam's HALF WIDTH.
+- Three sources: slab_edges -> member_edges (drawn beam+column outlines = exact panel
+  boundary; body strips filtered) -> beam_graph_inset. test4/5 -> 243 face-true panels.
+- test6: combined-layer schedule's slab table (Mark|H|Volume) parsed; S1..S9 size from it.
+- test7: "S7_150 THK." underscore labels parse.
+- test6/7 Floor.Create error: neighbour panel swallowed as HOLE via on-boundary
+  point-in-polygon -> strict 50mm interior clearance + ring sanitation.
+
 ## v0.36.0 — SLABS round 2: Floor.Create fixed + UI pickers + openings (+ compact UI)
 - Floor.Create failed everywhere: pythonnet does NOT convert a Python list to
   IList<CurveLoop>. Loops now packed into System.Collections.Generic.List[CurveLoop];

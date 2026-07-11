@@ -803,7 +803,7 @@ def main():
     _progress(8, 8, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, beam_segments,
-                                          dxf_result.texts, selections)
+                                          dxf_result.texts, selections, schedule)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
                 outcomes, dxf_result.texts, comparison)
@@ -956,12 +956,13 @@ def _create_beams(doc, beam_segments, selections):
             "errors": len(result["errors"])}
 
 
-def _create_slabs(doc, records, beam_segments, texts, selections):
+def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None):
     """Place floor slabs (PROTOTYPE step 1) after the beams, in a transaction group.
 
-    Outline source 1: closed rings on the slab-edge (A-FLOR) layer, as drawn.
-    Source 2 (fallback, no slab layer): bounded faces of the placed beam centreline
-    graph. Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
+    Outline sources, in order: (1) closed rings on the slab-edge (A-FLOR) layer;
+    (2) faces of the drawn beam+column edge lines (exact boundary, no offset);
+    (3) faces of the placed beam centreline graph, inset by each beam's half
+    width. Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
     INSIDE the loop -- content-driven, any text layer. The floor type is the one
     picked in the window, duplicated per thickness; the level is the beams' level.
     """
@@ -974,15 +975,23 @@ def _create_slabs(doc, records, beam_segments, texts, selections):
     if base_type_id is None:
         _say("Slabs -- skipped (no floor type chosen).")
         return {"created": 0, "skipped": 0, "errors": 0}
+    # Outline source chain: (1) slab-edge layer rings as drawn; (2) the faces of
+    # the DRAWN beam+column edges (true face lines, exact boundary); (3) the beam
+    # centreline graph with each face edge inset by that beam's half width.
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
-        loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))
-        source = "beam_graph"
+        loops = slabs_proto.slab_loops_from_member_edges(records)
+        source = "member_edges"
     if not loops:
-        _say("Slabs -- no closed slab outline found (either source).")
+        loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))
+        source = "beam_graph_inset"
+    if not loops:
+        _say("Slabs -- no closed slab outline found (any source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}
-    slab_defs = slabs_proto.apply_slab_labels(loops, texts)
+    slab_schedule = {m: v for m, v in (schedule or {}).items()
+                     if str(m)[:1].upper() == "S" and str(m)[1:2].isdigit()}
+    slab_defs = slabs_proto.apply_slab_labels(loops, texts, schedule=slab_schedule)
 
     group = TransactionGroup(doc, "CAD to BIM: Slabs")
     transaction = Transaction(doc, "Create slabs")

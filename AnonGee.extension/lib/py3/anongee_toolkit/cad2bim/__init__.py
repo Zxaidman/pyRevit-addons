@@ -35,7 +35,26 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.36.0"  # SLABS round 2: Floor.Create fixed + UI pickers + openings.
+__version__ = "0.37.0"  # SLABS round 3, from the 0.36.0 run over the renamed Test0-Test7 set.
+#                         (A) THREE outline sources, in order: slab-edge rings; NEW member-edge
+#                         faces (the DRAWN beam+column outlines bound each panel with true face
+#                         lines -- exact boundary, member-body strips filtered by mean width);
+#                         and the beam-centreline graph whose face edges are now INSET by each
+#                         beam's half width (test4/5 slabs no longer overlap the beams).
+#                         (B) SLAB LABELS: "S7_150 THK." (underscore join, the fixtures' real
+#                         convention) parses; the combined schedule's slab table (Mark|H|Volume,
+#                         S-marks, thickness-only) is read by parse_schedule and passed into the
+#                         slab pass -- test6's mark-only S1..S9 now size from their table, and
+#                         one schedule LAYER may carry all three tables (category renamed
+#                         "schedule (column/beam/slab)"); several layers may map to it too.
+#                         (C) Floor.Create "curve loops intersect" on the curved slab: adjacent
+#                         panels SHARE edges, and a shared-edge vertex sits ON the boundary where
+#                         point-in-polygon is arbitrary -- a neighbour panel was swallowed as a
+#                         HOLE. _ring_inside now demands strict interior clearance (50 mm), and
+#                         rings are sanitized (sub-tolerance edges + collinear stops merged, the
+#                         tessellated-arc boundary included) before Floor.Create.
+
+# 0.36.0  SLABS round 2: Floor.Create fixed + UI pickers + openings.
 #                         (A) "No method matches given arguments for Floor.Create": the API
 #                         needs a .NET IList<CurveLoop>; a CPython3/pythonnet Python list does
 #                         not convert. Loops are now packed into System.Collections.Generic.

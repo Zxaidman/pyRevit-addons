@@ -63,14 +63,46 @@ def place_slabs(doc, slabs, base_type_id, level_id):
     return result
 
 
+_MIN_EDGE_FT = 15.0 / 304.8       # skip sub-tolerance slivers (Revit rejects them)
+_COLLINEAR_FT = 1.0 / 304.8       # merge vertices that add no real corner
+
+
 def _curve_loop(ring):
+    """Ring -> CurveLoop, sanitized: duplicate points, sub-tolerance edges and
+    collinear stops are merged first -- a tessellated ARC boundary otherwise feeds
+    Revit hundreds of tiny segments and Floor.Create rejects the loop."""
+    pts = _sanitize_ring(ring)
     loop = CurveLoop()
-    n = len(ring)
+    n = len(pts)
     for i in range(n):
-        x1, y1 = ring[i]
-        x2, y2 = ring[(i + 1) % n]
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
         loop.Append(Line.CreateBound(XYZ(x1, y1, 0.0), XYZ(x2, y2, 0.0)))
     return loop
+
+
+def _sanitize_ring(ring):
+    pts = []
+    for x, y in ring:
+        if pts and ((x - pts[-1][0]) ** 2 + (y - pts[-1][1]) ** 2) ** 0.5 < _MIN_EDGE_FT:
+            continue
+        pts.append((x, y))
+    if len(pts) > 1 and ((pts[0][0] - pts[-1][0]) ** 2
+                         + (pts[0][1] - pts[-1][1]) ** 2) ** 0.5 < _MIN_EDGE_FT:
+        pts.pop()
+    out = []
+    n = len(pts)
+    for i in range(n):
+        ax, ay = pts[i - 1]
+        bx, by = pts[i]
+        cx, cy = pts[(i + 1) % n]
+        # perpendicular distance of b from segment a-c: a true corner keeps it
+        vx, vy = cx - ax, cy - ay
+        length = (vx * vx + vy * vy) ** 0.5
+        if length > 0 and abs((bx - ax) * vy - (by - ay) * vx) / length < _COLLINEAR_FT:
+            continue
+        out.append(pts[i])
+    return out if len(out) >= 3 else pts
 
 
 def _nest_openings(slabs):
@@ -110,11 +142,36 @@ def _ring_area(ring):
     return s / 2.0
 
 
+_HOLE_CLEARANCE_FT = 50.0 / 304.8
+
+
 def _ring_inside(inner, outer):
+    """True only when `inner` sits STRICTLY inside `outer`, clear of its boundary.
+
+    Adjacent slab panels SHARE edges; a shared-edge vertex sits ON the boundary,
+    where a plain point-in-polygon answer is arbitrary -- that once classified a
+    neighbouring panel as this floor's hole, and Floor.Create rejected the
+    intersecting loops. A genuine void (stair/lift) is well inside: every vertex
+    must be inside AND at least the clearance away from the outer boundary.
+    """
+    n = len(outer)
     for x, y in inner:
         if not _point_in_ring(x, y, outer):
             return False
+        for i in range(n):
+            if _pt_seg_dist(x, y, outer[i], outer[(i + 1) % n]) < _HOLE_CLEARANCE_FT:
+                return False
     return True
+
+
+def _pt_seg_dist(px, py, a, b):
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2)) if l2 else 0.0
+    qx, qy = ax + t * dx, ay + t * dy
+    return ((px - qx) ** 2 + (py - qy) ** 2) ** 0.5
 
 
 def _point_in_ring(x, y, ring):

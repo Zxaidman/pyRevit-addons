@@ -268,8 +268,25 @@ with phantom 300 gap.
       enclosing floor's inner CurveLoop (hole), not a stacked slab.
 - Remaining queued: curved beams as slab-graph edges; slab schedule; slab level picker
   (currently the beams' top level); slab marks S1/S2 from a dedicated slab-text layer.
->> NEXT: user runs v0.36.0 (pull + RESTART Revit) -- expect floors to appear on every
-   fixture; check THK notes size them and voids appear where outlines nest.
+>> 0.36.0 run over the RENAMED fixture set (Test0=Messy, Test1-Test7; column-only
+   fixtures culled; old fixtures considered good through beam v0.34.0):
+
+### Phase 12 — SLABS round 3 (v0.37.0) — DONE, AWAITING REVIT CONFIRM
+- [x] test4/5 slab-beam OVERLAP: graph faces sat on beam CENTRELINES. Faces now inset
+      per-edge by that beam's half width (width carried through healing/splitting;
+      corners rebuilt by intersecting offset carriers).
+- [x] THREE-SOURCE CHAIN (user request): slab_edges -> NEW member_edges (faces of the
+      DRAWN beam+column outlines = true face-line boundary, member bodies filtered by
+      mean width 2A/P) -> beam_graph_inset. test4/5: member_edges 243 panels.
+- [x] test6 schedule: combined one-layer schedule's SLAB table (Mark|H|Volume) now parsed
+      (S-mark thickness-only blocks); slab pass receives the schedule (S1..S9 sized).
+      Category renamed "schedule (column/beam/slab)"; multiple layers can map to it.
+- [x] test7 inline labels: "S7_150 THK." underscore convention now parses.
+- [x] test6/7 Floor.Create error on the curved slab: adjacent panel (shared edge) was
+      swallowed as a HOLE (point-in-polygon arbitrary ON the boundary). _ring_inside now
+      demands 50mm strict interior clearance; rings sanitized (short/collinear merged).
+- [x] Stress DXF regenerated (culled by the rename); 14/14 test files pass.
+>> NEXT: user runs v0.37.0 (pull + RESTART Revit) across Test0-Test7.
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

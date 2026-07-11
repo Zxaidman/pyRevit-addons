@@ -46,8 +46,9 @@ slabs_proto = _load()
 layers = sys.modules["_slb.classify.layers"]
 
 
-def _seg(x0, y0, x1, y1):
-    return {"start": [x0 * _FT, y0 * _FT, 0.0], "end": [x1 * _FT, y1 * _FT, 0.0]}
+def _seg(x0, y0, x1, y1, w=0.0):
+    return {"start": [x0 * _FT, y0 * _FT, 0.0], "end": [x1 * _FT, y1 * _FT, 0.0],
+            "width_mm": w}
 
 
 class _Text(object):
@@ -115,6 +116,60 @@ class SlabEdgeLoops(unittest.TestCase):
         self.assertEqual(slabs_proto.slab_loops_from_edges(recs), [])
 
 
+class InsetGraph(unittest.TestCase):
+    def test_faces_inset_to_the_beam_faces(self):
+        # one 5x5 m bay of 300-wide beams: the slab must stop at the beam FACES,
+        # i.e. a 4.7 x 4.7 m panel, not the 5 x 5 centreline face
+        segs = [_seg(0, 0, 5000, 0, 300), _seg(5000, 0, 5000, 5000, 300),
+                _seg(5000, 5000, 0, 5000, 300), _seg(0, 5000, 0, 0, 300)]
+        loops = slabs_proto.slab_loops_from_beam_graph(segs)
+        self.assertEqual(len(loops), 1)
+        ring, _z = loops[0]
+        area = abs(slabs_proto._signed_area(ring)) * _MM * _MM / 1e6
+        self.assertAlmostEqual(area, 4.7 * 4.7, delta=0.1)
+        xs = sorted(p[0] * _MM for p in ring)
+        self.assertAlmostEqual(xs[0], 150.0, delta=5.0)      # inset off the centreline
+
+    def test_mixed_widths_inset_per_edge(self):
+        # left beam 600 wide, the rest 300: the left edge insets 300, others 150
+        segs = [_seg(0, 0, 5000, 0, 300), _seg(5000, 0, 5000, 5000, 300),
+                _seg(5000, 5000, 0, 5000, 300), _seg(0, 5000, 0, 0, 600)]
+        loops = slabs_proto.slab_loops_from_beam_graph(segs)
+        self.assertEqual(len(loops), 1)
+        xs = sorted(p[0] * _MM for p in loops[0][0])
+        self.assertAlmostEqual(xs[0], 300.0, delta=5.0)
+
+
+class MemberEdgeFaces(unittest.TestCase):
+    class _Rec(object):
+        def __init__(self, pts_mm, category):
+            self.points = [(x * _FT, y * _FT, 0.0) for x, y in pts_mm]
+            self.category = category
+
+    def _edge_pair(self, x0, y0, x1, y1, width):
+        import math as _m
+        dx, dy = x1 - x0, y1 - y0
+        ln = _m.hypot(dx, dy)
+        nx, ny = -dy / ln * width / 2.0, dx / ln * width / 2.0
+        mk = lambda pts: self._Rec(pts, layers.CATEGORY_BEAM)
+        return [mk([(x0 + nx, y0 + ny), (x1 + nx, y1 + ny)]),
+                mk([(x0 - nx, y0 - ny), (x1 - nx, y1 - ny)])]
+
+    def test_drawn_edges_bound_the_panel_exactly(self):
+        # a 5x5 m bay of 300-wide beams DRAWN as edge pairs: the inner edges bound
+        # a 4.7 x 4.7 panel face; the beam-body strips must NOT become panels
+        recs = []
+        recs += self._edge_pair(0, 0, 5000, 0, 300)
+        recs += self._edge_pair(5000, 0, 5000, 5000, 300)
+        recs += self._edge_pair(5000, 5000, 0, 5000, 300)
+        recs += self._edge_pair(0, 5000, 0, 0, 300)
+        loops = slabs_proto.slab_loops_from_member_edges(recs)
+        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+                       for r, _z in loops)
+        self.assertEqual(len(areas), 1)              # only the panel, no body strips
+        self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
+
+
 class SlabLabels(unittest.TestCase):
     def _one_loop(self):
         ring = [(0.0, 0.0), (5000 * _FT, 0.0), (5000 * _FT, 5000 * _FT),
@@ -144,6 +199,15 @@ class SlabLabels(unittest.TestCase):
         self.assertEqual(slabs_proto.parse_slab_label("150 thk"), (None, 150.0))
         self.assertEqual(slabs_proto.parse_slab_label("S7"), ("S7", None))
         self.assertEqual(slabs_proto.parse_slab_label("hello"), (None, None))
+        # underscore join, the fixtures' actual convention ("S7_150 THK.")
+        self.assertEqual(slabs_proto.parse_slab_label("S7_150 THK."), ("S7", 150.0))
+        self.assertEqual(slabs_proto.parse_slab_label("S12_125 thk"), ("S12", 125.0))
+
+    def test_schedule_tuple_entry_reads_thickness(self):
+        # parse_schedule stores a slab row as (thk, thk); entry[0] is the thickness
+        slabs = slabs_proto.apply_slab_labels(
+            self._one_loop(), [_Text("S3", 2500, 2500)], schedule={"S3": (125.0, 125.0)})
+        self.assertEqual(slabs[0]["thickness_mm"], 125.0)
 
 
 if __name__ == "__main__":

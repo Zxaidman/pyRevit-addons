@@ -6,18 +6,20 @@ this module proves out the slab pipeline so it can be lifted in when beams are d
 It is Revit-free (imports no Revit assemblies) so it can be unit-tested and replayed
 against the JSON raw-geometry exports like the beam logic.
 
-Two outline sources, in order of preference:
+Three outline sources, in order of preference:
 
 (1) SLAB-EDGE LAYER (A-FLOR): each closed polyline on the slab-edge layer IS a slab
     boundary -- take it directly (loose edge lines are chained end-to-end into rings
     first). This is the normal path when the DWG carries a floor layer.
 
-(2) BEAM PERIMETER GRAPH (fallback, when the DWG has no slab-edge layer): a floor
-    panel is bounded by the beams around it, so the placed beam CENTERLINES form a
-    planar graph whose bounded faces are the slab panels. Build the graph (segments
-    split at crossings, endpoints snapped), walk its faces half-edge style (always
-    turn most-counter-clockwise), keep the bounded faces, drop the unbounded outer
-    face. Each face's ring is a slab outline candidate.
+(2) MEMBER EDGES (no slab layer): the beams' and columns' DRAWN outlines bound each
+    panel with true face lines; the bounded faces of that edge graph are the slab
+    panels at their exact boundary (member-body strips are filtered by mean width).
+
+(3) BEAM PERIMETER GRAPH (last resort): the placed beam CENTERLINES form a planar
+    graph whose bounded faces are the panels; each face edge is then offset INWARD
+    by that beam's half width so the slab meets the beam FACE instead of
+    overlapping to its centreline.
 
 Sizing and naming mirror columns/beams exactly:
     - a slab label ("S1 150 THK", "S3", "150 thk") sitting INSIDE a loop names it and
@@ -33,7 +35,7 @@ import re
 from collections import defaultdict
 
 from . import config
-from .classify.layers import CATEGORY_SLAB_EDGE
+from .classify.layers import CATEGORY_SLAB_EDGE, CATEGORY_BEAM, CATEGORY_COLUMN
 
 _MM = config.MM_PER_FT
 
@@ -41,10 +43,14 @@ _SNAP_MM = 50.0          # endpoint snap grid for the beam graph (junction slop)
 _HEAL_MM = 600.0         # extend a beam end up to this far to meet the junction
 _MIN_FACE_AREA_M2 = 1.0  # a bounded face smaller than this is a junction sliver
 _CHAIN_TOL_MM = 150.0    # loose slab-edge lines chain when ends are this close
+_EDGE_HEAL_MM = 350.0    # drawn member edges: close small junction gaps only
+_MIN_PANEL_WIDTH_MM = 500.0   # a face slimmer than this (2A/P) is a member body, not a panel
 
-# "S1 150 THK" / "S12 125" / "150 THK" / "S3" (mark-only; thickness via schedule)
+# "S1 150 THK" / "S7_150 THK." / "S12 125" / "150 THK" / "S3" (mark-only; thickness
+# via schedule). The mark joins its thickness by SPACE or UNDERSCORE -- the same
+# convention the beam labels use ("B1_300 X 600").
 _SLAB_LABEL = re.compile(
-    r"^\s*(?:(S\d+)\b)?\s*(?:(\d{2,4})\s*(?:MM\s*)?(?:THK|THICK)?\.?)?\s*$",
+    r"^\s*(?:(S\d+))?[\s_]*(?:(\d{2,4})\s*(?:MM\s*)?(?:THK|THICK)?\.?)?\s*$",
     re.IGNORECASE)
 
 
@@ -112,18 +118,150 @@ def _chain_into_rings(chains, tol_ft):
 
 # ---------------------------------------------------------------- outline source 2
 def slab_loops_from_beam_graph(beam_segments):
-    """Bounded faces of the beam-centerline graph, [(ring, z), ...] -- the fallback.
+    """Bounded faces of the beam-centerline graph, INSET to the beam faces.
 
     beam_segments: the "segments" list build_beam_segments returns (start/end in
-    internal feet). Segments are split at mutual crossings, endpoints snapped to a
-    _SNAP_MM grid so a T-junction meets exactly, then the planar faces are walked
-    half-edge style. The unbounded outer face (clockwise, i.e. negative area with
-    the most-CCW turn rule) is dropped; tiny junction slivers are dropped.
+    internal feet, width_mm). Segments are split at mutual crossings, endpoints
+    snapped to a _SNAP_MM grid so a T-junction meets exactly, then the planar
+    faces are walked half-edge style. The unbounded outer face is dropped, as are
+    junction slivers. Each face edge lies on a beam CENTRELINE, so the raw face
+    would overlap half of every bounding beam -- each edge is therefore offset
+    INWARD by that beam's half width and the ring rebuilt from the offset carriers
+    (the slab meets the beam FACE). Returns [(ring, z), ...].
     """
-    segs = [((s["start"][0], s["start"][1]), (s["end"][0], s["end"][1]))
-            for s in beam_segments]
+    segs = []
+    for s in beam_segments:
+        hw = config.mm_to_ft(float(s.get("width_mm") or 0.0)) / 2.0
+        segs.append(((s["start"][0], s["start"][1]),
+                     (s["end"][0], s["end"][1]), hw))
     z = beam_segments[0]["start"][2] if beam_segments else 0.0
-    segs = _heal_endpoints(segs, config.mm_to_ft(_HEAL_MM))
+    plain = [(a, b) for a, b, _hw in segs]
+    healed = _heal_endpoints(plain, config.mm_to_ft(_HEAL_MM))
+    healed_hw = [(a, b, segs[i][2]) for i, (a, b) in enumerate(healed)]
+    pieces = _split_at_crossings_w(healed_hw)
+    snap_ft = config.mm_to_ft(_SNAP_MM)
+
+    def key(p):
+        return (round(p[0] / snap_ft), round(p[1] / snap_ft))
+
+    nodes = {}
+    edge_hw = {}
+    for a, b, hw in pieces:
+        for p in (a, b):
+            nodes.setdefault(key(p), p)
+        ka, kb = key(a), key(b)
+        if ka != kb:
+            edge_hw[(ka, kb)] = max(hw, edge_hw.get((ka, kb), 0.0))
+            edge_hw[(kb, ka)] = edge_hw[(ka, kb)]
+    adjacency = defaultdict(set)
+    for (ka, kb) in edge_hw:
+        adjacency[ka].add(kb)
+
+    faces = _walk_faces(nodes, adjacency)
+    min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
+    out = []
+    for ring in faces:
+        area = _signed_area(ring)
+        if area <= 0 or area < min_area_ft2:
+            continue
+        keys = [key(p) for p in ring]
+        hws = [edge_hw.get((keys[i], keys[(i + 1) % len(keys)]), 0.0)
+               for i in range(len(keys))]
+        inset = _inset_ring(ring, hws)
+        if inset and _signed_area(inset) >= min_area_ft2 * 0.25:
+            out.append((inset, z))
+    return out
+
+
+def _split_at_crossings_w(segs_hw):
+    """_split_at_crossings, but every split piece inherits its parent's half-width."""
+    plain = [(a, b) for a, b, _hw in segs_hw]
+    pieces = _split_at_crossings(plain)
+    out = []
+    for a, b in pieces:
+        mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+        best_hw, best_d = 0.0, None
+        for pa, pb, hw in segs_hw:
+            d = _pt_seg_dist(mx, my, pa, pb)
+            if best_d is None or d < best_d:
+                best_d, best_hw = d, hw
+        out.append((a, b, best_hw))
+    return out
+
+
+def _pt_seg_dist(px, py, a, b):
+    ax, ay = a
+    bx, by = b
+    dx, dy = bx - ax, by - ay
+    l2 = dx * dx + dy * dy
+    t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / l2)) if l2 else 0.0
+    return ((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2) ** 0.5
+
+
+def _inset_ring(ring, halfwidths):
+    """Offset each edge of a CCW ring INWARD by its own half-width; rebuild corners.
+
+    Edge i runs ring[i] -> ring[i+1]; the interior of a CCW ring lies to its LEFT,
+    so each edge's carrier shifts along its left normal by halfwidths[i]. Each new
+    vertex is the intersection of consecutive offset carriers (parallel/degenerate
+    corners fall back to the plain offset point)."""
+    n = len(ring)
+    carriers = []
+    for i in range(n):
+        ax, ay = ring[i]
+        bx, by = ring[(i + 1) % n]
+        dx, dy = bx - ax, by - ay
+        length = (dx * dx + dy * dy) ** 0.5
+        if length == 0:
+            return None
+        nx, ny = -dy / length, dx / length          # left normal (interior side)
+        off = halfwidths[i]
+        carriers.append(((ax + nx * off, ay + ny * off),
+                         (bx + nx * off, by + ny * off)))
+    out = []
+    for i in range(n):
+        p = _line_x_line(carriers[i - 1], carriers[i])
+        out.append(p if p is not None else carriers[i][0])
+    return out
+
+
+def _line_x_line(s1, s2):
+    (x1, y1), (x2, y2) = s1
+    (x3, y3), (x4, y4) = s2
+    d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3)
+    if abs(d) < 1e-12:
+        return None
+    t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d
+    return (x1 + t * (x2 - x1), y1 + t * (y2 - y1))
+
+
+# ------------------------------------------------------- outline source 2 (middle)
+def slab_loops_from_member_edges(records):
+    """Bounded faces of the DRAWN beam + column edge lines, [(ring, z), ...].
+
+    The middle outline source: no slab layer, but the beams' and columns' drawn
+    outlines bound each panel with TRUE face lines -- so the faces of that edge
+    graph are the slab panels at their exact boundary, no offset needed. Member
+    BODIES also appear as faces (the thin strip between a beam's two edges): any
+    face slimmer than _MIN_PANEL_WIDTH_MM (by mean width 2A/P) is dropped, as are
+    junction slivers below the area floor.
+    """
+    segs = []
+    z = 0.0
+    for record in records:
+        if record.category not in (CATEGORY_BEAM, CATEGORY_COLUMN):
+            continue
+        pts = record.points
+        if len(pts) >= 2:
+            z = pts[0][2]
+        for i in range(len(pts) - 1):
+            a = (pts[i][0], pts[i][1])
+            b = (pts[i + 1][0], pts[i + 1][1])
+            if _dist(a, b) > 1e-9:
+                segs.append((a, b))
+    if len(segs) < 4:
+        return []
+    segs = _heal_endpoints(segs, config.mm_to_ft(_EDGE_HEAL_MM))
     segs = _split_at_crossings(segs)
     snap_ft = config.mm_to_ft(_SNAP_MM)
 
@@ -143,13 +281,16 @@ def slab_loops_from_beam_graph(beam_segments):
 
     faces = _walk_faces(nodes, adjacency)
     min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
+    min_width_ft = config.mm_to_ft(_MIN_PANEL_WIDTH_MM)
     out = []
     for ring in faces:
         area = _signed_area(ring)
-        if area <= 0:                  # outer face (or degenerate) under the CCW walk
+        if area <= 0 or area < min_area_ft2:
             continue
-        if area < min_area_ft2:
-            continue                   # junction sliver
+        perimeter = sum(_dist(ring[i], ring[(i + 1) % len(ring)])
+                        for i in range(len(ring)))
+        if perimeter <= 0 or 2.0 * area / perimeter < min_width_ft:
+            continue                   # a member body (thin strip), not a panel
         out.append((ring, z))
     return out
 

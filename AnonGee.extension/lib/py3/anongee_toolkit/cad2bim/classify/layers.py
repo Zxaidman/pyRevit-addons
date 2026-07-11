@@ -59,7 +59,7 @@ CATEGORY_GRID_TEXT = "grid text"
 # The column-schedule table: mark<->size rows that size MARK-ONLY plan labels
 # (e.g. "C9" on the plan, "C9 400x600" in the table). Routed apart from plan
 # column text because the table is a block of cells, not member-adjacent labels.
-CATEGORY_COLUMN_SCHEDULE = "column schedule"
+CATEGORY_COLUMN_SCHEDULE = "schedule (column/beam/slab)"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
                    CATEGORY_GRID_TEXT, CATEGORY_COLUMN_SCHEDULE,

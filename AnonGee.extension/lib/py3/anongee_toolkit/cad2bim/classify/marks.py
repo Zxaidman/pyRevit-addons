@@ -238,7 +238,8 @@ def _read_table(header, data_rows, out):
         elif current is not None and role in ("w", "l", "h", "size"):
             current.setdefault(role, x)
     blocks = [b for b in blocks
-              if ("w" in b and ("l" in b or "h" in b)) or "size" in b]
+              if ("w" in b and ("l" in b or "h" in b)) or "size" in b
+              or ("h" in b and "w" not in b and "l" not in b)]
     if not blocks:
         return
 
@@ -253,6 +254,12 @@ def _read_table(header, data_rows, out):
                 continue
             if "size" in block:
                 wh = _two_numbers(_cell_at(cells, block["size"], tol))
+            elif "w" not in block and "l" not in block:
+                # thickness-only table (slab schedule: Mark | H | Volume). Only an
+                # S-mark may read it -- a column table reduced to Mark | H would be
+                # the storey height, never a section size.
+                h = _number(_cell_at(cells, block["h"], tol))
+                wh = (h, h) if (_is_slab_mark(name) and h is not None) else None
             else:
                 w = _number(_cell_at(cells, block["w"], tol))
                 l = _number(_cell_at(cells, block["l"], tol)) if "l" in block else None
@@ -269,6 +276,11 @@ def _read_table(header, data_rows, out):
 def _is_beam_mark(name):
     """True for a beam mark like 'B1'/'B23' (a 'B' followed by a digit)."""
     return bool(name) and name[:1].upper() == "B" and name[1:2].isdigit()
+
+
+def _is_slab_mark(name):
+    """True for a slab mark like 'S1'/'S12' (an 'S' followed by a digit)."""
+    return bool(name) and name[:1].upper() == "S" and name[1:2].isdigit()
 
 
 def _cell_at(cells, target_x, tol):
