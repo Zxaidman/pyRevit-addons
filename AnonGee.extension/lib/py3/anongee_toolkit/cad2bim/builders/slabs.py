@@ -9,7 +9,7 @@ Runs inside a caller-owned Transaction; one bad loop never fails the batch.
 
 from System.Collections.Generic import List
 
-from Autodesk.Revit.DB import (FilteredElementCollector, XYZ, Line, CurveLoop,
+from Autodesk.Revit.DB import (FilteredElementCollector, XYZ, Line, Arc, CurveLoop,
                                Floor, FloorType, BuiltInParameter)
 
 from ..unit_convert import mm_to_internal
@@ -49,10 +49,13 @@ def place_slabs(doc, slabs, base_type_id, level_id):
             if len(ring) < 3:
                 result["skipped"].append("degenerate loop")
                 continue
+            if not _simple(ring):
+                result["skipped"].append("self-intersecting outline (skipped)")
+                continue
             loops = List[CurveLoop]()
-            loops.Add(_curve_loop(ring))
+            loops.Add(_curve_loop(ring, slab.get("arcs")))
             for hole in openings.get(index, []):
-                loops.Add(_curve_loop(hole["ring"]))
+                loops.Add(_curve_loop(hole["ring"], hole.get("arcs")))
             floor_type = _resolve_type(doc, base_type, slab.get("thickness_mm"), cache)
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
             _set_structural(instance)
@@ -67,18 +70,94 @@ _MIN_EDGE_FT = 15.0 / 304.8       # skip sub-tolerance slivers (Revit rejects th
 _COLLINEAR_FT = 1.0 / 304.8       # merge vertices that add no real corner
 
 
-def _curve_loop(ring):
-    """Ring -> CurveLoop, sanitized: duplicate points, sub-tolerance edges and
-    collinear stops are merged first -- a tessellated ARC boundary otherwise feeds
-    Revit hundreds of tiny segments and Floor.Create rejects the loop."""
+def _curve_loop(ring, arcs=None):
+    """Ring -> CurveLoop with REAL Arc edges where the boundary is curved.
+
+    `arcs` carries (start, mid, end) triples for the ring's curved stretches (the
+    proto tessellated them into chords for the geometry passes). Each registered
+    stretch is emitted as ONE Arc.Create(start, end, pointOnArc) and its chord run
+    skipped; the straight stretches are sanitized (duplicate points, sub-tolerance
+    edges and collinear stops merged) so Floor.Create never sees micro-segments."""
     pts = _sanitize_ring(ring)
-    loop = CurveLoop()
     n = len(pts)
-    for i in range(n):
+    spans = _arc_spans(pts, arcs or [])
+    # weld the ring vertices onto the arcs' exact endpoints: sanitation may have
+    # nudged them apart, and a CurveLoop must be contiguous to Revit tolerance
+    for ia, (_ia, ib, (a, m, b)) in list(spans.items()):
+        pts[ia] = a
+        pts[ib] = b
+    loop = CurveLoop()
+    i = 0
+    steps = 0
+    while i < n and steps <= 2 * n:
+        steps += 1
+        span = spans.get(i)
+        if span is not None:
+            ia, ib, (a, m, b) = span
+            spans.pop(ia, None)        # consume BOTH orientations: emit each arc once
+            spans.pop(ib, None)
+            loop.Append(Arc.Create(XYZ(a[0], a[1], 0.0), XYZ(b[0], b[1], 0.0),
+                                   XYZ(m[0], m[1], 0.0)))
+            if ib <= i:                # the arc run wraps past the ring seam
+                break
+            i = ib
+            continue
         x1, y1 = pts[i]
         x2, y2 = pts[(i + 1) % n]
         loop.Append(Line.CreateBound(XYZ(x1, y1, 0.0), XYZ(x2, y2, 0.0)))
+        i += 1
     return loop
+
+
+def _arc_spans(pts, arcs):
+    """{start_index: (start_index, end_index, triple)} for each registered arc.
+
+    An arc's chord run sits between the ring vertices nearest its true start and
+    end; walking the ring emits the Arc at the start index and jumps to the end."""
+    spans = {}
+    for triple in arcs:
+        a, m, b = triple
+        ia = _nearest_index(pts, a)
+        ib = _nearest_index(pts, b)
+        if ia is None or ib is None or ia == ib:
+            continue
+        # key the span at BOTH endpoints, oriented from whichever the ring walk
+        # reaches first -- the ring's traversal direction is independent of the
+        # order the arc was recorded in
+        spans[ia] = (ia, ib, (a, m, b))
+        spans.setdefault(ib, (ib, ia, (b, m, a)))
+    return spans
+
+
+def _nearest_index(pts, p):
+    best_i, best_d = None, None
+    for i, q in enumerate(pts):
+        d = (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2
+        if best_d is None or d < best_d:
+            best_i, best_d = i, d
+    return best_i
+
+
+def _simple(ring):
+    """True when no two non-adjacent edges cross (Floor.Create requires it)."""
+    n = len(ring)
+    for i in range(n):
+        x1, y1 = ring[i]
+        x2, y2 = ring[(i + 1) % n]
+        for j in range(i + 1, n):
+            if j == i or (j + 1) % n == i or (i + 1) % n == j:
+                continue
+            x3, y3 = ring[j]
+            x4, y4 = ring[(j + 1) % n]
+            d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3)
+            if abs(d) < 1e-12:
+                continue
+            t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d
+            u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d
+            eps = 1e-9
+            if eps < t < 1.0 - eps and eps < u < 1.0 - eps:
+                return False
+    return True
 
 
 def _sanitize_ring(ring):

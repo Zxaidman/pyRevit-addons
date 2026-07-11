@@ -286,7 +286,26 @@ with phantom 300 gap.
       swallowed as a HOLE (point-in-polygon arbitrary ON the boundary). _ring_inside now
       demands 50mm strict interior clearance; rings sanitized (short/collinear merged).
 - [x] Stress DXF regenerated (culled by the rename); 14/14 test files pass.
->> NEXT: user runs v0.37.0 (pull + RESTART Revit) across Test0-Test7.
+>> 0.37.0 run: test4/5 member_edges 158 created / 99 ERRORS; arcs drawn as line strings;
+   test6 D-slab (S8) missing; some slabs misaligned with beam outlines.
+
+### Phase 13 — SLABS round 4 (v0.38.0) — DONE, AWAITING REVIT CONFIRM
+- [x] ARC-AWARE SLAB EDGES: slab-layer arcs are 3-POINT circle fits; rings previously took
+      them as two straight chords (S8's D-ring broken; curves drawn as line strings). Now:
+      tessellate for geometry (16 chords) + carry (start,mid,end); builder emits ONE real
+      Arc.Create per curved stretch (welded endpoints, walk-oriented, consumed once).
+      Offline test6/7: 9/9 rings form and are simple; D-slab = 7.3 m2 with 3 arcs.
+- [x] MEMBER-EDGE 99 ERRORS: faces threading round-column arc CHORDS (columns present in
+      the Revit run, absent from the old export dump). Arc records now tessellated in the
+      member-edge graph; faces must be SIMPLE rings; builder SKIPS (never errors) any
+      self-intersecting outline.
+- [x] DIAG: raw_geometry now also dumps COLUMN-layer records -> full member-edge replay
+      offline next round.
+- [ ] PENDING DIAGNOSIS (needs the 0.38.0 export with column records): "slab not aligned
+      with beam outline in some places" -- suspect junction healing (350mm) fabricating
+      edges where drawn edges merely end.
+>> NEXT: user runs v0.38.0 (pull + RESTART Revit) across Test0-Test7; expect zero slab
+   errors, true curved slab edges, S8 placed.
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

@@ -38,6 +38,7 @@ def _load():
         return mod
 
     load("_slb.config", "config.py")
+    load("_slb.geom.shapes", "geom", "shapes.py")
     load("_slb.classify.layers", "classify", "layers.py")
     return load("_slb.slabs_proto", "slabs_proto.py")
 
@@ -58,12 +59,13 @@ class _Text(object):
 
 
 class _Record(object):
-    def __init__(self, points_mm, closed=False):
+    def __init__(self, points_mm, closed=False, kind="polyline"):
         pts = list(points_mm)
         if closed and pts[0] != pts[-1]:
             pts.append(pts[0])
         self.points = [(x * _FT, y * _FT, 0.0) for x, y in pts]
         self.category = layers.CATEGORY_SLAB_EDGE
+        self.kind = kind
 
 
 class BeamGraphFaces(unittest.TestCase):
@@ -79,7 +81,7 @@ class BeamGraphFaces(unittest.TestCase):
         loops = slabs_proto.slab_loops_from_beam_graph(self._grid())
         self.assertEqual(len(loops), 4)
         areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
-                       for r, _z in loops)
+                       for r, _z, _a in loops)
         for a in areas:
             self.assertAlmostEqual(a, 25.0, delta=0.5)   # 5 m x 5 m bays
 
@@ -124,7 +126,7 @@ class InsetGraph(unittest.TestCase):
                 _seg(5000, 5000, 0, 5000, 300), _seg(0, 5000, 0, 0, 300)]
         loops = slabs_proto.slab_loops_from_beam_graph(segs)
         self.assertEqual(len(loops), 1)
-        ring, _z = loops[0]
+        ring, _z, _arcs = loops[0]
         area = abs(slabs_proto._signed_area(ring)) * _MM * _MM / 1e6
         self.assertAlmostEqual(area, 4.7 * 4.7, delta=0.1)
         xs = sorted(p[0] * _MM for p in ring)
@@ -145,6 +147,7 @@ class MemberEdgeFaces(unittest.TestCase):
         def __init__(self, pts_mm, category):
             self.points = [(x * _FT, y * _FT, 0.0) for x, y in pts_mm]
             self.category = category
+            self.kind = "line"
 
     def _edge_pair(self, x0, y0, x1, y1, width):
         import math as _m
@@ -165,7 +168,7 @@ class MemberEdgeFaces(unittest.TestCase):
         recs += self._edge_pair(0, 5000, 0, 0, 300)
         loops = slabs_proto.slab_loops_from_member_edges(recs)
         areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
-                       for r, _z in loops)
+                       for r, _z, _a in loops)
         self.assertEqual(len(areas), 1)              # only the panel, no body strips
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
 

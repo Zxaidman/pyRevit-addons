@@ -35,7 +35,25 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.37.0"  # SLABS round 3, from the 0.36.0 run over the renamed Test0-Test7 set.
+__version__ = "0.38.0"  # SLABS round 4: real curved edges + valid member-edge faces.
+#                         (A) ARC-AWARE BOUNDARIES: a slab-layer ARC arrives as a 3-point circle
+#                         fit; the ring previously took those points as TWO straight chords --
+#                         the D-shaped S8 slab failed and every curve showed as line strings.
+#                         Arcs are now tessellated (16 chords) for the geometry passes (labels,
+#                         nesting, areas) while the true (start, mid, end) triple rides along,
+#                         and the builder emits ONE genuine Arc.Create per curved stretch --
+#                         welded to its neighbours, oriented to the ring walk, consumed once.
+#                         Test6/7 offline: all 9 rings form (D-slab = 7.3 m2, 3 arcs), all simple.
+#                         (B) MEMBER-EDGE FACES: the 99 Floor.Create errors on test4/5 come from
+#                         faces threading ROUND COLUMNS' 3-point arc chords (columns exist in the
+#                         Revit run but not the old export). Arc records are now tessellated in
+#                         the member-edge graph (watertight), every face must be a SIMPLE ring,
+#                         and the builder skips (not errors) any self-intersecting outline.
+#                         (C) DIAG: raw_geometry now includes COLUMN-layer records ("cat":
+#                         "column") so the member-edge source replays fully offline next round
+#                         (the remaining "slab not aligned with beam outline" spots need it).
+
+# 0.37.0  SLABS round 3, from the 0.36.0 run over the renamed Test0-Test7 set.
 #                         (A) THREE outline sources, in order: slab-edge rings; NEW member-edge
 #                         faces (the DRAWN beam+column outlines bound each panel with true face
 #                         lines -- exact boundary, member-body strips filtered by mean width);

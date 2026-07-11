@@ -36,6 +36,7 @@ from collections import defaultdict
 
 from . import config
 from .classify.layers import CATEGORY_SLAB_EDGE, CATEGORY_BEAM, CATEGORY_COLUMN
+from .geom import shapes
 
 _MM = config.MM_PER_FT
 
@@ -54,18 +55,70 @@ _SLAB_LABEL = re.compile(
     re.IGNORECASE)
 
 
+_ARC_CHORDS = 16   # tessellation density for a boundary arc (geometry tests only)
+
+
+def _tessellate_arc(pts):
+    """3-point arc record -> (chord_points, (start, mid, end)) or (pts_2d, None).
+
+    The readers return an ARC as exactly three points (start, on-arc, end) from a
+    circle fit. For ring GEOMETRY (labels, nesting, areas) the arc is sampled into
+    chords; the true (start, mid, end) triple rides along so the builder can emit a
+    genuine Revit Arc instead of the chords.
+    """
+    p2 = [(p[0], p[1]) for p in pts]
+    if len(p2) != 3:
+        return p2, None
+    a, m, b = p2
+    fit = shapes.circle_from_three_points(a, m, b)
+    if not fit:
+        return p2, None
+    cx, cy, r = fit
+    a0 = math.atan2(a[1] - cy, a[0] - cx)
+    am = math.atan2(m[1] - cy, m[0] - cx)
+    a1 = math.atan2(b[1] - cy, b[0] - cx)
+    sweep = (a1 - a0) % (2.0 * math.pi)
+    if (am - a0) % (2.0 * math.pi) > sweep:      # mid not inside CCW span: go CW
+        sweep = sweep - 2.0 * math.pi
+    chords = [(cx + r * math.cos(a0 + sweep * i / _ARC_CHORDS),
+               cy + r * math.sin(a0 + sweep * i / _ARC_CHORDS))
+              for i in range(_ARC_CHORDS + 1)]
+    return chords, (a, m, b)
+
+
+def _ring_arcs(ring, arc_triples, tol_ft):
+    """The arc triples whose BOTH endpoints sit on this ring (order preserved)."""
+    out = []
+    for a, m, b in arc_triples:
+        on_a = any(_dist(a, p) <= tol_ft for p in ring)
+        on_b = any(_dist(b, p) <= tol_ft for p in ring)
+        if on_a and on_b:
+            out.append((a, m, b))
+    return out
+
+
 # ---------------------------------------------------------------- outline source 1
 def slab_loops_from_edges(records):
-    """Slab boundary rings straight from the slab-edge layer, [(ring, z), ...].
+    """Slab boundary rings straight from the slab-edge layer, [(ring, z, arcs), ...].
 
-    A CLOSED polyline is a ring as drawn. Open polylines and loose lines are chained
-    end-to-end (within _CHAIN_TOL_MM) and kept only if they close into a ring.
+    A CLOSED polyline is a ring as drawn. Open polylines, loose lines AND boundary
+    ARCS (tessellated into chords, with the true start/mid/end triple carried in
+    `arcs` so the builder can rebuild a genuine curved edge) are chained end-to-end
+    (within _CHAIN_TOL_MM) and kept only if they close into a ring.
     """
     tol_ft = config.mm_to_ft(_CHAIN_TOL_MM)
     rings = []
     chains = []                       # open pieces awaiting chaining
+    arc_triples = []
     for record in records:
         if record.category != CATEGORY_SLAB_EDGE:
+            continue
+        if record.kind == "arc":
+            chords, triple = _tessellate_arc(record.points)
+            if triple:
+                arc_triples.append(triple)
+            if len(chords) >= 2:
+                chains.append((chords, record.points[0][2]))
             continue
         pts = [(p[0], p[1]) for p in record.points]
         if len(pts) < 2:
@@ -77,7 +130,8 @@ def slab_loops_from_edges(records):
             chains.append((pts, z))
     for ring, z in _chain_into_rings(chains, tol_ft):
         rings.append((_dedup_ring(ring), z))
-    return [(r, z) for r, z in rings if len(r) >= 3]
+    return [(r, z, _ring_arcs(r, arc_triples, tol_ft))
+            for r, z in rings if len(r) >= 3]
 
 
 def _chain_into_rings(chains, tol_ft):
@@ -169,7 +223,7 @@ def slab_loops_from_beam_graph(beam_segments):
                for i in range(len(keys))]
         inset = _inset_ring(ring, hws)
         if inset and _signed_area(inset) >= min_area_ft2 * 0.25:
-            out.append((inset, z))
+            out.append((inset, z, []))
     return out
 
 
@@ -251,7 +305,13 @@ def slab_loops_from_member_edges(records):
     for record in records:
         if record.category not in (CATEGORY_BEAM, CATEGORY_COLUMN):
             continue
-        pts = record.points
+        if record.kind == "arc":
+            # a 3-point arc record (round column, junction fillet) contributes two
+            # long CHORDS if used raw -- junk faces and phantom crossings. Sample it.
+            pts2, _triple = _tessellate_arc(record.points)
+            pts = [(x, y, record.points[0][2]) for x, y in pts2]
+        else:
+            pts = record.points
         if len(pts) >= 2:
             z = pts[0][2]
         for i in range(len(pts) - 1):
@@ -291,8 +351,36 @@ def slab_loops_from_member_edges(records):
                         for i in range(len(ring)))
         if perimeter <= 0 or 2.0 * area / perimeter < min_width_ft:
             continue                   # a member body (thin strip), not a panel
-        out.append((ring, z))
+        if not _is_simple_ring(ring):
+            continue                   # bow-tie / self-crossing face: never a panel
+        out.append((ring, z, []))
     return out
+
+
+def _is_simple_ring(ring):
+    """True when no two non-adjacent ring edges cross (a valid floor boundary)."""
+    n = len(ring)
+    for i in range(n):
+        a1, b1 = ring[i], ring[(i + 1) % n]
+        for j in range(i + 1, n):
+            if j == i or (j + 1) % n == i or (i + 1) % n == j:
+                continue
+            a2, b2 = ring[j], ring[(j + 1) % n]
+            if _segments_cross(a1, b1, a2, b2):
+                return False
+    return True
+
+
+def _segments_cross(a1, b1, a2, b2):
+    (x1, y1), (x2, y2) = a1, b1
+    (x3, y3), (x4, y4) = a2, b2
+    d = (x2 - x1) * (y4 - y3) - (y2 - y1) * (x4 - x3)
+    if abs(d) < 1e-12:
+        return False
+    t = ((x3 - x1) * (y4 - y3) - (y3 - y1) * (x4 - x3)) / d
+    u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d
+    eps = 1e-9
+    return eps < t < 1.0 - eps and eps < u < 1.0 - eps
 
 
 def _heal_endpoints(segs, heal_ft):
@@ -454,7 +542,9 @@ def apply_slab_labels(loops, texts, schedule=None):
     """
     schedule = schedule or {}
     out = []
-    for ring, z in loops:
+    for loop in loops:
+        ring, z = loop[0], loop[1]
+        arcs = loop[2] if len(loop) > 2 else []
         cx, cy = _centroid(ring)
         best = None                     # (dist, mark, thk)
         for t in (texts or []):
@@ -472,7 +562,8 @@ def apply_slab_labels(loops, texts, schedule=None):
         if thk is None and mark is not None and mark in schedule:
             entry = schedule[mark]
             thk = entry[0] if isinstance(entry, (tuple, list)) else entry
-        out.append({"ring": ring, "z": z, "mark": mark, "thickness_mm": thk})
+        out.append({"ring": ring, "z": z, "mark": mark, "thickness_mm": thk,
+                    "arcs": arcs})
     return out
 
 

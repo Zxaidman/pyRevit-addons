@@ -7,6 +7,15 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.38.0 — SLABS round 4: true curved edges + valid member-edge faces
+- Slab arcs = 3-point circle fits; were 2 chords (S8 D-slab failed, curves = line strings).
+  Now tessellated for geometry + true (start,mid,end) carried; builder emits genuine
+  Arc.Create per curved stretch. test6/7 offline: 9/9 rings simple, D-slab whole.
+- test4/5's 99 errors: faces threading round-column arc chords (columns in the Revit run,
+  missing from the export). Member-edge graph tessellates arcs; simple-ring filter; builder
+  skips instead of erroring. raw_geometry now dumps column records for full offline replay.
+- Pending: "slab misaligned with beam outline in places" — diagnose from the 0.38.0 export.
+
 ## v0.37.0 — SLABS round 3: three outline sources + schedule/label fixes (Test0-7 set)
 - Fixture reset: Test0 (messy) + Test1-7; column-only fixtures culled; stress DXF
   regenerated from its generator after the rename removed it.

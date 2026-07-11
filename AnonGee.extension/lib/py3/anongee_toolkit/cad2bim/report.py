@@ -2152,10 +2152,12 @@ def _beam_geometry_dump(result):
     """
     out = []
     for record in result.records:
-        if record.category not in (CATEGORY_BEAM, CATEGORY_SLAB_EDGE):
+        if record.category not in (CATEGORY_BEAM, CATEGORY_SLAB_EDGE, CATEGORY_COLUMN):
             continue
         out.append({
-            "cat": "slab" if record.category == CATEGORY_SLAB_EDGE else "beam",
+            "cat": ("slab" if record.category == CATEGORY_SLAB_EDGE
+                    else "column" if record.category == CATEGORY_COLUMN
+                    else "beam"),
             "kind": record.kind,
             "layer": record.layer,
             "pts": [[_mm(p[0]), _mm(p[1])] for p in record.points],
