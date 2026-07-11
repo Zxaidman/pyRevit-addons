@@ -327,3 +327,30 @@ Placement-time extend in builders/beams.py OR segment-time in report.py.
 by_category: beam 1027 curves, column 360. status: line_pair 301, bare_line_unpaired 133,
 degenerate 255, width_oor 23, NO edge_pair (slab_edge 0 -> floors not mapped/!present).
 255 degenerate + 133 unpaired = many beams missed. Marks up to B680. TODO: full case sweep.
+
+## v0.40.0 — beam-over-column split: the junction/crossing discriminator (durable)
+The overlap test8 complained about has THREE shapes, found by a polygon-intersection
+census (beam body rect ∩ column footprint) on the export items — the centreline-only
+view missed two of them:
+1. strict interior crossing (both crossing points inside the span) → split at faces;
+2. segment BURIED face-to-face inside one column: the column's own 350×1800 outline
+   mis-read as a beam (pair detection). Interval = [0, L], touches BOTH ends, so any
+   "skip end-touching intervals" guard silently keeps it → must be DROPPED;
+3. end drawn to the column's FAR face: interval touches ONE end; junction vs drawn-across
+   is decided by the column CENTRE's station along the beam — beams legitimately end AT
+   centres (CAD centrelines + snap_beam_ends_to_columns put them there), so only an end
+   >100mm PAST the centre is trimmed back to the near face.
+Guards that made it regression-free (0 changes on every non-test8 fixture ever exported):
+midpoint must penetrate ≥10mm inside every face (grazing a shared face line never
+counts); leftover pieces <100mm dropped; split rebuilds the list REUSING untouched dicts
+(so script.py's pre-split snapshot for slabs stays valid); mark → longest piece only.
+Column footprint convention (matches builders/columns.py): extent along long_axis_deg =
+max(w,h), across = min(w,h); deg None → 0 if width≥height else 90.
+
+## v0.40.0 — slab chain tolerance trap (durable)
+Any piece SHORTER than the chain tolerance (150mm) matches the ring end with BOTH of its
+own ends; greedy first-match can glue the wrong one and walk the piece out-and-back →
+pinch vertex → "self-intersecting outline" skip (test6/7 S8's 142mm junction fillet arc).
+Chaining must score all four attach modes (tail/head × fwd/rev) over ALL unused pieces
+and take the globally closest. Sibling trap: adjacent panels re-draw shared edges →
+duplicate pieces → spurs; dedupe by 10mm-grid fingerprint (min/max endpoint + mid) first.

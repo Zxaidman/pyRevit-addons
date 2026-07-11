@@ -123,9 +123,17 @@ def slab_loops_from_edges(records):
     rings = []
     chains = []                       # open pieces awaiting chaining
     arc_triples = []
+    seen_pieces = set()               # adjacent panels re-draw shared edges: ONE copy
     for record in records:
         if record.category != CATEGORY_SLAB_EDGE:
             continue
+        fp = _piece_fingerprint(record.points)
+        if fp in seen_pieces:
+            # the SAME edge drawn twice (each panel outlines it): chaining both
+            # copies stitches an out-and-back SPUR into one ring -- a pinch that
+            # Floor.Create rejects (this is what kept the curved S8 slab out).
+            continue
+        seen_pieces.add(fp)
         if record.kind == "arc":
             chords, triple = _tessellate_arc(record.points)
             if triple:
@@ -147,6 +155,15 @@ def slab_loops_from_edges(records):
             for r, z in rings if len(r) >= 3]
 
 
+def _piece_fingerprint(points):
+    """Orientation-free identity of a drawn piece (10 mm grid, endpoint-sorted)."""
+    def grid(p):
+        return (round(p[0] * 30.48), round(p[1] * 30.48))    # ~10 mm cells
+    a, b = grid(points[0]), grid(points[-1])
+    mid = grid(points[len(points) // 2])
+    return (min(a, b), max(a, b), mid)
+
+
 def _chain_into_rings(chains, tol_ft):
     """Greedily join open polylines end-to-end; yield the ones that close."""
     pool = [list(pts) for pts, _z in chains]
@@ -162,20 +179,32 @@ def _chain_into_rings(chains, tol_ft):
         grown = True
         while grown:
             grown = False
+            # take the globally CLOSEST attachment, not the first within tolerance:
+            # a junction fillet arc can be SHORTER than the tolerance, so both its
+            # ends "match" -- first-match then glues the wrong end and the ring
+            # walks the fillet out-and-back (the pinch that kept S8 out of Revit)
+            best = None                # (distance, j, mode)
             for j in range(len(pool)):
                 if used[j]:
                     continue
                 piece = pool[j]
-                if _dist(ring[-1], piece[0]) <= tol_ft:
+                for mode, dist in (("tail_fwd", _dist(ring[-1], piece[0])),
+                                   ("tail_rev", _dist(ring[-1], piece[-1])),
+                                   ("head_fwd", _dist(ring[0], piece[-1])),
+                                   ("head_rev", _dist(ring[0], piece[0]))):
+                    if dist <= tol_ft and (best is None or dist < best[0]):
+                        best = (dist, j, mode)
+            if best is not None:
+                _d, j, mode = best
+                piece = pool[j]
+                if mode == "tail_fwd":
                     ring += piece[1:]
-                elif _dist(ring[-1], piece[-1]) <= tol_ft:
+                elif mode == "tail_rev":
                     ring += list(reversed(piece))[1:]
-                elif _dist(ring[0], piece[-1]) <= tol_ft:
+                elif mode == "head_fwd":
                     ring = piece[:-1] + ring
-                elif _dist(ring[0], piece[0]) <= tol_ft:
-                    ring = list(reversed(piece))[:-1] + ring
                 else:
-                    continue
+                    ring = list(reversed(piece))[:-1] + ring
                 used[j] = True
                 grown = True
         if len(ring) >= 4 and _dist(ring[0], ring[-1]) <= tol_ft:
@@ -314,11 +343,13 @@ def slab_loops_from_member_edges(records):
     junction slivers below the area floor.
     """
     segs = []
+    src = []                          # per segment: True when it is a BEAM edge
     z = 0.0
     arc_triples = []
     for record in records:
         if record.category not in (CATEGORY_BEAM, CATEGORY_COLUMN):
             continue
+        is_beam = record.category == CATEGORY_BEAM
         if record.kind == "arc":
             # a 3-point arc record (round column, junction fillet, curved beam edge)
             # contributes two long CHORDS if used raw -- junk faces and phantom
@@ -337,8 +368,10 @@ def slab_loops_from_member_edges(records):
             b = (pts[i + 1][0], pts[i + 1][1])
             if _dist(a, b) > 1e-9:
                 segs.append((a, b))
+                src.append(is_beam)
     if len(segs) < 4:
         return []
+    beam_lines = [segs[i] for i in range(len(segs)) if src[i]]
     segs = _heal_endpoints(segs, config.mm_to_ft(_EDGE_HEAL_MM))
     segs = _split_at_crossings(segs)
     snap_ft = config.mm_to_ft(_SNAP_MM)
@@ -357,6 +390,19 @@ def slab_loops_from_member_edges(records):
             adjacency[ka].add(kb)
             adjacency[kb].add(ka)
 
+    # PRUNE dangling stubs: an edge chain ending mid-air (a clipped edge, an opening
+    # jamb) makes every face that meets it walk out-and-back through the stub -- a
+    # PINCHED ring Floor.Create rejects. 96 of test4/5's bays were dropped this way.
+    changed = True
+    while changed:
+        changed = False
+        for node in list(adjacency.keys()):
+            if len(adjacency[node]) == 1:
+                other = next(iter(adjacency[node]))
+                adjacency[other].discard(node)
+                del adjacency[node]
+                changed = True
+
     faces = _walk_faces(nodes, adjacency)
     min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
     min_width_ft = config.mm_to_ft(_MIN_PANEL_WIDTH_MM)
@@ -371,9 +417,38 @@ def slab_loops_from_member_edges(records):
             continue                   # a member body (thin strip), not a panel
         if not _is_simple_ring(ring):
             continue                   # bow-tie / self-crossing face: never a panel
+        if _beam_fraction(ring, beam_lines) < _MIN_BEAM_FRACTION:
+            continue                   # bounded by WALLS, not beams: a lift/stair shaft
         out.append((ring, z, _ring_arcs(ring, arc_triples,
                                         config.mm_to_ft(_SNAP_MM * 2.0))))
     return out
+
+
+_MIN_BEAM_FRACTION = 0.3   # a panel is framed by beams; a shaft is framed by walls
+
+
+def _beam_fraction(ring, beam_lines, tol_mm=60.0):
+    """Fraction of the ring's perimeter that runs along a BEAM-layer edge.
+
+    A lift or stair shaft is enclosed by core WALLS (column-layer edges), so its
+    face has almost no beam-edge boundary -- a real floor panel is framed by beams
+    on most sides. Sampled at edge midpoints, weighted by edge length."""
+    tol_ft = config.mm_to_ft(tol_mm)
+    n = len(ring)
+    total = 0.0
+    on_beam = 0.0
+    for i in range(n):
+        a, b = ring[i], ring[(i + 1) % n]
+        length = _dist(a, b)
+        if length <= 0:
+            continue
+        total += length
+        mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
+        for ls, le in beam_lines:
+            if _pt_seg_dist(mx, my, ls, le) <= tol_ft:
+                on_beam += length
+                break
+    return (on_beam / total) if total else 0.0
 
 
 def _is_simple_ring(ring):

@@ -35,7 +35,34 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.39.0"  # SLABS round 5: the 0.38.0 arc plumbing had TWO live bugs, both fixed
+__version__ = "0.40.0"  # BEAM/COLUMN OVERLAP (test8, client priority) + SLABS round 6, all
+#                         verified offline against the 0.39.0 exports AND every archived fixture:
+#                         (A) split_beams_at_columns (report.py, runs after the end snap): a beam
+#                         OUTLINE drawn straight across a column no longer places a beam on top of
+#                         it. Per column footprint (rects incl. rotated, circles): a crossing
+#                         strictly inside the span SPLITS the beam at the column faces; a segment
+#                         buried face-to-face inside one column (the column's own outline mis-read
+#                         as a beam) is DROPPED; a terminal end poking >100mm PAST the column
+#                         centre (drawn to the far face) is TRIMMED back to the near face. Ends AT
+#                         the column centre (junction convention, the snap pass target) never
+#                         move; grazing a shared face line never counts; leftovers <100mm are
+#                         drafting overshoot and vanish. test8: 29 solid overlaps -> 0; ALL other
+#                         fixtures incl. .archive_fixtures: zero segments changed. Slabs build
+#                         from a PRE-SPLIT snapshot so bay loops still run over the columns.
+#                         (B) test4/5 blank bays: member-edge faces PRUNE dangling degree-1 stubs
+#                         iteratively before the face walk -- 96 pinched rings became 91 extra
+#                         clean bays (158 kept+96 dropped -> 249 clean faces, zero non-simple).
+#                         (C) test1-3 without a floor layer put slabs on lift shafts/stair wells:
+#                         member-edge faces now need >=30% of their perimeter ON beam-layer edges
+#                         (_beam_fraction); wall-bounded shaft faces fail it and are dropped.
+#                         (D) test6/7 curved slab S8 missing: the junction fillet arc (~142mm) is
+#                         SHORTER than the 150mm chain tolerance, so both its ends matched and
+#                         greedy first-match glued the wrong one (out-and-back pinch). Slab-edge
+#                         chaining now scores all four attach modes for every unused piece and
+#                         takes the globally closest; duplicate re-drawn shared edges are deduped
+#                         by a 10mm-grid fingerprint first. test6/7: 9 rings, 0 non-simple.
+#
+# 0.39.0                  SLABS round 5: the 0.38.0 arc plumbing had TWO live bugs, both fixed
 #                         offline against the 0.38.0 exports (mirrored walk, every ring checked
 #                         for closure + full perimeter coverage):
 #                         (A) PHANTOM NEIGHBOUR ARCS: _ring_arcs attached an arc to any ring

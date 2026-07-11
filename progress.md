@@ -7,6 +7,27 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.40.0 — test8 beam-over-column (client priority) + SLABS round 6 (0.39.0 feedback, 4 items)
+- **split_beams_at_columns** (report.py, after the end snap): a beam outline drawn straight
+  ACROSS a column no longer places a beam on top of it. Crossing strictly inside the span →
+  split at the column faces; segment buried face-to-face in one column (the column's own
+  outline mis-read as a beam — test8's 350×1800 AC6/AC10/BC6 exact matches) → dropped;
+  terminal end >100mm past the column CENTRE (drawn to the far face) → trimmed to the near
+  face. Ends AT the centre (junction convention = the snap pass target) never move; grazing
+  a shared face (<10mm penetration) never counts; <100mm leftovers vanish; mark stays on the
+  longest piece. Offline census (beam body ∩ column footprint polygons): test8 29 solid
+  overlaps → 0 (233→211 segments); test1-7 and ALL .archive_fixtures exports → ZERO changes.
+  Slabs get a PRE-SPLIT snapshot so beam-graph bay loops still run over columns.
+  tests/test_beam_split.py (11 cases). Suite now 15 files, all OK.
+- test4/5 blank bays: degree-1 stub pruning before the member-edge face walk (96 pinched
+  rings were silently filtered = blank areas) → 249 clean faces, 0 non-simple.
+- test1-3 without floor layer: _beam_fraction ≥0.3 filter drops wall-bounded lift/stair
+  shaft faces (test1 → 47 faces).
+- test6/7 S8 curved slab: 142mm fillet arc < 150mm chain tol glued at the WRONG end by
+  greedy first-match (out-and-back pinch). Chaining now takes the globally-closest of all
+  four attach modes over all unused pieces; duplicate shared edges deduped by 10mm-grid
+  fingerprint. 9 rings, 0 non-simple on both tests.
+
 ## v0.39.0 — SLABS round 5: two live arc bugs found by mirroring the builder offline
 - 0.37→0.38 audit: beams/cols identical on every test; slabs nearly unchanged → the 0.38
   arc fixes shipped two NEW bugs instead:

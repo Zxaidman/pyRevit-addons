@@ -780,6 +780,17 @@ def main():
     if snapped_ends:
         _say("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
 
+    # A beam outline drawn straight ACROSS a column would bury a beam inside it: split
+    # such beams at the column faces so they frame IN, not through (client request).
+    # Slabs keep the PRE-SPLIT centrelines -- the beam-graph slab source needs its bay
+    # loops to run continuously over the columns (split never mutates kept dicts).
+    slab_beam_segments = dict(beam_segments)
+    slab_beam_segments["segments"] = list(beam_segments["segments"])
+    split_beams = report.split_beams_at_columns(
+        beam_segments, sections, sections.get("circles"))
+    if split_beams:
+        _say("beams: split {0} beam(s) drawn across column footprints".format(split_beams))
+
     _say("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
         _say(line)
@@ -802,7 +813,7 @@ def main():
     # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
     _progress(8, 8, "create slabs")
     if selections["create_slabs"]:
-        outcomes["slabs"] = _create_slabs(doc, revit_result.records, beam_segments,
+        outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
                                           dxf_result.texts, selections, schedule)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,

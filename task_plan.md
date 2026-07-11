@@ -327,6 +327,43 @@ with phantom 300 gap.
    will name the exact Revit failure for the remaining loops; alignment issue diagnosis
    follows from the 0.1mm replay.
 
+### Phase 15 — v0.40.0: test8 beam-over-column (CLIENT PRIORITY) + SLABS round 6 — DONE,
+###            AWAITING REVIT CONFIRM (user feedback on the 0.39.0 run, 4 items)
+- [x] **test8 (item 4, client): no beam drawn ON TOP of a column.** New report pass
+      `split_beams_at_columns(beam_segments, sections, circles)` in script.py right after
+      the end snap. Per column footprint (rects incl. rotated via long_axis_deg, circles):
+      * centreline crossing strictly inside the span -> SPLIT at the faces (2 pieces);
+      * segment buried face-to-face in one column (column outline mis-read as a beam,
+        e.g. AC6/AC10/BC6 350x1800 exact-coextensive "beams") -> DROPPED;
+      * terminal end >100mm PAST the column centre (drawn to the far face) -> TRIMMED
+        back to the near face; an end AT/BEFORE the centre = junction convention (what
+        snap_beam_ends_to_columns produces) -> never moves;
+      * grazing a shared face line (<10mm penetration at interval midpoint) never counts;
+      * leftover pieces <100mm (drafting overshoot / sliver between adjacent columns)
+        are dropped; mark stays on the LONGEST piece (one-segment-per-mark invariant).
+      VERIFIED offline (replay_split/verify_post_split on export items): test8 29 solid
+      overlaps -> 0 (28 segments changed); test1-7 AND every .archive_fixtures export
+      (0.16.1-0.39.0, tests 10-20): ZERO segments changed. 11-case tests/test_beam_split.py.
+      Slabs receive a PRE-SPLIT snapshot (split reuses untouched dicts, never mutates)
+      so the beam-graph slab source still closes its bay loops over the columns.
+- [x] **test4/5 blank bays (item 1).** Dangling degree-1 stubs (edges ending mid-air)
+      pinched 96 member-edge faces -> silently filtered = blank areas. Iterative stub
+      pruning before the face walk: 158+96 -> 249 clean faces, 0 non-simple (test4+5).
+- [x] **test1-3 shaft slabs (item 2).** Without a floor layer, lift/stair shafts became
+      slab faces. New _beam_fraction filter: a member-edge face needs >=30% of its
+      perimeter ON beam-layer edges; wall-bounded shaft faces are dropped. test1: 47 faces.
+- [x] **test6/7 S8 curved slab missing (item 3).** The 142mm junction fillet arc is
+      SHORTER than the 150mm chain tolerance -> greedy first-match glued its WRONG end
+      (out-and-back pinch = "self-intersecting outline" skip). _chain_into_rings now
+      scores all four attach modes across all unused pieces and takes the globally
+      closest; _piece_fingerprint dedupes re-drawn shared edges first. 9 rings, 0 bad.
+- [x] Suite: 15 test files OK (incl. new test_beam_split.py); slab checks re-verified on
+      0.39.0 exports after all edits.
+>> NEXT: user runs v0.40.0 in Revit on test1-8 (+ archives if wanted). Expected: test8
+   beams stop at column faces everywhere; test4/5 blank bays fill; test1-3 no shaft
+   slabs without floor layer; test6/7 S8 curved slab appears. Watch beam counts:
+   test8 233 -> 211 segments (28 split/trimmed/dropped) is INTENDED.
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK
