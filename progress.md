@@ -7,6 +7,19 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.39.0 — SLABS round 5: two live arc bugs found by mirroring the builder offline
+- 0.37→0.38 audit: beams/cols identical on every test; slabs nearly unchanged → the 0.38
+  arc fixes shipped two NEW bugs instead:
+  (A) arcs attached to NEIGHBOUR rings via shared junction corners → straight panel edges
+  bulged into arcs ("something wrong I can't point out"); ring must now TRAVERSE the arc.
+  (B) rings traversing an arc BACKWARD skipped up to 97% of their boundary (0.45m loop on
+  a 14.5m ring ×3 = the persistent test6/7 error). Circle-side run detection + walk-order
+  keying + walk-oriented Arc. Offline: all rings on test1/2/3/6/7 close at ratio 1.000.
+- Member-edge source now registers arcs too (real curved edges without a slab layer).
+- Diagnostics: cad2bim_version stamped in export; raw_geometry at 0.1mm (Revit built 255
+  loops where int-mm replay built 230); slab error/skip strings exported; pinch-vertex
+  rings filtered (pass the crossing test, fail Revit).
+
 ## v0.38.0 — SLABS round 4: true curved edges + valid member-edge faces
 - Slab arcs = 3-point circle fits; were 2 chords (S8 D-slab failed, curves = line strings).
   Now tessellated for geometry + true (start,mid,end) carried; builder emits genuine

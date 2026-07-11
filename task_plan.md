@@ -304,8 +304,28 @@ with phantom 300 gap.
 - [ ] PENDING DIAGNOSIS (needs the 0.38.0 export with column records): "slab not aligned
       with beam outline in some places" -- suspect junction healing (350mm) fabricating
       edges where drawn edges merely end.
->> NEXT: user runs v0.38.0 (pull + RESTART Revit) across Test0-Test7; expect zero slab
-   errors, true curved slab edges, S8 placed.
+>> 0.38.0 run: numbers ~unchanged (test4/5 97 errors, test6/7 D-slab error persists);
+   arcs real on test1-3 slab_edges but chorded elsewhere; "something wrong, can't point out".
+
+### Phase 14 — SLABS round 5 (v0.39.0) — DONE, AWAITING REVIT CONFIRM
+- [x] Regression audit 0.37 vs 0.38 per test: beams/columns identical everywhere; slabs
+      test1-3 identical counts (arcs now real), test4/5 99->97 errors, test6/7 error:1 stays.
+- [x] LIVE BUG A (the un-pinpointable wrongness): _ring_arcs attached arcs to NEIGHBOUR
+      panels via shared junction corners -> straight edges replaced by bulging arcs. Ring
+      must now TRAVERSE the arc (mid point on ring path).
+- [x] LIVE BUG B: ring traversing an arc BACKWARD made the walk jump the wrong way,
+      skipping up to 97% of the boundary (0.45m loop on 14.5m perimeter x3 = test6/7 error
+      + micro-slab debris). Chord run now detected by circle-side test; span keyed at the
+      run's walk-order start; Arc oriented to the walk. Offline: test1/2/3/6/7 rings ALL
+      close at ratio 1.000, 0 gaps.
+- [x] Member-edge source registers arc triples too (real curved edges without slab layer).
+- [x] Diagnostics for test4/5's remaining ~97 errors: export stamps cad2bim_version;
+      raw_geometry at 0.1mm (int-mm rounding made replay diverge: 255 vs 230 loops);
+      slabs outcome carries error_details/skip_details; PINCH rings (repeated vertex,
+      passes crossing test, fails Revit) filtered in proto + builder.
+>> NEXT: user runs v0.39.0 (pull + RESTART Revit). test4/5's error_details in the export
+   will name the exact Revit failure for the remaining loops; alignment issue diagnosis
+   follows from the 0.1mm replay.
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as

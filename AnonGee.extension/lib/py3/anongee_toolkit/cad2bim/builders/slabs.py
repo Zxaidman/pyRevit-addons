@@ -14,6 +14,7 @@ from Autodesk.Revit.DB import (FilteredElementCollector, XYZ, Line, Arc, CurveLo
 
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name
+from ..geom.shapes import circle_from_three_points
 
 
 def floor_types(doc):
@@ -81,11 +82,18 @@ def _curve_loop(ring, arcs=None):
     pts = _sanitize_ring(ring)
     n = len(pts)
     spans = _arc_spans(pts, arcs or [])
+    if spans:
+        # the ring seam must NOT sit inside an arc's chord run (the walk would emit
+        # part of the chords AND the whole arc): rotate the ring to a run START.
+        start = min(spans)
+        pts = pts[start:] + pts[:start]
+        spans = _arc_spans(pts, arcs or [])
     # weld the ring vertices onto the arcs' exact endpoints: sanitation may have
     # nudged them apart, and a CurveLoop must be contiguous to Revit tolerance
-    for ia, (_ia, ib, (a, m, b)) in list(spans.items()):
-        pts[ia] = a
-        pts[ib] = b
+    for i_first, (i_last, a, m, b) in list(spans.items()):
+        pts[i_first] = a
+        pts[i_last] = b
+    n = len(pts)
     loop = CurveLoop()
     i = 0
     steps = 0
@@ -93,14 +101,12 @@ def _curve_loop(ring, arcs=None):
         steps += 1
         span = spans.get(i)
         if span is not None:
-            ia, ib, (a, m, b) = span
-            spans.pop(ia, None)        # consume BOTH orientations: emit each arc once
-            spans.pop(ib, None)
+            i_last, a, m, b = span
             loop.Append(Arc.Create(XYZ(a[0], a[1], 0.0), XYZ(b[0], b[1], 0.0),
                                    XYZ(m[0], m[1], 0.0)))
-            if ib <= i:                # the arc run wraps past the ring seam
+            if i_last <= i:            # the run wraps the ring seam: boundary done
                 break
-            i = ib
+            i = i_last
             continue
         x1, y1 = pts[i]
         x2, y2 = pts[(i + 1) % n]
@@ -109,23 +115,55 @@ def _curve_loop(ring, arcs=None):
     return loop
 
 
-def _arc_spans(pts, arcs):
-    """{start_index: (start_index, end_index, triple)} for each registered arc.
+_ON_CIRCLE_FT = 20.0 / 304.8
 
-    An arc's chord run sits between the ring vertices nearest its true start and
-    end; walking the ring emits the Arc at the start index and jumps to the end."""
+
+def _arc_spans(pts, arcs):
+    """{run_first_index: (run_last_index, walk_start, mid, walk_end)} per arc.
+
+    The arc's tessellated CHORD RUN occupies the ring indices between the vertices
+    nearest its two endpoints -- on ONE side only. Which side is decided by testing
+    whether that side's interior vertices lie on the arc's circle (the other side
+    is the panel's straight boundary). The span is keyed at the run's first index
+    IN WALK ORDER and oriented so the emitted Arc starts where the walk arrives --
+    the ring's traversal direction is independent of how the arc was recorded."""
     spans = {}
+    n = len(pts)
     for triple in arcs:
         a, m, b = triple
+        fit = circle_from_three_points(a, m, b)
+        if not fit:
+            continue
+        cx, cy, r = fit
         ia = _nearest_index(pts, a)
         ib = _nearest_index(pts, b)
         if ia is None or ib is None or ia == ib:
             continue
-        # key the span at BOTH endpoints, oriented from whichever the ring walk
-        # reaches first -- the ring's traversal direction is independent of the
-        # order the arc was recorded in
-        spans[ia] = (ia, ib, (a, m, b))
-        spans.setdefault(ib, (ib, ia, (b, m, a)))
+
+        def on_circle(idx):
+            x, y = pts[idx]
+            return abs(((x - cx) ** 2 + (y - cy) ** 2) ** 0.5 - r) <= _ON_CIRCLE_FT
+
+        def run_is_arc(start, end):    # forward run start -> end (mod n), interior on circle
+            length = (end - start) % n
+            if length < 2:
+                return True            # adjacent: nothing to test
+            probe = (start + length // 2) % n
+            return on_circle(probe)
+
+        if run_is_arc(ia, ib) and not run_is_arc(ib, ia):
+            first, last = ia, ib       # walk enters at a, leaves at b
+            oriented = (a, m, b)
+        elif run_is_arc(ib, ia) and not run_is_arc(ia, ib):
+            first, last = ib, ia       # walk enters at b, leaves at a
+            oriented = (b, m, a)
+        else:
+            # both or neither side test as arc (tiny ring): take the shorter side
+            if (ib - ia) % n <= (ia - ib) % n:
+                first, last, oriented = ia, ib, (a, m, b)
+            else:
+                first, last, oriented = ib, ia, (b, m, a)
+        spans[first] = (last, oriented[0], oriented[1], oriented[2])
     return spans
 
 
@@ -139,8 +177,14 @@ def _nearest_index(pts, p):
 
 
 def _simple(ring):
-    """True when no two non-adjacent edges cross (Floor.Create requires it)."""
+    """True when the ring neither crosses NOR touches itself (Floor.Create needs both)."""
     n = len(ring)
+    seen = set()
+    for x, y in ring:
+        key = (round(x * 3048.0), round(y * 3048.0))    # 0.1 mm grid: pinch vertex
+        if key in seen:
+            return False
+        seen.add(key)
     for i in range(n):
         x1, y1 = ring[i]
         x2, y2 = ring[(i + 1) % n]

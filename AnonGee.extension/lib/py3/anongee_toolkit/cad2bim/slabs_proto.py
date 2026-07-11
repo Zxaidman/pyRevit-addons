@@ -87,12 +87,25 @@ def _tessellate_arc(pts):
 
 
 def _ring_arcs(ring, arc_triples, tol_ft):
-    """The arc triples whose BOTH endpoints sit on this ring (order preserved)."""
+    """The arc triples this ring actually TRAVERSES (order preserved).
+
+    Endpoint membership is not enough: an arc's endpoints are junction corners
+    SHARED with the neighbouring panel, whose ring runs STRAIGHT between them --
+    attaching the arc there would bulge the neighbour's edge. The ring must also
+    pass through the arc's MID point (i.e. it walked the arc's chords)."""
     out = []
+    n = len(ring)
     for a, m, b in arc_triples:
         on_a = any(_dist(a, p) <= tol_ft for p in ring)
         on_b = any(_dist(b, p) <= tol_ft for p in ring)
-        if on_a and on_b:
+        if not (on_a and on_b):
+            continue
+        on_m = False
+        for i in range(n):
+            if _pt_seg_dist(m[0], m[1], ring[i], ring[(i + 1) % n]) <= tol_ft:
+                on_m = True
+                break
+        if on_m:
             out.append((a, m, b))
     return out
 
@@ -302,13 +315,18 @@ def slab_loops_from_member_edges(records):
     """
     segs = []
     z = 0.0
+    arc_triples = []
     for record in records:
         if record.category not in (CATEGORY_BEAM, CATEGORY_COLUMN):
             continue
         if record.kind == "arc":
-            # a 3-point arc record (round column, junction fillet) contributes two
-            # long CHORDS if used raw -- junk faces and phantom crossings. Sample it.
-            pts2, _triple = _tessellate_arc(record.points)
+            # a 3-point arc record (round column, junction fillet, curved beam edge)
+            # contributes two long CHORDS if used raw -- junk faces and phantom
+            # crossings. Sample it; keep the triple so a face running the WHOLE arc
+            # gets a genuine curved edge (a partial run falls back to its chords).
+            pts2, triple = _tessellate_arc(record.points)
+            if triple:
+                arc_triples.append(triple)
             pts = [(x, y, record.points[0][2]) for x, y in pts2]
         else:
             pts = record.points
@@ -353,13 +371,23 @@ def slab_loops_from_member_edges(records):
             continue                   # a member body (thin strip), not a panel
         if not _is_simple_ring(ring):
             continue                   # bow-tie / self-crossing face: never a panel
-        out.append((ring, z, []))
+        out.append((ring, z, _ring_arcs(ring, arc_triples,
+                                        config.mm_to_ft(_SNAP_MM * 2.0))))
     return out
 
 
 def _is_simple_ring(ring):
-    """True when no two non-adjacent ring edges cross (a valid floor boundary)."""
+    """True when the ring neither crosses NOR touches itself (valid floor boundary).
+
+    Floor.Create also rejects a PINCH -- the same vertex visited twice (a figure-8
+    through a junction node): no two edges cross, but the loop is not simple."""
     n = len(ring)
+    seen = set()
+    for x, y in ring:
+        key = (round(x * 3048.0), round(y * 3048.0))    # 0.1 mm grid
+        if key in seen:
+            return False
+        seen.add(key)
     for i in range(n):
         a1, b1 = ring[i], ring[(i + 1) % n]
         for j in range(i + 1, n):

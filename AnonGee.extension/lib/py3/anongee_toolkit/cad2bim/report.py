@@ -11,6 +11,10 @@ import math
 from collections import defaultdict, Counter
 
 from .geom import shapes
+try:
+    from . import __version__
+except ImportError:                      # test loaders stub the parent package
+    __version__ = "?"
 from .classify import marks
 from . import config
 from .classify.layers import CATEGORY_COLUMN, CATEGORY_BEAM, CATEGORY_SLAB_EDGE
@@ -2160,7 +2164,7 @@ def _beam_geometry_dump(result):
                     else "beam"),
             "kind": record.kind,
             "layer": record.layer,
-            "pts": [[_mm(p[0]), _mm(p[1])] for p in record.points],
+            "pts": [[round(p[0] * _MM, 1), round(p[1] * _MM, 1)] for p in record.points],
         })
     return out
 
@@ -2205,6 +2209,7 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
     outcomes = outcomes or {}
     payload = {
         "source": result.source_name,
+        "cad2bim_version": __version__,
         "units": "mm (sizes and positions; positions derived from internal feet)",
         "totals": {"dxf_curves": len(result.records),
                    "by_category": build_category_counts(result.records)},

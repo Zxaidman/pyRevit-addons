@@ -1020,10 +1020,12 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None)
          "created: {3}, skipped: {4}, errors: {5}".format(
              source, len(slab_defs), sized, len(result["created"]),
              len(result["skipped"]), len(result["errors"])))
-    for message in result["errors"]:
+    for message in result["errors"] + result["skipped"]:
         _say("  slab: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
-            "errors": len(result["errors"]), "source": source, "loops": len(slab_defs)}
+            "errors": len(result["errors"]), "source": source, "loops": len(slab_defs),
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
 
 
 def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):

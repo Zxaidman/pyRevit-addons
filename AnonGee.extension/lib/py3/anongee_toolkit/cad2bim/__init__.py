@@ -35,7 +35,34 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.38.0"  # SLABS round 4: real curved edges + valid member-edge faces.
+__version__ = "0.39.0"  # SLABS round 5: the 0.38.0 arc plumbing had TWO live bugs, both fixed
+#                         offline against the 0.38.0 exports (mirrored walk, every ring checked
+#                         for closure + full perimeter coverage):
+#                         (A) PHANTOM NEIGHBOUR ARCS: _ring_arcs attached an arc to any ring
+#                         whose vertices touched the arc's ENDPOINTS -- but those are junction
+#                         corners SHARED with the adjacent rectangular panel, so the neighbour's
+#                         straight edge got replaced by a bulging arc (the un-pinpointable
+#                         wrongness). A ring now must also TRAVERSE the arc (its mid point on
+#                         the ring path).
+#                         (B) BACKWARD ARC WALK: when a ring traverses an arc opposite to its
+#                         recorded direction, the loop walk jumped the wrong way and skipped up
+#                         to 97% of the boundary (three rings emitted 0.45m loops on a 14.5m
+#                         perimeter = the persisting test6/7 error + micro-slab debris). The
+#                         span logic now detects the chord run by testing which SIDE lies on the
+#                         arc's circle, keys it at the run's walk-order start, and orients the
+#                         emitted Arc to the walk. Verified: test1/2/3/6/7 -- every ring closes
+#                         at ratio 1.000, zero gaps.
+#                         (C) MEMBER-EDGE ARCS (user request): curved beam/column edges register
+#                         their triples in the member-edge source too, so a face running a whole
+#                         arc gets a genuine curved edge (partial runs fall back to chords).
+#                         (D) DIAGNOSTICS for the remaining test4/5 failures: the export stamps
+#                         cad2bim_version, raw_geometry carries 0.1mm precision (int-mm rounding
+#                         made replays diverge: Revit built 255 loops where the replay built 230),
+#                         slab outcomes carry error_details/skip_details strings, and a PINCH
+#                         ring (same vertex twice -- passes the crossing test, fails Revit) is
+#                         now caught by both the proto filter and the builder guard.
+
+# 0.38.0  SLABS round 4: real curved edges + valid member-edge faces.
 #                         (A) ARC-AWARE BOUNDARIES: a slab-layer ARC arrives as a 3-point circle
 #                         fit; the ring previously took those points as TWO straight chords --
 #                         the D-shaped S8 slab failed and every curve showed as line strings.
