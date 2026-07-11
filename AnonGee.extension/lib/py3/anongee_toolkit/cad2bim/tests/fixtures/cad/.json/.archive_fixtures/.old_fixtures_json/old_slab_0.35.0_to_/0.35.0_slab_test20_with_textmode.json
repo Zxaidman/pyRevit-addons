@@ -1,0 +1,879 @@
+{
+ "source": "StructuralPlan-Test20-Beam Stress test",
+ "units": "mm (sizes and positions; positions derived from internal feet)",
+ "totals": {
+  "dxf_curves": 34,
+  "by_category": {
+   "beam": 33,
+   "slab_edge": 1
+  }
+ },
+ "comparison": {
+  "revit_curves": 34,
+  "dxf_curves": 36,
+  "matched": 33,
+  "dxf_only": 3,
+  "revit_only": 1,
+  "clipped": 0,
+  "transform": {
+   "method": "geometry_anchored"
+  }
+ },
+ "grids": {
+  "created": 0,
+  "skipped": 0,
+  "errors": 0
+ },
+ "columns": {
+  "outcome": {
+   "rect": 0,
+   "circular": 0,
+   "skipped": 0,
+   "errors": 0
+  },
+  "status_counts": {
+   "line_member": 0,
+   "circle": 0
+  },
+  "items": [],
+  "circles": [],
+  "warnings": [],
+  "dropped_raw": []
+ },
+ "slabs": {
+  "created": 0,
+  "skipped": 0,
+  "errors": 1,
+  "source": "beam_graph",
+  "loops": 1
+ },
+ "beams": {
+  "outcome": {
+   "created": 13,
+   "skipped": 0,
+   "errors": 0
+  },
+  "status_counts": {
+   "rect": 1,
+   "degenerate": 1,
+   "line_pair": 10,
+   "bare_line_unpaired": 7,
+   "arc_junction": 0,
+   "curved_pair": 1,
+   "edge_pair": 2,
+   "text_sized": 13,
+   "continuation": 1,
+   "width_out_of_range": 1
+  },
+  "items": [
+   {
+    "w": 300,
+    "len": 5000,
+    "x1": 22000,
+    "y1": 14000,
+    "x2": 27000,
+    "y2": 14000,
+    "d": 600,
+    "mark": "B13"
+   },
+   {
+    "w": 300,
+    "len": 5000,
+    "x1": 22000,
+    "y1": 16150,
+    "x2": 27000,
+    "y2": 16150,
+    "d": 600,
+    "mark": "B11"
+   },
+   {
+    "w": 600,
+    "len": 5000,
+    "x1": 22000,
+    "y1": 17300,
+    "x2": 27000,
+    "y2": 17300,
+    "d": 900,
+    "mark": "B10"
+   },
+   {
+    "w": 300,
+    "len": 4550,
+    "x1": 16000,
+    "y1": 9450,
+    "x2": 16000,
+    "y2": 14000,
+    "d": 600,
+    "mark": "B12"
+   },
+   {
+    "w": 300,
+    "len": 7071,
+    "x1": 12000,
+    "y1": 3000,
+    "x2": 17000,
+    "y2": 8000,
+    "d": 600,
+    "mark": "B6"
+   },
+   {
+    "w": 300,
+    "len": 8000,
+    "x1": 12000,
+    "y1": 0,
+    "x2": 19981,
+    "y2": 558,
+    "d": 600,
+    "mark": "B5"
+   },
+   {
+    "w": 300,
+    "len": 4700,
+    "x1": 8000,
+    "y1": 150,
+    "x2": 8000,
+    "y2": 4850,
+    "d": 600,
+    "mark": "B4"
+   },
+   {
+    "w": 300,
+    "len": 4700,
+    "x1": 0,
+    "y1": 150,
+    "x2": 0,
+    "y2": 4850,
+    "d": 600,
+    "mark": "B3"
+   },
+   {
+    "w": 300,
+    "len": 8000,
+    "x1": 0,
+    "y1": 5000,
+    "x2": 8000,
+    "y2": 5000,
+    "d": 600,
+    "mark": "B2"
+   },
+   {
+    "w": 300,
+    "len": 8000,
+    "x1": 0,
+    "y1": 0,
+    "x2": 8000,
+    "y2": 0,
+    "d": 600,
+    "mark": "B1"
+   },
+   {
+    "w": 300,
+    "len": 6000,
+    "x1": 0,
+    "y1": 14000,
+    "x2": 6000,
+    "y2": 14000,
+    "d": 600,
+    "mark": "B8"
+   },
+   {
+    "w": 900,
+    "len": 20000,
+    "x1": 0,
+    "y1": 10000,
+    "x2": 20000,
+    "y2": 10000,
+    "d": 900,
+    "mark": "B7"
+   }
+  ],
+  "raw_geometry": [
+   {
+    "cat": "beam",
+    "kind": "polyline",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      30000,
+      4000
+     ],
+     [
+      33000,
+      4000
+     ],
+     [
+      33000,
+      4020
+     ],
+     [
+      30000,
+      4020
+     ],
+     [
+      30000,
+      4000
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "polyline",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      34000,
+      0
+     ],
+     [
+      30000,
+      0
+     ],
+     [
+      34000,
+      0
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      13850
+     ],
+     [
+      27000,
+      13850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      14150
+     ],
+     [
+      27000,
+      14150
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      16000
+     ],
+     [
+      27000,
+      16000
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      16300
+     ],
+     [
+      27000,
+      16300
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      17000
+     ],
+     [
+      27000,
+      17000
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      22000,
+      17600
+     ],
+     [
+      27000,
+      17600
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      13850
+     ],
+     [
+      6000,
+      13850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      16150,
+      9450
+     ],
+     [
+      16150,
+      14000
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      15850,
+      9450
+     ],
+     [
+      15850,
+      14000
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      16150,
+      9550
+     ],
+     [
+      20000,
+      9550
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      16150,
+      10450
+     ],
+     [
+      20000,
+      10450
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      9550
+     ],
+     [
+      15850,
+      9550
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      10450
+     ],
+     [
+      15850,
+      10450
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      12106,
+      2894
+     ],
+     [
+      17106,
+      7894
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      11894,
+      3106
+     ],
+     [
+      16894,
+      8106
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      12010,
+      -150
+     ],
+     [
+      19991,
+      408
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      11990,
+      150
+     ],
+     [
+      19970,
+      708
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      8150,
+      150
+     ],
+     [
+      8150,
+      4850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      7850,
+      150
+     ],
+     [
+      7850,
+      4850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      150,
+      150
+     ],
+     [
+      150,
+      4850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      -150,
+      150
+     ],
+     [
+      -150,
+      4850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      4850
+     ],
+     [
+      8000,
+      4850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      5150
+     ],
+     [
+      8000,
+      5150
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      -150
+     ],
+     [
+      8000,
+      -150
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "line",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      0,
+      150
+     ],
+     [
+      8000,
+      150
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      26575,
+      7728
+     ],
+     [
+      25815,
+      8043
+     ],
+     [
+      25000,
+      8150
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      27728,
+      6575
+     ],
+     [
+      27227,
+      7227
+     ],
+     [
+      26575,
+      7728
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      28150,
+      5000
+     ],
+     [
+      28043,
+      5815
+     ],
+     [
+      27728,
+      6575
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      26425,
+      7468
+     ],
+     [
+      25738,
+      7753
+     ],
+     [
+      25000,
+      7850
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      27468,
+      6425
+     ],
+     [
+      27015,
+      7015
+     ],
+     [
+      26425,
+      7468
+     ]
+    ]
+   },
+   {
+    "cat": "beam",
+    "kind": "arc",
+    "layer": "S-BEAM",
+    "pts": [
+     [
+      27850,
+      5000
+     ],
+     [
+      27753,
+      5738
+     ],
+     [
+      27468,
+      6425
+     ]
+    ]
+   },
+   {
+    "cat": "slab",
+    "kind": "polyline",
+    "layer": "A-FLOR",
+    "pts": [
+     [
+      0,
+      14150
+     ],
+     [
+      6000,
+      14150
+     ],
+     [
+      6000,
+      17000
+     ]
+    ]
+   }
+  ]
+ },
+ "texts_sized": [
+  {
+   "mark": "B1",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 3600,
+   "y": 350,
+   "rot": 0.0
+  },
+  {
+   "mark": "B2",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 3600,
+   "y": 5350,
+   "rot": 0.0
+  },
+  {
+   "mark": "B3",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": -350,
+   "y": 2000,
+   "rot": 90.0
+  },
+  {
+   "mark": "B4",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 8350,
+   "y": 2000,
+   "rot": 90.0
+  },
+  {
+   "mark": "B5",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 15800,
+   "y": 500,
+   "rot": 4.0
+  },
+  {
+   "mark": "B6",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 14200,
+   "y": 5800,
+   "rot": 45.0
+  },
+  {
+   "mark": "B7",
+   "layer": "S-BEAM-IDEN",
+   "b": 900.0,
+   "h": 900.0,
+   "x": 7000,
+   "y": 10600,
+   "rot": 0.0
+  },
+  {
+   "mark": "B12",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 16350,
+   "y": 12200,
+   "rot": 90.0
+  },
+  {
+   "mark": "B8",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 3000,
+   "y": 13500,
+   "rot": 0.0
+  },
+  {
+   "mark": "B10",
+   "layer": "S-BEAM-IDEN",
+   "b": 600.0,
+   "h": 900.0,
+   "x": 24500,
+   "y": 17750,
+   "rot": 0.0
+  },
+  {
+   "mark": "B11",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 24300,
+   "y": 16500,
+   "rot": 0.0
+  },
+  {
+   "mark": "B13",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 24500,
+   "y": 14350,
+   "rot": 0.0
+  },
+  {
+   "mark": "B9",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 27369,
+   "y": 7369,
+   "rot": 0.0
+  },
+  {
+   "mark": "B99",
+   "layer": "S-BEAM-IDEN",
+   "b": 300.0,
+   "h": 600.0,
+   "x": 31000,
+   "y": 6000,
+   "rot": 0.0
+  }
+ ],
+ "review": [
+  "7 bare lines without a parallel partner",
+  "1 curved beam(s) detected"
+ ]
+}

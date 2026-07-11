@@ -1,0 +1,319 @@
+{
+ "source": "StructuralPlan-Test16",
+ "units": "mm (sizes and positions; positions derived from internal feet)",
+ "totals": {
+  "dxf_curves": 27,
+  "by_category": {
+   "grid": 14,
+   "column": 13
+  }
+ },
+ "comparison": {
+  "revit_curves": 27,
+  "dxf_curves": 38,
+  "matched": 25,
+  "dxf_only": 13,
+  "revit_only": 2,
+  "clipped": 3,
+  "transform": {
+   "method": "grid_anchored"
+  }
+ },
+ "grids": {
+  "created": 14,
+  "skipped": 0,
+  "errors": 0
+ },
+ "columns": {
+  "outcome": {
+   "rect": 15,
+   "circular": 1,
+   "skipped": 0,
+   "errors": 0
+  },
+  "status_counts": {
+   "open_fragment": 4,
+   "rectangle": 5,
+   "composite": 2,
+   "oriented_rect": 1,
+   "line_member": 0,
+   "circle": 1,
+   "recovered_strip": 1,
+   "recovered_rect": 2,
+   "text_corrected": 8
+  },
+  "items": [
+   {
+    "b": 400,
+    "h": 400,
+    "x": 5000,
+    "y": 5000
+   },
+   {
+    "b": 300,
+    "h": 900,
+    "x": 10000,
+    "y": 5000
+   },
+   {
+    "b": 900,
+    "h": 300,
+    "x": 15000,
+    "y": 5000
+   },
+   {
+    "b": 600,
+    "h": 900,
+    "x": 20000,
+    "y": 5000,
+    "deg": 120.0
+   },
+   {
+    "b": 600,
+    "h": 800,
+    "x": 5000,
+    "y": 10000,
+    "deg": 115.0
+   },
+   {
+    "b": 6000,
+    "h": 300,
+    "x": 19000,
+    "y": 10000
+   },
+   {
+    "b": 500,
+    "h": 500,
+    "x": 5000,
+    "y": 20000,
+    "mark": "C9"
+   },
+   {
+    "b": 650,
+    "h": 650,
+    "x": 10000,
+    "y": 20000,
+    "mark": "C10"
+   },
+   {
+    "b": 300,
+    "h": 2400,
+    "x": 16150,
+    "y": 11350
+   },
+   {
+    "b": 300,
+    "h": 2400,
+    "x": 19000,
+    "y": 11350
+   },
+   {
+    "b": 300,
+    "h": 2400,
+    "x": 21850,
+    "y": 11350
+   },
+   {
+    "b": 1500,
+    "h": 900,
+    "x": 25000,
+    "y": 4700
+   },
+   {
+    "b": 600,
+    "h": 600,
+    "x": 24550,
+    "y": 5450
+   },
+   {
+    "b": 4500,
+    "h": 300,
+    "x": 30000,
+    "y": 20000
+   },
+   {
+    "b": 600,
+    "h": 800,
+    "x": 30000,
+    "y": 10000,
+    "deg": 115.0
+   }
+  ],
+  "circles": [
+   {
+    "dia": 700,
+    "x": 30000,
+    "y": 5000
+   }
+  ],
+  "warnings": [],
+  "dropped_raw": [
+   {
+    "kind": "polyline",
+    "layer": "S-COLS",
+    "status": "open_path",
+    "pts": [
+     [
+      30177,
+      10331
+     ],
+     [
+      30103,
+      10489
+     ],
+     [
+      29559,
+      10236
+     ],
+     [
+      29595,
+      10159
+     ]
+    ]
+   },
+   {
+    "kind": "polyline",
+    "layer": "S-COLS",
+    "status": "open_path",
+    "pts": [
+     [
+      29789,
+      9743
+     ],
+     [
+      29897,
+      9511
+     ],
+     [
+      30441,
+      9764
+     ],
+     [
+      30367,
+      9923
+     ]
+    ]
+   },
+   {
+    "kind": "polyline",
+    "layer": "S-COLS",
+    "status": "open_path",
+    "pts": [
+     [
+      32250,
+      19850
+     ],
+     [
+      27750,
+      19850
+     ],
+     [
+      27750,
+      20150
+     ],
+     [
+      32250,
+      20150
+     ]
+    ]
+   },
+   {
+    "kind": "polyline",
+    "layer": "S-COLS",
+    "status": "open_path",
+    "pts": [
+     [
+      5251,
+      10172
+     ],
+     [
+      5103,
+      10489
+     ],
+     [
+      4559,
+      10236
+     ],
+     [
+      4897,
+      9511
+     ],
+     [
+      5441,
+      9764
+     ],
+     [
+      5293,
+      10081
+     ]
+    ]
+   }
+  ]
+ },
+ "beams": {
+  "outcome": null,
+  "status_counts": {
+   "arc_junction": 0
+  },
+  "items": []
+ },
+ "texts_sized": [
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 400.0,
+   "h": 400.0,
+   "x": 5300,
+   "y": 5300
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 300.0,
+   "h": 900.0,
+   "x": 10300,
+   "y": 5500
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 900.0,
+   "h": 300.0,
+   "x": 15300,
+   "y": 5300
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 600.0,
+   "h": 900.0,
+   "x": 20400,
+   "y": 5500
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 600.0,
+   "h": 800.0,
+   "x": 5400,
+   "y": 10500
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 300.0,
+   "h": 6000.0,
+   "x": 18600,
+   "y": 9400
+  },
+  {
+   "mark": null,
+   "layer": "S-COLS-IDEN",
+   "b": 300.0,
+   "h": 4500.0,
+   "x": 28000,
+   "y": 19200
+  }
+ ],
+ "review": []
+}
