@@ -270,6 +270,31 @@ class ColumnOutlineFootprints(unittest.TestCase):
                                       [(0, 0), (250, 0), (250, 9000), (0, 9000), (0, 0)]], cat)
         self.assertEqual(report.column_outline_footprints([lshape, wall]), [])
 
+    def test_recover_outline_columns_places_and_names_blade(self):
+        # a closed blade outline beyond the size limits becomes a column at its
+        # drawn size/angle, named by the nearest unclaimed column mark
+        class _T(object):
+            def __init__(self, mark, x, y):
+                self.mark = mark
+                self.point_internal = (x * _FT, y * _FT, 0.0)
+        sections = {"entries": [{"layer": "x", "status": "x", "rectangles": []}],
+                    "circles": [], "status_counts": {}, "total_rectangles": 0}
+        n = report.recover_outline_columns(
+            sections, [self._blade()], [_T("AC19", 700, 1500)])
+        self.assertEqual(n, 1)
+        rect = sections["entries"][-1]["rectangles"][0]
+        self.assertEqual(rect["mark"], "AC19")
+        self.assertAlmostEqual(rect["width_mm"], 254.0, delta=4.0)
+        self.assertAlmostEqual(rect["height_mm"], 3246.0, delta=8.0)
+
+    def test_recover_outline_columns_skips_already_placed(self):
+        placed = {"center": [415.0 * _FT, 1575.0 * _FT, 0.0], "width_mm": 250.0,
+                  "height_mm": 3250.0, "long_axis_deg": 80.0}
+        sections = {"entries": [{"layer": "x", "status": "x", "rectangles": [placed]}],
+                    "circles": [], "status_counts": {}, "total_rectangles": 1}
+        n = report.recover_outline_columns(sections, [self._blade()], [])
+        self.assertEqual(n, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

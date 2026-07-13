@@ -7,6 +7,23 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.42.0 — 0.41.0 feedback: round columns, member-body slabs, blades placed
+- **Round columns** (the remaining "slab edge misalignment"): drawn as dozens of 2-30mm arc
+  fragments — tessellation+clustering made stub soup (slanted bay edges, notches). Circle
+  footprints swallow all column linework within r+pad and add one clean polygon ring
+  (chords ≥2×snap); swallowed fragments no longer register arc triples (that phantom
+  micro-arc was test3's "loop discontinuous" Floor error). Builder mirror: every ring on
+  every fixture contiguous.
+- **Member-body slabs** (test6 slab on B21/B20 + merged B22/B4/B5 cross): _body_coverage
+  drops any face >50% covered by placed beam bodies — width/perimeter filters can't catch
+  a 900-wide beam's body or a fused corridor cross. test6: 12 → 9 clean bays.
+- **Blade columns placed** (test8 "most columns not drawn"): recover_outline_columns turns
+  closed 4-corner column-layer outlines beyond the size limits into real columns at drawn
+  size/angle, named by the nearest unclaimed mark — 19 on test8 (all marked), 0 elsewhere.
+  The strip "beams" that vanished were these columns' bodies re-traced on the beam layer.
+- Member-edge source reads REVIT LINK records (DXF = texts only) — user question answered.
+- Suite 15 files OK; split/dedupe idempotent on the 0.41.0 exports.
+
 ## v0.41.0 — 0.40.0 feedback: slab/beam alignment root cause + blade columns
 - **test4/5 slab-over-beam SOLVED (the "misalignment" since round 1).** A beam edge tip
   44mm from a column ring corner rounded into a different 50mm grid cell → never merged →

@@ -773,6 +773,15 @@ def main():
         _say("columns: recovered {0} absorbed labelled column(s) from "
               "schedule+geometry".format(recovered_labeled))
 
+    # Blade / wall-columns beyond the size limits (dropped by detection) whose
+    # outlines are drawn CLOSED on the column layer: place them at drawn size,
+    # position and angle (test8's AC19..BC28 strips).
+    recovered_outline = report.recover_outline_columns(
+        sections, revit_result.records, column_texts)
+    if recovered_outline:
+        _say("columns: placed {0} blade/outline column(s) beyond the size "
+             "limits".format(recovered_outline))
+
     # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
     # end to the column centre (columns are now final). Axis-aligned columns are untouched.
     snapped_ends = report.snap_beam_ends_to_columns(
@@ -795,7 +804,7 @@ def main():
     slab_beam_segments = dict(beam_segments)
     slab_beam_segments["segments"] = list(beam_segments["segments"])
     outline_footprints = report.column_outline_footprints(revit_result.records)
-    column_footprints = report.column_rect_footprints(sections) + outline_footprints
+    column_footprints = report.column_trim_footprints(sections) + outline_footprints
     split_beams = report.split_beams_at_columns(
         beam_segments, sections, sections.get("circles"),
         extra_footprints=outline_footprints)
@@ -1005,8 +1014,9 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
-        loops = slabs_proto.slab_loops_from_member_edges(records,
-                                                         column_rects=column_rects)
+        loops = slabs_proto.slab_loops_from_member_edges(
+            records, column_rects=column_rects,
+            beam_segments=beam_segments.get("segments"))
         source = "member_edges"
     if not loops:
         loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))

@@ -35,7 +35,35 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.41.0"  # 0.40.0 feedback round: slab/beam alignment + blade columns, verified
+__version__ = "0.42.0"  # 0.41.0 feedback: round columns, member-body slabs, blade columns PLACED.
+#                         Verified offline against the 0.41.0 exports (renders, builder-walk
+#                         mirror, ground-truth diff); all quiet fixtures unchanged:
+#                         (A) ROUND-COLUMN TRIM (test1-3/4/5 "slab edge misalignment"): round
+#                         columns arrive as DOZENS of tiny drawn arc fragments (2-30mm) -- after
+#                         tessellation+clustering the boundary walk wandered (slanted bay edges,
+#                         notches). Circle footprints now swallow ALL column linework inside
+#                         r+pad (incl. fragment arcs, which no longer register phantom arc
+#                         triples) and add one clean polygon ring (chords >= 2x snap). Bay edges
+#                         at circles run straight+wrap cleanly; test3's "loop discontinuous"
+#                         builder error gone (mirror: every ring contiguous on every fixture).
+#                         (B) MEMBER-BODY SLABS (test6 slabs ON B21/B20 + merged B22/B4/B5
+#                         cross): a 900-wide beam's body strip beats the mean-width floor and a
+#                         fused corridor cross passes every perimeter test. New AREA test: a
+#                         face >50% covered by placed beam bodies (grid-sampled) is a member,
+#                         not a panel. test6: 12 faces -> 9 clean bays (8 grid + D-slab).
+#                         (C) BLADE COLUMNS PLACED (test8 "most columns not drawn"): closed
+#                         4-corner column-layer outlines beyond the size limits now become REAL
+#                         columns at drawn size/position/angle via recover_outline_columns --
+#                         19 on test8, every one named by its plan mark (AC19-24, BC23/24/26/27,
+#                         AC2/3/4/15/18, BC2/17/18/19); zero on every other fixture (dedupe
+#                         against placed footprints). The "missing beams" on the strips were
+#                         these columns' bodies re-traced on the beam layer -- now they are
+#                         columns, which is what the drawing means.
+#                         Suite: 15 files (22 beam-split cases, 20 slab cases). NOTE: the
+#                         member-edge source reads the REVIT LINK geometry (revit_result
+#                         records); the DXF is the TEXT source only.
+#
+# 0.41.0                  0.40.0 feedback round: slab/beam alignment + blade columns, verified
 #                         offline against the 0.40.0 exports (leak census, ground-truth diff,
 #                         renders of the exact reported regions):
 #                         (A) test4/5 SLAB-OVER-BEAM ROOT CAUSE (the reported misalignment /

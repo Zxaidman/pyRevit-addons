@@ -398,6 +398,36 @@ with phantom 300 gap.
    geometric signal without the floor layer); test8: no double beams, nothing on blade
    columns (beams: 203 -> ~170 segments is INTENDED).
 
+### Phase 17 — v0.42.0: 0.41.0 feedback — DONE, AWAITING REVIT CONFIRM
+User confirmed: test4/5 "major accomplishment, all slab area drawn, no beam body overlap";
+rotated-column trim "perfect". Remaining: round columns messy, test6 member leaks, test8
+columns. Real-world CADs mostly have NO floor layer -> member_edges is the flagship path.
+- [x] **Round-column trim (items 1+2).** Round columns are DRAWN as dozens of tiny arc
+      fragments (2-30mm bboxes) on the column layer -- tessellation + clustering turned
+      them into stub soup: slanted bay edges, notches (user's img1/img2). Circle
+      footprints from sections["circles"] now swallow all column linework within r+pad
+      (fragments included; swallowed arcs no longer register arc triples -> phantom
+      micro-arcs gone = test3's "loop discontinuous" Floor error) and contribute ONE
+      clean polygon ring (chords >= 2x snap). Renders: bay edges straight, clean wraps.
+      ANSWERED: member_edges reads the REVIT LINK records; DXF is texts only.
+- [x] **test6 member-body slabs (item 3).** Slab ON B21/B20 + merged B22/B4/B5 cross:
+      the 900-wide B22 body strip beats _MIN_PANEL_WIDTH and corridor crosses pass all
+      perimeter filters. New _body_coverage: face area >50% under placed beam bodies
+      (grid sampling, pre-split segment snapshot) -> member, dropped. test6: 9 clean
+      bays (8 grid + D-slab); also kills test8's beam-inside-strip slivers.
+- [x] **test8 columns (item 5).** recover_outline_columns: closed 4-corner column-layer
+      outlines beyond the size limits become REAL columns at drawn size/position/angle,
+      named by the nearest unclaimed column mark. test8: +19 (AC19-24, BC23/24/26/27,
+      AC2/3/4/15/18, BC2/17/18/19 -- all 19 marked); all other fixtures: 0 (deduped
+      against placed). The strips' "missing beams" were these columns' bodies re-traced
+      on the beam layer; BC25/BC28 outlines are fragmented (not closed) -> still absent.
+- [x] Builder-walk mirror: every ring on every fixture contiguous, 0 non-simple, 0
+      zero-length. Suite 15 files OK. Split/dedupe idempotent on 0.41.0 exports (0 changes).
+>> NEXT: user runs v0.42.0. Expected: test1-3 round-column slab edges clean; test6
+   without slab layer -> 9 slabs (no B21/B20/B22-cross); test8 -> +19 columns placed
+   ON the strips (console: "placed 19 blade/outline column(s)"), slabs ~77. If beams
+   are STILL missing on test8, need the location/mark specifics next round.
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

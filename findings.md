@@ -374,3 +374,24 @@ them and the beam layer may re-trace their outlines. Everything downstream that 
 rectangular column-layer outlines as footprints too (column_outline_footprints), not
 just placed sections. Placed-only footprints made split_beams_at_columns blind exactly
 where test8's client complaint was (AC19-24/BC23-28).
+
+## v0.42.0 — round columns are drawn as fragment soup (durable)
+CAD round columns arrive from the Revit link as DOZENS of tiny arc fragments (2-30mm)
+plus quarter arcs plus a many-chord polyline — never one circle record. Any graph pass
+that consumes raw column linework must treat the circle like the rects: swallow
+everything inside r+pad and emit ONE clean ring. Swallowed fragments must ALSO be kept
+out of the arc-triple registry, or they come back as phantom micro-arcs on slab
+boundaries ("This curve will make the loop discontinuous" from Floor.Create).
+
+## v0.42.0 — perimeter tests cannot catch member-body faces (durable)
+A beam BODY face passes every boundary-based filter when the beam is wide (900 body >
+500 mean-width floor, beam fraction 1.0) or when corridors fuse into crosses. Only an
+AREA test works: fraction of the face's area covered by placed beam-body rectangles
+(grid sampling; >0.5 = member). Real bays measure <0.2 (trim slivers only).
+
+## v0.42.0 — closed outlines are authority for out-of-band columns (durable)
+Size limits protect against junk, but a CLOSED 4-corner column-layer outline with a plan
+mark beside it is a real column regardless of size (blade/wall columns 250x3250). Place
+it at drawn size/position/angle (no grid/size snapping), dedupe against placed
+footprints, and attach the nearest unclaimed mark. Fragmented outlines stay unplaced —
+closedness IS the safety gate.

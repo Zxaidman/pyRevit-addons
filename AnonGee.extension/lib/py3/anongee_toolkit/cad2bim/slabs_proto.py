@@ -349,7 +349,7 @@ def _in_rect_footprint(px, py, fp, pad_ft):
     return abs(u) <= hl + pad_ft and abs(v) <= hs + pad_ft
 
 
-def slab_loops_from_member_edges(records, column_rects=None):
+def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None):
     """Bounded faces of the DRAWN beam + column edge lines, [(ring, z), ...].
 
     The middle outline source: no slab layer, but the beams' and columns' drawn
@@ -359,21 +359,35 @@ def slab_loops_from_member_edges(records, column_rects=None):
     face slimmer than _MIN_PANEL_WIDTH_MM (by mean width 2A/P) is dropped, as are
     junction slivers below the area floor.
 
-    `column_rects` (("rect", cx, cy, cos, sin, half_long, half_short) footprints
-    from the column pass) makes the BEAM outlines the primary graph and reduces
-    columns to TRIM geometry: raw column-layer linework lying inside a footprint
-    (fragmented outlines, rotated corners, diagonal marker strokes) is REPLACED by
-    that footprint's exact 4-edge ring. A broken drawn ring lets the face walk
-    flood THROUGH the column and fuse a bay with the beam-body corridors (test4/5's
-    slabs overlapping beams); an exact ring is airtight. Core WALLS -- column-layer
-    linework not inside any footprint -- stay in the graph so shafts remain bounded.
+    `column_rects` (("rect", cx, cy, cos, sin, half_long, half_short) and
+    ("circle", cx, cy, r) footprints from the column pass) makes the BEAM outlines
+    the primary graph and reduces columns to TRIM geometry: raw column-layer
+    linework lying inside a footprint (fragmented outlines, rotated corners,
+    diagonal marker strokes -- and ROUND columns drawn as dozens of tiny arc
+    fragments) is REPLACED by that footprint's exact ring (4 edges for a rect, a
+    fine polygon for a circle). Broken drawn rings let the face walk flood THROUGH
+    the column and fuse a bay with the beam-body corridors, or notch the boundary
+    (test1-3's round-column mess); an exact ring is airtight. Core WALLS --
+    column-layer linework not inside any footprint -- stay in the graph so shafts
+    remain bounded.
+
+    `beam_segments` (placed centreline dicts, pre-split) lets faces that are
+    mostly BEAM BODY by area be dropped: a 900-wide beam's body strip out-sizes
+    the mean-width floor, and fused corridor crosses pass every perimeter test --
+    but no real panel has half its AREA under beams (test6's B21/B20 strips and
+    the B22/B4/B5 cross).
     """
     pad_ft = config.mm_to_ft(_COLUMN_RECT_PAD_MM)
     rects = [fp for fp in (column_rects or []) if fp[0] == "rect"]
+    circles = [fp for fp in (column_rects or []) if fp[0] == "circle"]
 
     def _swallowed(pts):
         for fp in rects:
             if all(_in_rect_footprint(p[0], p[1], fp, pad_ft) for p in pts):
+                return True
+        for _kind, cx, cy, r in circles:
+            reach = (r + pad_ft) ** 2
+            if all((p[0] - cx) ** 2 + (p[1] - cy) ** 2 <= reach for p in pts):
                 return True
         return False
 
@@ -385,6 +399,10 @@ def slab_loops_from_member_edges(records, column_rects=None):
         if record.category not in (CATEGORY_BEAM, CATEGORY_COLUMN):
             continue
         is_beam = record.category == CATEGORY_BEAM
+        if not is_beam and (rects or circles) and _swallowed(record.points):
+            continue                  # replaced by the clean footprint ring below;
+            # swallowed arcs must not register triples either, or the fragments a
+            # round column is drawn from become phantom micro-arcs on the boundary
         if record.kind == "arc":
             # a 3-point arc record (round column, junction fillet, curved beam edge)
             # contributes two long CHORDS if used raw -- junk faces and phantom
@@ -396,8 +414,6 @@ def slab_loops_from_member_edges(records, column_rects=None):
             pts = [(x, y, record.points[0][2]) for x, y in pts2]
         else:
             pts = record.points
-        if not is_beam and rects and record.kind != "arc" and _swallowed(pts):
-            continue                  # replaced by the clean footprint ring below
         if len(pts) >= 2:
             z = pts[0][2]
         for i in range(len(pts) - 1):
@@ -412,6 +428,14 @@ def slab_loops_from_member_edges(records, column_rects=None):
                    for su, sv in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
         for i in range(4):
             segs.append((corners[i], corners[(i + 1) % 4]))
+            src.append(False)
+    min_chord = config.mm_to_ft(_SNAP_MM * 2.0)   # chords must outsize the node snap
+    for _kind, cx, cy, r in circles:
+        n = max(8, min(48, int(2.0 * math.pi * r / min_chord)))
+        ring = [(cx + r * math.cos(2.0 * math.pi * i / n),
+                 cy + r * math.sin(2.0 * math.pi * i / n)) for i in range(n)]
+        for i in range(n):
+            segs.append((ring[i], ring[(i + 1) % n]))
             src.append(False)
     if len(segs) < 4:
         return []
@@ -449,6 +473,18 @@ def slab_loops_from_member_edges(records, column_rects=None):
                 changed = True
 
     faces = _walk_faces(nodes, adjacency)
+    bodies = []
+    for seg in (beam_segments or []):
+        x1, y1 = seg["start"][0], seg["start"][1]
+        x2, y2 = seg["end"][0], seg["end"][1]
+        length = _dist((x1, y1), (x2, y2))
+        if length <= 0:
+            continue
+        ux, uy = (x2 - x1) / length, (y2 - y1) / length
+        half_w = (seg.get("width_mm") or 0.0) / _MM / 2.0
+        if half_w > 0:
+            bodies.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0, ux, uy,
+                           length / 2.0 + half_w, half_w))
     min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
     min_width_ft = config.mm_to_ft(_MIN_PANEL_WIDTH_MM)
     out = []
@@ -464,6 +500,8 @@ def slab_loops_from_member_edges(records, column_rects=None):
             continue                   # bow-tie / self-crossing face: never a panel
         if _beam_fraction(ring, beam_lines) < _MIN_BEAM_FRACTION:
             continue                   # bounded by WALLS, not beams: a lift/stair shaft
+        if _body_coverage(ring, bodies) > _MAX_BODY_COVERAGE:
+            continue                   # mostly under beam bodies: a member, not a panel
         out.append((ring, z, _ring_arcs(ring, arc_triples,
                                         config.mm_to_ft(_SNAP_MM * 2.0))))
     return out
@@ -475,6 +513,51 @@ def slab_loops_from_member_edges(records, column_rects=None):
 # (A wall-fraction ceiling was tried instead and dropped REAL bays that nestle
 # into an L of the core: wall-adjacency does not separate wells from bays.)
 _MIN_BEAM_FRACTION = 0.35
+
+# A face mostly UNDER the placed beams is a member body / fused corridor, never a
+# panel (corridors of 900-wide beams beat the mean-width floor; a real bay's area
+# under beams is just the trim slivers, well below 0.2).
+_MAX_BODY_COVERAGE = 0.5
+_COVERAGE_STEP_MM = 150.0     # sample grid pitch for the area-coverage estimate
+
+
+def _body_coverage(ring, bodies):
+    """Approximate fraction of the ring's area lying inside beam BODY rectangles.
+
+    Grid point-sampling (pitch _COVERAGE_STEP_MM, widened on large faces to keep
+    the sample count bounded): robust against the polygon-clip corner cases of
+    long thin fused corridors. `bodies` are (cx, cy, ux, uy, half_len, half_w)."""
+    if not bodies:
+        return 0.0
+    xs = [p[0] for p in ring]
+    ys = [p[1] for p in ring]
+    x0, x1 = min(xs), max(xs)
+    y0, y1 = min(ys), max(ys)
+    step = config.mm_to_ft(_COVERAGE_STEP_MM)
+    span = max(x1 - x0, y1 - y0)
+    if span / step > 120.0:
+        step = span / 120.0
+    near = [b for b in bodies
+            if b[0] + b[4] >= x0 and b[0] - b[4] <= x1 and
+            b[1] + b[4] >= y0 and b[1] - b[4] <= y1]
+    if not near:
+        return 0.0
+    inside_n = 0
+    covered = 0
+    yy = y0 + step / 2.0
+    while yy < y1:
+        xx = x0 + step / 2.0
+        while xx < x1:
+            if _point_in_ring((xx, yy), ring):
+                inside_n += 1
+                for cx, cy, ux, uy, hl, hw in near:
+                    dx, dy = xx - cx, yy - cy
+                    if abs(dx * ux + dy * uy) <= hl and abs(dy * ux - dx * uy) <= hw:
+                        covered += 1
+                        break
+            xx += step
+        yy += step
+    return (covered / float(inside_n)) if inside_n else 0.0
 
 
 def _beam_fraction(ring, beam_lines, tol_mm=60.0):

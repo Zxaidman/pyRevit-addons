@@ -1210,6 +1210,90 @@ def _ring_keeps_all_points(xy, ring, tol_ft):
     return True
 
 
+def recover_outline_columns(sections, records, column_texts=None,
+                            mark_reach_mm=700.0):
+    """Place columns from CLOSED rectangular column-layer outlines the size
+    limits rejected.
+
+    Blade / wall-columns (test8's 250x3250 slanted strips, labelled AC19..BC28)
+    exceed the schedule-plausible size band, so detection drops them -- yet their
+    outlines are drawn CLOSED and unambiguous, and the beam layer even re-traces
+    them. Every closed 4-corner column-layer outline that does not overlap an
+    already placed column becomes a column at its drawn size, position and angle;
+    the nearest unclaimed column mark within reach names it. These columns are
+    NOT grid-snapped or size-snapped -- the drawn outline is the authority.
+    Returns the count placed.
+    """
+    candidates = column_outline_footprints(records)
+    if not candidates:
+        return 0
+    reach_ft = config.mm_to_ft(mark_reach_mm)
+    placed = _column_footprints(sections, sections.get("circles"))
+    new_rects = []
+    for fp in candidates:
+        _kind, cx, cy, ca, sa, hl, hs = fp
+        dup = False
+        for pfp in placed:
+            if pfp[0] == "circle":
+                _k, px, py, pr = pfp
+                if (cx - px) ** 2 + (cy - py) ** 2 <= (pr + hs) ** 2:
+                    dup = True
+                    break
+            else:
+                _k, px, py, pca, psa, phl, phs = pfp
+                dx, dy = cx - px, cy - py
+                u = dx * pca + dy * psa
+                v = dy * pca - dx * psa
+                if abs(u) <= phl + hs and abs(v) <= phs + hs:
+                    dup = True
+                    break
+        if dup:
+            continue
+        small = hs * 2.0 * _MM
+        big = hl * 2.0 * _MM
+        new_rects.append({"center": [cx, cy, 0.0],
+                          "width_mm": small, "height_mm": big,
+                          "width_ft": small / _MM, "height_ft": big / _MM,
+                          "long_axis_deg": math.degrees(math.atan2(sa, ca)) % 180.0,
+                          "mark": None, "_fp": fp})
+        placed.append(fp)             # two outlines can never stack
+    if not new_rects:
+        return 0
+    entries = sections.get("entries", [])
+    claimed = set(r.get("mark") for e in entries for r in e.get("rectangles", [])
+                  if r.get("mark"))
+    claimed |= set(c.get("mark") for c in (sections.get("circles") or [])
+                   if c.get("mark"))
+    for text in (column_texts or []):
+        mark = getattr(text, "mark", None)
+        point = getattr(text, "point_internal", None)
+        if not mark or mark in claimed or point is None:
+            continue
+        best = None
+        for rect in new_rects:
+            if rect["mark"]:
+                continue
+            _kind, cx, cy, ca, sa, hl, hs = rect["_fp"]
+            dx, dy = point[0] - cx, point[1] - cy
+            u = dx * ca + dy * sa
+            v = dy * ca - dx * sa
+            outside = (max(abs(u) - hl, 0.0) ** 2 + max(abs(v) - hs, 0.0) ** 2) ** 0.5
+            if outside <= reach_ft and (best is None or outside < best[0]):
+                best = (outside, rect)
+        if best is not None:
+            best[1]["mark"] = mark
+            claimed.add(mark)
+    for rect in new_rects:
+        del rect["_fp"]
+    entries.append({"layer": "COLUMN (closed outline)", "status": "outline_recovered",
+                    "rectangles": new_rects})
+    sections["entries"] = entries
+    counts = sections.setdefault("status_counts", {})
+    counts["outline_recovered"] = counts.get("outline_recovered", 0) + len(new_rects)
+    sections["total_rectangles"] = sections.get("total_rectangles", 0) + len(new_rects)
+    return len(new_rects)
+
+
 def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
                               pad_ft=None):
     """Run a beam END up to a ROUND or ROTATED column's centre to close the junction gap.
@@ -1442,12 +1526,13 @@ def _column_footprints(sections, circles):
     return out
 
 
-def column_rect_footprints(sections):
-    """PLACED column rectangles as ("rect", ...) footprints (no circles).
+def column_trim_footprints(sections):
+    """PLACED columns -- rects AND round -- as footprint tuples.
 
     The slab member-edge source uses these to replace raw column-layer linework
-    with exact rings (columns become TRIM geometry for the beam-outline graph)."""
-    return _column_footprints(sections, None)
+    with exact rings (columns become TRIM geometry for the beam-outline graph);
+    round columns especially arrive as dozens of tiny drawn arc fragments."""
+    return _column_footprints(sections, sections.get("circles"))
 
 
 def _clip_slab(t0, t1, f0, df, half):

@@ -205,6 +205,55 @@ class MemberEdgeFaces(unittest.TestCase):
                 (chords[1][1] - chords[0][1]) ** 2) ** 0.5
         self.assertGreaterEqual(step * _MM, 95.0)
 
+    def test_wide_beam_body_corridor_dropped_by_coverage(self):
+        # a 900-wide beam's body strip beats the mean-width floor and its
+        # perimeter is 100% beam edges -- only AREA coverage identifies it
+        recs = []
+        recs += self._edge_pair(0, 0, 5000, 0, 900)         # the wide beam
+        recs += self._edge_pair(5000, 0, 5000, 5000, 300)
+        recs += self._edge_pair(5000, 5000, 0, 5000, 300)
+        recs += self._edge_pair(0, 5000, 0, 0, 300)
+        segs = [{"start": [0.0, 0.0, 0.0], "end": [5000 * _FT, 0.0, 0.0],
+                 "width_mm": 900.0},
+                {"start": [5000 * _FT, 0.0, 0.0], "end": [5000 * _FT, 5000 * _FT, 0.0],
+                 "width_mm": 300.0},
+                {"start": [5000 * _FT, 5000 * _FT, 0.0], "end": [0.0, 5000 * _FT, 0.0],
+                 "width_mm": 300.0},
+                {"start": [0.0, 5000 * _FT, 0.0], "end": [0.0, 0.0, 0.0],
+                 "width_mm": 300.0}]
+        loops = slabs_proto.slab_loops_from_member_edges(recs, beam_segments=segs)
+        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+                       for r, _z, _a in loops)
+        # the 900-wide body strip (5.0 x 0.9 = 4.5 m2 > 1 m2 floor) must be gone;
+        # only the panel remains
+        self.assertEqual(len(areas), 1)
+        self.assertGreater(areas[0], 15.0)
+
+    def test_round_column_fragments_replaced_by_clean_ring(self):
+        # a round column drawn as tiny arc fragments: with a circle footprint the
+        # junk is swallowed and the bay corner is trimmed by one clean ring
+        import math as _m
+        recs = []
+        recs += self._edge_pair(0, 0, 5000, 0, 300)
+        recs += self._edge_pair(5000, 0, 5000, 5000, 300)
+        recs += self._edge_pair(5000, 5000, 0, 5000, 300)
+        recs += self._edge_pair(0, 5000, 0, 0, 300)
+        r = 300.0
+        for k in range(12):                       # broken 30-deg arc fragments
+            a0 = 2.0 * _m.pi * k / 12.0
+            a1 = 2.0 * _m.pi * (k + 1) / 12.0
+            am = (a0 + a1) / 2.0
+            pts = [(r * _m.cos(a), r * _m.sin(a)) for a in (a0, am, a1)]
+            rec = self._Rec(pts, layers.CATEGORY_COLUMN)
+            rec.kind = "arc"
+            recs.append(rec)
+        circle = ("circle", 0.0, 0.0, r * _FT)
+        loops = slabs_proto.slab_loops_from_member_edges(recs, column_rects=[circle])
+        areas = sorted(abs(slabs_proto._signed_area(rg)) * _MM * _MM / 1e6
+                       for rg, _z, _a in loops)
+        self.assertEqual(len(areas), 1)
+        self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.3)   # corner wrap trimmed
+
     def test_column_rects_replace_raw_linework_and_trim(self):
         # a drawn column outline WITH a diagonal marker stroke sits on the bay
         # corner; with column_rects the raw linework (incl. the diagonal) is
