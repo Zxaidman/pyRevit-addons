@@ -428,6 +428,37 @@ columns. Real-world CADs mostly have NO floor layer -> member_edges is the flags
    ON the strips (console: "placed 19 blade/outline column(s)"), slabs ~77. If beams
    are STILL missing on test8, need the location/mark specifics next round.
 
+### Phase 18 — v0.43.0: placed-geometry slab source + performance — DONE, AWAITING REVIT
+User: test4/5 stuck/slow; 0.42.0 regressed rect trim + round-column arcs; proposed taking
+outlines from the PLACED geometry graph. All four addressed at the root:
+- [x] **Perf (test4/5 stuck).** _heal_endpoints/_split_at_crossings were all-pairs O(n^2):
+      45.6s offline on test4. Spatial grid buckets (_seg_grid, 3m cells) -> 2.1s drawn /
+      3.6s placed. Also the footprint DOUBLING (placed rects + outline fits of the same
+      columns) both doubled cost and caused 0.42.0's jagged rect trims: only
+      column_trim_footprints(sections) is passed now (recover_outline_columns already
+      placed every usable closed outline).
+- [x] **Placed-geometry source (user proposal).** slab_loops_from_placed_members: straight
+      beams contribute edge lines (centreline +/- w/2 + end caps), columns their footprint
+      rings; drawn beam ARCS (curved edges/fillets) + wall linework kept. _create_slabs
+      runs placed AND drawn-edge sources, keeps the larger covered area (placed wins near
+      ties): placed on test1-7 (test7 fallback 1 -> 9 faces), drawn on test8 (1070 vs
+      871 m2, its unlabelled beams are undetected -- user acknowledged).
+- [x] **Round-column arcs restored.** _circle_wrap_arcs: boundary runs along a circle
+      footprint synthesize (start, mid, end) triples with endpoints projected onto the
+      circle -> genuine Arc.Create (0.42.0 had chords).
+- [x] **Beam-edge alignment exact.** Cluster nodes PREFER beam-edge points (the centroid
+      with ring vertices tilted straight boundaries ~40mm); measured: bay edge exactly at
+      centreline - w/2 across the strip.
+- [x] **Builder contiguity.** Adjacent arc spans share a welded vertex; arcs now emit from
+      FINAL ring positions ("loop discontinuous" gone; mirror contiguous everywhere).
+>> NEXT: user runs v0.43.0. Expected: test1-7 slabs aligned to placed beams with real arcs
+   at round columns; test4/5 FAST; test8 unchanged slab source (member) + console shows
+   the source comparison line. ROADMAP AGREED (after slabs): (1) STRUCTURAL WALLS --
+   column-layer wall linework -> walls base-to-top like columns; (2) ARCH WALLS -- on top
+   of beams, to the level above, else free-standing 2-3m; (3) STAIRCASE from plan --
+   feasible: flight outlines + riser lines exist on stair layers; Revit API supports
+   sketch-based stairs (needs fixture with stair layers exported).
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

@@ -803,11 +803,13 @@ def main():
     # continuously over the columns (split never mutates kept dicts).
     slab_beam_segments = dict(beam_segments)
     slab_beam_segments["segments"] = list(beam_segments["segments"])
-    outline_footprints = report.column_outline_footprints(revit_result.records)
-    column_footprints = report.column_trim_footprints(sections) + outline_footprints
+    # recover_outline_columns has PLACED every usable closed outline, so the placed
+    # footprints cover everything -- passing the outline fits AS WELL doubled every
+    # ring (two slightly-offset squares per column = 0.42.0's jagged diamond trims)
+    # and doubled the slab graph cost.
+    column_footprints = report.column_trim_footprints(sections)
     split_beams = report.split_beams_at_columns(
-        beam_segments, sections, sections.get("circles"),
-        extra_footprints=outline_footprints)
+        beam_segments, sections, sections.get("circles"))
     if split_beams:
         _say("beams: split {0} beam(s) drawn across column footprints".format(split_beams))
 
@@ -1008,16 +1010,32 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
     if base_type_id is None:
         _say("Slabs -- skipped (no floor type chosen).")
         return {"created": 0, "skipped": 0, "errors": 0}
-    # Outline source chain: (1) slab-edge layer rings as drawn; (2) the faces of
-    # the DRAWN beam+column edges (true face lines, exact boundary); (3) the beam
-    # centreline graph with each face edge inset by that beam's half width.
+    # Outline source chain: (1) slab-edge layer rings as drawn; (2) the BETTER of
+    # -- faces of the PLACED geometry (beam edge lines synthesized from the placed
+    #    centrelines + column footprint rings: alignment exact by construction) and
+    # -- faces of the DRAWN beam+column edge lines (covers bays whose beams the
+    #    detection missed, e.g. test8's unlabelled members),
+    # picked by COVERED AREA (placed wins near-ties for its alignment);
+    # (3) the beam centreline graph inset per edge.
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
-        loops = slabs_proto.slab_loops_from_member_edges(
+        placed = slabs_proto.slab_loops_from_placed_members(
+            records, beam_segments.get("segments"), column_rects=column_rects)
+        drawn = slabs_proto.slab_loops_from_member_edges(
             records, column_rects=column_rects,
             beam_segments=beam_segments.get("segments"))
-        source = "member_edges"
+        placed_area = sum(abs(slabs_proto._signed_area(r)) for r, _z, _a in placed)
+        drawn_area = sum(abs(slabs_proto._signed_area(r)) for r, _z, _a in drawn)
+        if placed and placed_area >= 0.98 * drawn_area:
+            loops, source = placed, "placed_members"
+        else:
+            loops, source = drawn, "member_edges"
+        if placed or drawn:
+            _say("slabs: placed-geometry {0} panels / {1:.0f} m2, drawn-edge {2} "
+                 "panels / {3:.0f} m2 -> using {4}".format(
+                     len(placed), placed_area * 0.09290304,
+                     len(drawn), drawn_area * 0.09290304, source))
     if not loops:
         loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))
         source = "beam_graph_inset"

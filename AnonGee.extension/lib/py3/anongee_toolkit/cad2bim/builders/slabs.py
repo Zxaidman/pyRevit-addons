@@ -102,7 +102,12 @@ def _curve_loop(ring, arcs=None):
         span = spans.get(i)
         if span is not None:
             i_last, a, m, b = span
-            loop.Append(Arc.Create(XYZ(a[0], a[1], 0.0), XYZ(b[0], b[1], 0.0),
+            # endpoints come from the FINAL ring positions, not the span's own
+            # triple: two adjacent arcs SHARE a vertex, and whichever welded it
+            # last wins -- emitting the stale triple endpoint would leave a gap
+            # ("loop discontinuous") between consecutive curves
+            pa, pb = pts[i], pts[i_last]
+            loop.Append(Arc.Create(XYZ(pa[0], pa[1], 0.0), XYZ(pb[0], pb[1], 0.0),
                                    XYZ(m[0], m[1], 0.0)))
             if i_last <= i:            # the run wraps the ring seam: boundary done
                 break

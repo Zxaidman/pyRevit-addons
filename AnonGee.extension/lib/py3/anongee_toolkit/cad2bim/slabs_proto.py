@@ -422,6 +422,83 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
             if _dist(a, b) > 1e-9:
                 segs.append((a, b))
                 src.append(is_beam)
+    _append_footprint_rings(segs, src, rects, circles)
+    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments)
+
+
+def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
+    """Bounded faces of the PLACED geometry, [(ring, z, arcs), ...].
+
+    The user-proposed source: slabs are created AFTER beams and columns, so their
+    outlines can come from what was actually placed instead of the raw drawn
+    linework -- each straight beam contributes its two long edge lines
+    (centreline offset by half its width) plus end caps, every column its exact
+    footprint ring. Alignment with the placed members is then exact BY
+    CONSTRUCTION. From the drawn records only two things are kept: BEAM-layer
+    ARCS (curved beam edges and junction fillets, with their true triples) and
+    column-layer WALL linework outside every footprint (so shafts stay bounded).
+    """
+    pad_ft = config.mm_to_ft(_COLUMN_RECT_PAD_MM)
+    rects = [fp for fp in (column_rects or []) if fp[0] == "rect"]
+    circles = [fp for fp in (column_rects or []) if fp[0] == "circle"]
+
+    def _swallowed(pts):
+        for fp in rects:
+            if all(_in_rect_footprint(p[0], p[1], fp, pad_ft) for p in pts):
+                return True
+        for _kind, cx, cy, r in circles:
+            reach = (r + pad_ft) ** 2
+            if all((p[0] - cx) ** 2 + (p[1] - cy) ** 2 <= reach for p in pts):
+                return True
+        return False
+
+    segs = []
+    src = []
+    z = 0.0
+    arc_triples = []
+    for seg in (beam_segments or []):
+        x1, y1 = seg["start"][0], seg["start"][1]
+        x2, y2 = seg["end"][0], seg["end"][1]
+        length = _dist((x1, y1), (x2, y2))
+        half_w = (seg.get("width_mm") or 0.0) / _MM / 2.0
+        if length <= 0 or half_w <= 0:
+            continue
+        z = seg["start"][2]
+        ux, uy = (x2 - x1) / length, (y2 - y1) / length
+        nx, ny = -uy * half_w, ux * half_w
+        e1a, e1b = (x1 + nx, y1 + ny), (x2 + nx, y2 + ny)
+        e2a, e2b = (x1 - nx, y1 - ny), (x2 - nx, y2 - ny)
+        segs += [(e1a, e1b), (e2a, e2b), (e1a, e2a), (e1b, e2b)]   # edges + end caps
+        src += [True, True, True, True]
+    for record in records:
+        is_beam = record.category == CATEGORY_BEAM
+        if is_beam:
+            if record.kind != "arc":
+                continue               # straight linework replaced by placed edges
+        elif record.category == CATEGORY_COLUMN:
+            if _swallowed(record.points):
+                continue               # replaced by the footprint ring
+        else:
+            continue
+        if record.kind == "arc":
+            pts2, triple = _tessellate_arc(record.points)
+            if triple:
+                arc_triples.append(triple)
+            pts = [(x, y, record.points[0][2]) for x, y in pts2]
+        else:
+            pts = record.points
+        for i in range(len(pts) - 1):
+            a = (pts[i][0], pts[i][1])
+            b = (pts[i + 1][0], pts[i + 1][1])
+            if _dist(a, b) > 1e-9:
+                segs.append((a, b))
+                src.append(is_beam)
+    _append_footprint_rings(segs, src, rects, circles)
+    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments)
+
+
+def _append_footprint_rings(segs, src, rects, circles):
+    """The clean column TRIM rings: 4 edges per rect, a fine polygon per circle."""
     for fp in rects:
         _kind, cx, cy, ca, sa, hl, hs = fp
         corners = [(cx + su * hl * ca - sv * hs * sa, cy + su * hl * sa + sv * hs * ca)
@@ -437,11 +514,19 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
         for i in range(n):
             segs.append((ring[i], ring[(i + 1) % n]))
             src.append(False)
+
+
+def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments):
+    """Shared face machinery: heal -> split -> cluster -> prune -> walk -> filter.
+
+    Returns [(ring, z, arcs)]; `arcs` carries the drawn triples the ring traverses
+    PLUS synthesized wrap arcs where the boundary runs along a circle footprint.
+    """
     if len(segs) < 4:
         return []
     beam_lines = [segs[i] for i in range(len(segs)) if src[i]]
-    segs = _heal_endpoints(segs, config.mm_to_ft(_EDGE_HEAL_MM))
-    segs = _split_at_crossings(segs)
+    segs = _heal_endpoints(segs, config.mm_to_ft(_EDGE_HEAL_MM))   # order-preserving
+    segs, src = _split_at_crossings(segs, flags=src)
     snap_ft = config.mm_to_ft(_SNAP_MM)
 
     # Node identity by NEIGHBOUR-CELL clustering, not same-cell rounding: two
@@ -449,9 +534,11 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
     # landing just shy of a column ring corner), stay two nodes, dangle, get
     # pruned -- and the bay face floods over the beam body (test4/5's overlap).
     # Clustering merges every endpoint pair within snap_ft regardless of grid
-    # alignment.
+    # alignment; a node with any BEAM-edge member sits ON the beam edge (the beam
+    # outline is the alignment authority, column rings are trim).
     key, nodes = _cluster_nodes(
-        [p for seg in segs for p in seg], snap_ft)
+        [p for seg in segs for p in seg], snap_ft,
+        prefer=[f for flag in src for f in (flag, flag)])
     adjacency = defaultdict(set)
     for a, b in segs:
         ka, kb = key(a), key(b)
@@ -487,6 +574,7 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
                            length / 2.0 + half_w, half_w))
     min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
     min_width_ft = config.mm_to_ft(_MIN_PANEL_WIDTH_MM)
+    arc_tol_ft = config.mm_to_ft(_SNAP_MM * 2.0)
     out = []
     for ring in faces:
         area = _signed_area(ring)
@@ -502,8 +590,46 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
             continue                   # bounded by WALLS, not beams: a lift/stair shaft
         if _body_coverage(ring, bodies) > _MAX_BODY_COVERAGE:
             continue                   # mostly under beam bodies: a member, not a panel
-        out.append((ring, z, _ring_arcs(ring, arc_triples,
-                                        config.mm_to_ft(_SNAP_MM * 2.0))))
+        arcs = _ring_arcs(ring, arc_triples, arc_tol_ft)
+        arcs += _circle_wrap_arcs(ring, circles, arc_tol_ft)
+        out.append((ring, z, arcs))
+    return out
+
+
+def _circle_wrap_arcs(ring, circles, tol_ft):
+    """Synthesized (start, mid, end) triples where the ring WRAPS a round column.
+
+    The clean circle ring is pure chords, so without this every round-column trim
+    came out as line strings (the 0.42.0 regression). Each maximal run of >= 3
+    consecutive ring vertices lying ON a circle footprint becomes one triple with
+    its endpoints PROJECTED onto the circle -- the builder welds the ring to the
+    triple and emits a genuine Arc."""
+    if not circles:
+        return []
+    n = len(ring)
+    out = []
+    for _kind, cx, cy, r in circles:
+        on = [abs(_dist(p, (cx, cy)) - r) <= tol_ft for p in ring]
+        if not any(on) or all(on):
+            continue                   # no wrap, or the ring IS the column face
+        i = 0
+        while i < n:
+            if not (on[i] and not on[i - 1]):
+                i += 1
+                continue
+            j = i                      # run start: walk to its end (circular)
+            length = 1
+            while on[(j + 1) % n] and length < n:
+                j = (j + 1) % n
+                length += 1
+            if length >= 3:
+                def _proj(p):
+                    dx, dy = p[0] - cx, p[1] - cy
+                    d = (dx * dx + dy * dy) ** 0.5 or 1.0
+                    return (cx + dx / d * r, cy + dy / d * r)
+                mid = ring[(i + length // 2) % n]
+                out.append((_proj(ring[i]), _proj(mid), _proj(ring[j])))
+            i = i + length if j >= i else n
     return out
 
 
@@ -619,7 +745,7 @@ def _segments_cross(a1, b1, a2, b2):
     return eps < t < 1.0 - eps and eps < u < 1.0 - eps
 
 
-def _cluster_nodes(points, snap_ft):
+def _cluster_nodes(points, snap_ft, prefer=None):
     """(key_fn, positions): endpoint identity by proximity clustering.
 
     Union-find over grid buckets: every pair of points within snap_ft merges
@@ -628,15 +754,23 @@ def _cluster_nodes(points, snap_ft):
     cluster's total spread stays under ~1.5x snap: transitive chains would
     otherwise swallow whole runs of closely-spaced vertices (an arc's chords, a
     short jog) into one node and collapse real geometry. A cluster's position is
-    the centroid of its members. key_fn maps a coordinate pair to its cluster id.
+    the centroid of its PREFERRED members when `prefer` flags any (a beam edge
+    tip merging with a column ring vertex must land ON the beam edge -- the
+    centroid of both tilted long straight boundaries by up to snap/2), else the
+    centroid of all. key_fn maps a coordinate pair to its cluster id.
     """
     pts = []
     seen = {}
-    for p in points:
+    pref = []
+    for idx, p in enumerate(points):
         q = (p[0], p[1])
+        flag = bool(prefer[idx]) if prefer is not None else False
         if q not in seen:
             seen[q] = len(pts)
             pts.append(q)
+            pref.append(flag)
+        elif flag:
+            pref[seen[q]] = True
     parent = list(range(len(pts)))
     bbox = [[x, y, x, y] for (x, y) in pts]     # per-root min/max extent
 
@@ -678,20 +812,49 @@ def _cluster_nodes(points, snap_ft):
                                 continue          # would swallow real geometry
                             parent[rj] = ri
                             bbox[ri] = [x0, y0, x1, y1]
-    sums = defaultdict(lambda: [0.0, 0.0, 0])
+    sums = defaultdict(lambda: [0.0, 0.0, 0, 0.0, 0.0, 0])
     for i, (x, y) in enumerate(pts):
         r = find(i)
         s = sums[r]
         s[0] += x
         s[1] += y
         s[2] += 1
-    positions = {r: (s[0] / s[2], s[1] / s[2]) for r, s in sums.items()}
+        if pref[i]:
+            s[3] += x
+            s[4] += y
+            s[5] += 1
+    positions = {}
+    for r, s in sums.items():
+        if s[5]:
+            positions[r] = (s[3] / s[5], s[4] / s[5])
+        else:
+            positions[r] = (s[0] / s[2], s[1] / s[2])
     index = seen
 
     def key(p):
         return find(index[(p[0], p[1])])
 
     return key, positions
+
+
+_GRAPH_CELL_MM = 3000.0   # spatial-bucket size for the O(n^2)->O(n*k) graph passes
+
+
+def _seg_grid(segs, cell_ft, pad_ft=0.0):
+    """(grid, boxes): cell -> segment indices whose padded bbox covers the cell."""
+    grid = defaultdict(list)
+    boxes = []
+    for i, (a, b) in enumerate(segs):
+        x0, x1 = (a[0], b[0]) if a[0] <= b[0] else (b[0], a[0])
+        y0, y1 = (a[1], b[1]) if a[1] <= b[1] else (b[1], a[1])
+        box = (x0 - pad_ft, y0 - pad_ft, x1 + pad_ft, y1 + pad_ft)
+        boxes.append(box)
+        for cx in range(int(math.floor(box[0] / cell_ft)),
+                        int(math.floor(box[2] / cell_ft)) + 1):
+            for cy in range(int(math.floor(box[1] / cell_ft)),
+                            int(math.floor(box[3] / cell_ft)) + 1):
+                grid[(cx, cy)].append(i)
+    return grid, boxes
 
 
 def _heal_endpoints(segs, heal_ft):
@@ -702,8 +865,12 @@ def _heal_endpoints(segs, heal_ft):
     endpoint is pushed OUTWARD along its own carrier to the closest intersection with
     another segment's carrier, provided both sit within heal_ft of their spans -- i.e.
     to the shared junction point (the column centre). Ends with no nearby partner stay
-    put (a genuinely open beam end never fabricates a junction).
+    put (a genuinely open beam end never fabricates a junction). Candidate partners
+    come from a spatial grid (a hit must lie within heal_ft of the tip AND near the
+    partner's span), so the pass is O(n*k) instead of all-pairs.
     """
+    cell_ft = config.mm_to_ft(_GRAPH_CELL_MM)
+    grid, _boxes = _seg_grid(segs, cell_ft, pad_ft=2.0 * heal_ft)
     healed = []
     for i, (a, b) in enumerate(segs):
         new_ends = []
@@ -714,10 +881,17 @@ def _heal_endpoints(segs, heal_ft):
                 new_ends.append(tip)
                 continue
             ux, uy = dx / length, dy / length          # outward direction at this tip
+            candidates = set()
+            for cx in range(int(math.floor((tip[0] - heal_ft) / cell_ft)),
+                            int(math.floor((tip[0] + heal_ft) / cell_ft)) + 1):
+                for cy in range(int(math.floor((tip[1] - heal_ft) / cell_ft)),
+                                int(math.floor((tip[1] + heal_ft) / cell_ft)) + 1):
+                    candidates.update(grid.get((cx, cy), ()))
             best_s, best_p = None, None
-            for j, sj in enumerate(segs):
+            for j in sorted(candidates):
                 if j == i:
                     continue
+                sj = segs[j]
                 hit = _line_intersection((tip, (tip[0] + ux, tip[1] + uy)), sj)
                 if hit is None:
                     continue
@@ -732,32 +906,53 @@ def _heal_endpoints(segs, heal_ft):
     return healed
 
 
-def _split_at_crossings(segs):
+def _split_at_crossings(segs, flags=None):
     """Split segments where they cross or touch: X crossings AND T-junctions.
 
     A T-junction (one beam ending ON another's span, the usual bay layout) puts the
     cut on the RUN-THROUGH segment only; an X crossing cuts both. Without the T cut
-    the run-through edge skips the junction node and the faces merge.
+    the run-through edge skips the junction node and the faces merge. Candidate
+    pairs come from a spatial grid + bbox overlap, so the pass is O(n*k) instead
+    of all-pairs (test4's ~4k edges took tens of seconds otherwise). When `flags`
+    (one per segment) is given, pieces inherit their parent's flag and the return
+    is (segments, flags).
     """
     tol_ft = config.mm_to_ft(_SNAP_MM)
+    cell_ft = config.mm_to_ft(_GRAPH_CELL_MM)
+    grid, boxes = _seg_grid(segs, cell_ft, pad_ft=tol_ft)
     cuts = [[] for _ in segs]
-    for i in range(len(segs)):
-        for j in range(i + 1, len(segs)):
-            hit = _line_intersection(segs[i], segs[j])
-            if hit is None:
-                continue
-            p, ti, tj = hit
-            ei = tol_ft / max(_dist(*segs[i]), 1e-9)   # param-space slop, per segment
-            ej = tol_ft / max(_dist(*segs[j]), 1e-9)
-            if -ei <= ti <= 1.0 + ei and -ej <= tj <= 1.0 + ej:
-                if ei < ti < 1.0 - ei:
-                    cuts[i].append(p)
-                if ej < tj < 1.0 - ej:
-                    cuts[j].append(p)
+    checked = set()
+    for members in grid.values():
+        for ii in range(len(members)):
+            for jj in range(ii + 1, len(members)):
+                i, j = members[ii], members[jj]
+                if i > j:
+                    i, j = j, i
+                pair = i * len(segs) + j
+                if pair in checked:
+                    continue
+                checked.add(pair)
+                bi, bj = boxes[i], boxes[j]
+                if bi[2] < bj[0] or bj[2] < bi[0] or bi[3] < bj[1] or bj[3] < bi[1]:
+                    continue
+                hit = _line_intersection(segs[i], segs[j])
+                if hit is None:
+                    continue
+                p, ti, tj = hit
+                ei = tol_ft / max(_dist(*segs[i]), 1e-9)   # param-space slop, per segment
+                ej = tol_ft / max(_dist(*segs[j]), 1e-9)
+                if -ei <= ti <= 1.0 + ei and -ej <= tj <= 1.0 + ej:
+                    if ei < ti < 1.0 - ei:
+                        cuts[i].append(p)
+                    if ej < tj < 1.0 - ej:
+                        cuts[j].append(p)
     out = []
-    for (a, b), pts in zip(segs, cuts):
+    out_flags = []
+    for idx, ((a, b), pts) in enumerate(zip(segs, cuts)):
+        flag = flags[idx] if flags is not None else False
         if not pts:
             out.append((a, b))
+            out_flags.append(flag)
             continue
         along = sorted(set([0.0, 1.0] + [_param_along(a, b, p) for p in pts]))
         for t0, t1 in zip(along, along[1:]):
@@ -766,7 +961,10 @@ def _split_at_crossings(segs):
             p0 = (a[0] + (b[0] - a[0]) * t0, a[1] + (b[1] - a[1]) * t0)
             p1 = (a[0] + (b[0] - a[0]) * t1, a[1] + (b[1] - a[1]) * t1)
             out.append((p0, p1))
-    return out
+            out_flags.append(flag)
+    if flags is None:
+        return out
+    return out, out_flags
 
 
 def _line_intersection(s1, s2):

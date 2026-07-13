@@ -35,7 +35,40 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.42.0"  # 0.41.0 feedback: round columns, member-body slabs, blade columns PLACED.
+__version__ = "0.43.0"  # 0.42.0 feedback: PLACED-GEOMETRY slab source (user proposal), 13-22x
+#                         faster, and the 0.42.0 regressions fixed at the root:
+#                         (A) NEW SOURCE slab_loops_from_placed_members: slabs run AFTER beams
+#                         and columns, so their outlines come from what was PLACED -- each
+#                         straight beam contributes its two edge lines (centreline +/- w/2, plus
+#                         end caps), every column its exact footprint ring; only beam-layer ARCS
+#                         (curved edges/fillets) and wall linework survive from the drawing.
+#                         Alignment with placed members is exact BY CONSTRUCTION. _create_slabs
+#                         runs BOTH this and the drawn-edge source and keeps the one covering
+#                         more area (placed wins near-ties): placed on test1-7 (test7 member
+#                         fallback 1 -> 9 faces!), drawn on test8 (1070 vs 871 m2 -- its beam
+#                         detection misses unlabelled members, exactly as the user noted).
+#                         (B) PERF (test4/5 "stuck"): _heal_endpoints and _split_at_crossings
+#                         were all-pairs O(n^2) -- 45.6s offline on test4's ~4k edges; spatial
+#                         grid buckets cut that to 2.1s (drawn) / 3.6s (placed). The doubled
+#                         footprints (placed + outline fits of the SAME columns) also doubled
+#                         cost AND jagged every rect trim -- 0.42.0's "rotated column not right"
+#                         regression: recover_outline_columns already placed every usable
+#                         outline, so only column_trim_footprints(sections) is passed now.
+#                         (C) ROUND-COLUMN ARCS (0.42.0 turned wraps into chords): the boundary
+#                         run along a circle footprint synthesizes a (start, mid, end) triple
+#                         with endpoints PROJECTED onto the circle -> genuine Arc.Create again.
+#                         (D) CLUSTER NODES PREFER BEAM-EDGE POINTS: the centroid of a beam tip
+#                         + ring vertices tilted long straight boundaries by up to 40mm (the
+#                         residual "misalignment with beam"); a node with any beam-edge member
+#                         now sits ON the beam edge; the circle side self-corrects via (C).
+#                         (E) BUILDER: adjacent arc spans share a ring vertex; emitting the
+#                         span's own endpoint left a gap when the neighbour re-welded it
+#                         ("loop discontinuous") -- arcs now emit from the FINAL ring points.
+#                         Verified: builder mirror contiguous on ALL fixtures/sources; test1-3
+#                         6/7 match slab-layer ground truth exactly; suite 15 files (23 slab
+#                         cases). Roadmap accepted: structural walls, arch walls, stairs.
+#
+# 0.42.0                  0.41.0 feedback: round columns, member-body slabs, blade columns PLACED.
 #                         Verified offline against the 0.41.0 exports (renders, builder-walk
 #                         mirror, ground-truth diff); all quiet fixtures unchanged:
 #                         (A) ROUND-COLUMN TRIM (test1-3/4/5 "slab edge misalignment"): round

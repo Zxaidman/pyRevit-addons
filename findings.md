@@ -395,3 +395,17 @@ mark beside it is a real column regardless of size (blade/wall columns 250x3250)
 it at drawn size/position/angle (no grid/size snapping), dedupe against placed
 footprints, and attach the nearest unclaimed mark. Fragmented outlines stay unplaced —
 closedness IS the safety gate.
+
+## v0.43.0 — placed geometry beats drawn linework for slab outlines (durable)
+Slabs are created AFTER beams/columns, so their outlines can be SYNTHESIZED from what was
+placed (beam centreline ± w/2 + end caps, column footprint rings) instead of parsing the
+drawn linework again — alignment becomes exact by construction and the graph is half the
+size. But drawn edges still win where detection is incomplete (test8's unlabelled beams):
+run both, pick by covered area. Cluster nodes must PREFER beam-edge points or junction
+centroids tilt long straight boundaries; arc spans must emit from FINAL welded ring
+positions or adjacent arcs leave "loop discontinuous" gaps.
+
+## v0.43.0 — all-pairs geometry passes do not survive real plans (durable)
+_heal_endpoints/_split_at_crossings at O(n²) took 45.6s on test4's ~4k edges (CPython;
+worse under pyRevit). Grid-bucket candidate pairs (3m cells, bbox prefilter): 2.1s. Any
+future pass touching pairwise segment geometry starts bucketed.

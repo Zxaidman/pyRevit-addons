@@ -279,6 +279,49 @@ class MemberEdgeFaces(unittest.TestCase):
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.3)
 
 
+class PlacedMemberFaces(unittest.TestCase):
+    """Faces synthesized from the PLACED beams/columns (the user-proposed source)."""
+
+    def _seg(self, x0, y0, x1, y1, w=300.0):
+        return {"start": [x0 * _FT, y0 * _FT, 0.0], "end": [x1 * _FT, y1 * _FT, 0.0],
+                "width_mm": w}
+
+    def _bay_segments(self):
+        return [self._seg(0, 0, 5000, 0), self._seg(5000, 0, 5000, 5000),
+                self._seg(5000, 5000, 0, 5000), self._seg(0, 5000, 0, 0)]
+
+    def test_bay_bounded_by_synthesized_edges(self):
+        loops = slabs_proto.slab_loops_from_placed_members([], self._bay_segments())
+        areas = [abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+                 for r, _z, _a in loops]
+        self.assertEqual(len(areas), 1)
+        self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
+
+    def test_boundary_stays_exactly_on_beam_edge(self):
+        # cluster nodes PREFER beam-edge points: the bay edge must sit at exactly
+        # centreline - w/2, not drift toward column-ring vertices
+        rect = ("rect", 0.0, 0.0, 1.0, 0.0, 300 * _FT, 300 * _FT)
+        loops = slabs_proto.slab_loops_from_placed_members(
+            [], self._bay_segments(), column_rects=[rect])
+        self.assertEqual(len(loops), 1)
+        ring = loops[0][0]
+        ys = sorted(set(round(y * _MM, 1) for _x, y in ring))
+        self.assertIn(150.0, ys)             # bottom edge exactly at w/2
+        self.assertIn(4850.0, ys)            # top edge exactly at 5000 - w/2
+
+    def test_round_column_wrap_gets_true_arc(self):
+        circle = ("circle", 0.0, 0.0, 400 * _FT)
+        loops = slabs_proto.slab_loops_from_placed_members(
+            [], self._bay_segments(), column_rects=[circle])
+        self.assertEqual(len(loops), 1)
+        ring, _z, arcs = loops[0]
+        self.assertGreaterEqual(len(arcs), 1)          # wrap emitted as a triple
+        a, m, b = arcs[0]
+        for p in (a, m, b):                             # all three ON the circle
+            r_mm = ((p[0] ** 2 + p[1] ** 2) ** 0.5) * _MM
+            self.assertAlmostEqual(r_mm, 400.0, delta=2.0)
+
+
 class SlabLabels(unittest.TestCase):
     def _one_loop(self):
         ring = [(0.0, 0.0), (5000 * _FT, 0.0), (5000 * _FT, 5000 * _FT),

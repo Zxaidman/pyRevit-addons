@@ -7,6 +7,19 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.43.0 — placed-geometry slab source (user proposal) + 13-22x faster
+- slab_loops_from_placed_members: outlines synthesized from PLACED beams (edge lines at
+  centreline ± w/2 + caps) and column footprint rings; drawn beam arcs + walls kept.
+  Runs alongside the drawn-edge source; picked by covered area (placed wins near-ties).
+  placed on test1-7 (test7 fallback 1→9 faces), drawn on test8 (undetected unlabelled beams).
+- Perf: heal/split all-pairs O(n²) → grid buckets: test4 45.6s → 2.1-3.6s. Double-footprint
+  bug (placed + outline fits of the same columns) removed — it caused 0.42.0's jagged rect
+  trims AND half the runtime.
+- Round-column wraps emit true arcs again (_circle_wrap_arcs, endpoints projected onto the
+  circle). Cluster nodes prefer beam-edge points → long boundaries dead straight on the
+  beam edge (was ±40mm tilt). Builder arcs emit from final ring points → "loop
+  discontinuous" fixed. Mirror contiguous on every fixture/source; suite 15 files OK.
+
 ## v0.42.0 — 0.41.0 feedback: round columns, member-body slabs, blades placed
 - **Round columns** (the remaining "slab edge misalignment"): drawn as dozens of 2-30mm arc
   fragments — tessellation+clustering made stub soup (slanted bay edges, notches). Circle
