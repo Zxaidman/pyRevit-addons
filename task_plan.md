@@ -364,6 +364,40 @@ with phantom 300 gap.
    slabs without floor layer; test6/7 S8 curved slab appears. Watch beam counts:
    test8 233 -> 211 segments (28 split/trimmed/dropped) is INTENDED.
 
+### Phase 16 — v0.41.0: 0.40.0 feedback (4 items) — DONE, AWAITING REVIT CONFIRM
+- [x] **test4/5 slab-over-beam + merged bays (item 2).** ROOT CAUSE measured: a beam edge
+      tip 44mm from a column ring corner rounds into a DIFFERENT 50mm grid cell, never
+      merges, dangles, gets pruned -> the bay face floods over the beam-body corridor
+      (user's images 1+3 reproduced offline pixel-for-pixel). FIX: node identity by
+      NEIGHBOUR-CELL CLUSTERING (union-find, any pair <=50mm merges; cluster spread
+      capped ~75mm). Census: beam-swallowing faces 24 -> 0, clean bays 249 -> 323 on
+      both test4 and test5; both reported regions render clean.
+- [x] **Columns as TRIM geometry (user proposal, item 2).** slab_loops_from_member_edges
+      takes column_rects: raw column-layer linework inside a footprint is replaced by
+      the exact 4-edge ring (fragments/diagonal marker strokes gone); wall linework
+      stays so shafts remain bounded. script.py passes placed rects + outline obstacles.
+- [x] **Arc chords >= 2x snap.** Fixed 16-chord tessellation put small-fillet vertices
+      ~25mm apart; clustering chain-collapsed them and LOST a real bay (test2/3/6
+      ground-truth diff caught it). Adaptive 2..16 chords; all truth bays match again.
+- [x] **test1-3 stair wells (item 1).** Stair wells measure beam-fraction 0.33 vs real
+      panels >=0.44 (lift shafts <0.3): _MIN_BEAM_FRACTION 0.3 -> 0.35. A wall-fraction
+      ceiling was tried first and REJECTED: it also dropped real bays nestled into the
+      core's L (regression caught by ground-truth diff before commit).
+- [x] **test8 double beams on column strips (item 4).** The 250x3250 blade columns
+      (AC19-24/BC23-28) exceed size limits -> dropped, unplaced -> no footprint, and the
+      beam layer RE-TRACES their outlines: (a) dedupe_beam_segments drops exact twins +
+      contained collinear fragments (12 on test8; only 3 genuine degenerate cleanups
+      anywhere else incl. archives); (b) column_outline_footprints turns closed
+      rectangular column-layer outlines into split obstacles even when unplaced --
+      blade-body beams drop, real inter-blade connectors stay. Post-state: 0 solid
+      overlaps on test8.
+- [x] Suite 15 files OK (test_beam_split 20 cases, test_slabs_proto 18).
+>> NEXT: user runs v0.41.0. Expected: test4/5 SLABS ALIGN with beam outlines (no slab
+   over beams, no merged bays -- expect ~323 loops, up from 250); test1-3 without floor
+   layer: no stair-well slabs (landing-band voids at beam-fraction 0.6-0.9 remain, no
+   geometric signal without the floor layer); test8: no double beams, nothing on blade
+   columns (beams: 203 -> ~170 segments is INTENDED).
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

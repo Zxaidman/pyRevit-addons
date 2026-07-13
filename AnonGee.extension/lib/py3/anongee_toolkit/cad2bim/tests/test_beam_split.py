@@ -192,5 +192,84 @@ class BeamSplitAtColumns(unittest.TestCase):
         self.assertEqual(len(bs["segments"]), 1)
 
 
+class DedupeBeamSegments(unittest.TestCase):
+    """Retraced beam outlines emit the same centreline twice (test8's strips)."""
+
+    def test_exact_twin_reversed_dropped(self):
+        bs = {"segments": [_seg(0, 0, 5000, 0, mark="B1"), _seg(5000, 0, 0, 0)]}
+        n = report.dedupe_beam_segments(bs)
+        self.assertEqual(n, 1)
+        self.assertEqual(len(bs["segments"]), 1)
+        self.assertEqual(bs["segments"][0]["mark"], "B1")   # marked twin survives
+
+    def test_contained_fragment_dropped_mark_transfers(self):
+        # a 254mm partial retrace lying ON a longer collinear same-width beam
+        bs = {"segments": [_seg(0, 0, 2758, 0), _seg(0, 0, 254, 0, mark="B9")]}
+        n = report.dedupe_beam_segments(bs)
+        self.assertEqual(n, 1)
+        self.assertEqual(len(bs["segments"]), 1)
+        self.assertAlmostEqual(bs["segments"][0]["length_mm"], 2758, delta=1)
+        self.assertEqual(bs["segments"][0]["mark"], "B9")   # fragment's mark kept
+
+    def test_offset_parallel_and_different_width_kept(self):
+        near = _seg(0, 100, 5000, 100)          # 100mm off the carrier: a real twin beam
+        wider = _seg(1000, 0, 2000, 0)
+        wider["width_mm"] = 400.0               # different width: a real overlapping member
+        bs = {"segments": [_seg(0, 0, 5000, 0), near, wider]}
+        n = report.dedupe_beam_segments(bs)
+        self.assertEqual(n, 0)
+        self.assertEqual(len(bs["segments"]), 3)
+
+    def test_partial_overlap_kept(self):
+        # collinear but extends BEYOND the other: two real beams meeting mid-line
+        bs = {"segments": [_seg(0, 0, 5000, 0), _seg(4000, 0, 9000, 0)]}
+        n = report.dedupe_beam_segments(bs)
+        self.assertEqual(n, 0)
+
+
+class ColumnOutlineFootprints(unittest.TestCase):
+    """Closed rectangular column-layer outlines become obstacles even unplaced."""
+
+    class _Rec(object):
+        def __init__(self, kind, pts, category):
+            self.kind = kind
+            self.points = pts
+            self.layer = "COLUMN"
+            self.category = category
+
+    def _blade(self, retraced=True):
+        # test8's blade: 250 x 3250 slanted rect, drawn with a diagonal marker
+        pts = [(0.0, 0.0), (250.0, -45.0), (830.0, 3150.0), (580.0, 3195.0), (0.0, 0.0)]
+        if retraced:
+            pts.append((830.0, 3150.0))         # the diagonal stroke back across
+        cat = report.CATEGORY_COLUMN
+        return self._Rec("polyline", [(x * _FT, y * _FT, 0.0) for (x, y) in pts], cat)
+
+    def test_blade_rect_with_diagonal_becomes_obstacle(self):
+        fps = report.column_outline_footprints([self._blade()])
+        self.assertEqual(len(fps), 1)
+        kind, cx, cy, _ca, _sa, hl, hs = fps[0]
+        self.assertEqual(kind, "rect")
+        self.assertAlmostEqual(hs * _MM * 2, 254.0, delta=4.0)     # short side ~250
+        self.assertAlmostEqual(hl * _MM * 2, 3246.0, delta=8.0)    # long side ~3250
+
+    def test_blade_obstacle_drops_buried_beam(self):
+        fps = report.column_outline_footprints([self._blade()])
+        # a beam drawn face-midpoint to face-midpoint along the blade body
+        bs = {"segments": [_seg(125, -22, 705, 3172)]}
+        n = report.split_beams_at_columns(bs, _sections([]), [], extra_footprints=fps)
+        self.assertEqual(n, 1)
+        self.assertEqual(len(bs["segments"]), 0)
+
+    def test_non_rect_and_oversize_outlines_ignored(self):
+        cat = report.CATEGORY_COLUMN
+        lshape = self._Rec("polyline", [(x * _FT, y * _FT, 0.0) for (x, y) in
+                                        [(0, 0), (2000, 0), (2000, 2000), (1000, 2000),
+                                         (1000, 1000), (0, 1000), (0, 0)]], cat)
+        wall = self._Rec("polyline", [(x * _FT, y * _FT, 0.0) for (x, y) in
+                                      [(0, 0), (250, 0), (250, 9000), (0, 9000), (0, 0)]], cat)
+        self.assertEqual(report.column_outline_footprints([lshape, wall]), [])
+
+
 if __name__ == "__main__":
     unittest.main()

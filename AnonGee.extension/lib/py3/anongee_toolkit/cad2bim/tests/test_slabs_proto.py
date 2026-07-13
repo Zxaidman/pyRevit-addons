@@ -172,6 +172,63 @@ class MemberEdgeFaces(unittest.TestCase):
         self.assertEqual(len(areas), 1)              # only the panel, no body strips
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
 
+    def test_edge_tip_near_ring_corner_still_bounds(self):
+        # THE test4/5 leak: an edge tip landing 44 mm from a column ring corner
+        # rounded into a DIFFERENT 50 mm grid cell, dangled, was pruned -- and the
+        # bay face flooded over the beam body. Neighbour-cell clustering must weld
+        # tip and corner into one node so the edge keeps bounding its bay.
+        a = (1.0, 1.0)
+        b = (1.0 + 0.144, 1.0)                       # 44 mm right of a cell edge
+        segs = [((0.0, 0.0), a), (a, b)]             # chain broken at a? no: shared
+        key, nodes = slabs_proto._cluster_nodes(
+            [(0.0, 0.0), a, (1.1444, 1.0), b], 0.164)   # 50 mm in ft
+        self.assertEqual(key(a), key((1.1444, 1.0)))    # 44 mm apart: same node
+        self.assertNotEqual(key((0.0, 0.0)), key(a))
+
+    def test_cluster_chain_does_not_collapse_arc(self):
+        # transitive chains must NOT swallow a run of closely-spaced arc chords
+        pts = [(i * 0.10, 0.0) for i in range(10)]      # 30 mm steps, 270 mm run
+        key, nodes = slabs_proto._cluster_nodes(pts, 0.164)
+        self.assertGreater(len(set(key(p) for p in pts)), 3)
+
+    def test_small_arc_tessellates_with_chords_above_snap(self):
+        # a 90-degree fillet of 400 mm radius: 16 fixed chords would be ~39 mm --
+        # inside the node snap, so the graph would chain-merge them. Adaptive
+        # tessellation keeps chords >= ~2x snap.
+        r = 400.0 * _FT
+        pts = [(r, 0.0, 0.0),
+               (r * 0.7071, r * 0.7071, 0.0),
+               (0.0, r, 0.0)]
+        chords, triple = slabs_proto._tessellate_arc(pts)
+        self.assertIsNotNone(triple)
+        step = ((chords[1][0] - chords[0][0]) ** 2 +
+                (chords[1][1] - chords[0][1]) ** 2) ** 0.5
+        self.assertGreaterEqual(step * _MM, 95.0)
+
+    def test_column_rects_replace_raw_linework_and_trim(self):
+        # a drawn column outline WITH a diagonal marker stroke sits on the bay
+        # corner; with column_rects the raw linework (incl. the diagonal) is
+        # swallowed and the exact ring trims the corner -- one clean panel, and
+        # no face leaks across the beam bodies
+        recs = []
+        recs += self._edge_pair(0, 0, 5000, 0, 300)
+        recs += self._edge_pair(5000, 0, 5000, 5000, 300)
+        recs += self._edge_pair(5000, 5000, 0, 5000, 300)
+        recs += self._edge_pair(0, 5000, 0, 0, 300)
+        # drawn column outline at the (0,0) junction, retraced with a diagonal
+        col = [(-300, -300), (300, -300), (300, 300), (-300, 300), (-300, -300),
+               (300, 300)]
+        col_rec = self._Rec(col, layers.CATEGORY_COLUMN)
+        col_rec.kind = "polyline"
+        recs.append(col_rec)
+        rect = ("rect", 0.0, 0.0, 1.0, 0.0, 300 * _FT, 300 * _FT)
+        loops = slabs_proto.slab_loops_from_member_edges(recs, column_rects=[rect])
+        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+                       for r, _z, _a in loops)
+        self.assertEqual(len(areas), 1)
+        # the column ring clips the bay corner: slightly under the full 4.7 x 4.7
+        self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.3)
+
 
 class SlabLabels(unittest.TestCase):
     def _one_loop(self):

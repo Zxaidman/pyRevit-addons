@@ -1278,6 +1278,146 @@ _SPLIT_MIN_PIECE_MM = 100.0        # a leftover piece shorter than this is draft
 _SPLIT_MIN_PENETRATION_MM = 10.0   # centreline must reach this far inside; grazing a face is not a crossing
 _SPLIT_JUNCTION_MARGIN_MM = 100.0  # an end at most this far past the column CENTRE is a junction
 
+# Column-LAYER outline rectangles used as obstacles even when no column got placed
+# (blade columns like test8's 250x3250 slanted rects exceed the column limits and are
+# dropped -- but a beam still must not be drawn over them).
+_OBSTACLE_SHORT_MIN_MM = 100.0     # a closed rect thinner than this is stray linework
+_OBSTACLE_SHORT_MAX_MM = 1000.0    # ...wider than this is a room/void outline, not a column
+_OBSTACLE_LONG_MAX_MM = 6000.0     # ...longer than this is a core wall, not a blade column
+
+
+def dedupe_beam_segments(beam_segments, tol_mm=10.0):
+    """Drop straight segments that RETRACE another segment of the same width.
+
+    A messy beam-layer polyline that runs back over its own edges (test8's outlines
+    trace across the column rectangles and back) decomposes into the same centreline
+    twice -- or into a short fragment lying ON a longer one -- and every copy becomes
+    a beam z-fighting in Revit. Two passes:
+      1. EXACT twins: endpoints equal within `tol_mm` (either direction), same width.
+      2. CONTAINED fragments: both endpoints of the shorter segment lie on the longer
+         one's carrier line (within a small perpendicular band) and inside its span.
+    The marked copy survives (a dropped fragment's mark transfers to its keeper when
+    the keeper has none). Returns the number of segments removed.
+    """
+    grid = config.mm_to_ft(tol_mm)
+    segments = beam_segments.get("segments", [])
+    kept = {}
+    order = []
+    for seg in segments:
+        a = (round(seg["start"][0] / grid), round(seg["start"][1] / grid))
+        b = (round(seg["end"][0] / grid), round(seg["end"][1] / grid))
+        key = (min(a, b), max(a, b), int(round(seg["width_mm"] / tol_mm)))
+        other = kept.get(key)
+        if other is None:
+            kept[key] = seg
+            order.append(key)
+        elif not other.get("mark") and seg.get("mark"):
+            kept[key] = seg               # keep the marked twin
+    survivors = [kept[k] for k in order]
+
+    band_ft = config.mm_to_ft(15.0)       # perpendicular slack off the carrier
+    span_ft = config.mm_to_ft(tol_mm)
+    by_len = sorted(survivors, key=lambda s: -s["length_mm"])
+    removed = set()
+    for i, big in enumerate(by_len):
+        if id(big) in removed:
+            continue
+        ox, oy = big["start"][0], big["start"][1]
+        vx, vy = big["end"][0] - ox, big["end"][1] - oy
+        length = (vx * vx + vy * vy) ** 0.5
+        if length <= 0:
+            continue
+        ux, uy = vx / length, vy / length
+        for small in by_len[i + 1:]:
+            if id(small) in removed:
+                continue
+            if abs(small["width_mm"] - big["width_mm"]) > tol_mm:
+                continue
+            ok = True
+            for end in ("start", "end"):
+                px, py = small[end][0] - ox, small[end][1] - oy
+                t = px * ux + py * uy
+                perp = abs(px * uy - py * ux)
+                if perp > band_ft or t < -span_ft or t > length + span_ft:
+                    ok = False
+                    break
+            if ok:
+                removed.add(id(small))
+                if small.get("mark") and not big.get("mark"):
+                    big["mark"] = small["mark"]
+    if removed:
+        survivors = [s for s in survivors if id(s) not in removed]
+    dropped = len(segments) - len(survivors)
+    if dropped:
+        beam_segments["segments"] = survivors
+    return dropped
+
+
+def _distinct_ring_corners(points, tol_ft):
+    """First-visit distinct vertices of a (possibly retraced) closed polyline."""
+    corners = []
+    for p in points:
+        for q in corners:
+            if abs(p[0] - q[0]) <= tol_ft and abs(p[1] - q[1]) <= tol_ft:
+                break
+        else:
+            corners.append((p[0], p[1]))
+    return corners
+
+
+def column_outline_footprints(records, placed_footprints=None):
+    """Obstacle footprints from CLOSED RECTANGULAR column-layer outlines.
+
+    Column detection enforces schedule-plausible size limits, so a blade column
+    (test8: 250x3250, slanted, drawn with a diagonal marker stroke) is dropped and
+    never placed -- yet the beam layer re-traces its outline and the derived beams
+    would be DRAWN ON TOP of the (real, just unplaced) column. Every column-layer
+    polyline whose distinct vertices form one clean rectangle (opposite sides equal,
+    corners square) within blade-column bounds becomes a ("rect", ...) footprint for
+    split_beams_at_columns, whether or not a column got placed there. Fragmented or
+    L/C-shaped core outlines never qualify -- deliberately conservative.
+    """
+    tol_ft = config.mm_to_ft(1.0)
+    short_min = config.mm_to_ft(_OBSTACLE_SHORT_MIN_MM)
+    short_max = config.mm_to_ft(_OBSTACLE_SHORT_MAX_MM)
+    long_max = config.mm_to_ft(_OBSTACLE_LONG_MAX_MM)
+    side_tol = config.mm_to_ft(20.0)
+    out = []
+    for record in records:
+        if record.category != CATEGORY_COLUMN or record.kind != "polyline":
+            continue
+        if len(record.points) < 4:
+            continue
+        corners = _distinct_ring_corners(record.points, tol_ft)
+        if len(corners) != 4:
+            continue
+        (ax, ay), (bx, by), (cx2, cy2), (dx2, dy2) = corners
+        e1 = (bx - ax, by - ay)
+        e2 = (cx2 - bx, cy2 - by)
+        e3 = (dx2 - cx2, dy2 - cy2)
+        e4 = (ax - dx2, ay - dy2)
+        l1 = (e1[0] ** 2 + e1[1] ** 2) ** 0.5
+        l2 = (e2[0] ** 2 + e2[1] ** 2) ** 0.5
+        l3 = (e3[0] ** 2 + e3[1] ** 2) ** 0.5
+        l4 = (e4[0] ** 2 + e4[1] ** 2) ** 0.5
+        if min(l1, l2, l3, l4) <= 0:
+            continue
+        if abs(l1 - l3) > side_tol or abs(l2 - l4) > side_tol:
+            continue
+        if abs(e1[0] * e2[0] + e1[1] * e2[1]) / (l1 * l2) > 0.035:   # ~2 deg off square
+            continue
+        short, long_ = min(l1, l2), max(l1, l2)
+        if not (short_min <= short <= short_max) or long_ > long_max:
+            continue
+        cx = (ax + cx2) / 2.0
+        cy = (ay + cy2) / 2.0
+        if l1 >= l2:
+            ca, sa = e1[0] / l1, e1[1] / l1
+        else:
+            ca, sa = e2[0] / l2, e2[1] / l2
+        out.append(("rect", cx, cy, ca, sa, long_ / 2.0, short / 2.0))
+    return out
+
 
 def _column_footprints(sections, circles):
     """Every column footprint, as ("circle", cx, cy, r) or
@@ -1300,6 +1440,14 @@ def _column_footprints(sections, circles):
             out.append(("rect", cx, cy, math.cos(theta), math.sin(theta),
                         max(w, h) / 2.0, min(w, h) / 2.0))
     return out
+
+
+def column_rect_footprints(sections):
+    """PLACED column rectangles as ("rect", ...) footprints (no circles).
+
+    The slab member-edge source uses these to replace raw column-layer linework
+    with exact rings (columns become TRIM geometry for the beam-outline graph)."""
+    return _column_footprints(sections, None)
 
 
 def _clip_slab(t0, t1, f0, df, half):
@@ -1353,7 +1501,8 @@ def _footprint_interval(fp, ox, oy, ux, uy, length, pen_ft):
     return t0, t1, -(fx * ux + fy * uy)
 
 
-def split_beams_at_columns(beam_segments, sections, circles=None):
+def split_beams_at_columns(beam_segments, sections, circles=None,
+                           extra_footprints=None):
     """Split a beam DRAWN ACROSS a column so no beam is modelled on top of it.
 
     Structural CAD routinely draws a continuous beam outline straight over the
@@ -1382,9 +1531,11 @@ def split_beams_at_columns(beam_segments, sections, circles=None):
     Untouched segment dicts are REUSED (callers may hold a pre-split snapshot);
     split pieces are copies, with the mark kept on the longest piece only (mark
     ownership stays one-segment-per-mark). Curved beams are left alone.
-    Returns the number of segments split, trimmed or dropped.
+    `extra_footprints` (from column_outline_footprints) adds obstacles for real
+    columns the detector could not place. Returns the number of segments split,
+    trimmed or dropped.
     """
-    footprints = _column_footprints(sections, circles)
+    footprints = _column_footprints(sections, circles) + list(extra_footprints or [])
     if not footprints:
         return 0
     min_piece_ft = config.mm_to_ft(_SPLIT_MIN_PIECE_MM)

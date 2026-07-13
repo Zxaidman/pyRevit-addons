@@ -7,6 +7,25 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.41.0 — 0.40.0 feedback: slab/beam alignment root cause + blade columns
+- **test4/5 slab-over-beam SOLVED (the "misalignment" since round 1).** A beam edge tip
+  44mm from a column ring corner rounded into a different 50mm grid cell → never merged →
+  dangled → pruned → bay face flooded over the beam corridor. Node identity is now
+  neighbour-cell union-find clustering (any pair ≤50mm merges, cluster spread capped 75mm
+  so chains can't swallow geometry). Beam-swallowing faces 24→0; clean bays 249→323; the
+  user's two screenshot regions replay pixel-clean.
+- Columns are now TRIM geometry in the member-edge source (user's proposal): raw
+  column-layer linework inside a placed/derived footprint replaced by the exact ring;
+  walls stay (shafts still bounded). Adaptive arc tessellation (chords ≥2×snap) after the
+  ground-truth diff caught clustering chain-collapsing a fillet and losing a real bay.
+- test1-3 stair wells: beam fraction 0.33 vs real panels ≥0.44 → threshold 0.3→0.35.
+  Wall-fraction ceiling tried and rejected (ate real core-adjacent bays).
+- test8 double beams: blades 250×3250 (dropped by limits, unplaced) re-traced on the beam
+  layer → dedupe_beam_segments (exact twins + contained collinear fragments) +
+  column_outline_footprints (closed rectangular column-layer outlines become split
+  obstacles even unplaced). Blade-body beams gone, inter-blade connectors kept, 0 solid
+  overlaps. Only 3 degenerate cleanups across every other fixture + archives.
+
 ## v0.40.0 — test8 beam-over-column (client priority) + SLABS round 6 (0.39.0 feedback, 4 items)
 - **split_beams_at_columns** (report.py, after the end snap): a beam outline drawn straight
   ACROSS a column no longer places a beam on top of it. Crossing strictly inside the span →

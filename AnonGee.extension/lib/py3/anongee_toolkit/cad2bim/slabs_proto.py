@@ -80,9 +80,14 @@ def _tessellate_arc(pts):
     sweep = (a1 - a0) % (2.0 * math.pi)
     if (am - a0) % (2.0 * math.pi) > sweep:      # mid not inside CCW span: go CW
         sweep = sweep - 2.0 * math.pi
-    chords = [(cx + r * math.cos(a0 + sweep * i / _ARC_CHORDS),
-               cy + r * math.sin(a0 + sweep * i / _ARC_CHORDS))
-              for i in range(_ARC_CHORDS + 1)]
+    # Adaptive chord count: a small junction fillet sampled at 16 chords puts its
+    # vertices ~25 mm apart -- INSIDE the node-snap distance, so the graph pass
+    # would chain-merge them and collapse the arc. Chords stay >= ~2x the snap.
+    min_chord_ft = config.mm_to_ft(_SNAP_MM * 2.0)
+    n_chords = max(2, min(_ARC_CHORDS, int(abs(sweep) * r / min_chord_ft)))
+    chords = [(cx + r * math.cos(a0 + sweep * i / n_chords),
+               cy + r * math.sin(a0 + sweep * i / n_chords))
+              for i in range(n_chords + 1)]
     return chords, (a, m, b)
 
 
@@ -332,7 +337,19 @@ def _line_x_line(s1, s2):
 
 
 # ------------------------------------------------------- outline source 2 (middle)
-def slab_loops_from_member_edges(records):
+_COLUMN_RECT_PAD_MM = 80.0   # drawn linework this close inside a column rect is that column's
+
+
+def _in_rect_footprint(px, py, fp, pad_ft):
+    """Point inside a ("rect", cx, cy, cos, sin, half_long, half_short) + pad."""
+    _kind, cx, cy, ca, sa, hl, hs = fp
+    dx, dy = px - cx, py - cy
+    u = dx * ca + dy * sa
+    v = dy * ca - dx * sa
+    return abs(u) <= hl + pad_ft and abs(v) <= hs + pad_ft
+
+
+def slab_loops_from_member_edges(records, column_rects=None):
     """Bounded faces of the DRAWN beam + column edge lines, [(ring, z), ...].
 
     The middle outline source: no slab layer, but the beams' and columns' drawn
@@ -341,7 +358,25 @@ def slab_loops_from_member_edges(records):
     BODIES also appear as faces (the thin strip between a beam's two edges): any
     face slimmer than _MIN_PANEL_WIDTH_MM (by mean width 2A/P) is dropped, as are
     junction slivers below the area floor.
+
+    `column_rects` (("rect", cx, cy, cos, sin, half_long, half_short) footprints
+    from the column pass) makes the BEAM outlines the primary graph and reduces
+    columns to TRIM geometry: raw column-layer linework lying inside a footprint
+    (fragmented outlines, rotated corners, diagonal marker strokes) is REPLACED by
+    that footprint's exact 4-edge ring. A broken drawn ring lets the face walk
+    flood THROUGH the column and fuse a bay with the beam-body corridors (test4/5's
+    slabs overlapping beams); an exact ring is airtight. Core WALLS -- column-layer
+    linework not inside any footprint -- stay in the graph so shafts remain bounded.
     """
+    pad_ft = config.mm_to_ft(_COLUMN_RECT_PAD_MM)
+    rects = [fp for fp in (column_rects or []) if fp[0] == "rect"]
+
+    def _swallowed(pts):
+        for fp in rects:
+            if all(_in_rect_footprint(p[0], p[1], fp, pad_ft) for p in pts):
+                return True
+        return False
+
     segs = []
     src = []                          # per segment: True when it is a BEAM edge
     z = 0.0
@@ -361,6 +396,8 @@ def slab_loops_from_member_edges(records):
             pts = [(x, y, record.points[0][2]) for x, y in pts2]
         else:
             pts = record.points
+        if not is_beam and rects and record.kind != "arc" and _swallowed(pts):
+            continue                  # replaced by the clean footprint ring below
         if len(pts) >= 2:
             z = pts[0][2]
         for i in range(len(pts) - 1):
@@ -369,6 +406,13 @@ def slab_loops_from_member_edges(records):
             if _dist(a, b) > 1e-9:
                 segs.append((a, b))
                 src.append(is_beam)
+    for fp in rects:
+        _kind, cx, cy, ca, sa, hl, hs = fp
+        corners = [(cx + su * hl * ca - sv * hs * sa, cy + su * hl * sa + sv * hs * ca)
+                   for su, sv in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
+        for i in range(4):
+            segs.append((corners[i], corners[(i + 1) % 4]))
+            src.append(False)
     if len(segs) < 4:
         return []
     beam_lines = [segs[i] for i in range(len(segs)) if src[i]]
@@ -376,13 +420,14 @@ def slab_loops_from_member_edges(records):
     segs = _split_at_crossings(segs)
     snap_ft = config.mm_to_ft(_SNAP_MM)
 
-    def key(p):
-        return (round(p[0] / snap_ft), round(p[1] / snap_ft))
-
-    nodes = {}
-    for a, b in segs:
-        for p in (a, b):
-            nodes.setdefault(key(p), p)
+    # Node identity by NEIGHBOUR-CELL clustering, not same-cell rounding: two
+    # endpoints 44 mm apart can round into ADJACENT 50 mm cells (a beam edge tip
+    # landing just shy of a column ring corner), stay two nodes, dangle, get
+    # pruned -- and the bay face floods over the beam body (test4/5's overlap).
+    # Clustering merges every endpoint pair within snap_ft regardless of grid
+    # alignment.
+    key, nodes = _cluster_nodes(
+        [p for seg in segs for p in seg], snap_ft)
     adjacency = defaultdict(set)
     for a, b in segs:
         ka, kb = key(a), key(b)
@@ -424,7 +469,12 @@ def slab_loops_from_member_edges(records):
     return out
 
 
-_MIN_BEAM_FRACTION = 0.3   # a panel is framed by beams; a shaft is framed by walls
+# A panel is framed by beams; a shaft is framed by walls. Measured on test1-3:
+# lift shafts < 0.3, STAIR WELLS 0.33 (one flight-side beam, walls elsewhere),
+# real panels >= 0.44 -- 0.35 drops both shafts and stair wells with margin.
+# (A wall-fraction ceiling was tried instead and dropped REAL bays that nestle
+# into an L of the core: wall-adjacency does not separate wells from bays.)
+_MIN_BEAM_FRACTION = 0.35
 
 
 def _beam_fraction(ring, beam_lines, tol_mm=60.0):
@@ -484,6 +534,81 @@ def _segments_cross(a1, b1, a2, b2):
     u = ((x3 - x1) * (y2 - y1) - (y3 - y1) * (x2 - x1)) / d
     eps = 1e-9
     return eps < t < 1.0 - eps and eps < u < 1.0 - eps
+
+
+def _cluster_nodes(points, snap_ft):
+    """(key_fn, positions): endpoint identity by proximity clustering.
+
+    Union-find over grid buckets: every pair of points within snap_ft merges
+    (checked across the 3x3 neighbouring cells, so the cell-boundary blind spot
+    of plain rounding is gone -- two endpoints 44 mm apart ALWAYS unify). A
+    cluster's total spread stays under ~1.5x snap: transitive chains would
+    otherwise swallow whole runs of closely-spaced vertices (an arc's chords, a
+    short jog) into one node and collapse real geometry. A cluster's position is
+    the centroid of its members. key_fn maps a coordinate pair to its cluster id.
+    """
+    pts = []
+    seen = {}
+    for p in points:
+        q = (p[0], p[1])
+        if q not in seen:
+            seen[q] = len(pts)
+            pts.append(q)
+    parent = list(range(len(pts)))
+    bbox = [[x, y, x, y] for (x, y) in pts]     # per-root min/max extent
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    max_span = snap_ft * 1.5
+    cells = defaultdict(list)
+    for i, (x, y) in enumerate(pts):
+        cells[(int(math.floor(x / snap_ft)), int(math.floor(y / snap_ft)))].append(i)
+    snap2 = snap_ft * snap_ft
+    for (cx, cy), members in cells.items():
+        for dx in (0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy < 0:
+                    continue           # each unordered cell pair once
+                other = cells.get((cx + dx, cy + dy))
+                if not other:
+                    continue
+                for i in members:
+                    xi, yi = pts[i]
+                    for j in other:
+                        if i >= j and (dx, dy) == (0, 0):
+                            continue
+                        xj, yj = pts[j]
+                        if (xi - xj) ** 2 + (yi - yj) ** 2 <= snap2:
+                            ri, rj = find(i), find(j)
+                            if ri == rj:
+                                continue
+                            bi, bj = bbox[ri], bbox[rj]
+                            x0 = min(bi[0], bj[0])
+                            y0 = min(bi[1], bj[1])
+                            x1 = max(bi[2], bj[2])
+                            y1 = max(bi[3], bj[3])
+                            if x1 - x0 > max_span or y1 - y0 > max_span:
+                                continue          # would swallow real geometry
+                            parent[rj] = ri
+                            bbox[ri] = [x0, y0, x1, y1]
+    sums = defaultdict(lambda: [0.0, 0.0, 0])
+    for i, (x, y) in enumerate(pts):
+        r = find(i)
+        s = sums[r]
+        s[0] += x
+        s[1] += y
+        s[2] += 1
+    positions = {r: (s[0] / s[2], s[1] / s[2]) for r, s in sums.items()}
+    index = seen
+
+    def key(p):
+        return find(index[(p[0], p[1])])
+
+    return key, positions
 
 
 def _heal_endpoints(segs, heal_ft):

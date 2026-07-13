@@ -354,3 +354,23 @@ pinch vertex → "self-intersecting outline" skip (test6/7 S8's 142mm junction f
 Chaining must score all four attach modes (tail/head × fwd/rev) over ALL unused pieces
 and take the globally closest. Sibling trap: adjacent panels re-draw shared edges →
 duplicate pieces → spurs; dedupe by 10mm-grid fingerprint (min/max endpoint + mid) first.
+
+## v0.41.0 — grid-cell rounding is not node identity (durable)
+`round(x/snap)` node keys have a blind spot: two endpoints 44mm apart straddling a cell
+boundary stay separate while 49mm-apart points in one cell merge. In the member-edge
+face walk that turned a beam edge tip near a column ring corner into a dangling chain →
+pruned → the bay face flooded over the beam body (test4/5's slab-beam misalignment, 24
+faces). Node identity must be proximity CLUSTERING (union-find over 3×3 neighbour
+cells). But cap the cluster spread (~1.5×snap): union-find is transitive, and a run of
+closely-spaced vertices (a small fillet's 25mm arc chords) chain-collapses into one node
+otherwise — that silently deleted a real bay (caught only by diffing member faces
+against slab-edge ground truth). Companion rule: tessellation must never emit chords
+shorter than ~2×snap.
+
+## v0.41.0 — unplaced columns still exist (durable)
+Column detection's size limits reject blade columns (250×3250) — but the CAD still draws
+them and the beam layer may re-trace their outlines. Everything downstream that asks
+"is this inside a column?" (beam split, slab member edges) must use DRAWN closed
+rectangular column-layer outlines as footprints too (column_outline_footprints), not
+just placed sections. Placed-only footprints made split_beams_at_columns blind exactly
+where test8's client complaint was (AC19-24/BC23-28).

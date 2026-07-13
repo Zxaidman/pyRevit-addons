@@ -780,14 +780,25 @@ def main():
     if snapped_ends:
         _say("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
 
+    # A messy beam outline that RETRACES its own edges decomposes into the same
+    # centreline twice -> two beams z-fighting in Revit (test8's column strips).
+    deduped_beams = report.dedupe_beam_segments(beam_segments)
+    if deduped_beams:
+        _say("beams: removed {0} duplicate segment(s)".format(deduped_beams))
+
     # A beam outline drawn straight ACROSS a column would bury a beam inside it: split
     # such beams at the column faces so they frame IN, not through (client request).
-    # Slabs keep the PRE-SPLIT centrelines -- the beam-graph slab source needs its bay
-    # loops to run continuously over the columns (split never mutates kept dicts).
+    # Obstacles include closed rectangular column-LAYER outlines the detector dropped
+    # (blade columns beyond the size limits are still real columns). Slabs keep the
+    # PRE-SPLIT centrelines -- the beam-graph slab source needs its bay loops to run
+    # continuously over the columns (split never mutates kept dicts).
     slab_beam_segments = dict(beam_segments)
     slab_beam_segments["segments"] = list(beam_segments["segments"])
+    outline_footprints = report.column_outline_footprints(revit_result.records)
+    column_footprints = report.column_rect_footprints(sections) + outline_footprints
     split_beams = report.split_beams_at_columns(
-        beam_segments, sections, sections.get("circles"))
+        beam_segments, sections, sections.get("circles"),
+        extra_footprints=outline_footprints)
     if split_beams:
         _say("beams: split {0} beam(s) drawn across column footprints".format(split_beams))
 
@@ -814,7 +825,8 @@ def main():
     _progress(8, 8, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
-                                          dxf_result.texts, selections, schedule)
+                                          dxf_result.texts, selections, schedule,
+                                          column_rects=column_footprints)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
                 outcomes, dxf_result.texts, comparison)
@@ -967,7 +979,8 @@ def _create_beams(doc, beam_segments, selections):
             "errors": len(result["errors"])}
 
 
-def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None):
+def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
+                  column_rects=None):
     """Place floor slabs (PROTOTYPE step 1) after the beams, in a transaction group.
 
     Outline sources, in order: (1) closed rings on the slab-edge (A-FLOR) layer;
@@ -992,7 +1005,8 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None)
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
-        loops = slabs_proto.slab_loops_from_member_edges(records)
+        loops = slabs_proto.slab_loops_from_member_edges(records,
+                                                         column_rects=column_rects)
         source = "member_edges"
     if not loops:
         loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))

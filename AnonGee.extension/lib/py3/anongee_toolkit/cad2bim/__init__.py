@@ -35,7 +35,41 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.40.0"  # BEAM/COLUMN OVERLAP (test8, client priority) + SLABS round 6, all
+__version__ = "0.41.0"  # 0.40.0 feedback round: slab/beam alignment + blade columns, verified
+#                         offline against the 0.40.0 exports (leak census, ground-truth diff,
+#                         renders of the exact reported regions):
+#                         (A) test4/5 SLAB-OVER-BEAM ROOT CAUSE (the reported misalignment /
+#                         "slab made over beam from one side"): a beam edge tip landing within
+#                         50mm of a column ring corner rounded into a DIFFERENT 50mm grid cell,
+#                         never merged, dangled, was pruned -- and the bay face flooded over the
+#                         beam-body corridor. Node identity is now NEIGHBOUR-CELL CLUSTERING
+#                         (union-find, any pair <=50mm merges) with cluster spread capped at
+#                         ~75mm so transitive chains cannot swallow real geometry. Census on the
+#                         0.40.0 exports: faces that swallow a beam body 24 -> 0 on test4/5;
+#                         249 -> 323 clean bays (the fused corridor monsters split apart).
+#                         (B) COLUMNS = TRIM GEOMETRY (user proposal): with column_rects passed,
+#                         raw column-layer linework inside a placed/derived footprint (fragments,
+#                         rotated corners, diagonal marker strokes) is REPLACED by the footprint's
+#                         exact 4-edge ring; walls stay. Beam outlines stay the primary graph.
+#                         (C) ARC CHORDS >= 2x SNAP: a small fillet at 16 fixed chords put its
+#                         vertices ~25mm apart -- clustering would chain-collapse them (lost a
+#                         real bay on test2/3/6). Tessellation is now adaptive (2..16 chords).
+#                         (D) test1-3 STAIR WELLS without a floor layer: measured beam fraction
+#                         0.33 (lift shafts <0.3, real panels >=0.44) -> _MIN_BEAM_FRACTION
+#                         0.3 -> 0.35 drops the wells; a wall-fraction ceiling was tried and
+#                         REJECTED (it ate real bays nestled into the core's L).
+#                         (E) test8 DOUBLE BEAMS on the blade-column strips (AC19-24/BC23-28):
+#                         the 250x3250 blades exceed column limits (dropped, unplaced), yet the
+#                         beam layer re-traces their outlines -- dedupe_beam_segments removes
+#                         exact twins AND contained collinear fragments (12 on test8, 0 on all
+#                         other fixtures/archives except 3 genuine degenerate cleanups), and
+#                         column_outline_footprints turns closed rectangular column-layer
+#                         outlines into split obstacles even when unplaced: beams along the
+#                         blade bodies are dropped, the real connectors between blades stay.
+#                         test8: 29 remaining solid overlaps -> 0. Suite: 15 files, 20+18 new
+#                         beam-split/slab cases.
+#
+# 0.40.0                  BEAM/COLUMN OVERLAP (test8, client priority) + SLABS round 6, all
 #                         verified offline against the 0.39.0 exports AND every archived fixture:
 #                         (A) split_beams_at_columns (report.py, runs after the end snap): a beam
 #                         OUTLINE drawn straight across a column no longer places a beam on top of
