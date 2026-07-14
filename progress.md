@@ -7,6 +7,15 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.45.0 — the 14.4mm misalignment solved (exactness pass)
+- Root cause measured from the paired exports: walk nodes are weld-cluster centroids
+  (≤snap/2 off the true junction); wrap projection kept them on the circle but off the
+  beam line = the 14.413mm step. _snap_ring_to_carriers snaps every vertex to carrier
+  crossings / line×circle intersections / carrier feet; arc chords excluded from carriers.
+- Ground truth: 137/137 bays matched, max deviation 3.3-5.5mm (wrap chord sag; true arcs
+  in Revit), most 0.0mm; img1's junction reproduces the drawn (-40.2, 27550.0) exactly.
+- Export default filename per convention; stress DXF regenerates to temp when archived.
+
 ## v0.44.0 — two-source chain (user directive), free-end caps, Project1 + stair groundwork
 - Chain: slab_edges → placed_members, nothing else. Audit: long edges 0mm everywhere;
   junction end-caps caused 24mm corner jogs → caps only at free beam ends now.

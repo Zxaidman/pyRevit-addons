@@ -426,3 +426,14 @@ StaircasePlan-Test1: S-STRS flights = boundary pair + equidistant riser lines (3
 treads, 1500mm wide), landings = rects, 'DN' on S-STRS-IDEN, 'ST-n' marks on
 G-ANNO-TEXT, SW1..6 shear walls (300x3300/6300) as closed outlines on S-COLS with
 S-COLS-IDEN size labels -- the blade-column recovery already handles that shape.
+
+## v0.45.0 — cluster centroids are approximations; carriers are authority (durable)
+The face-walk graph welds nodes within snap (50mm): a node is a CENTROID, so every
+junction vertex is up to snap/2 off its true position — invisible on plain bays,
+glaring where geometry must meet (a wrap arc endpoint 14.4mm off the beam edge). The
+walk decides TOPOLOGY only; positions must be re-derived from the authoritative input
+CARRIERS afterwards: two-line crossing at corners, line×circle at wrap ends (gate the
+intersection to snap distance or mid-wrap chord vertices collapse into the wrap end and
+kill the arc run), radial for mid-wrap, carrier foot along edges. Never let tessellated
+arc chords into the carrier set — short angled chords near junctions hijack the
+two-line branch with garbage intersections.

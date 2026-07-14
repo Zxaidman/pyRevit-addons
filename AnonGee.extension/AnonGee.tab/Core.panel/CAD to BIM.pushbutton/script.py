@@ -30,6 +30,7 @@ __author__ = "AnonGee"
 __min_revit_ver__ = 2022
 
 import os
+import re
 import sys
 import traceback
 
@@ -840,7 +841,8 @@ def main():
                                           column_rects=column_footprints)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
-                outcomes, dxf_result.texts, comparison)
+                outcomes, dxf_result.texts, comparison,
+                default_name=_export_name(path, selections))
 
 
 def _create_grids(doc, records, grid_texts=None):
@@ -1063,9 +1065,28 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
             "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
 
 
-def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):
+def _export_name(cad_path, selections):
+    """Default export file name (user convention):
+    [version]_[main element]_[testN from the CAD name]_[textmode].json
+    e.g. "0.44.0_slab_test1_with_textmode.json"."""
+    element = ("slab" if selections.get("create_slabs")
+               else "beam" if selections.get("create_beams")
+               else "column" if selections.get("create_columns")
+               else "grid")
+    stem = os.path.splitext(os.path.basename(cad_path or ""))[0]
+    m = re.search(r"(test|project)\s*-?_?(\d+)", stem, re.IGNORECASE)
+    plan = "{0}{1}".format(m.group(1).lower(), m.group(2)) if m else (stem or "plan")
+    text_mapping = selections.get("text_mapping") or {}
+    routed = any(cat and cat != layers.CATEGORY_TEXT_IGNORE
+                 for cat in text_mapping.values())
+    mode = "with_textmode" if routed else "no_text"
+    return "{0}_{1}_{2}_{3}.json".format(cad2bim.__version__, element, plan, mode)
+
+
+def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison,
+            default_name="cad_to_bim_read.json"):
     """Write the intermediate JSON (the user opted in via the window)."""
-    target = _save_json("cad_to_bim_read.json")
+    target = _save_json(default_name)
     if not target:
         return
     try:

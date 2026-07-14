@@ -35,7 +35,33 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.44.0"  # 0.43.0 feedback: two-source slab chain (user directive), junction caps,
+__version__ = "0.45.0"  # THE 14.4mm MISALIGNMENT SOLVED (paired with/without-slab-layer exports
+#                         made it exactly measurable -- thank you for those):
+#                         (A) ROOT CAUSE: a walk node is a weld-cluster centroid, which can sit
+#                         up to snap/2 off the true junction; the wrap-arc endpoint projection
+#                         then kept it on the circle but OFF the beam edge line -- the user
+#                         measured 14.413mm. FIX = the EXACTNESS PASS (_snap_ring_to_carriers):
+#                         every output vertex snaps to its authoritative geometry -- the
+#                         crossing of its two nearest CARRIER lines (beam edge x beam edge /
+#                         x column ring edge), the nearest line's intersection with a circle
+#                         footprint at a round-column wrap (gated to snap distance so mid-wrap
+#                         chord vertices stay radial), the foot on a single carrier otherwise.
+#                         Carriers = straight input lines only (synthesized beam edges + caps,
+#                         wall lines, rect rings) -- NEVER tessellated arc chords, which had
+#                         polluted the candidate set and hijacked junctions.
+#                         MEASURED against the slab-layer ground truth: test1 max deviation
+#                         3.4mm, test2 5.5mm, test3 3.3mm (chord sag at wraps; Revit gets true
+#                         arcs there), all 137 bays matched, most at exactly 0.0mm. test1's
+#                         (-40.2, 27550.0) junction reproduces the drawn boundary EXACTLY.
+#                         test6's one 29.8mm bay = the slab meeting the PLACED chamfer column's
+#                         face (the column's own size-snap vs drawing; edges coincide in model).
+#                         (B) Export default name per user convention:
+#                         [version]_[element]_[testN]_[textmode].json via _export_name.
+#                         (C) The Test20 stress DXF is regenerated into a TEMP dir when absent
+#                         (the repo copy stays archived in .old_fixture as the user keeps it).
+#                         Builder mirror: every ring contiguous on every fixture; suite 15 OK.
+#
+# 0.44.0                  0.43.0 feedback: two-source slab chain (user directive), junction caps,
 #                         Project1 + staircase groundwork:
 #                         (A) SOURCE CHAIN = slab_edges -> placed_members ONLY. The drawn-linework
 #                         fallbacks (member_edges, beam_graph_inset) are retired from the chain

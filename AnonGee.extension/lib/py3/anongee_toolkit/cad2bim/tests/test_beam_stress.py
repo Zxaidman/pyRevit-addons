@@ -24,10 +24,32 @@ import unittest
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
-_DXF = os.path.join(_HERE, "fixtures", "cad",
-                    "StructuralPlan-Test20-Beam Stress test.dxf")
 _MM = 304.8
 _FT = 1.0 / _MM
+
+
+def _stress_dxf():
+    """The generated stress-plan DXF; built into a TEMP dir when not present.
+
+    The DXF is deliberately NOT kept in fixtures/cad (the user archives it), so
+    the suite regenerates it from its generator on demand instead of requiring
+    the repo copy."""
+    repo = os.path.join(_HERE, "fixtures", "cad",
+                        "StructuralPlan-Test20-Beam Stress test.dxf")
+    if os.path.exists(repo):
+        return repo
+    import subprocess
+    import tempfile
+    out = os.path.join(tempfile.gettempdir(), "cad2bim-stress",
+                       "StructuralPlan-Test20-Beam Stress test.dxf")
+    if not os.path.exists(out):
+        subprocess.check_call(
+            [sys.executable, os.path.join(_HERE, "fixtures", "make_stress_plan.py"),
+             "--out", out])
+    return out
+
+
+_DXF = _stress_dxf()
 
 
 def _load():

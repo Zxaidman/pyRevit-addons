@@ -37,6 +37,11 @@ import ezdxf
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                    "cad", "StructuralPlan-Test20-Beam Stress test.dxf")
+if "--out" in sys.argv:                     # the suite regenerates into a TEMP dir
+    OUT = sys.argv[sys.argv.index("--out") + 1]
+    out_dir = os.path.dirname(OUT)
+    if out_dir and not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
 
 doc = ezdxf.new("R2013")
 # Declare MILLIMETRES: without $INSUNITS Revit auto-detect can link the DXF at the

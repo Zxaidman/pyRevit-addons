@@ -484,6 +484,30 @@ outlines from the PLACED geometry graph. All four addressed at the root:
 >> NEXT: user runs v0.44.0 on test1-8 + Project1 (map layers in the dialog; export JSON).
    Then: structural-wall placement pass, stair pass, arch walls.
 
+### Phase 20 — v0.45.0: the 14.4mm misalignment SOLVED (exactness pass) — DONE
+The paired with/without-slab-layer 0.44.0 exports made the defect exactly measurable.
+- [x] **Root cause**: a walk node is a weld-cluster centroid (up to snap/2 off the true
+      junction); the wrap-arc endpoint projection kept it on the circle but OFF the beam
+      edge line -> the measured 14.413mm step at round columns (img1), and the tilted
+      long edges on test2/3/6 strips (img2-4).
+- [x] **Fix = EXACTNESS PASS** (_snap_ring_to_carriers): every output vertex snaps to
+      authoritative geometry -- two nearest carrier lines' crossing at corners, the
+      line x circle intersection at wrap ends (gated to snap distance so mid-wrap chord
+      vertices stay radial), the foot on a single carrier along plain edges. Carriers
+      exclude tessellated arc chords (they had polluted the candidates and hijacked
+      junctions -- an arc's carrier is its circle).
+- [x] **Measured vs slab-layer ground truth**: test1 3.4mm / test2 5.5mm / test3 3.3mm
+      max deviation (chord sag at wraps -- Revit gets true arcs), 137/137 bays matched,
+      most exactly 0.0mm; the img1 junction reproduces the drawn (-40.2, 27550.0)
+      EXACTLY. test6's single 29.8mm = slab meets the PLACED chamfer column's face
+      (column size-snap vs drawing; edges coincide in the model).
+- [x] Export default name per user convention (_export_name):
+      [version]_[element]_[testN]_[with_textmode|no_text].json.
+- [x] Stress DXF regenerates into TEMP when absent (repo copy stays in .old_fixture).
+- [x] Mirror contiguous everywhere; suite 15 files OK.
+>> NEXT: user runs v0.45.0 (expect slab edges pixel-on drawn boundaries at beams AND
+   round columns). Then: structural walls, arch walls, stairs (fixtures ready), Project1.
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

@@ -393,6 +393,7 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
 
     segs = []
     src = []                          # per segment: True when it is a BEAM edge
+    carriers = []                     # straight input lines (never arc chords)
     z = 0.0
     arc_triples = []
     for record in records:
@@ -403,7 +404,8 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
             continue                  # replaced by the clean footprint ring below;
             # swallowed arcs must not register triples either, or the fragments a
             # round column is drawn from become phantom micro-arcs on the boundary
-        if record.kind == "arc":
+        is_arc = record.kind == "arc"
+        if is_arc:
             # a 3-point arc record (round column, junction fillet, curved beam edge)
             # contributes two long CHORDS if used raw -- junk faces and phantom
             # crossings. Sample it; keep the triple so a face running the WHOLE arc
@@ -422,8 +424,11 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
             if _dist(a, b) > 1e-9:
                 segs.append((a, b))
                 src.append(is_beam)
-    _append_footprint_rings(segs, src, rects, circles)
-    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments)
+                if not is_arc:
+                    carriers.append((a, b))
+    _append_footprint_rings(segs, src, rects, circles, carriers=carriers)
+    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
+                                  carriers=carriers)
 
 
 def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
@@ -482,6 +487,7 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
 
     segs = []
     src = []
+    carriers = []                     # straight input lines (never arc chords)
     z = 0.0
     arc_triples = []
     for idx, (x1, y1, x2, y2, length, half_w, bz) in enumerate(beams_xy):
@@ -492,12 +498,15 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
         e2a, e2b = (x1 - nx, y1 - ny), (x2 - nx, y2 - ny)
         segs += [(e1a, e1b), (e2a, e2b)]
         src += [True, True]
+        carriers += [(e1a, e1b), (e2a, e2b)]
         if not _junction_end(x1, y1, idx):
             segs.append((e1a, e2a))               # cap only a FREE end
             src.append(True)
+            carriers.append((e1a, e2a))
         if not _junction_end(x2, y2, idx):
             segs.append((e1b, e2b))
             src.append(True)
+            carriers.append((e1b, e2b))
     for record in records:
         is_beam = record.category == CATEGORY_BEAM
         if is_beam:
@@ -508,7 +517,8 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
                 continue               # replaced by the footprint ring
         else:
             continue
-        if record.kind == "arc":
+        is_arc = record.kind == "arc"
+        if is_arc:
             pts2, triple = _tessellate_arc(record.points)
             if triple:
                 arc_triples.append(triple)
@@ -521,12 +531,18 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
             if _dist(a, b) > 1e-9:
                 segs.append((a, b))
                 src.append(is_beam)
-    _append_footprint_rings(segs, src, rects, circles)
-    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments)
+                if not is_arc:
+                    carriers.append((a, b))
+    _append_footprint_rings(segs, src, rects, circles, carriers=carriers)
+    return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
+                                  carriers=carriers)
 
 
-def _append_footprint_rings(segs, src, rects, circles):
-    """The clean column TRIM rings: 4 edges per rect, a fine polygon per circle."""
+def _append_footprint_rings(segs, src, rects, circles, carriers=None):
+    """The clean column TRIM rings: 4 edges per rect, a fine polygon per circle.
+
+    Rect ring edges are CARRIERS for the exactness pass; circle chords are not
+    (a circle's true carrier is the circle itself)."""
     for fp in rects:
         _kind, cx, cy, ca, sa, hl, hs = fp
         corners = [(cx + su * hl * ca - sv * hs * sa, cy + su * hl * sa + sv * hs * ca)
@@ -534,6 +550,8 @@ def _append_footprint_rings(segs, src, rects, circles):
         for i in range(4):
             segs.append((corners[i], corners[(i + 1) % 4]))
             src.append(False)
+            if carriers is not None:
+                carriers.append((corners[i], corners[(i + 1) % 4]))
     min_chord = config.mm_to_ft(_SNAP_MM * 2.0)   # chords must outsize the node snap
     for _kind, cx, cy, r in circles:
         n = max(8, min(48, int(2.0 * math.pi * r / min_chord)))
@@ -544,11 +562,17 @@ def _append_footprint_rings(segs, src, rects, circles):
             src.append(False)
 
 
-def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments):
+def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
+                           carriers=None):
     """Shared face machinery: heal -> split -> cluster -> prune -> walk -> filter.
 
     Returns [(ring, z, arcs)]; `arcs` carries the drawn triples the ring traverses
     PLUS synthesized wrap arcs where the boundary runs along a circle footprint.
+    `carriers` (input lines excluding circle-polygon chords) drive the EXACTNESS
+    pass: every output vertex is snapped to the intersection of its two nearest
+    carriers (line x line at corners, line x circle at round-column wraps) --
+    cluster centroids otherwise drift junction vertices up to snap/2 off the beam
+    edge (the reported 14 mm slab/beam misalignment).
     """
     if len(segs) < 4:
         return []
@@ -603,6 +627,7 @@ def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments):
     min_area_ft2 = _MIN_FACE_AREA_M2 * (1000.0 / _MM) ** 2
     min_width_ft = config.mm_to_ft(_MIN_PANEL_WIDTH_MM)
     arc_tol_ft = config.mm_to_ft(_SNAP_MM * 2.0)
+    carrier_idx = None
     out = []
     for ring in faces:
         area = _signed_area(ring)
@@ -618,9 +643,112 @@ def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments):
             continue                   # bounded by WALLS, not beams: a lift/stair shaft
         if _body_coverage(ring, bodies) > _MAX_BODY_COVERAGE:
             continue                   # mostly under beam bodies: a member, not a panel
+        if carriers:
+            if carrier_idx is None:
+                carrier_idx = _carrier_index(carriers, snap_ft)
+            ring = _snap_ring_to_carriers(ring, carriers, circles, snap_ft,
+                                          index=carrier_idx)
+            if len(ring) < 3:
+                continue
         arcs = _ring_arcs(ring, arc_triples, arc_tol_ft)
         arcs += _circle_wrap_arcs(ring, circles, arc_tol_ft)
         out.append((ring, z, arcs))
+    return out
+
+
+def _carrier_index(carriers, snap_ft):
+    """Precomputed spatial lookup for the exactness pass (shared per source run)."""
+    reach = snap_ft * 1.2
+    cell_ft = config.mm_to_ft(_GRAPH_CELL_MM)
+    grid, _boxes = _seg_grid(carriers, cell_ft, pad_ft=reach)
+    return grid, cell_ft
+
+
+def _snap_ring_to_carriers(ring, carriers, circles, snap_ft, index=None):
+    """Snap every ring vertex onto its authoritative geometry (the EXACTNESS pass).
+
+    A vertex is a walk node -- the centroid of a weld cluster, which can sit up to
+    snap/2 off the true junction. The true position is fully determined by the
+    input geometry: the crossing of the two nearest CARRIER lines (beam edge x
+    beam edge, beam edge x column ring edge), the nearest line's intersection
+    with a circle footprint at a round-column wrap, or the foot on a single
+    carrier along a plain edge. Vertices with no carrier within reach stay put.
+    """
+    reach = snap_ft * 1.2
+    slop = config.mm_to_ft(_EDGE_HEAL_MM) + snap_ft   # heal may extend past spans
+    grid, cell_ft = index if index is not None else _carrier_index(carriers, snap_ft)
+    out = []
+    for (vx, vy) in ring:
+        near = []                     # (distance, ux, uy, ax, ay) per carrier line
+        for k in grid.get((int(math.floor(vx / cell_ft)),
+                           int(math.floor(vy / cell_ft))), ()):
+            a, b = carriers[k]
+            ax, ay = a
+            dx, dy = b[0] - ax, b[1] - ay
+            length = (dx * dx + dy * dy) ** 0.5
+            if length <= 0:
+                continue
+            ux, uy = dx / length, dy / length
+            t = (vx - ax) * ux + (vy - ay) * uy
+            if t < -slop or t > length + slop:
+                continue
+            perp = abs((vx - ax) * uy - (vy - ay) * ux)
+            if perp <= reach:
+                near.append((perp, ux, uy, ax, ay))
+        near.sort(key=lambda c: c[0])
+        best = []
+        for cand in near:             # distinct DIRECTIONS only (dedupe collinear)
+            if all(abs(cand[1] * o[2] - cand[2] * o[1]) > 0.15 for o in best):
+                best.append(cand)
+            if len(best) == 2:
+                break
+        on_circle = None
+        for _kind, cx, cy, r in circles:
+            d = abs(_dist((vx, vy), (cx, cy)) - r)
+            if d <= reach and (on_circle is None or d < on_circle[0]):
+                on_circle = (d, cx, cy, r)
+        nx, ny = vx, vy
+        if len(best) == 2:            # junction corner: exact line crossing
+            _d1, u1x, u1y, a1x, a1y = best[0]
+            _d2, u2x, u2y, a2x, a2y = best[1]
+            det = u1x * u2y - u1y * u2x
+            if abs(det) > 1e-9:
+                s = ((a2x - a1x) * u2y - (a2y - a1y) * u2x) / det
+                px, py = a1x + s * u1x, a1y + s * u1y
+                if _dist((px, py), (vx, vy)) <= reach * 2.0:
+                    nx, ny = px, py
+        elif len(best) == 1:
+            _d, ux, uy, ax, ay = best[0]
+            hit = None
+            if on_circle is not None:        # wrap end: exact line x circle point,
+                _dc, cx, cy, r = on_circle   # but only when the vertex IS that end
+                fx, fy = ax - cx, ay - cy    # -- a mid-wrap chord vertex 40-60mm
+                bq = fx * ux + fy * uy       # from a passing line must stay radial
+                disc = bq * bq - (fx * fx + fy * fy - r * r)
+                if disc >= 0:
+                    root = disc ** 0.5
+                    cands = [(ax + t * ux, ay + t * uy) for t in (-bq - root, -bq + root)]
+                    px, py = min(cands, key=lambda p: _dist(p, (vx, vy)))
+                    if _dist((px, py), (vx, vy)) <= snap_ft:
+                        hit = (px, py)
+            if hit is None and on_circle is not None and on_circle[0] < best[0][0]:
+                _dc, cx, cy, r = on_circle   # closer to the circle than the line
+                fx, fy = vx - cx, vy - cy
+                d = (fx * fx + fy * fy) ** 0.5 or 1.0
+                hit = (cx + fx / d * r, cy + fy / d * r)
+            if hit is None:                  # plain edge: foot on the carrier
+                t = (vx - ax) * ux + (vy - ay) * uy
+                hit = (ax + t * ux, ay + t * uy)
+            nx, ny = hit
+        elif on_circle is not None:
+            _dc, cx, cy, r = on_circle       # mid-wrap chord vertex: radial
+            fx, fy = vx - cx, vy - cy
+            d = (fx * fx + fy * fy) ** 0.5 or 1.0
+            nx, ny = cx + fx / d * r, cy + fy / d * r
+        if not out or _dist((nx, ny), out[-1]) > 1e-9:
+            out.append((nx, ny))
+    while len(out) > 1 and _dist(out[0], out[-1]) <= 1e-9:
+        out.pop()
     return out
 
 
