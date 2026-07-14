@@ -7,6 +7,15 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.44.0 — two-source chain (user directive), free-end caps, Project1 + stair groundwork
+- Chain: slab_edges → placed_members, nothing else. Audit: long edges 0mm everywhere;
+  junction end-caps caused 24mm corner jogs → caps only at free beam ends now.
+- New layer categories structural wall / arch wall / stair (+ conventions) — Project1's
+  wall/stair layers route out of the box; dialog offers them via ALL_CATEGORIES.
+- Project1 (first real project) offline: default mapping covers everything structural;
+  327 column rects + 661 beam segments detect; no grid layer. Staircase fixture decoded
+  (riser-line flights, rect landings, DN/ST-n texts, SW shear walls as closed outlines).
+
 ## v0.43.0 — placed-geometry slab source (user proposal) + 13-22x faster
 - slab_loops_from_placed_members: outlines synthesized from PLACED beams (edge lines at
   centreline ± w/2 + caps) and column footprint rings; drawn beam arcs + walls kept.

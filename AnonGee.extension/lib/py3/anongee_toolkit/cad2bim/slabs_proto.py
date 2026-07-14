@@ -452,24 +452,52 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
                 return True
         return False
 
-    segs = []
-    src = []
-    z = 0.0
-    arc_triples = []
+    beams_xy = []
     for seg in (beam_segments or []):
         x1, y1 = seg["start"][0], seg["start"][1]
         x2, y2 = seg["end"][0], seg["end"][1]
         length = _dist((x1, y1), (x2, y2))
         half_w = (seg.get("width_mm") or 0.0) / _MM / 2.0
-        if length <= 0 or half_w <= 0:
-            continue
-        z = seg["start"][2]
+        if length > 0 and half_w > 0:
+            beams_xy.append((x1, y1, x2, y2, length, half_w, seg["start"][2]))
+
+    def _junction_end(px, py, self_idx):
+        # a beam end meeting a column or another beam gets its boundary from THAT
+        # member; a cap there only adds jog material at the corner
+        for fp in rects:
+            if _in_rect_footprint(px, py, fp, pad_ft):
+                return True
+        for _kind, cx, cy, r in circles:
+            if (px - cx) ** 2 + (py - cy) ** 2 <= (r + pad_ft) ** 2:
+                return True
+        for k, (x1, y1, x2, y2, length, half_w, _bz) in enumerate(beams_xy):
+            if k == self_idx:
+                continue
+            ux, uy = (x2 - x1) / length, (y2 - y1) / length
+            dx, dy = px - (x1 + x2) / 2.0, py - (y1 + y2) / 2.0
+            if (abs(dx * ux + dy * uy) <= length / 2.0 + pad_ft and
+                    abs(dy * ux - dx * uy) <= half_w + pad_ft):
+                return True
+        return False
+
+    segs = []
+    src = []
+    z = 0.0
+    arc_triples = []
+    for idx, (x1, y1, x2, y2, length, half_w, bz) in enumerate(beams_xy):
+        z = bz
         ux, uy = (x2 - x1) / length, (y2 - y1) / length
         nx, ny = -uy * half_w, ux * half_w
         e1a, e1b = (x1 + nx, y1 + ny), (x2 + nx, y2 + ny)
         e2a, e2b = (x1 - nx, y1 - ny), (x2 - nx, y2 - ny)
-        segs += [(e1a, e1b), (e2a, e2b), (e1a, e2a), (e1b, e2b)]   # edges + end caps
-        src += [True, True, True, True]
+        segs += [(e1a, e1b), (e2a, e2b)]
+        src += [True, True]
+        if not _junction_end(x1, y1, idx):
+            segs.append((e1a, e2a))               # cap only a FREE end
+            src.append(True)
+        if not _junction_end(x2, y2, idx):
+            segs.append((e1b, e2b))
+            src.append(True)
     for record in records:
         is_beam = record.category == CATEGORY_BEAM
         if is_beam:

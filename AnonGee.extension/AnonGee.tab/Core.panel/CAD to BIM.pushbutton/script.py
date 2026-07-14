@@ -1010,35 +1010,17 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
     if base_type_id is None:
         _say("Slabs -- skipped (no floor type chosen).")
         return {"created": 0, "skipped": 0, "errors": 0}
-    # Outline source chain: (1) slab-edge layer rings as drawn; (2) the BETTER of
-    # -- faces of the PLACED geometry (beam edge lines synthesized from the placed
-    #    centrelines + column footprint rings: alignment exact by construction) and
-    # -- faces of the DRAWN beam+column edge lines (covers bays whose beams the
-    #    detection missed, e.g. test8's unlabelled members),
-    # picked by COVERED AREA (placed wins near-ties for its alignment);
-    # (3) the beam centreline graph inset per edge.
+    # Outline source chain (user directive: these TWO only): (1) slab-edge layer
+    # rings as drawn; (2) faces of the PLACED geometry -- the placed beams' edge
+    # lines form the boundary, and the column footprint rings inside it trim the
+    # corners. The beams are placed aligned, so the slab edges align with them by
+    # construction; the drawn-linework fallbacks are retired.
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
-        placed = slabs_proto.slab_loops_from_placed_members(
+        loops = slabs_proto.slab_loops_from_placed_members(
             records, beam_segments.get("segments"), column_rects=column_rects)
-        drawn = slabs_proto.slab_loops_from_member_edges(
-            records, column_rects=column_rects,
-            beam_segments=beam_segments.get("segments"))
-        placed_area = sum(abs(slabs_proto._signed_area(r)) for r, _z, _a in placed)
-        drawn_area = sum(abs(slabs_proto._signed_area(r)) for r, _z, _a in drawn)
-        if placed and placed_area >= 0.98 * drawn_area:
-            loops, source = placed, "placed_members"
-        else:
-            loops, source = drawn, "member_edges"
-        if placed or drawn:
-            _say("slabs: placed-geometry {0} panels / {1:.0f} m2, drawn-edge {2} "
-                 "panels / {3:.0f} m2 -> using {4}".format(
-                     len(placed), placed_area * 0.09290304,
-                     len(drawn), drawn_area * 0.09290304, source))
-    if not loops:
-        loops = slabs_proto.slab_loops_from_beam_graph(beam_segments.get("segments", []))
-        source = "beam_graph_inset"
+        source = "placed_members"
     if not loops:
         _say("Slabs -- no closed slab outline found (any source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}

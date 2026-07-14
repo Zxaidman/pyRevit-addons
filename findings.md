@@ -409,3 +409,20 @@ positions or adjacent arcs leave "loop discontinuous" gaps.
 _heal_endpoints/_split_at_crossings at O(n²) took 45.6s on test4's ~4k edges (CPython;
 worse under pyRevit). Grid-bucket candidate pairs (3m cells, bbox prefilter): 2.1s. Any
 future pass touching pairwise segment geometry starts bucketed.
+
+## v0.44.0 — junction caps vs free-end caps (durable)
+Synthesized beam end caps are only needed at FREE ends (cantilever tips) to keep the
+boundary watertight. At junctions the neighbouring member's edges already bound the
+face, and a cap there just deposits corner vertices 40-50mm from ring corners that the
+node snap welds into ~24mm jogs. Cap ends only when no column footprint and no other
+beam body contains the endpoint.
+
+## v0.44.0 — Project1 + staircase conventions (reference)
+LayoutPlan-Project1: same office as test8 (ARCH BEAM / COLUMN / COLUMN NO._ASC +
+COLUMN SIZE_ASC text pairs); plus A-STAIR-Steps, A-WALL-CUT-Brick, PARAPET WALL,
+RAILING- 1, S-RCC-COL, PT SLAB HATCH (hatch only); NO grid layer. Offline detection:
+327 column rects, 661 beams (150-400mm widths, 230 dominant).
+StaircasePlan-Test1: S-STRS flights = boundary pair + equidistant riser lines (300mm
+treads, 1500mm wide), landings = rects, 'DN' on S-STRS-IDEN, 'ST-n' marks on
+G-ANNO-TEXT, SW1..6 shear walls (300x3300/6300) as closed outlines on S-COLS with
+S-COLS-IDEN size labels -- the blade-column recovery already handles that shape.
