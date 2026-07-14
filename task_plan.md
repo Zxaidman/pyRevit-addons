@@ -459,6 +459,31 @@ outlines from the PLACED geometry graph. All four addressed at the root:
    feasible: flight outlines + riser lines exist on stair layers; Revit API supports
    sketch-based stairs (needs fixture with stair layers exported).
 
+### Phase 19 — v0.44.0: two-source chain, junction caps, Project1 + stairs — DONE
+- [x] **Chain = slab_edges -> placed_members only (user directive).** Drawn-linework
+      fallbacks retired from _create_slabs (functions kept for tests/harness). test8 will
+      now use placed geometry too -- its slab coverage follows its beam detection; missing
+      beams there are a BEAM issue to fix with mark/location specifics.
+- [x] **Misalignment audit.** Every face edge measured against its carrier: long edges 0mm
+      on all fixtures. Residual = end-cap corner welds at junctions (56 x 24mm jogs on
+      test4): caps now only at FREE beam ends. Left: ~24mm corner shortcuts where a ring
+      apex welds into a beam crossing node (inherent to the 50mm snap; endpoints exact).
+- [x] **Layer groundwork (user: walls/stairs must be layer-based).** New categories
+      structural wall / arch wall / stair + conventions (shear|retain, wall|parapet,
+      stair|strs|step); override dialog lists them automatically.
+- [x] **Project1 assessed** (LayoutPlan-Project1.dxf, offline DXF path): default mapping
+      covers all structural layers; columns 327 rects, beams 661 segments (150-400mm);
+      no grid layer (gridless path exists); 300 mark + 300 size texts on _ASC layers.
+      Next: user runs it in Revit with export for the full-pipeline picture.
+- [x] **Staircase decoded** (StaircasePlan-Test1.dxf): flight = >=3 equidistant riser
+      lines between two boundary lines (300mm treads, 1500 wide), landing = rect at flight
+      end, DN text = direction, ST-n mark, S1 slab label, SW1..6 shear walls 300x3300/6300
+      as closed outlines on S-COLS (recover_outline_columns-compatible). Stair pass design:
+      detect flights/landings -> Revit StairsEditScope sketched runs; walls: struct wall
+      base-to-top (like columns), arch wall on beams to next level else 2-3m free.
+>> NEXT: user runs v0.44.0 on test1-8 + Project1 (map layers in the dialog; export JSON).
+   Then: structural-wall placement pass, stair pass, arch walls.
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

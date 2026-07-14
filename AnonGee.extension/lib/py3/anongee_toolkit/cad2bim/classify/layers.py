@@ -17,6 +17,14 @@ CATEGORY_GRID = "grid"
 CATEGORY_COLUMN = "column"
 CATEGORY_BEAM = "beam"
 CATEGORY_SLAB_EDGE = "slab_edge"
+# Upcoming layer-driven passes (user roadmap): structural walls rise base-to-top
+# like columns; arch walls sit ON beams (to the level above, else free-standing);
+# stairs come from the stair-plan linework. Mapped now so real projects
+# (LayoutPlan-Project1: A-WALL-CUT-Brick, PARAPET WALL, A-STAIR-Steps;
+# StaircasePlan-Test1: S-STRS) can already be routed in the override dialog.
+CATEGORY_STRUCT_WALL = "structural wall"
+CATEGORY_ARCH_WALL = "arch wall"
+CATEGORY_STAIR = "stair"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -42,11 +50,15 @@ DEFAULT_CONVENTION = (
     (r"col", CATEGORY_COLUMN),
     (r"beam|girder|joist", CATEGORY_BEAM),
     (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
+    (r"stair|strs|step", CATEGORY_STAIR),
+    (r"shear|retain", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
+    (r"wall|parapet", CATEGORY_ARCH_WALL),
 )
 
 ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
-    CATEGORY_SLAB_EDGE, CATEGORY_UNMAPPED,
+    CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
+    CATEGORY_STAIR, CATEGORY_UNMAPPED,
 )
 
 # Text/label layers carry the size marks (e.g. "S-COLS-IDEN", "S-BEAM-IDEN").

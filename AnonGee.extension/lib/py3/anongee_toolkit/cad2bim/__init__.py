@@ -35,7 +35,36 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.43.0"  # 0.42.0 feedback: PLACED-GEOMETRY slab source (user proposal), 13-22x
+__version__ = "0.44.0"  # 0.43.0 feedback: two-source slab chain (user directive), junction caps,
+#                         Project1 + staircase groundwork:
+#                         (A) SOURCE CHAIN = slab_edges -> placed_members ONLY. The drawn-linework
+#                         fallbacks (member_edges, beam_graph_inset) are retired from the chain
+#                         per the user's directive: the placed beams' edge lines form the
+#                         boundary, column footprint rings inside it trim the corners -- beams
+#                         are placed aligned, so slabs align by construction. (Functions retained
+#                         for the offline harness/tests.)
+#                         (B) MISALIGNMENT AUDIT (every face edge measured against its carrier):
+#                         long edges sit at 0mm on all fixtures; the residual was end-CAP corner
+#                         welds at junctions (56 x ~24mm jogs on test4). Caps are now added only
+#                         at FREE beam ends (cantilever tips) -- at a junction the neighbouring
+#                         member's edges provide the boundary. Remaining: ~24mm corner shortcuts
+#                         where a column ring apex welds into a beam crossing node (50mm snap,
+#                         endpoints exact).
+#                         (C) NEW LAYER CATEGORIES for the roadmap: "structural wall", "arch
+#                         wall", "stair" (+ default conventions: stair|strs|step, shear|retain,
+#                         wall|parapet) -- the override dialog lists them via ALL_CATEGORIES, so
+#                         LayoutPlan-Project1's A-WALL-CUT-Brick / PARAPET WALL / A-STAIR-Steps
+#                         and StaircasePlan-Test1's S-STRS route correctly from day one.
+#                         (D) PROJECT1 ASSESSED offline (DXF path, mm->ft): default mapping
+#                         covers every structural layer (ARCH BEAM, COLUMN, S-RCC-COL, the _ASC
+#                         text layers); columns 327 rects detected, beams 661 segments (widths
+#                         150-400); NO grid layer (gridless path already supported). Staircase
+#                         fixture decoded: flights = equidistant riser lines (300mm treads,
+#                         1500 wide), landings = rects, DN direction, ST-n marks, SW1..6 shear
+#                         walls (300x3300/6300) on the column layer with closed outlines --
+#                         next round: stair pass design + structural wall placement.
+#
+# 0.43.0                  0.42.0 feedback: PLACED-GEOMETRY slab source (user proposal), 13-22x
 #                         faster, and the 0.42.0 regressions fixed at the root:
 #                         (A) NEW SOURCE slab_loops_from_placed_members: slabs run AFTER beams
 #                         and columns, so their outlines come from what was PLACED -- each
