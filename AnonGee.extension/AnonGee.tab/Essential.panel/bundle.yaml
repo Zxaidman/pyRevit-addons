@@ -1,6 +1,6 @@
 title: Essential
 layout:
-  - Export Schedule
-  - Rotate Column
-  - RVT Imported
-  - Bulk Tool
+  - ExportSchedule
+  - RotateColumn
+  - RVTLinked
+  - BulkTool
