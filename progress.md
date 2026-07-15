@@ -7,6 +7,17 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.47.0 — STAIRCASE option 2: drawn stair linework drives the layout
+- Riser lines cluster into stairs (bbox union-find, 2m gap); dominant parallel direction
+  = risers (same-length filter stops the drawn landing boundary bridging the runs);
+  overlapping spans split lines into RUNS. Everything measured from the drawing: tread =
+  spacing, width = riser length, riser count = line count (dedup per-panel copies),
+  riser height = storey / drawn total, landing = drawn leftover, first run climbs INTO
+  the landing edge. Chain: linework -> text+parametric fallback; console prints source.
+- Replays: StaircasePlan ST-1/ST-2 + test1 reproduce the DRAWN stair exactly (turn 12650,
+  tread 300, width 1500, landing 1500, 10+10 @ 150); test4 no stair layer -> text
+  fallback. Suite 16 files OK, 17 stair tests.
+
 ## v0.46.0 — STAIRCASE option 1: parametric dog-leg located by plan text
 - Slab work paused at ~50% per user (more real-world CADs to test later); staircase first.
 - Option 1 (user's spec, no stair linework): new Staircase tab (riser max, tread, run

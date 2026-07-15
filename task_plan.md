@@ -530,8 +530,12 @@ User's two-option plan; option 1 first:
       landing, user numbers on a duplicated stairs type.
 - [x] Exports: stair/wall raw geometry (cat "stair"/"wall") + stair notes in texts_sized.
 - [x] Replays: test1 -> 2 stairs, stair fixture -> ST-1 + ST-2; slab counts unchanged.
-- [ ] Option 2 (next): same inputs, stair-layer LINEWORK drives run/landing positions.
->> NEXT: user runs 0.46.0 with "Create staircases" on StaircasePlan-Test1 / test1-3.
+- [x] Option 2 (v0.47.0): stair-layer LINEWORK drives run/landing positions -- riser
+      clusters -> runs (tread/width/counts/landing all measured from the drawing);
+      chain prefers linework, falls back to text+parametric; replays reproduce the
+      drawn stairs exactly on StaircasePlan + test1.
+>> NEXT: user runs 0.47.0 with "Create staircases" on StaircasePlan-Test1 / test1-3
+   (map S-STRS to "stair" for option 2; unmap it to exercise option 1).
 
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
