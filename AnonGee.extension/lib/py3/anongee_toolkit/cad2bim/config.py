@@ -48,6 +48,12 @@ DEFAULTS = {
     "parallel_angle_deg": 3.0,
     "junction_tol_mm": 200.0,     # arc centred this close to a round column = junction
     "concentric_tol_mm": 60.0,    # two arcs sharing a centre this closely = concentric
+
+    # --- staircase (generic dog-leg from the dialog's Staircase tab, mm) -----
+    "stair_riser_mm": 150.0,      # target MAX riser height; count = storey / this
+    "stair_tread_mm": 300.0,      # tread depth (the fixtures' riser spacing)
+    "stair_run_width_mm": 1250.0, # width of each run
+    "stair_landing_mm": 0.0,      # landing depth along the runs; 0 = run width
 }
 
 

@@ -85,12 +85,13 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import compat, config, report, slab_outlines
+from anongee_toolkit.cad2bim import (compat, config, report, slab_outlines,
+                                     stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
 from anongee_toolkit.cad2bim.builders import (columns, beams, grids, slabs,
-                                              txn_failures)
+                                              stairs, txn_failures)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
@@ -318,7 +319,12 @@ class CadToBimWindow(object):
         self.chk_columns = find("chk_columns")
         self.chk_beams = find("chk_beams")
         self.chk_slabs = find("chk_slabs")
+        self.chk_stairs = find("chk_stairs")
         self.chk_export = find("chk_export")
+        self.tb_stair_riser = find("tb_stair_riser")
+        self.tb_stair_tread = find("tb_stair_tread")
+        self.tb_stair_width = find("tb_stair_width")
+        self.tb_stair_landing = find("tb_stair_landing")
 
         self.tb_beam_min = find("tb_beam_min")
         self.tb_beam_max = find("tb_beam_max")
@@ -450,6 +456,10 @@ class CadToBimWindow(object):
         self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+        self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
+        self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
+        self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
+        self.tb_stair_landing.Text = str(int(d["stair_landing_mm"]))
 
     def _read_int(self, textbox, fallback):
         try:
@@ -525,6 +535,17 @@ class CadToBimWindow(object):
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
             "create_slabs": bool(self.chk_slabs.IsChecked),
+            "create_stairs": bool(self.chk_stairs.IsChecked),
+            "stair_params": {
+                "riser_mm": self._read_float(self.tb_stair_riser,
+                                             config.DEFAULTS["stair_riser_mm"]),
+                "tread_mm": self._read_float(self.tb_stair_tread,
+                                             config.DEFAULTS["stair_tread_mm"]),
+                "run_width_mm": self._read_float(self.tb_stair_width,
+                                                 config.DEFAULTS["stair_run_width_mm"]),
+                "landing_mm": self._read_float(self.tb_stair_landing,
+                                               config.DEFAULTS["stair_landing_mm"]),
+            },
             "floor_type_id": self._floor_ids.get(self.cb_floor_type.SelectedItem),
             "column_family_id": self._family_ids.get(self.cb_family.SelectedItem),
             "circular_family_id": self._family_ids.get(self.cb_circular_family.SelectedItem),
@@ -601,7 +622,7 @@ def main():
     if not options.result:
         return
     path = options.result["path"]
-    _progress(1, 8, "link DXF")
+    _progress(1, 9, "link DXF")
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
                                        options.result["placement"],
@@ -613,7 +634,7 @@ def main():
     # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
     #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
     #    only, mapped into Revit coordinates by the link's own exact transform.
-    _progress(2, 8, "read link geometry")
+    _progress(2, 9, "read link geometry")
     revit_result = geometry_reader.read_link(doc, instance)
     if revit_result.is_empty():
         _alert("Empty link", "The linked DXF produced no readable geometry in "
@@ -699,7 +720,7 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
-    _progress(3, 8, "build columns")
+    _progress(3, 9, "build columns")
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
 
@@ -728,7 +749,7 @@ def main():
     # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
     # beam is sized from its label -- an inline "B1 300x600" OR a mark-only "B1" via the
     # schedule. Pass beam labels + the schedule so each segment gets its width/depth + mark.
-    _progress(4, 8, "build beams")
+    _progress(4, 9, "build beams")
     beam_segments = report.build_beam_segments(revit_result.records,
                                                sections.get("circles"),
                                                limits, standards,
@@ -822,23 +843,31 @@ def main():
         _say(line)
 
     outcomes = {}
-    _progress(5, 8, "create grids")
+    _progress(5, 9, "create grids")
     if selections["create_grids"]:
         outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
-    _progress(6, 8, "create columns")
+    _progress(6, 9, "create columns")
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
-    _progress(7, 8, "create beams")
+    _progress(7, 9, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     # SLABS: outlines from the slab-edge (A-FLOR) rings, falling back to the
     # PLACED beams + column footprints when the DWG has no slab layer;
     # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
-    _progress(8, 8, "create slabs")
+    _progress(8, 9, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
                                           dxf_result.texts, selections, schedule,
                                           column_rects=column_footprints)
+    # STAIRS (option 1, parametric): a STAIRCASE / ST-n text marks the bay; a
+    # generic dog-leg from the Staircase tab numbers is laid out inside it.
+    _progress(9, 9, "create stairs")
+    if selections.get("create_stairs"):
+        outcomes["stairs"] = _create_stairs(doc, revit_result.records,
+                                            slab_beam_segments, dxf_result.texts,
+                                            selections,
+                                            column_rects=column_footprints)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
                 outcomes, dxf_result.texts, comparison,
@@ -1070,11 +1099,57 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
             "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
 
 
+def _create_stairs(doc, records, beam_segments, texts, selections,
+                   column_rects=None):
+    """Place generic dog-leg staircases at the plan's STAIRCASE / ST-n texts.
+
+    Option 1 (no stair linework): the bay containing the text is the stair's
+    area (placed-members faces with the shaft filter relaxed); riser count,
+    tread, run width and landing come from the Staircase tab plus the base-to-
+    top storey height. The builder runs its own StairsEditScope per stair --
+    NO outer transaction group here (Revit forbids nesting an edit scope).
+    """
+    base_id = selections.get("base_level_id")
+    top_id = selections.get("top_level_id")
+    if base_id is None or top_id is None:
+        _say("Stairs -- skipped (base and top levels are both required).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    base_level = doc.GetElement(base_id)
+    top_level = doc.GetElement(top_id)
+    storey_mm = (top_level.Elevation - base_level.Elevation) * 304.8
+    if storey_mm <= 0:
+        _say("Stairs -- skipped (top level is not above the base level).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+
+    plans, notes = stair_layout.plan_stairs(
+        records, (beam_segments or {}).get("segments"), column_rects, texts,
+        selections.get("stair_params") or {}, storey_mm)
+    for note in notes:
+        _say("  stair: {0}".format(note))
+    if not plans:
+        _say("Stairs -- no staircase planned (see notes above).")
+        return {"created": 0, "skipped": len(notes), "errors": 0}
+
+    result = stairs.place_stairs(doc, plans, base_id, top_id)
+    _say("Stairs -- planned: {0}, created: {1}, skipped: {2}, errors: {3} "
+         "(storey {4} mm, {5} risers @ {6:.1f} mm)".format(
+             len(plans), len(result["created"]), len(result["skipped"]),
+             len(result["errors"]), int(storey_mm), plans[0]["risers_total"],
+             plans[0]["riser_mm"]))
+    for message in result["errors"] + result["skipped"]:
+        _say("  stair: {0}".format(message))
+    return {"created": len(result["created"]), "skipped": len(result["skipped"]),
+            "errors": len(result["errors"]), "planned": len(plans),
+            "notes": notes[:8],
+            "error_details": [str(e)[:220] for e in result["errors"][:8]]}
+
+
 def _export_name(cad_path, selections):
     """Default export file name (user convention):
     [version]_[main element]_[testN from the CAD name]_[textmode].json
     e.g. "0.44.0_slab_test1_with_textmode.json"."""
-    element = ("slab" if selections.get("create_slabs")
+    element = ("stair" if selections.get("create_stairs")
+               else "slab" if selections.get("create_slabs")
                else "beam" if selections.get("create_beams")
                else "column" if selections.get("create_columns")
                else "grid")

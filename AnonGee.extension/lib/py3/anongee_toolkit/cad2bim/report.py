@@ -8,6 +8,7 @@ it is the contract between the in-Revit reader and the out-of-Revit checker.
 
 import json
 import math
+import re
 from collections import defaultdict, Counter
 
 from .geom import shapes
@@ -17,7 +18,9 @@ except ImportError:                      # test loaders stub the parent package
     __version__ = "?"
 from .classify import marks
 from . import config
-from .classify.layers import CATEGORY_COLUMN, CATEGORY_BEAM, CATEGORY_SLAB_EDGE
+from .classify.layers import (CATEGORY_COLUMN, CATEGORY_BEAM,
+                              CATEGORY_SLAB_EDGE, CATEGORY_STAIR,
+                              CATEGORY_STRUCT_WALL)
 
 _MM = config.MM_PER_FT
 
@@ -2576,11 +2579,15 @@ def _beam_geometry_dump(result):
     """
     out = []
     for record in result.records:
-        if record.category not in (CATEGORY_BEAM, CATEGORY_SLAB_EDGE, CATEGORY_COLUMN):
+        if record.category not in (CATEGORY_BEAM, CATEGORY_SLAB_EDGE,
+                                   CATEGORY_COLUMN, CATEGORY_STAIR,
+                                   CATEGORY_STRUCT_WALL):
             continue
         out.append({
             "cat": ("slab" if record.category == CATEGORY_SLAB_EDGE
                     else "column" if record.category == CATEGORY_COLUMN
+                    else "stair" if record.category == CATEGORY_STAIR
+                    else "wall" if record.category == CATEGORY_STRUCT_WALL
                     else "beam"),
             "kind": record.kind,
             "layer": record.layer,
@@ -2605,11 +2612,17 @@ def _compact_beams(beams):
 
 def _compact_texts(texts):
     out = []
+    stair_note = re.compile(
+        r"^\s*(?:STAIRS?CASE|STAIRS?|ST[-_ ]?\d+|DN|UP)\.?\s*$", re.IGNORECASE)
     for text in texts or []:
-        if text.b_mm is None and not getattr(text, "mark", None):
-            continue   # neither a size nor a mark: nothing to replay/debug from it
+        is_stair_note = bool(stair_note.match(text.text or ""))
+        if text.b_mm is None and not getattr(text, "mark", None) and not is_stair_note:
+            continue   # no size, no mark, no stair note: nothing to replay from it
+        mark = getattr(text, "mark", None)
+        if is_stair_note and not mark:
+            mark = (text.text or "").strip()
         point = text.point_internal
-        out.append({"mark": text.mark, "layer": text.layer,
+        out.append({"mark": mark, "layer": text.layer,
                     "b": text.b_mm, "h": text.h_mm,
                     "x": _mm(point[0]) if point else None,
                     "y": _mm(point[1]) if point else None,

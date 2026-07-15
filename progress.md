@@ -7,6 +7,22 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.46.0 — STAIRCASE option 1: parametric dog-leg located by plan text
+- Slab work paused at ~50% per user (more real-world CADs to test later); staircase first.
+- Option 1 (user's spec, no stair linework): new Staircase tab (riser max, tread, run
+  width, landing depth) + "Create staircases" checkbox. STAIRCASE/ST-n text marks the
+  stair; its bay = placed-members face with new `keep_points` relaxation (wall-bounded
+  bays skip the shaft filters). Dog-leg: risers = ceil(storey/riser), actual riser
+  recomputed, split across two runs anchored at the landing edge; DN/UP note picks the
+  landing end. stair_layout.py plans (Revit-free, 12 tests); builders/stairs.py places
+  (one StairsEditScope per stair, straight runs + automatic landing, numbers pushed to
+  a duplicated stairs type).
+- Exports extended: stair/wall raw geometry + STAIRCASE/ST-n/DN/UP notes → offline replay.
+  Replays: test1 plans 2 stairs, stair fixture plans ST-1+ST-2, turn edge exactly
+  landing-depth from the DN wall (set landing 1500 = the drawn 12650 line). Slab counts
+  and truth match unchanged; suite 16 files OK.
+- Option 2 next (same inputs, stair-layer linework drives run/landing positions).
+
 ## v0.45.4 — REVERT to 0.45.2 logic + rename slabs_proto.py → slab_outlines.py
 - User's Revit run: 0.45.3 body-clip did NOT fix the 50mm-offset gap → per the agreed
   fallback, slab logic reverted to 0.45.2 (topology-aware exactness, current best).

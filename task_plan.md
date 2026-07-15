@@ -508,6 +508,31 @@ The paired with/without-slab-layer 0.44.0 exports made the defect exactly measur
 >> NEXT: user runs v0.45.0 (expect slab edges pixel-on drawn boundaries at beams AND
    round columns). Then: structural walls, arch walls, stairs (fixtures ready), Project1.
 
+### Phase 21 — v0.45.1-0.45.4: trim isolation, exact-junction attempts, rename — DONE
+- [x] 0.45.1 diagnostic (beam edges only) → trim interaction proven the culprit.
+- [x] 0.45.2 topology-aware carrier choice (direction-matched crossings): the diamond-apex
+      welding fixed; user confirmed happy, residual 50mm-offset gap on test4/5 remained.
+- [x] 0.45.3 body-clip of column rings (user's algorithm) — offline correct (55 faces,
+      10-47mm, both directions) but the Revit run showed no improvement → 0.45.4 REVERTED
+      to 0.45.2 logic. The 50mm-offset gap stays OPEN (needs fresh export + coordinates).
+- [x] 0.45.4 rename: slabs_proto.py → slab_outlines.py; "prototype" naming retired.
+>> SLAB STATUS per user: ~50% (real-world CADs untested); PAUSED for staircases.
+
+### Phase 22 — v0.46.0: STAIRCASE option 1 (parametric, text-located) — DONE
+User's two-option plan; option 1 first:
+- [x] Staircase tab (riser max / tread / run width / landing depth; landing 0 = run
+      width) + "Create staircases" checkbox; defaults in config.DEFAULTS.
+- [x] stair_layout.py (Revit-free): STAIRCASE/ST-n text -> bay via placed-members faces
+      with keep_points (wall-bounded bays skip the shaft filters); dog-leg layout
+      (risers = ceil(storey/riser), split over two runs anchored at the landing edge,
+      DN/UP picks the landing end); 12 tests.
+- [x] builders/stairs.py: StairsEditScope per stair, CreateStraightRun x2, automatic
+      landing, user numbers on a duplicated stairs type.
+- [x] Exports: stair/wall raw geometry (cat "stair"/"wall") + stair notes in texts_sized.
+- [x] Replays: test1 -> 2 stairs, stair fixture -> ST-1 + ST-2; slab counts unchanged.
+- [ ] Option 2 (next): same inputs, stair-layer LINEWORK drives run/landing positions.
+>> NEXT: user runs 0.46.0 with "Create staircases" on StaircasePlan-Test1 / test1-3.
+
 ### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
 - [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
       drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK

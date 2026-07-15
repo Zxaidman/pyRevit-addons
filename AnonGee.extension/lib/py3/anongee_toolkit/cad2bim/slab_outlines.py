@@ -431,8 +431,13 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
 
 
 def slab_loops_from_placed_members(records, beam_segments, column_rects=None,
-                                   trim_columns=True):
+                                   trim_columns=True, keep_points=None):
     """Bounded faces of the PLACED geometry, [(ring, z, arcs), ...].
+
+    `keep_points` (staircase location): faces containing any of these (x, y)
+    points bypass the beam-fraction and body-coverage filters -- a stair bay is
+    bounded by WALLS and would otherwise be dropped as a shaft. The stair layout
+    asks for the face under its STAIRCASE/ST-n text this way.
 
     `trim_columns=False` is the v0.45.1 DIAGNOSTIC mode (isolating the test4/5
     misalignment): the graph is built from the placed BEAM edges alone -- no
@@ -550,7 +555,7 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None,
                     carriers.append((a, b))
     _append_footprint_rings(segs, src, rects, circles, carriers=carriers)
     return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
-                                  carriers=carriers)
+                                  carriers=carriers, keep_points=keep_points)
 
 
 def _append_footprint_rings(segs, src, rects, circles, carriers=None):
@@ -578,8 +583,12 @@ def _append_footprint_rings(segs, src, rects, circles, carriers=None):
 
 
 def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
-                           carriers=None):
+                           carriers=None, keep_points=None):
     """Shared face machinery: heal -> split -> cluster -> prune -> walk -> filter.
+
+    A face containing one of `keep_points` skips the beam-fraction and body-
+    coverage filters (a wall-bounded stair bay is a REAL area to the stair
+    layout, not a shaft to discard); area/width/simple checks still apply.
 
     Returns [(ring, z, arcs)]; `arcs` carries the drawn triples the ring traverses
     PLUS synthesized wrap arcs where the boundary runs along a circle footprint.
@@ -654,9 +663,10 @@ def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
             continue                   # a member body (thin strip), not a panel
         if not _is_simple_ring(ring):
             continue                   # bow-tie / self-crossing face: never a panel
-        if _beam_fraction(ring, beam_lines) < _MIN_BEAM_FRACTION:
+        kept = any(_point_in_ring(kp, ring) for kp in (keep_points or []))
+        if not kept and _beam_fraction(ring, beam_lines) < _MIN_BEAM_FRACTION:
             continue                   # bounded by WALLS, not beams: a lift/stair shaft
-        if _body_coverage(ring, bodies) > _MAX_BODY_COVERAGE:
+        if not kept and _body_coverage(ring, bodies) > _MAX_BODY_COVERAGE:
             continue                   # mostly under beam bodies: a member, not a panel
         if carriers:
             if carrier_idx is None:

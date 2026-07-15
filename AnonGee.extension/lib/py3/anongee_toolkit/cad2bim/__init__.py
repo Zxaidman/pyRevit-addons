@@ -35,7 +35,27 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.45.4"  # REVERT to the 0.45.2 slab logic (the user's Revit run showed 0.45.3's
+__version__ = "0.46.0"  # STAIRCASE OPTION 1 (user's spec): a generic DOG-LEG stair from dialog
+#                         numbers, located by plan TEXT -- no stair linework read. New Staircase
+#                         tab (riser height max, tread depth, run width, landing depth; landing 0
+#                         = run width) + "Create staircases" in Build. A STAIRCASE / ST-n text
+#                         marks the stair; its bay comes from the placed-members faces with the
+#                         new keep_points relaxation (a wall-bounded stair bay is dropped as a
+#                         shaft by the slab chain -- keep_points bypasses the beam-fraction and
+#                         body-coverage filters for the face under the text). Riser count =
+#                         storey height / riser, rounded up; actual riser recomputed; risers
+#                         split across two runs anchored at the landing edge; a DN/UP note picks
+#                         the landing end. stair_layout.py (Revit-free, tested) plans;
+#                         builders/stairs.py places -- one StairsEditScope per stair, runs via
+#                         StairsRun.CreateStraightRun, automatic landing between them, user
+#                         numbers pushed onto a duplicated stairs type. Exports now carry stair/
+#                         wall-layer raw geometry (cat "stair"/"wall") and STAIRCASE/ST-n/DN/UP
+#                         notes in texts_sized, so stair runs replay offline. Option 2 (stair
+#                         LINEWORK drives the layout) is next. Offline: fixture replays plan 2
+#                         stairs on test1 and both ST-1/ST-2 on the staircase plan (turn edge
+#                         exactly landing-depth from the DN wall); slab counts/truth unchanged.
+#
+# 0.45.4                  REVERT to the 0.45.2 slab logic (the user's Revit run showed 0.45.3's
 #                         body-clip did NOT fix the intended 50mm-offset gap, so per the agreed
 #                         fallback the current-best behavior returns) + RENAME: the slab pipeline
 #                         is production now, so slabs_proto.py -> slab_outlines.py (test file
