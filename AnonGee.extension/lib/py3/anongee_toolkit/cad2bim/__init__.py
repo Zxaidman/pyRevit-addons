@@ -35,7 +35,26 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.45.1"  # DIAGNOSTIC build (user-requested isolation of the remaining test4/5
+__version__ = "0.45.2"  # TRIMS RESTORED with the culprit fixed. The 0.45.1 isolation run was
+#                         conclusive: beam-edges-only had ZERO misalignment on every fixture, so
+#                         the trim INTERACTION was the fault. Offline audit found it: the
+#                         exactness pass picked each vertex's two NEAREST distinct-direction
+#                         carriers -- at a rotated (diamond) column junction the column's two
+#                         45-degree ring edges out-crowd the beam edge, so the long boundary's
+#                         endpoint welded onto the column APEX (129 off-carrier edges on test4,
+#                         long edges tilted 24-60mm -- the "new place" misalignment; test1-3's
+#                         axis-aligned columns dodge it, which is why they were clean).
+#                         FIX: TOPOLOGY-AWARE carrier choice -- a vertex belongs to its two
+#                         ring edges, so it snaps to the crossing of the carriers PARALLEL to
+#                         those edges (in/out direction match, 10 degrees); wrap ends keep
+#                         line x circle, mid-wrap chords stay radial. test4 audit: 129 -> 33
+#                         off-carrier edges, all 190mm apex shaves at column corners with
+#                         EXACT junction endpoints (24mm cosmetic clip of the column corner);
+#                         every long boundary sits at 0mm on its beam edge. The 0.45.1 missing
+#                         slabs (7 on test4/5, GH/AB bays on test1-3, 5 on test6) return with
+#                         the trims. Truth match test1-3: 137/137 bays, unchanged.
+#
+# 0.45.1                  DIAGNOSTIC build (user-requested isolation of the remaining test4/5
 #                         misalignment): the placed-members slab source runs with
 #                         trim_columns=False -- boundaries from the placed BEAM edges ALONE.
 #                         No column footprint rings, no round-column wraps, no column-layer

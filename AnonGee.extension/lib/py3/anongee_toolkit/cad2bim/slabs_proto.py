@@ -693,8 +693,9 @@ def _snap_ring_to_carriers(ring, carriers, circles, snap_ft, index=None):
     reach = snap_ft * 1.2
     slop = config.mm_to_ft(_EDGE_HEAL_MM) + snap_ft   # heal may extend past spans
     grid, cell_ft = index if index is not None else _carrier_index(carriers, snap_ft)
+    n = len(ring)
     out = []
-    for (vx, vy) in ring:
+    for i, (vx, vy) in enumerate(ring):
         near = []                     # (distance, ux, uy, ax, ay) per carrier line
         for k in grid.get((int(math.floor(vx / cell_ft)),
                            int(math.floor(vy / cell_ft))), ()):
@@ -712,46 +713,63 @@ def _snap_ring_to_carriers(ring, carriers, circles, snap_ft, index=None):
             if perp <= reach:
                 near.append((perp, ux, uy, ax, ay))
         near.sort(key=lambda c: c[0])
-        best = []
-        for cand in near:             # distinct DIRECTIONS only (dedupe collinear)
-            if all(abs(cand[1] * o[2] - cand[2] * o[1]) > 0.15 for o in best):
-                best.append(cand)
-            if len(best) == 2:
-                break
+
+        # TOPOLOGY-AWARE carrier choice: the vertex belongs to its two ring edges,
+        # so its true position is the crossing of the carriers PARALLEL to them.
+        # Nearest-two would grab a diamond column's two ring edges at a junction
+        # and weld the beam edge onto the column APEX (test4/5's 24-60mm tilts of
+        # long boundaries -- the diamonds' 45-degree edges out-crowd the beam edge).
+        def _edge_dir(p, q):
+            dx, dy = q[0] - p[0], q[1] - p[1]
+            length = (dx * dx + dy * dy) ** 0.5
+            return (dx / length, dy / length) if length > 1e-9 else None
+
+        def _match(direction):
+            if direction is None:
+                return None
+            for cand in near:         # nearest carrier parallel to this ring edge
+                if abs(direction[0] * cand[2] - direction[1] * cand[1]) <= 0.17:
+                    return cand
+            return None
+
+        d_in = _edge_dir(ring[i - 1], (vx, vy))
+        d_out = _edge_dir((vx, vy), ring[(i + 1) % n])
+        c_in = _match(d_in)
+        c_out = _match(d_out)
         on_circle = None
         for _kind, cx, cy, r in circles:
             d = abs(_dist((vx, vy), (cx, cy)) - r)
             if d <= reach and (on_circle is None or d < on_circle[0]):
                 on_circle = (d, cx, cy, r)
+        lines = []
+        for cand in (c_in, c_out):
+            if cand is not None and all(
+                    abs(cand[1] * o[2] - cand[2] * o[1]) > 0.15 for o in lines):
+                lines.append(cand)
         nx, ny = vx, vy
-        if len(best) == 2:            # junction corner: exact line crossing
-            _d1, u1x, u1y, a1x, a1y = best[0]
-            _d2, u2x, u2y, a2x, a2y = best[1]
+        if len(lines) == 2:           # corner: exact crossing of ITS two carriers
+            _d1, u1x, u1y, a1x, a1y = lines[0]
+            _d2, u2x, u2y, a2x, a2y = lines[1]
             det = u1x * u2y - u1y * u2x
             if abs(det) > 1e-9:
                 s = ((a2x - a1x) * u2y - (a2y - a1y) * u2x) / det
                 px, py = a1x + s * u1x, a1y + s * u1y
                 if _dist((px, py), (vx, vy)) <= reach * 2.0:
                     nx, ny = px, py
-        elif len(best) == 1:
-            _d, ux, uy, ax, ay = best[0]
+        elif len(lines) == 1:
+            _d, ux, uy, ax, ay = lines[0]
             hit = None
-            if on_circle is not None:        # wrap end: exact line x circle point,
-                _dc, cx, cy, r = on_circle   # but only when the vertex IS that end
-                fx, fy = ax - cx, ay - cy    # -- a mid-wrap chord vertex 40-60mm
-                bq = fx * ux + fy * uy       # from a passing line must stay radial
+            if on_circle is not None:        # wrap end: exact line x circle point
+                _dc, cx, cy, r = on_circle   # (the other ring edge is a chord, so
+                fx, fy = ax - cx, ay - cy    # no line carrier matches it)
+                bq = fx * ux + fy * uy
                 disc = bq * bq - (fx * fx + fy * fy - r * r)
                 if disc >= 0:
                     root = disc ** 0.5
                     cands = [(ax + t * ux, ay + t * uy) for t in (-bq - root, -bq + root)]
                     px, py = min(cands, key=lambda p: _dist(p, (vx, vy)))
-                    if _dist((px, py), (vx, vy)) <= snap_ft:
+                    if _dist((px, py), (vx, vy)) <= reach * 2.0:
                         hit = (px, py)
-            if hit is None and on_circle is not None and on_circle[0] < best[0][0]:
-                _dc, cx, cy, r = on_circle   # closer to the circle than the line
-                fx, fy = vx - cx, vy - cy
-                d = (fx * fx + fy * fy) ** 0.5 or 1.0
-                hit = (cx + fx / d * r, cy + fy / d * r)
             if hit is None:                  # plain edge: foot on the carrier
                 t = (vx - ax) * ux + (vy - ay) * uy
                 hit = (ax + t * ux, ay + t * uy)

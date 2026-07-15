@@ -437,3 +437,11 @@ intersection to snap distance or mid-wrap chord vertices collapse into the wrap 
 kill the arc run), radial for mid-wrap, carrier foot along edges. Never let tessellated
 arc chords into the carrier set — short angled chords near junctions hijack the
 two-line branch with garbage intersections.
+
+## v0.45.2 — nearest-two carriers is wrong; ring-edge direction is right (durable)
+The exactness pass must pick each vertex's carriers by TOPOLOGY, not proximity: the
+vertex belongs to its two ring edges, so it snaps to the crossing of the carriers
+PARALLEL to those edges (10° match). Nearest-two grabbed a diamond column's two 45°
+ring edges at a junction (both closer than the beam edge) and welded long boundaries
+onto the column apex — 24-60mm tilts that axis-aligned plans never show because their
+ring edges are collinear with the beam edges and dedupe into one carrier.

@@ -7,6 +7,17 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.45.2 — trims restored; the test4/5 culprit fixed (topology-aware exactness)
+- The 0.45.1 isolation was conclusive (beam-edges-only = zero misalignment everywhere) →
+  the trim interaction was at fault. Audit found it: the exactness pass took each vertex's
+  two NEAREST carriers; at diamond junctions the column's two 45° edges out-crowd the beam
+  edge and welded long boundaries onto the column APEX (129 off-carrier edges, 24-60mm
+  tilts — the "new place" misalignment; axis-aligned test1-3 dodge it).
+- Fix: carriers are chosen by RING-EDGE DIRECTION (a vertex snaps to the crossing of the
+  carriers parallel to its own two edges). test4: 129 → 33 off-carrier, all 190mm apex
+  shaves with exact junction endpoints; long boundaries at 0mm. Missing 0.45.1 slabs
+  return; truth match 137/137 unchanged; suite 15 OK; mirror contiguous.
+
 ## v0.45.1 — DIAGNOSTIC build (test4/5 isolation, user-requested)
 - placed_members runs with trim_columns=False: slab boundaries from placed BEAM edges
   alone (no column rings/wraps/linework; caps still suppressed at column junctions).
