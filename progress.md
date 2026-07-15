@@ -7,6 +7,21 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.45.3 — body-clip column trims (user's algorithm; kills the 50mm-offset gap)
+- Residual test4/5: column edge ~50mm off a beam edge → the 50mm graph weld collapsed
+  the two nodes, the step vanished, the slab jumped column end → beam corner (gap).
+  User's hypothesis (tolerance eats the offset) confirmed; user's algorithm applied:
+  clip the whole column ring against every placed beam BODY rectangle before it enters
+  the graph (`_beam_body_rects` + `_clip_out_bodies` in slabs_proto.py). Only parts
+  protruding past the beams survive, endpoints land EXACTLY on the beam edge line —
+  no near-miss node pair to weld. Buried edges (47mm bulges INTO beams) removed outright.
+  Carriers keep full unclipped rect edges for the exactness pass.
+- Verified offline: 15-file suite OK; counts unchanged 45/50/50/323/323/9; truth
+  137/137 on 0.44.0 paired test1-3; 55 test4/5 faces corrected 10–47mm (both
+  directions checked numerically: protruding column keeps an exact step, buried edge
+  gone); builder mirror 100% contiguous, zero nonsimple. Fallback if user run
+  disagrees: revert to v0.45.2 behavior.
+
 ## v0.45.2 — trims restored; the test4/5 culprit fixed (topology-aware exactness)
 - The 0.45.1 isolation was conclusive (beam-edges-only = zero misalignment everywhere) →
   the trim interaction was at fault. Audit found it: the exactness pass took each vertex's

@@ -35,7 +35,25 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.45.2"  # TRIMS RESTORED with the culprit fixed. The 0.45.1 isolation run was
+__version__ = "0.45.3"  # BODY-CLIP column trims (user's algorithm). Residual test4/5 defect:
+#                         when a column edge sits ~50mm from a beam edge, the 50mm graph weld
+#                         collapses the two nodes into one -- the step vanishes and the slab
+#                         jumps from the column end straight to the beam corner, leaving a gap
+#                         against the placed elements. The user's read was right: the snap
+#                         tolerance eats the offset. FIX: before the column footprint ring
+#                         enters the edge graph, each ring edge (and round-column chord) is
+#                         CLIPPED against every placed beam BODY rectangle
+#                         (_beam_body_rects + _clip_out_bodies); only the parts protruding
+#                         beyond the beams survive, and their endpoints land EXACTLY on the
+#                         beam edge line -- no near-miss node pair, nothing for the weld to
+#                         collapse. Column edges buried inside a beam body (the 47mm bulges
+#                         old code pushed INTO the beam) disappear outright. Carriers keep the
+#                         full unclipped rect edges so the exactness pass still has the true
+#                         column lines. Offline: counts unchanged (45/50/50/323/323/9),
+#                         truth 137/137 on the 0.44.0 paired exports, 55 test4/5 faces
+#                         corrected by 10-47mm, builder mirror fully contiguous.
+#
+# 0.45.2                  TRIMS RESTORED with the culprit fixed. The 0.45.1 isolation run was
 #                         conclusive: beam-edges-only had ZERO misalignment on every fixture, so
 #                         the trim INTERACTION was the fault. Offline audit found it: the
 #                         exactness pass picked each vertex's two NEAREST distinct-direction
