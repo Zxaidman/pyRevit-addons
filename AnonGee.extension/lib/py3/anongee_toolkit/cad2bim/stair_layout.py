@@ -1,17 +1,22 @@
 # -*- coding: utf-8 -*-
-"""Plan STAIRCASES from the CAD plan -- location from text, geometry from inputs.
+"""Plan STAIRCASES from the CAD plan -- both of the user's two source modes.
 
-Option 1 of the user's two staircase modes (this module): NO stair linework is
-read. A STAIRCASE / ST-1 text marks WHERE a stair lives; the bay that contains
-the text -- a bounded face of the placed beams + walls, from the same machinery
-the slabs use -- is the stair's area. Inside that area a generic DOG-LEG (two
-parallel runs + one half landing) is laid out from the user's numbers in the
-dialog's Staircase tab: target riser height, tread depth, run width and landing
-depth. The storey height (base to top level) fixes the riser count; the actual
-riser is storey / count (never above the target).
+Option 2, STAIR LINEWORK (preferred when the plan has a stair layer): the
+S-STRS riser lines say exactly where the runs are. Riser lines cluster into
+stairs, group into RUNS (parallel, equidistant, overlapping spans); the tread
+is the drawn spacing, the run width the drawn riser length, the riser count
+per run the drawn line count, and the riser height storey / total drawn
+risers. The landing is the drawn leftover space next to the riser extent.
+The user's dialog numbers back-fill anything the linework cannot say.
 
-Option 2 (planned): the same user inputs, but the run/landing positions come
-from the stair-layer linework (S-STRS riser lines) instead of a generic layout.
+Option 1, TEXT ONLY (fallback, plans like test1-3 whose stair layer is off or
+missing): a STAIRCASE / ST-1 text marks WHERE a stair lives; the bay that
+contains the text -- a bounded face of the placed beams + walls, from the same
+machinery the slabs use -- is the stair's area. Inside that area a generic
+DOG-LEG (two parallel runs + one half landing) is laid out from the user's
+numbers: target riser height, tread depth, run width and landing depth. The
+storey height (base to top level) fixes the riser count; the actual riser is
+storey / count (never above the target).
 
 Revit-free (no Revit imports) so the layout can be unit-tested and replayed
 against the JSON exports offline; builders/stairs.py turns the plans into
@@ -20,11 +25,14 @@ Revit stairs inside a StairsEditScope.
 
 import math
 import re
+from collections import defaultdict
 
 from . import config
 from . import slab_outlines
+from .classify.layers import CATEGORY_STAIR
 
 _MM = config.MM_PER_FT
+_dist = slab_outlines._dist
 
 # "STAIRCASE" / "STAIR" / "STAIRS" / "ST-1" / "ST1" / "ST 2" -- the note that sits
 # inside the stair bay on the plan (any text layer; content decides, like slabs).
@@ -238,21 +246,243 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
     return plan, note
 
 
+# ------------------------------------------------------- option 2: stair linework
+_RISER_ANGLE_TOL = math.radians(3.0)
+_RISER_MIN_LINES = 3          # fewer parallel lines than this is not a flight
+_TREAD_MIN_MM = 150.0         # drawn riser spacing accepted as a tread
+_TREAD_MAX_MM = 500.0
+_CLUSTER_GAP_MM = 2000.0      # stair pieces closer than this belong together
+_POSITION_DEDUPE_MM = 10.0    # the same riser drawn per-run appears twice
+
+
+def _stair_lines(records):
+    """Straight (a, b) segments from the stair-layer records, with their z."""
+    lines = []
+    z = 0.0
+    for record in records:
+        if record.category != CATEGORY_STAIR or record.kind == "arc":
+            continue
+        pts = record.points
+        z = pts[0][2] if pts else z
+        for i in range(len(pts) - 1):
+            a = (pts[i][0], pts[i][1])
+            b = (pts[i + 1][0], pts[i + 1][1])
+            if _dist(a, b) > config.mm_to_ft(50.0):
+                lines.append((a, b))
+    return lines, z
+
+
+def _cluster_lines(lines, gap_ft):
+    """Union-find the lines into stairs: bounding boxes closer than `gap_ft`."""
+    boxes = []
+    for a, b in lines:
+        boxes.append((min(a[0], b[0]), min(a[1], b[1]),
+                      max(a[0], b[0]), max(a[1], b[1])))
+    parent = list(range(len(lines)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(lines)):
+        for j in range(i + 1, len(lines)):
+            bi, bj = boxes[i], boxes[j]
+            if (bi[0] - gap_ft <= bj[2] and bj[0] - gap_ft <= bi[2] and
+                    bi[1] - gap_ft <= bj[3] and bj[1] - gap_ft <= bi[3]):
+                parent[find(i)] = find(j)
+    groups = defaultdict(list)
+    for i in range(len(lines)):
+        groups[find(i)].append(lines[i])
+    return list(groups.values())
+
+
+def _riser_runs(lines):
+    """RUNS from one stair's linework: (run_axis, runs) or (None, []).
+
+    Riser lines = the dominant parallel direction. Lines whose ACROSS spans
+    overlap belong to the same run; each run's riser positions (deduped -- the
+    shared riser between adjacent panels is drawn once per panel) must be >= 3
+    and equidistant within tread limits. `runs` come back as
+    [(positions_ft_sorted, span_lo_ft, span_hi_ft)], run_axis the unit vector
+    the positions are measured along.
+    """
+    buckets = defaultdict(list)
+    for a, b in lines:
+        ang = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
+        key = int(round(ang / _RISER_ANGLE_TOL))
+        buckets[key].append((a, b))
+    best = None
+    for key, bucket in buckets.items():
+        if len(bucket) < _RISER_MIN_LINES:
+            continue
+        if best is None or len(bucket) > len(best):
+            best = bucket
+    if best is None:
+        return None, []
+    # risers are same-length; a boundary line in the same direction (the drawn
+    # landing edge, twice their length) would BRIDGE the two run groups
+    lengths = sorted(_dist(a, b) for a, b in best)
+    median_len = lengths[len(lengths) // 2]
+    best = [(a, b) for a, b in best
+            if 0.6 * median_len <= _dist(a, b) <= 1.4 * median_len]
+    if len(best) < _RISER_MIN_LINES:
+        return None, []
+    a0, b0 = best[0]
+    ang = math.atan2(b0[1] - a0[1], b0[0] - a0[0]) % math.pi
+    dx, dy = math.cos(ang), math.sin(ang)          # along a riser line
+    px, py = -dy, dx                               # the run axis
+    items = []
+    for a, b in best:
+        pos = ((a[0] + b[0]) / 2.0) * px + ((a[1] + b[1]) / 2.0) * py
+        lo = min(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
+        hi = max(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
+        items.append((pos, lo, hi))
+    parent = list(range(len(items)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            lo = max(items[i][1], items[j][1])
+            hi = min(items[i][2], items[j][2])
+            shorter = min(items[i][2] - items[i][1], items[j][2] - items[j][1])
+            if shorter > 0 and (hi - lo) > 0.3 * shorter:
+                parent[find(i)] = find(j)
+    grouped = defaultdict(list)
+    for i in range(len(items)):
+        grouped[find(i)].append(items[i])
+    dedupe_ft = config.mm_to_ft(_POSITION_DEDUPE_MM)
+    runs = []
+    for group in grouped.values():
+        positions = []
+        for pos, _lo, _hi in sorted(group):
+            if not positions or pos - positions[-1] > dedupe_ft:
+                positions.append(pos)
+        if len(positions) < _RISER_MIN_LINES:
+            continue
+        gaps = [(positions[i + 1] - positions[i]) * _MM
+                for i in range(len(positions) - 1)]
+        if min(gaps) < _TREAD_MIN_MM or max(gaps) > _TREAD_MAX_MM:
+            continue
+        if max(gaps) - min(gaps) > 60.0:
+            continue                    # not equidistant: boundary lines, not risers
+        lo = min(g[1] for g in group)
+        hi = max(g[2] for g in group)
+        runs.append((positions, lo, hi))
+    return (px, py), runs
+
+
+def stair_plans_from_linework(records, params, storey_mm, texts=None):
+    """Option 2: dog-leg plans measured from the drawn stair-layer riser lines.
+
+    Every drawn quantity wins over the dialog: tread = drawn spacing, run width
+    = drawn riser length, riser count = drawn line count, landing = the drawn
+    leftover next to the riser extent. The dialog still contributes the riser
+    height limit only through storey / drawn-riser-count (reported per plan).
+    Returns (plans, notes).
+    """
+    lines, z = _stair_lines(records)
+    if not lines:
+        return [], []
+    stair_texts = find_stair_texts(texts or [])
+    plans = []
+    notes = []
+    for index, cluster in enumerate(
+            _cluster_lines(lines, config.mm_to_ft(_CLUSTER_GAP_MM)), start=1):
+        axis, runs = _riser_runs(cluster)
+        if not runs:
+            notes.append("stair linework cluster {0}: no riser lines "
+                         "(need >= {1} parallel equidistant lines)".format(
+                             index, _RISER_MIN_LINES))
+            continue
+        runs = sorted(runs, key=lambda r: r[1])[:2]      # dog-leg: two runs max
+        px, py = axis
+        xs = [q for a, b in cluster for q in (a[0], b[0])]
+        ys = [q for a, b in cluster for q in (a[1], b[1])]
+        cluster_lo = min(x * px + y * py for x, y in zip(xs, ys))
+        cluster_hi = max(x * px + y * py for x, y in zip(xs, ys))
+        pos_lo = min(r[0][0] for r in runs)
+        pos_hi = max(r[0][-1] for r in runs)
+        left_over_lo = (pos_lo - cluster_lo) * _MM
+        left_over_hi = (cluster_hi - pos_hi) * _MM
+        landing_at_lo = left_over_lo >= left_over_hi
+        landing_mm = max(left_over_lo, left_over_hi)
+        gaps = [(r[0][i + 1] - r[0][i]) * _MM
+                for r in runs for i in range(len(r[0]) - 1)]
+        gaps.sort()
+        tread_mm = gaps[len(gaps) // 2]
+        widths = [(r[2] - r[1]) * _MM for r in runs]
+        width_mm = min(widths)
+        if landing_mm < width_mm * 0.5:
+            landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
+        risers_total = sum(len(r[0]) for r in runs)
+        riser_mm = storey_mm / risers_total if storey_mm > 0 else 0.0
+        # nearest stair text names the stair
+        cx = sum(xs) / len(xs)
+        cy = sum(ys) / len(ys)
+        mark = "ST-{0}".format(index)
+        best_d = None
+        for tx, ty, tmark in stair_texts:
+            d = math.hypot(tx - cx, ty - cy)
+            if best_d is None or d < best_d:
+                best_d, mark = d, tmark
+        # (px, py) is the run axis and `off` the across offset: a point is
+        # p = axis * s + normal * off, with normal = the riser-line direction.
+        # The FIRST run climbs INTO the landing edge, the second climbs OUT of
+        # it back the other way (the 180-degree dog-leg turn).
+        dxn, dyn = py, -px                              # unit normal to the axis
+        run_dicts = []
+        for number, (positions, span_lo, span_hi) in enumerate(runs):
+            off = (span_lo + span_hi) / 2.0
+            s0, s1 = positions[0], positions[-1]
+            near_s, far_s = (s0, s1) if landing_at_lo else (s1, s0)
+            if number == 0:
+                start_s, end_s = far_s, near_s
+            else:
+                start_s, end_s = near_s, far_s
+            run_dicts.append({
+                "start": (px * start_s + dxn * off, py * start_s + dyn * off),
+                "end": (px * end_s + dxn * off, py * end_s + dyn * off),
+                "risers": len(positions),
+                "width_mm": (span_hi - span_lo) * _MM})
+        plans.append({"mark": mark, "z": z, "runs": run_dicts,
+                      "landing": None, "risers_total": risers_total,
+                      "riser_mm": riser_mm, "tread_mm": tread_mm,
+                      "run_width_mm": width_mm, "landing_mm": landing_mm,
+                      "source": "stair_linework"})
+    return plans, notes
+
+
 def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm):
-    """The full option-1 pipeline: texts -> areas -> dog-leg plans.
+    """The staircase chain (user's two options, drawn linework preferred):
+
+    (2) stair-layer LINEWORK -- runs measured from the drawn riser lines;
+    (1) TEXT + dialog numbers -- a generic dog-leg inside the bay that holds a
+        STAIRCASE / ST-n note (used when the plan has no usable stair layer).
 
     Returns (plans, notes). Every skipped stair leaves a human-readable note so
-    the console says WHY a text produced no stair.
+    the console says WHY a source produced no stair.
     """
-    areas, notes = stair_areas_from_texts(records, beam_segments, column_rects,
-                                          texts)
+    plans, notes = stair_plans_from_linework(records, params, storey_mm,
+                                             texts=texts)
+    if plans:
+        return plans, notes
+    areas, area_notes = stair_areas_from_texts(records, beam_segments,
+                                               column_rects, texts)
+    notes += area_notes
     direction_texts = find_direction_texts(texts)
-    plans = []
     for ring, z, mark in areas:
         plan, note = plan_dogleg_stair(ring, z, mark, params, storey_mm,
                                        direction_texts=direction_texts)
         if note:
             notes.append(note)
         if plan:
+            plan["source"] = "stair_text"
             plans.append(plan)
     return plans, notes

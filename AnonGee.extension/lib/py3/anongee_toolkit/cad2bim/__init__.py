@@ -35,7 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.46.0"  # STAIRCASE OPTION 1 (user's spec): a generic DOG-LEG stair from dialog
+__version__ = "0.47.0"  # STAIRCASE OPTION 2 (user's spec): the stair-layer LINEWORK drives the
+#                         layout. Riser lines cluster into stairs (bbox union-find), the dominant
+#                         parallel direction is the riser direction (same-length filter keeps the
+#                         drawn landing boundary from bridging the runs), overlapping spans group
+#                         the lines into RUNS: tread = drawn spacing, run width = drawn riser
+#                         length, riser count = drawn line count (deduped -- each riser is drawn
+#                         once per panel), riser height = storey / drawn total, landing = the
+#                         drawn leftover next to the riser extent, first run climbs INTO the
+#                         landing edge and the second climbs out (180 turn). The chain prefers
+#                         linework and falls back to option 1 (text + dialog numbers) when the
+#                         plan has no usable stair layer -- console prints the source. Replays:
+#                         StaircasePlan ST-1/ST-2 and test1 both reproduce the DRAWN stair
+#                         exactly (turn edge 12650, tread 300, width 1500, landing 1500,
+#                         10+10 risers @ 150); test4 (no stair layer) falls back to text.
+#
+# 0.46.0                  STAIRCASE OPTION 1 (user's spec): a generic DOG-LEG stair from dialog
 #                         numbers, located by plan TEXT -- no stair linework read. New Staircase
 #                         tab (riser height max, tread depth, run width, landing depth; landing 0
 #                         = run width) + "Create staircases" in Build. A STAIRCASE / ST-n text

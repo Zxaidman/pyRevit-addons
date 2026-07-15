@@ -1131,9 +1131,10 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
         return {"created": 0, "skipped": len(notes), "errors": 0}
 
     result = stairs.place_stairs(doc, plans, base_id, top_id)
-    _say("Stairs -- planned: {0}, created: {1}, skipped: {2}, errors: {3} "
-         "(storey {4} mm, {5} risers @ {6:.1f} mm)".format(
-             len(plans), len(result["created"]), len(result["skipped"]),
+    _say("Stairs -- source: {0}, planned: {1}, created: {2}, skipped: {3}, "
+         "errors: {4} (storey {5} mm, {6} risers @ {7:.1f} mm)".format(
+             plans[0].get("source") or "stair_text", len(plans),
+             len(result["created"]), len(result["skipped"]),
              len(result["errors"]), int(storey_mm), plans[0]["risers_total"],
              plans[0]["riser_mm"]))
     for message in result["errors"] + result["skipped"]:

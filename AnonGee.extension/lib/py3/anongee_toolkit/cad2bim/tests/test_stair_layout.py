@@ -168,6 +168,84 @@ class KeepPointsFace(unittest.TestCase):
         self.assertAlmostEqual(area_m2, 16.0, places=1)
 
 
+def _linework_stair(x0_mm=11150.0, turn_mm=12650.0, last_mm=15350.0,
+                    y0_mm=23150.0, mid_mm=24650.0, y1_mm=26150.0):
+    """Riser + boundary lines mirroring the StaircasePlan-Test1 ST-1 geometry:
+    two stacked runs (across y), vertical risers every 300 mm from `turn_mm` to
+    `last_mm` drawn ONCE PER RUN (duplicates), and a drawn half landing between
+    x0_mm and turn_mm spanning both runs."""
+    recs = []
+
+    def line(ax, ay, bx, by):
+        recs.append(_Rec("line", [(ax * _FT, ay * _FT), (bx * _FT, by * _FT)],
+                         layers.CATEGORY_STAIR))
+
+    x = turn_mm
+    while x <= last_mm + 0.5:
+        line(x, y0_mm, x, mid_mm)          # lower-run riser
+        line(x, mid_mm, x, y1_mm)          # upper-run riser (same position)
+        x += 300.0
+    line(x0_mm, y0_mm, turn_mm, y0_mm)     # landing boundary
+    line(x0_mm, y1_mm, turn_mm, y1_mm)
+    line(x0_mm, y0_mm, x0_mm, y1_mm)
+    return recs
+
+
+class LineworkStairs(unittest.TestCase):
+    def test_runs_measured_from_riser_lines(self):
+        recs = _linework_stair()
+        plans, notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0, texts=[_Text("ST-1", 13679.0, 24513.0)])
+        self.assertEqual(len(plans), 1)
+        plan = plans[0]
+        self.assertEqual(plan["source"], "stair_linework")
+        self.assertEqual(plan["mark"], "ST-1")
+        self.assertEqual([r["risers"] for r in plan["runs"]], [10, 10])
+        self.assertEqual(plan["risers_total"], 20)
+        self.assertAlmostEqual(plan["riser_mm"], 150.0)
+        self.assertAlmostEqual(plan["tread_mm"], 300.0, places=3)
+        self.assertAlmostEqual(plan["run_width_mm"], 1500.0, places=3)
+        self.assertAlmostEqual(plan["landing_mm"], 1500.0, places=3)
+        # first run climbs INTO the landing edge (drawn at x = 12650)
+        run1, run2 = plan["runs"]
+        self.assertAlmostEqual(run1["end"][0] * _MM, 12650.0, places=2)
+        self.assertAlmostEqual(run1["start"][0] * _MM, 15350.0, places=2)
+        self.assertAlmostEqual(run2["start"][0] * _MM, 12650.0, places=2)
+        # runs sit on the two run centrelines (y 23900 and 25400)
+        centres = sorted(round(r["start"][1] * _MM) for r in plan["runs"])
+        self.assertEqual(centres, [23900, 25400])
+
+    def test_no_riser_lines_no_plan(self):
+        recs = _wall_bay(0.0, 0.0, 4000.0, 4000.0)      # walls, no stair layer
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(plans, [])
+
+    def test_two_clusters_two_stairs(self):
+        recs = (_linework_stair() +
+                _linework_stair(y0_mm=15650.0, mid_mm=17150.0, y1_mm=18650.0))
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 2)
+
+    def test_chain_prefers_linework(self):
+        recs = (_wall_bay(11000.0, 23000.0, 16500.0, 26300.0) +
+                _linework_stair())
+        texts = [_Text("ST-1", 13679.0, 24513.0)]
+        plans, _notes = stair_layout.plan_stairs(recs, [], None, texts,
+                                                 _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["source"], "stair_linework")
+
+    def test_chain_falls_back_to_text(self):
+        recs = _wall_bay(0.0, 0.0, 6000.0, 3000.0)
+        texts = [_Text("STAIRCASE", 3000.0, 1500.0)]
+        plans, _notes = stair_layout.plan_stairs(recs, [], None, texts,
+                                                 _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["source"], "stair_text")
+
+
 class FullPipeline(unittest.TestCase):
     def test_plan_stairs_from_texts(self):
         recs = _wall_bay(0.0, 0.0, 6000.0, 3000.0)
