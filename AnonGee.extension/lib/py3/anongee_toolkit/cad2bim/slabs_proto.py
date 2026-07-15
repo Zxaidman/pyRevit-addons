@@ -431,8 +431,16 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
                                   carriers=carriers)
 
 
-def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
+def slab_loops_from_placed_members(records, beam_segments, column_rects=None,
+                                   trim_columns=True):
     """Bounded faces of the PLACED geometry, [(ring, z, arcs), ...].
+
+    `trim_columns=False` is the v0.45.1 DIAGNOSTIC mode (isolating the test4/5
+    misalignment): the graph is built from the placed BEAM edges alone -- no
+    column footprint rings, no round-column wraps, and no column-layer linework
+    (walls included) -- so any misalignment that remains cannot come from the
+    column trimming. Slab corners run square through the column corners and
+    shaft faces are not wall-bounded in this mode; that is expected.
 
     The user-proposed source: slabs are created AFTER beams and columns, so their
     outlines can come from what was actually placed instead of the raw drawn
@@ -444,8 +452,13 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
     column-layer WALL linework outside every footprint (so shafts stay bounded).
     """
     pad_ft = config.mm_to_ft(_COLUMN_RECT_PAD_MM)
+    junction_fps = column_rects            # caps still suppress at column junctions
+    if not trim_columns:
+        column_rects = None                # beam edges ONLY: no rings, no wraps
     rects = [fp for fp in (column_rects or []) if fp[0] == "rect"]
     circles = [fp for fp in (column_rects or []) if fp[0] == "circle"]
+    jrects = [fp for fp in (junction_fps or []) if fp[0] == "rect"]
+    jcircles = [fp for fp in (junction_fps or []) if fp[0] == "circle"]
 
     def _swallowed(pts):
         for fp in rects:
@@ -468,11 +481,12 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
 
     def _junction_end(px, py, self_idx):
         # a beam end meeting a column or another beam gets its boundary from THAT
-        # member; a cap there only adds jog material at the corner
-        for fp in rects:
+        # member; a cap there only adds jog material at the corner (columns keep
+        # suppressing caps even in the trim_columns=False diagnostic mode)
+        for fp in jrects:
             if _in_rect_footprint(px, py, fp, pad_ft):
                 return True
-        for _kind, cx, cy, r in circles:
+        for _kind, cx, cy, r in jcircles:
             if (px - cx) ** 2 + (py - cy) ** 2 <= (r + pad_ft) ** 2:
                 return True
         for k, (x1, y1, x2, y2, length, half_w, _bz) in enumerate(beams_xy):
@@ -513,6 +527,8 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None):
             if record.kind != "arc":
                 continue               # straight linework replaced by placed edges
         elif record.category == CATEGORY_COLUMN:
+            if not trim_columns:
+                continue               # diagnostic mode: beam edges ONLY
             if _swallowed(record.points):
                 continue               # replaced by the footprint ring
         else:

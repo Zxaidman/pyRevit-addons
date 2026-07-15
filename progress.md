@@ -7,6 +7,12 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.45.1 — DIAGNOSTIC build (test4/5 isolation, user-requested)
+- placed_members runs with trim_columns=False: slab boundaries from placed BEAM edges
+  alone (no column rings/wraps/linework; caps still suppressed at column junctions).
+  Offline: test4 316 faces / 3653 m² (vs 323/3687 trimmed). If the misalignment persists
+  → not the column trim; if it vanishes → trim interaction is the culprit.
+
 ## v0.45.0 — the 14.4mm misalignment solved (exactness pass)
 - Root cause measured from the paired exports: walk nodes are weld-cluster centroids
   (≤snap/2 off the true junction); wrap projection kept them on the circle but off the

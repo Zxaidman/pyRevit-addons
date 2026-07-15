@@ -1020,9 +1020,15 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
     loops = slabs_proto.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
+        # v0.45.1 DIAGNOSTIC (user-requested isolation of the remaining test4/5
+        # misalignment): trim_columns=False -> slab boundaries come from the placed
+        # BEAM edges ALONE; column rings/wraps and column-layer linework are out of
+        # the graph. Expected side effects while diagnosing: slab corners run square
+        # through column corners, no round-column wraps, shafts not wall-bounded.
         loops = slabs_proto.slab_loops_from_placed_members(
-            records, beam_segments.get("segments"), column_rects=column_rects)
-        source = "placed_members"
+            records, beam_segments.get("segments"), column_rects=column_rects,
+            trim_columns=False)
+        source = "placed_members(beam-edges-only)"
     if not loops:
         _say("Slabs -- no closed slab outline found (any source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}

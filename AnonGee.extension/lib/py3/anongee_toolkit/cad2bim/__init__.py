@@ -35,7 +35,18 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.45.0"  # THE 14.4mm MISALIGNMENT SOLVED (paired with/without-slab-layer exports
+__version__ = "0.45.1"  # DIAGNOSTIC build (user-requested isolation of the remaining test4/5
+#                         misalignment): the placed-members slab source runs with
+#                         trim_columns=False -- boundaries from the placed BEAM edges ALONE.
+#                         No column footprint rings, no round-column wraps, no column-layer
+#                         linework in the graph (caps still suppressed at column junctions so
+#                         beam ends do not grow cap slivers). Expected while diagnosing: slab
+#                         corners run square through column corners, no arcs at round columns,
+#                         shaft faces not wall-bounded. If the test4/5 misalignment persists in
+#                         this build it is NOT the column trimming; if it vanishes, the trim
+#                         interaction is the culprit and 0.45.2 will fix it surgically.
+#
+# 0.45.0                  THE 14.4mm MISALIGNMENT SOLVED (paired with/without-slab-layer exports
 #                         made it exactly measurable -- thank you for those):
 #                         (A) ROOT CAUSE: a walk node is a weld-cluster centroid, which can sit
 #                         up to snap/2 off the true junction; the wrap-arc endpoint projection
