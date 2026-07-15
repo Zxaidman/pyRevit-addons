@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
-"""PROTOTYPE: derive floor SLABS from the plan -- outline, thickness and mark.
+"""Derive floor SLAB outlines from the plan -- outline, thickness and mark.
 
-Status: prototype, NOT wired into the pushbutton. Beams are the active workstream;
-this module proves out the slab pipeline so it can be lifted in when beams are done.
+Wired into the CAD-to-BIM pushbutton (builders/slabs.py places the floors).
 It is Revit-free (imports no Revit assemblies) so it can be unit-tested and replayed
 against the JSON raw-geometry exports like the beam logic.
 
-Three outline sources, in order of preference:
+Two outline sources, in order of preference (the production chain):
 
 (1) SLAB-EDGE LAYER (A-FLOR): each closed polyline on the slab-edge layer IS a slab
     boundary -- take it directly (loose edge lines are chained end-to-end into rings
     first). This is the normal path when the DWG carries a floor layer.
 
-(2) MEMBER EDGES (no slab layer): the beams' and columns' DRAWN outlines bound each
-    panel with true face lines; the bounded faces of that edge graph are the slab
-    panels at their exact boundary (member-body strips are filtered by mean width).
+(2) PLACED MEMBERS (no slab layer): synthesize edge lines from the PLACED beams
+    (centreline +/- half width) and the PLACED column footprint rings; the bounded
+    faces of that graph are the slab panels, every vertex re-derived exactly onto
+    its carrier lines by the exactness pass.
 
-(3) BEAM PERIMETER GRAPH (last resort): the placed beam CENTERLINES form a planar
-    graph whose bounded faces are the panels; each face edge is then offset INWARD
-    by that beam's half width so the slab meets the beam FACE instead of
-    overlapping to its centreline.
+Two further sources survive for tests and offline replays only:
+slab_loops_from_member_edges (drawn member linework) and
+slab_loops_from_beam_graph (centreline graph, faces inset by half width).
 
 Sizing and naming mirror columns/beams exactly:
     - a slab label ("S1 150 THK", "S3", "150 thk") sitting INSIDE a loop names it and
@@ -426,8 +425,7 @@ def slab_loops_from_member_edges(records, column_rects=None, beam_segments=None)
                 src.append(is_beam)
                 if not is_arc:
                     carriers.append((a, b))
-    _append_footprint_rings(segs, src, rects, circles, carriers=carriers,
-                            bodies=_beam_body_rects(beam_segments))
+    _append_footprint_rings(segs, src, rects, circles, carriers=carriers)
     return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
                                   carriers=carriers)
 
@@ -550,110 +548,33 @@ def slab_loops_from_placed_members(records, beam_segments, column_rects=None,
                 src.append(is_beam)
                 if not is_arc:
                     carriers.append((a, b))
-    _append_footprint_rings(segs, src, rects, circles, carriers=carriers,
-                            bodies=_beam_body_rects(beam_segments))
+    _append_footprint_rings(segs, src, rects, circles, carriers=carriers)
     return _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
                                   carriers=carriers)
 
 
-def _beam_body_rects(beam_segments):
-    """(cx, cy, ux, uy, half_len, half_w) per placed segment, for ring clipping."""
-    out = []
-    for seg in (beam_segments or []):
-        x1, y1 = seg["start"][0], seg["start"][1]
-        x2, y2 = seg["end"][0], seg["end"][1]
-        length = _dist((x1, y1), (x2, y2))
-        half_w = (seg.get("width_mm") or 0.0) / _MM / 2.0
-        if length <= 0 or half_w <= 0:
-            continue
-        out.append(((x1 + x2) / 2.0, (y1 + y2) / 2.0,
-                    (x2 - x1) / length, (y2 - y1) / length, length / 2.0, half_w))
-    return out
+def _append_footprint_rings(segs, src, rects, circles, carriers=None):
+    """The clean column TRIM rings: 4 edges per rect, a fine polygon per circle.
 
-
-def _clip_out_bodies(a, b, bodies):
-    """Sub-segments of (a, b) OUTSIDE every beam body -- [(p, q), ...].
-
-    A column ring edge running INSIDE a beam is redundant (the boundary there is
-    the beam's own edge) and worse: where a column edge sits ~snap distance off a
-    parallel beam edge (the reported 50 mm offset), its nodes WELD onto the beam
-    edge's nodes and the offset step vanishes -- the slab jumps from the column
-    end to the beam corner, leaving a gap. Clipping makes the surviving ring
-    pieces end EXACTLY on the beam edge lines, so junctions coincide instead of
-    nearly missing, and no tolerance is involved."""
-    ax, ay = a
-    dx, dy = b[0] - ax, b[1] - ay
-    length = (dx * dx + dy * dy) ** 0.5
-    if length <= 0:
-        return []
-    ux, uy = dx / length, dy / length
-    spans = []
-    for (bx, by, bux, buy, hl, hw) in bodies:
-        fx, fy = ax - bx, ay - by
-        u0 = fx * bux + fy * buy
-        du = ux * bux + uy * buy
-        v0 = fy * bux - fx * buy
-        dv = uy * bux - ux * buy
-        span = _clip_1d(0.0, length, u0, du, hl)
-        if span:
-            span = _clip_1d(span[0], span[1], v0, dv, hw)
-        if span and span[1] - span[0] > 1e-9:
-            spans.append(span)
-    if not spans:
-        return [(a, b)]
-    spans.sort()
-    out = []
-    cursor = 0.0
-    min_piece = config.mm_to_ft(20.0)
-    for t0, t1 in spans:
-        if t0 - cursor >= min_piece:
-            out.append(((ax + ux * cursor, ay + uy * cursor),
-                        (ax + ux * t0, ay + uy * t0)))
-        cursor = max(cursor, t1)
-    if length - cursor >= min_piece:
-        out.append(((ax + ux * cursor, ay + uy * cursor), (b[0], b[1])))
-    return out
-
-
-def _clip_1d(t0, t1, f0, df, half):
-    """Shrink [t0, t1] to where |f0 + t*df| <= half; None when nothing remains."""
-    if abs(df) < 1e-12:
-        return (t0, t1) if abs(f0) <= half else None
-    ta, tb = (-half - f0) / df, (half - f0) / df
-    if ta > tb:
-        ta, tb = tb, ta
-    t0, t1 = max(t0, ta), min(t1, tb)
-    return (t0, t1) if t0 < t1 else None
-
-
-def _append_footprint_rings(segs, src, rects, circles, carriers=None, bodies=None):
-    """The clean column TRIM rings, CLIPPED against the beam bodies: only the
-    parts of a column outline that protrude past the beams enter the graph (the
-    user-proposed trimming -- the covered parts' boundary is the beam edge).
-
-    Rect ring edges are CARRIERS for the exactness pass (full, unclipped: the
-    carrier is the line); circle chords are not (their carrier is the circle)."""
-    bodies = bodies or []
+    Rect ring edges are CARRIERS for the exactness pass; circle chords are not
+    (a circle's true carrier is the circle itself)."""
     for fp in rects:
         _kind, cx, cy, ca, sa, hl, hs = fp
         corners = [(cx + su * hl * ca - sv * hs * sa, cy + su * hl * sa + sv * hs * ca)
                    for su, sv in ((1, 1), (-1, 1), (-1, -1), (1, -1))]
         for i in range(4):
-            edge = (corners[i], corners[(i + 1) % 4])
-            for piece in _clip_out_bodies(edge[0], edge[1], bodies):
-                segs.append(piece)
-                src.append(False)
+            segs.append((corners[i], corners[(i + 1) % 4]))
+            src.append(False)
             if carriers is not None:
-                carriers.append(edge)
+                carriers.append((corners[i], corners[(i + 1) % 4]))
     min_chord = config.mm_to_ft(_SNAP_MM * 2.0)   # chords must outsize the node snap
     for _kind, cx, cy, r in circles:
         n = max(8, min(48, int(2.0 * math.pi * r / min_chord)))
         ring = [(cx + r * math.cos(2.0 * math.pi * i / n),
                  cy + r * math.sin(2.0 * math.pi * i / n)) for i in range(n)]
         for i in range(n):
-            for piece in _clip_out_bodies(ring[i], ring[(i + 1) % n], bodies):
-                segs.append(piece)
-                src.append(False)
+            segs.append((ring[i], ring[(i + 1) % n]))
+            src.append(False)
 
 
 def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,

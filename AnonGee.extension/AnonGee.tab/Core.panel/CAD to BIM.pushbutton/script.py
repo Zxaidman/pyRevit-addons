@@ -85,7 +85,7 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import compat, config, report, slabs_proto
+from anongee_toolkit.cad2bim import compat, config, report, slab_outlines
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -831,8 +831,8 @@ def main():
     _progress(7, 8, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
-    # SLABS, step 1 (prototype wired): outlines from the slab-edge (A-FLOR) rings,
-    # falling back to the BEAM PERIMETER GRAPH when the DWG has no slab layer;
+    # SLABS: outlines from the slab-edge (A-FLOR) rings, falling back to the
+    # PLACED beams + column footprints when the DWG has no slab layer;
     # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
     _progress(8, 8, "create slabs")
     if selections["create_slabs"]:
@@ -994,12 +994,12 @@ def _create_beams(doc, beam_segments, selections):
 
 def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
                   column_rects=None):
-    """Place floor slabs (PROTOTYPE step 1) after the beams, in a transaction group.
+    """Place floor slabs after the beams, in a transaction group.
 
     Outline sources, in order: (1) closed rings on the slab-edge (A-FLOR) layer;
-    (2) faces of the drawn beam+column edge lines (exact boundary, no offset);
-    (3) faces of the placed beam centreline graph, inset by each beam's half
-    width. Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
+    (2) faces of the PLACED beam edge lines with the placed column footprints
+    trimming the corners (exact boundary, re-derived onto the carrier lines).
+    Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
     INSIDE the loop -- content-driven, any text layer. The floor type is the one
     picked in the window, duplicated per thickness; the level is the beams' level.
     """
@@ -1017,7 +1017,7 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
     # lines form the boundary, and the column footprint rings inside it trim the
     # corners. The beams are placed aligned, so the slab edges align with them by
     # construction; the drawn-linework fallbacks are retired.
-    loops = slabs_proto.slab_loops_from_edges(records)
+    loops = slab_outlines.slab_loops_from_edges(records)
     source = "slab_edges"
     if not loops:
         # Column trimming is back ON (the 0.45.1 beam-edges-only isolation proved
@@ -1025,7 +1025,7 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
         # picks each vertex's carriers by RING-EDGE DIRECTION, so a diamond
         # column's 45-degree edges can no longer out-crowd the beam edge and weld
         # a long boundary onto the column apex.
-        loops = slabs_proto.slab_loops_from_placed_members(
+        loops = slab_outlines.slab_loops_from_placed_members(
             records, beam_segments.get("segments"), column_rects=column_rects)
         source = "placed_members"
     if not loops:
@@ -1033,7 +1033,7 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}
     slab_schedule = {m: v for m, v in (schedule or {}).items()
                      if str(m)[:1].upper() == "S" and str(m)[1:2].isdigit()}
-    slab_defs = slabs_proto.apply_slab_labels(loops, texts, schedule=slab_schedule)
+    slab_defs = slab_outlines.apply_slab_labels(loops, texts, schedule=slab_schedule)
 
     group = TransactionGroup(doc, "CAD to BIM: Slabs")
     transaction = Transaction(doc, "Create slabs")
@@ -1058,7 +1058,7 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
                 "source": source}
 
     sized = sum(1 for sd in slab_defs if sd.get("thickness_mm") is not None)
-    _say("Slabs (prototype) -- source: {0}, loops: {1}, thickness-noted: {2}, "
+    _say("Slabs -- source: {0}, loops: {1}, thickness-noted: {2}, "
          "created: {3}, skipped: {4}, errors: {5}".format(
              source, len(slab_defs), sized, len(result["created"]),
              len(result["skipped"]), len(result["errors"])))

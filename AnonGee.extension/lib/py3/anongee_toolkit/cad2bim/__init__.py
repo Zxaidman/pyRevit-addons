@@ -35,7 +35,16 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.45.3"  # BODY-CLIP column trims (user's algorithm). Residual test4/5 defect:
+__version__ = "0.45.4"  # REVERT to the 0.45.2 slab logic (the user's Revit run showed 0.45.3's
+#                         body-clip did NOT fix the intended 50mm-offset gap, so per the agreed
+#                         fallback the current-best behavior returns) + RENAME: the slab pipeline
+#                         is production now, so slabs_proto.py -> slab_outlines.py (test file
+#                         follows), and the "prototype" naming is retired from the pushbutton
+#                         console line ("Slabs -- source: ...") and every comment/docstring.
+#                         Replay counts identical to 0.45.2 (45/50/50/323/323/9, truth 137/137).
+#
+# 0.45.3                  (reverted in 0.45.4 -- no improvement in the Revit run)
+#                         BODY-CLIP column trims (user's algorithm). Residual test4/5 defect:
 #                         when a column edge sits ~50mm from a beam edge, the 50mm graph weld
 #                         collapses the two nodes into one -- the step vanishes and the slab
 #                         jumps from the column end straight to the beam corner, leaving a gap

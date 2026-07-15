@@ -24,8 +24,8 @@
   ("StructuralPlan-Test20-Beam Stress test.dxf", $INSUNITS=mm); asserted by
   `tests/test_beam_stress.py` (14 tests).
 
-## SLAB PIPELINE (current state at v0.36.0)
-- `slabs_proto.py`: loops from A-FLOR rings (chained if loose), else the beam-perimeter
+## SLAB PIPELINE (current state at v0.36.0; module renamed slab_outlines.py at 0.45.4)
+- `slab_outlines.py` (was slabs_proto.py): loops from A-FLOR rings (chained if loose), else the beam-perimeter
   GRAPH (ends healed ≤600mm onto carriers, split at X/T crossings, max-CCW face walk,
   bounded faces ≥1 m²). `apply_slab_labels`: "S1 150 THK"/"150 THK." inside the loop;
   mark-only via schedule.

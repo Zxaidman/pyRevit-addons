@@ -1,4 +1,4 @@
-# Demo: slab prototype against a REAL 0.30.0 export -- both outline sources.
+# Demo: slab outlines against a REAL 0.30.0 export -- both outline sources.
 import importlib.util, os, sys, types, json
 PKG = "/home/user/pyRevit-addons/AnonGee.extension/lib/py3/anongee_toolkit/cad2bim"
 for name in ("_c2b", "_c2b.geom", "_c2b.classify", "_c2b.readers"):
@@ -14,7 +14,7 @@ L("_c2b.geom.shapes","geom","shapes.py")
 layers=L("_c2b.classify.layers","classify","layers.py")
 marks=L("_c2b.classify.marks","classify","marks.py")
 report=L("_c2b.report","report.py")
-proto=L("_c2b.slabs_proto","slabs_proto.py")
+proto=L("_c2b.slab_outlines","slab_outlines.py")
 MM=config.MM_PER_FT; FT=1.0/MM
 
 class T:

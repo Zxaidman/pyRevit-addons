@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Place floor slabs from derived slab loops (see slabs_proto.py).
+"""Place floor slabs from derived slab loops (see slab_outlines.py).
 
 Mirrors the column/beam builders: a base floor type is duplicated per thickness
 ("150 THK") and cached; a loop with no thickness inherits the picked type. A loop
@@ -75,7 +75,7 @@ def _curve_loop(ring, arcs=None):
     """Ring -> CurveLoop with REAL Arc edges where the boundary is curved.
 
     `arcs` carries (start, mid, end) triples for the ring's curved stretches (the
-    proto tessellated them into chords for the geometry passes). Each registered
+    outline module tessellated them into chords for the geometry passes). Each registered
     stretch is emitted as ONE Arc.Create(start, end, pointOnArc) and its chord run
     skipped; the straight stretches are sanitized (duplicate points, sub-tolerance
     edges and collinear stops merged) so Floor.Create never sees micro-segments."""

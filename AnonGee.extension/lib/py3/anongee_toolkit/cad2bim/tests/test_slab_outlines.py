@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""slabs_proto -- slab loops from the slab-edge layer OR the beam-perimeter graph.
+"""slab_outlines -- slab loops from the slab-edge layer OR the placed members.
 
-The prototype's two outline sources and its label sizing are exercised on synthetic
+The module's outline sources and its label sizing are exercised on synthetic
 plans: a 2x2 beam grid must yield exactly 4 bounded faces (the outer face and the
 junction slivers never become slabs); a closed slab-edge polyline is taken as drawn;
 loose edge lines chain into a ring; labels size/name a loop from inside it, with
@@ -40,10 +40,10 @@ def _load():
     load("_slb.config", "config.py")
     load("_slb.geom.shapes", "geom", "shapes.py")
     load("_slb.classify.layers", "classify", "layers.py")
-    return load("_slb.slabs_proto", "slabs_proto.py")
+    return load("_slb.slab_outlines", "slab_outlines.py")
 
 
-slabs_proto = _load()
+slab_outlines = _load()
 layers = sys.modules["_slb.classify.layers"]
 
 
@@ -78,9 +78,9 @@ class BeamGraphFaces(unittest.TestCase):
         return segs
 
     def test_two_by_two_grid_gives_four_bays(self):
-        loops = slabs_proto.slab_loops_from_beam_graph(self._grid())
+        loops = slab_outlines.slab_loops_from_beam_graph(self._grid())
         self.assertEqual(len(loops), 4)
-        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+        areas = sorted(abs(slab_outlines._signed_area(r)) * _MM * _MM / 1e6
                        for r, _z, _a in loops)
         for a in areas:
             self.assertAlmostEqual(a, 25.0, delta=0.5)   # 5 m x 5 m bays
@@ -90,18 +90,18 @@ class BeamGraphFaces(unittest.TestCase):
         segs = [_seg(0, 0, 8000, 0), _seg(8000, 0, 8000, 8000),
                 _seg(8000, 8000, 0, 8000), _seg(0, 8000, 0, 0),
                 _seg(0, 4000, 8000, 4000), _seg(4000, 0, 4000, 8000)]
-        loops = slabs_proto.slab_loops_from_beam_graph(segs)
+        loops = slab_outlines.slab_loops_from_beam_graph(segs)
         self.assertEqual(len(loops), 4)
 
     def test_open_ends_make_no_face(self):
         segs = [_seg(0, 0, 5000, 0), _seg(5000, 0, 5000, 5000)]   # an L, not a loop
-        self.assertEqual(slabs_proto.slab_loops_from_beam_graph(segs), [])
+        self.assertEqual(slab_outlines.slab_loops_from_beam_graph(segs), [])
 
 
 class SlabEdgeLoops(unittest.TestCase):
     def test_closed_polyline_is_a_ring(self):
         rec = _Record([(0, 0), (6000, 0), (6000, 4000), (0, 4000)], closed=True)
-        loops = slabs_proto.slab_loops_from_edges([rec])
+        loops = slab_outlines.slab_loops_from_edges([rec])
         self.assertEqual(len(loops), 1)
         self.assertEqual(len(loops[0][0]), 4)
 
@@ -110,12 +110,12 @@ class SlabEdgeLoops(unittest.TestCase):
                 _Record([(6000, 0), (6000, 4000)]),
                 _Record([(6000, 4000), (0, 4000)]),
                 _Record([(0, 4000), (0, 0)])]
-        loops = slabs_proto.slab_loops_from_edges(recs)
+        loops = slab_outlines.slab_loops_from_edges(recs)
         self.assertEqual(len(loops), 1)
 
     def test_open_chain_is_dropped(self):
         recs = [_Record([(0, 0), (6000, 0)]), _Record([(6000, 0), (6000, 4000)])]
-        self.assertEqual(slabs_proto.slab_loops_from_edges(recs), [])
+        self.assertEqual(slab_outlines.slab_loops_from_edges(recs), [])
 
 
 class InsetGraph(unittest.TestCase):
@@ -124,10 +124,10 @@ class InsetGraph(unittest.TestCase):
         # i.e. a 4.7 x 4.7 m panel, not the 5 x 5 centreline face
         segs = [_seg(0, 0, 5000, 0, 300), _seg(5000, 0, 5000, 5000, 300),
                 _seg(5000, 5000, 0, 5000, 300), _seg(0, 5000, 0, 0, 300)]
-        loops = slabs_proto.slab_loops_from_beam_graph(segs)
+        loops = slab_outlines.slab_loops_from_beam_graph(segs)
         self.assertEqual(len(loops), 1)
         ring, _z, _arcs = loops[0]
-        area = abs(slabs_proto._signed_area(ring)) * _MM * _MM / 1e6
+        area = abs(slab_outlines._signed_area(ring)) * _MM * _MM / 1e6
         self.assertAlmostEqual(area, 4.7 * 4.7, delta=0.1)
         xs = sorted(p[0] * _MM for p in ring)
         self.assertAlmostEqual(xs[0], 150.0, delta=5.0)      # inset off the centreline
@@ -136,7 +136,7 @@ class InsetGraph(unittest.TestCase):
         # left beam 600 wide, the rest 300: the left edge insets 300, others 150
         segs = [_seg(0, 0, 5000, 0, 300), _seg(5000, 0, 5000, 5000, 300),
                 _seg(5000, 5000, 0, 5000, 300), _seg(0, 5000, 0, 0, 600)]
-        loops = slabs_proto.slab_loops_from_beam_graph(segs)
+        loops = slab_outlines.slab_loops_from_beam_graph(segs)
         self.assertEqual(len(loops), 1)
         xs = sorted(p[0] * _MM for p in loops[0][0])
         self.assertAlmostEqual(xs[0], 300.0, delta=5.0)
@@ -166,8 +166,8 @@ class MemberEdgeFaces(unittest.TestCase):
         recs += self._edge_pair(5000, 0, 5000, 5000, 300)
         recs += self._edge_pair(5000, 5000, 0, 5000, 300)
         recs += self._edge_pair(0, 5000, 0, 0, 300)
-        loops = slabs_proto.slab_loops_from_member_edges(recs)
-        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+        loops = slab_outlines.slab_loops_from_member_edges(recs)
+        areas = sorted(abs(slab_outlines._signed_area(r)) * _MM * _MM / 1e6
                        for r, _z, _a in loops)
         self.assertEqual(len(areas), 1)              # only the panel, no body strips
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
@@ -180,7 +180,7 @@ class MemberEdgeFaces(unittest.TestCase):
         a = (1.0, 1.0)
         b = (1.0 + 0.144, 1.0)                       # 44 mm right of a cell edge
         segs = [((0.0, 0.0), a), (a, b)]             # chain broken at a? no: shared
-        key, nodes = slabs_proto._cluster_nodes(
+        key, nodes = slab_outlines._cluster_nodes(
             [(0.0, 0.0), a, (1.1444, 1.0), b], 0.164)   # 50 mm in ft
         self.assertEqual(key(a), key((1.1444, 1.0)))    # 44 mm apart: same node
         self.assertNotEqual(key((0.0, 0.0)), key(a))
@@ -188,7 +188,7 @@ class MemberEdgeFaces(unittest.TestCase):
     def test_cluster_chain_does_not_collapse_arc(self):
         # transitive chains must NOT swallow a run of closely-spaced arc chords
         pts = [(i * 0.10, 0.0) for i in range(10)]      # 30 mm steps, 270 mm run
-        key, nodes = slabs_proto._cluster_nodes(pts, 0.164)
+        key, nodes = slab_outlines._cluster_nodes(pts, 0.164)
         self.assertGreater(len(set(key(p) for p in pts)), 3)
 
     def test_small_arc_tessellates_with_chords_above_snap(self):
@@ -199,7 +199,7 @@ class MemberEdgeFaces(unittest.TestCase):
         pts = [(r, 0.0, 0.0),
                (r * 0.7071, r * 0.7071, 0.0),
                (0.0, r, 0.0)]
-        chords, triple = slabs_proto._tessellate_arc(pts)
+        chords, triple = slab_outlines._tessellate_arc(pts)
         self.assertIsNotNone(triple)
         step = ((chords[1][0] - chords[0][0]) ** 2 +
                 (chords[1][1] - chords[0][1]) ** 2) ** 0.5
@@ -221,8 +221,8 @@ class MemberEdgeFaces(unittest.TestCase):
                  "width_mm": 300.0},
                 {"start": [0.0, 5000 * _FT, 0.0], "end": [0.0, 0.0, 0.0],
                  "width_mm": 300.0}]
-        loops = slabs_proto.slab_loops_from_member_edges(recs, beam_segments=segs)
-        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+        loops = slab_outlines.slab_loops_from_member_edges(recs, beam_segments=segs)
+        areas = sorted(abs(slab_outlines._signed_area(r)) * _MM * _MM / 1e6
                        for r, _z, _a in loops)
         # the 900-wide body strip (5.0 x 0.9 = 4.5 m2 > 1 m2 floor) must be gone;
         # only the panel remains
@@ -248,8 +248,8 @@ class MemberEdgeFaces(unittest.TestCase):
             rec.kind = "arc"
             recs.append(rec)
         circle = ("circle", 0.0, 0.0, r * _FT)
-        loops = slabs_proto.slab_loops_from_member_edges(recs, column_rects=[circle])
-        areas = sorted(abs(slabs_proto._signed_area(rg)) * _MM * _MM / 1e6
+        loops = slab_outlines.slab_loops_from_member_edges(recs, column_rects=[circle])
+        areas = sorted(abs(slab_outlines._signed_area(rg)) * _MM * _MM / 1e6
                        for rg, _z, _a in loops)
         self.assertEqual(len(areas), 1)
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.3)   # corner wrap trimmed
@@ -271,8 +271,8 @@ class MemberEdgeFaces(unittest.TestCase):
         col_rec.kind = "polyline"
         recs.append(col_rec)
         rect = ("rect", 0.0, 0.0, 1.0, 0.0, 300 * _FT, 300 * _FT)
-        loops = slabs_proto.slab_loops_from_member_edges(recs, column_rects=[rect])
-        areas = sorted(abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+        loops = slab_outlines.slab_loops_from_member_edges(recs, column_rects=[rect])
+        areas = sorted(abs(slab_outlines._signed_area(r)) * _MM * _MM / 1e6
                        for r, _z, _a in loops)
         self.assertEqual(len(areas), 1)
         # the column ring clips the bay corner: slightly under the full 4.7 x 4.7
@@ -291,8 +291,8 @@ class PlacedMemberFaces(unittest.TestCase):
                 self._seg(5000, 5000, 0, 5000), self._seg(0, 5000, 0, 0)]
 
     def test_bay_bounded_by_synthesized_edges(self):
-        loops = slabs_proto.slab_loops_from_placed_members([], self._bay_segments())
-        areas = [abs(slabs_proto._signed_area(r)) * _MM * _MM / 1e6
+        loops = slab_outlines.slab_loops_from_placed_members([], self._bay_segments())
+        areas = [abs(slab_outlines._signed_area(r)) * _MM * _MM / 1e6
                  for r, _z, _a in loops]
         self.assertEqual(len(areas), 1)
         self.assertAlmostEqual(areas[0], 4.7 * 4.7, delta=0.2)
@@ -301,7 +301,7 @@ class PlacedMemberFaces(unittest.TestCase):
         # cluster nodes PREFER beam-edge points: the bay edge must sit at exactly
         # centreline - w/2, not drift toward column-ring vertices
         rect = ("rect", 0.0, 0.0, 1.0, 0.0, 300 * _FT, 300 * _FT)
-        loops = slabs_proto.slab_loops_from_placed_members(
+        loops = slab_outlines.slab_loops_from_placed_members(
             [], self._bay_segments(), column_rects=[rect])
         self.assertEqual(len(loops), 1)
         ring = loops[0][0]
@@ -311,7 +311,7 @@ class PlacedMemberFaces(unittest.TestCase):
 
     def test_round_column_wrap_gets_true_arc(self):
         circle = ("circle", 0.0, 0.0, 400 * _FT)
-        loops = slabs_proto.slab_loops_from_placed_members(
+        loops = slab_outlines.slab_loops_from_placed_members(
             [], self._bay_segments(), column_rects=[circle])
         self.assertEqual(len(loops), 1)
         ring, _z, arcs = loops[0]
@@ -329,35 +329,35 @@ class SlabLabels(unittest.TestCase):
         return [(ring, 0.0)]
 
     def test_inline_label_names_and_sizes(self):
-        slabs = slabs_proto.apply_slab_labels(
+        slabs = slab_outlines.apply_slab_labels(
             self._one_loop(), [_Text("S1 150 THK", 2500, 2500)])
         self.assertEqual(slabs[0]["mark"], "S1")
         self.assertEqual(slabs[0]["thickness_mm"], 150.0)
 
     def test_mark_only_label_resolves_via_schedule(self):
-        slabs = slabs_proto.apply_slab_labels(
+        slabs = slab_outlines.apply_slab_labels(
             self._one_loop(), [_Text("S3", 2500, 2500)], schedule={"S3": 125.0})
         self.assertEqual(slabs[0]["mark"], "S3")
         self.assertEqual(slabs[0]["thickness_mm"], 125.0)
 
     def test_label_outside_loop_is_ignored(self):
-        slabs = slabs_proto.apply_slab_labels(
+        slabs = slab_outlines.apply_slab_labels(
             self._one_loop(), [_Text("S1 150 THK", 9000, 9000)])
         self.assertIsNone(slabs[0]["mark"])
         self.assertIsNone(slabs[0]["thickness_mm"])
 
     def test_parse_variants(self):
-        self.assertEqual(slabs_proto.parse_slab_label("S2 200 THK"), ("S2", 200.0))
-        self.assertEqual(slabs_proto.parse_slab_label("150 thk"), (None, 150.0))
-        self.assertEqual(slabs_proto.parse_slab_label("S7"), ("S7", None))
-        self.assertEqual(slabs_proto.parse_slab_label("hello"), (None, None))
+        self.assertEqual(slab_outlines.parse_slab_label("S2 200 THK"), ("S2", 200.0))
+        self.assertEqual(slab_outlines.parse_slab_label("150 thk"), (None, 150.0))
+        self.assertEqual(slab_outlines.parse_slab_label("S7"), ("S7", None))
+        self.assertEqual(slab_outlines.parse_slab_label("hello"), (None, None))
         # underscore join, the fixtures' actual convention ("S7_150 THK.")
-        self.assertEqual(slabs_proto.parse_slab_label("S7_150 THK."), ("S7", 150.0))
-        self.assertEqual(slabs_proto.parse_slab_label("S12_125 thk"), ("S12", 125.0))
+        self.assertEqual(slab_outlines.parse_slab_label("S7_150 THK."), ("S7", 150.0))
+        self.assertEqual(slab_outlines.parse_slab_label("S12_125 thk"), ("S12", 125.0))
 
     def test_schedule_tuple_entry_reads_thickness(self):
         # parse_schedule stores a slab row as (thk, thk); entry[0] is the thickness
-        slabs = slabs_proto.apply_slab_labels(
+        slabs = slab_outlines.apply_slab_labels(
             self._one_loop(), [_Text("S3", 2500, 2500)], schedule={"S3": (125.0, 125.0)})
         self.assertEqual(slabs[0]["thickness_mm"], 125.0)
 

@@ -7,12 +7,23 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
-## v0.45.3 — body-clip column trims (user's algorithm; kills the 50mm-offset gap)
+## v0.45.4 — REVERT to 0.45.2 logic + rename slabs_proto.py → slab_outlines.py
+- User's Revit run: 0.45.3 body-clip did NOT fix the 50mm-offset gap → per the agreed
+  fallback, slab logic reverted to 0.45.2 (topology-aware exactness, current best).
+  The 50mm-offset gap in test4/5 stays OPEN — needs a fresh diagnosis (offline diff
+  showed body-clip changed the right 55 faces, so the Revit-visible gap likely lives
+  elsewhere: builder path, or a case the 0.45.1 exports don't capture).
+- Slab pipeline is production → "prototype" naming retired everywhere: module renamed
+  (test file follows), console line now "Slabs -- source: ...", docstrings updated.
+  Replay counts identical to 0.45.2; suite 15 files OK.
+
+## v0.45.3 — body-clip column trims (user's algorithm; kills the 50mm-offset gap) [REVERTED]
 - Residual test4/5: column edge ~50mm off a beam edge → the 50mm graph weld collapsed
   the two nodes, the step vanished, the slab jumped column end → beam corner (gap).
   User's hypothesis (tolerance eats the offset) confirmed; user's algorithm applied:
   clip the whole column ring against every placed beam BODY rectangle before it enters
-  the graph (`_beam_body_rects` + `_clip_out_bodies` in slabs_proto.py). Only parts
+  the graph (`_beam_body_rects` + `_clip_out_bodies` in slab_outlines.py, named
+  slabs_proto.py until 0.45.4). Only parts
   protruding past the beams survive, endpoints land EXACTLY on the beam edge line —
   no near-miss node pair to weld. Buried edges (47mm bulges INTO beams) removed outright.
   Carriers keep full unclipped rect edges for the exactness pass.
