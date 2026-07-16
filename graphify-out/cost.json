@@ -18,8 +18,14 @@
       "output_tokens": 4000,
       "files": 51,
       "note": "incremental: beam campaign close + slab pipeline"
+    },
+    {
+      "date": "2026-07-16T11:25:20.934813+00:00",
+      "input_tokens": 140870,
+      "output_tokens": 0,
+      "files": 274
     }
   ],
-  "total_input_tokens": 471665,
+  "total_input_tokens": 612535,
   "total_output_tokens": 4000
 }
