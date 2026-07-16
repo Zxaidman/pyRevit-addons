@@ -35,7 +35,19 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.47.0"  # STAIRCASE OPTION 2 (user's spec): the stair-layer LINEWORK drives the
+__version__ = "0.47.1"  # HOTFIX (user's pushbutton run): "cannot import name 'StairsEditScope'
+#                         from 'Autodesk.Revit.DB.Architecture'" -- StairsEditScope lives in
+#                         Autodesk.Revit.DB (verified against revitapidocs.com/2025); only
+#                         StairsRun / StairsLanding / StairsRunJustification are in the
+#                         .Architecture namespace. Two more fixes from the same API check:
+#                         (1) a run's location line carries its BASE ELEVATION in Z (was 0) --
+#                         run 1 starts on the base level, run 2 at base + run 1's rise; (2) the
+#                         stairs type (user's riser/tread/width) now switches BEFORE the runs
+#                         are created, because CreateStraightRun derives riser/tread counts from
+#                         the type at creation time. Transaction rollback added before
+#                         scope.Cancel on failure.
+#
+# 0.47.0                  STAIRCASE OPTION 2 (user's spec): the stair-layer LINEWORK drives the
 #                         layout. Riser lines cluster into stairs (bbox union-find), the dominant
 #                         parallel direction is the riser direction (same-length filter keeps the
 #                         drawn landing boundary from bridging the runs), overlapping spans group

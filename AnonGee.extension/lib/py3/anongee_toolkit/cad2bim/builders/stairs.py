@@ -14,9 +14,11 @@ from them plus the run's riser counts.
 
 import math
 
+# StairsEditScope lives in Autodesk.Revit.DB (NOT .Architecture -- the run/
+# landing classes do): https://www.revitapidocs.com/2025/ StairsEditScope Class
 from Autodesk.Revit.DB import (BuiltInParameter, ElementId, ElementTypeGroup,
-                               Line, Transaction, XYZ)
-from Autodesk.Revit.DB.Architecture import (StairsEditScope, StairsRun,
+                               Line, StairsEditScope, Transaction, XYZ)
+from Autodesk.Revit.DB.Architecture import (StairsLanding, StairsRun,
                                             StairsRunJustification)
 
 from .. import config
@@ -83,15 +85,27 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
     Each stair gets its own StairsEditScope + inner transaction; the landing
     between the two runs is Revit's automatic landing (it fills the 180-degree
     turn between the run ends on its own).
+
+    Per the API contract for CreateStraightRun, a run's location line carries
+    its BASE elevation in Z and points in the direction of ascent -- the first
+    run starts on the base level, the second starts where the first ended
+    (base + first run's risers). The stair type (with the user's numbers) is
+    switched BEFORE the runs are created: Revit derives each run's riser/tread
+    counts from the type at creation time.
     """
     result = {"created": [], "skipped": [], "errors": []}
+    base_level = doc.GetElement(base_level_id)
+    top_level = doc.GetElement(top_level_id)
+    storey_ft = top_level.Elevation - base_level.Elevation
     for plan in plans:
         mark = plan.get("mark") or "ST"
         runs = plan.get("runs") or []
         if not runs:
             result["skipped"].append("{0}: no runs in the plan".format(mark))
             continue
+        risers_total = sum(r.get("risers") or 0 for r in runs) or 1
         scope = None
+        transaction = None
         try:
             scope = StairsEditScope(doc, "CAD to BIM: Stair {0}".format(mark))
             stairs_id = scope.Start(base_level_id, top_level_id)
@@ -99,13 +113,20 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
             transaction.Start()
             txn_failures.attach_warning_swallower(transaction)
             type_id = _stairs_type_id(doc, plan)
+            if type_id is not None:
+                stairs_element = doc.GetElement(stairs_id)
+                if stairs_element is not None:
+                    stairs_element.ChangeTypeId(type_id)
             run_ids = []
+            risers_done = 0
             for run in runs:
                 sx, sy = run["start"]
                 ex, ey = run["end"]
                 if math.hypot(ex - sx, ey - sy) <= 1e-6:
                     continue
-                line = Line.CreateBound(XYZ(sx, sy, 0.0), XYZ(ex, ey, 0.0))
+                z = base_level.Elevation + storey_ft * (
+                    float(risers_done) / risers_total)
+                line = Line.CreateBound(XYZ(sx, sy, z), XYZ(ex, ey, z))
                 stairs_run = StairsRun.CreateStraightRun(
                     doc, stairs_id, line, StairsRunJustification.Center)
                 try:
@@ -113,9 +134,9 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
                 except Exception:
                     pass
                 run_ids.append(stairs_run.Id)
+                risers_done += run.get("risers") or 0
             if len(run_ids) >= 2:
                 try:
-                    from Autodesk.Revit.DB.Architecture import StairsLanding
                     StairsLanding.CreateAutomaticLanding(doc, run_ids[0],
                                                          run_ids[1])
                 except Exception as landing_error:
@@ -123,19 +144,15 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
                                              .format(mark,
                                                      str(landing_error)[:120]))
             transaction.Commit()
-            if type_id is not None:
-                change = Transaction(doc, "Stair type {0}".format(mark))
-                change.Start()
-                try:
-                    stairs = doc.GetElement(stairs_id)
-                    if stairs is not None:
-                        stairs.ChangeTypeId(type_id)
-                    change.Commit()
-                except Exception:
-                    change.RollBack()
             scope.Commit(txn_failures.WarningSwallower())
             result["created"].append(mark)
         except Exception as stair_error:
+            try:
+                if (transaction is not None and transaction.HasStarted()
+                        and not transaction.HasEnded()):
+                    transaction.RollBack()
+            except Exception:
+                pass
             try:
                 if scope is not None:
                     scope.Cancel()
