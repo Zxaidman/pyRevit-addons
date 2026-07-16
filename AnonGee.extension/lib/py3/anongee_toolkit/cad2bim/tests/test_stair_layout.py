@@ -315,6 +315,83 @@ class LineworkStairs(unittest.TestCase):
         self.assertEqual(plans[0]["source"], "stair_text")
 
 
+class ShapeStairs(unittest.TestCase):
+    def test_l_shape_two_flights(self):
+        recs = []
+
+        def line(ax, ay, bx, by):
+            recs.append(_Rec("line", [(ax * _FT, ay * _FT), (bx * _FT, by * _FT)],
+                             layers.CATEGORY_STAIR))
+
+        for i in range(8):                       # flight A along x (risers | y)
+            x = 1000.0 + i * 300.0
+            line(x, 0.0, x, 1500.0)
+        for i in range(8):                       # flight B along y (risers | x)
+            y = 3000.0 + i * 300.0
+            line(3400.0, y, 4900.0, y)
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        plan = plans[0]
+        self.assertEqual(len(plan["runs"]), 2)
+        self.assertEqual(plan["risers_total"], 16)
+        # the flights connect at ONE corner: end of run 1 near start of run 2
+        first, second = plan["runs"]
+        hop = math.hypot(second["start"][0] - first["end"][0],
+                         second["start"][1] - first["end"][1]) * _MM
+        self.assertLess(hop, 3600.0)
+
+    def test_circular_stair_radial_risers(self):
+        recs = []
+        ccx, ccy = 10000.0, 10000.0
+        r_in, r_out = 900.0, 2400.0
+        for i in range(13):                      # radial risers over 270 deg
+            ang = math.radians(i * 22.5)
+            recs.append(_Rec("line", [
+                ((ccx + r_in * math.cos(ang)) * _FT,
+                 (ccy + r_in * math.sin(ang)) * _FT),
+                ((ccx + r_out * math.cos(ang)) * _FT,
+                 (ccy + r_out * math.sin(ang)) * _FT)],
+                layers.CATEGORY_STAIR))
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        plan = plans[0]
+        spiral = plan.get("spiral")
+        self.assertIsNotNone(spiral)
+        self.assertEqual(spiral["risers"], 13)
+        self.assertAlmostEqual(spiral["center"][0] * _MM, ccx, delta=20.0)
+        self.assertAlmostEqual(spiral["center"][1] * _MM, ccy, delta=20.0)
+        self.assertAlmostEqual(spiral["radius"] * _MM, 1650.0, delta=30.0)
+        self.assertAlmostEqual(spiral["width_mm"], 1500.0, delta=30.0)
+        self.assertAlmostEqual(math.degrees(spiral["included_angle"]),
+                               270.0, delta=2.0)
+        self.assertAlmostEqual(plan["riser_mm"], 3000.0 / 13, places=3)
+
+    def test_winder_corner_detected(self):
+        # dog-leg flights plus three ANGLED risers fanning through the turn
+        recs = _linework_stair()
+        pivot = (12650.0, 24650.0)               # inner corner of the turn
+        for deg in (30.0, 45.0, 60.0):
+            ang = math.radians(180.0 - deg)
+            recs.append(_Rec("line", [
+                (pivot[0] * _FT, pivot[1] * _FT),
+                ((pivot[0] + 1500.0 * math.cos(ang)) * _FT,
+                 (pivot[1] + 1500.0 * math.sin(ang)) * _FT)],
+                layers.CATEGORY_STAIR))
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        plan = plans[0]
+        winders = plan.get("winders")
+        self.assertEqual(len(winders), 1)
+        self.assertEqual(winders[0]["after_run"], 0)
+        self.assertEqual(len(winders[0]["riser_lines"]), 3)
+        # winder risers join the storey division: 20 straight + 3 fan + 1
+        self.assertEqual(plan["risers_total"], 24)
+        self.assertAlmostEqual(plan["riser_mm"], 3000.0 / 24, places=3)
+
+
 class FullPipeline(unittest.TestCase):
     def test_plan_stairs_from_texts(self):
         recs = _wall_bay(0.0, 0.0, 6000.0, 3000.0)

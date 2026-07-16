@@ -19,8 +19,10 @@ import math
 from Autodesk.Revit.DB import (BuiltInParameter, CurveLoop, ElementId,
                                ElementTypeGroup, FilteredElementCollector,
                                Line, StairsEditScope, Transaction, XYZ)
-from Autodesk.Revit.DB.Architecture import (StairsLanding, StairsRun,
-                                            StairsRunJustification, StairsType)
+from Autodesk.Revit.DB.Architecture import (Railing, StairsLanding,
+                                            StairsRun,
+                                            StairsRunJustification,
+                                            StairsType)
 
 from .. import config
 from ..compat import get_element_name
@@ -166,13 +168,17 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
     base_level = doc.GetElement(base_level_id)
     top_level = doc.GetElement(top_level_id)
     storey_ft = top_level.Elevation - base_level.Elevation
+    created_stairs_ids = []
     for plan in plans:
         mark = plan.get("mark") or "ST"
         runs = plan.get("runs") or []
-        if not runs:
+        spiral = plan.get("spiral")
+        if not runs and not spiral:
             result["skipped"].append("{0}: no runs in the plan".format(mark))
             continue
-        risers_total = sum(r.get("risers") or 0 for r in runs) or 1
+        risers_total = (plan.get("risers_total")
+                        or sum(r.get("risers") or 0 for r in runs) or 1)
+        winders = {w["after_run"]: w for w in (plan.get("winders") or [])}
         scope = None
         transaction = None
         try:
@@ -188,7 +194,21 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                     stairs_element.ChangeTypeId(type_id)
             run_ids = []
             risers_done = 0
-            for run in runs:
+            if spiral:
+                cx, cy = spiral["center"]
+                stairs_run = StairsRun.CreateSpiralRun(
+                    doc, stairs_id,
+                    XYZ(cx, cy, base_level.Elevation),
+                    spiral["radius"], spiral["start_angle"],
+                    spiral["included_angle"], bool(spiral.get("clockwise")),
+                    StairsRunJustification.Center)
+                try:
+                    stairs_run.ActualRunWidth = spiral["width_mm"] / _MM
+                except Exception:
+                    pass
+                run_ids.append(stairs_run.Id)
+                risers_done = risers_total
+            for number, run in enumerate(runs):
                 sx, sy = run["start"]
                 ex, ey = run["end"]
                 if math.hypot(ex - sx, ey - sy) <= 1e-6:
@@ -204,9 +224,25 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                     pass
                 run_ids.append(stairs_run.Id)
                 risers_done += run.get("risers") or 0
-            # a landing between EVERY consecutive pair of runs: the single turn
-            # of a dog-leg, the three corners of a four-flight winding stair
-            for first, second in zip(run_ids, run_ids[1:]):
+                winder = winders.get(number)
+                if winder is not None:
+                    risers_done += len(winder["riser_lines"]) + 1
+            # the turn between consecutive flights: drawn WINDER risers become
+            # a sketched run through the corner; otherwise Revit's automatic
+            # landing fills it (dog-leg turn, winding-stair corners)
+            for number, (first, second) in enumerate(zip(run_ids,
+                                                         run_ids[1:])):
+                winder = winders.get(number) if not spiral else None
+                if winder is not None:
+                    try:
+                        _create_winder_run(doc, stairs_id, base_level,
+                                           storey_ft, risers_total,
+                                           runs, number, winder)
+                        continue
+                    except Exception as winder_error:
+                        result["skipped"].append(
+                            "{0}: winder corner fell back to a landing "
+                            "({1})".format(mark, str(winder_error)[:120]))
                 try:
                     StairsLanding.CreateAutomaticLanding(doc, first, second)
                 except Exception as landing_error:
@@ -232,6 +268,7 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                             mark, str(landing_error)[:120]))
             transaction.Commit()
             scope.Commit(txn_failures.WarningSwallower())
+            created_stairs_ids.append(stairs_id)
             result["created"].append(mark)
         except Exception as stair_error:
             try:
@@ -247,4 +284,114 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                 pass
             result["errors"].append("{0}: {1}".format(mark,
                                                       str(stair_error)[:220]))
+    _delete_auto_railings(doc, created_stairs_ids, result)
     return result
+
+
+def _delete_auto_railings(doc, stairs_ids, result):
+    """Remove the railings Revit auto-hosts on each new stair (user request:
+    no railing after every run). Own transaction, after the edit scopes."""
+    if not stairs_ids:
+        return
+    wanted = set(stairs_ids)
+    try:
+        doomed = [r.Id for r in FilteredElementCollector(doc).OfClass(Railing)
+                  if r.HasHost and r.HostId in wanted]
+    except Exception:
+        doomed = []
+    if not doomed:
+        return
+    transaction = Transaction(doc, "Remove stair railings")
+    try:
+        transaction.Start()
+        txn_failures.attach_warning_swallower(transaction)
+        for railing_id in doomed:
+            doc.Delete(railing_id)
+        transaction.Commit()
+    except Exception:
+        try:
+            if transaction.HasStarted() and not transaction.HasEnded():
+                transaction.RollBack()
+        except Exception:
+            pass
+
+
+def _create_winder_run(doc, stairs_id, base_level, storey_ft, risers_total,
+                       runs, number, winder):
+    """A SKETCHED run through a turn whose corner is drawn with ANGLED risers
+    (a winder) instead of a flat landing.
+
+    Geometry from the flights themselves: the corner square between run
+    `number`'s end and run `number+1`'s start; its outer/inner edge pairs are
+    the boundary chains, the drawn fan lines (plus the entry and exit edges)
+    are the risers, and the path runs end -> corner -> start along the
+    centrelines. Everything is Line-based per the CreateSketchedRun contract.
+    """
+    from System.Collections.Generic import List
+    from Autodesk.Revit.DB import Curve
+    run_a = runs[number]
+    run_b = runs[number + 1]
+    ax0, ay0 = run_a["start"]
+    ax1, ay1 = run_a["end"]
+    bx0, by0 = run_b["start"]
+    bx1, by1 = run_b["end"]
+    da = (ax1 - ax0, ay1 - ay0)
+    la = math.hypot(*da)
+    db = (bx1 - bx0, by1 - by0)
+    lb = math.hypot(*db)
+    da = (da[0] / la, da[1] / la)
+    db = (db[0] / lb, db[1] / lb)
+    den = da[0] * db[1] - da[1] * db[0]
+    if abs(den) < 0.2:
+        raise ValueError("flights are near-parallel; no corner to wind")
+    # centreline corner point C: run_a's line meets run_b's line
+    t = ((bx0 - ax1) * db[1] - (by0 - ay1) * db[0]) / den
+    cx, cy = ax1 + da[0] * t, ay1 + da[1] * t
+    half_w = (min(run_a["width_mm"], run_b["width_mm"]) / _MM) / 2.0
+    na = (-da[1], da[0])
+    nb = (-db[1], db[0])
+    turn = da[0] * db[1] - da[1] * db[0]     # +1 left turn, -1 right turn
+    sa = 1.0 if turn > 0 else -1.0           # inner side sign along na/nb
+    inner_c = _line_x_line((ax1 + na[0] * half_w * sa, ay1 + na[1] * half_w * sa), da,
+                           (bx0 + nb[0] * half_w * sa, by0 + nb[1] * half_w * sa), db)
+    outer_c = _line_x_line((ax1 - na[0] * half_w * sa, ay1 - na[1] * half_w * sa), da,
+                           (bx0 - nb[0] * half_w * sa, by0 - nb[1] * half_w * sa), db)
+    z = base_level.Elevation + storey_ft * (
+        float(sum(r.get("risers") or 0 for r in runs[:number + 1]))
+        / risers_total)
+
+    def pt(p):
+        return XYZ(p[0], p[1], z)
+
+    entry_in = (ax1 + na[0] * half_w * sa, ay1 + na[1] * half_w * sa)
+    entry_out = (ax1 - na[0] * half_w * sa, ay1 - na[1] * half_w * sa)
+    exit_in = (bx0 + nb[0] * half_w * sa, by0 + nb[1] * half_w * sa)
+    exit_out = (bx0 - nb[0] * half_w * sa, by0 - nb[1] * half_w * sa)
+    boundary = List[Curve]()
+    boundary.Add(Line.CreateBound(pt(entry_in), pt(inner_c)))
+    boundary.Add(Line.CreateBound(pt(inner_c), pt(exit_in)))
+    boundary.Add(Line.CreateBound(pt(entry_out), pt(outer_c)))
+    boundary.Add(Line.CreateBound(pt(outer_c), pt(exit_out)))
+    risers = List[Curve]()
+    risers.Add(Line.CreateBound(pt(entry_in), pt(entry_out)))
+    # fan lines ordered by angle around the inner corner, entry -> exit
+    ang0 = math.atan2(entry_out[1] - inner_c[1], entry_out[0] - inner_c[0])
+    def fan_key(ln):
+        (p, q) = ln
+        mx, my = (p[0] + q[0]) / 2.0, (p[1] + q[1]) / 2.0
+        return abs((math.atan2(my - inner_c[1], mx - inner_c[0]) - ang0)
+                   % (2.0 * math.pi))
+    for p, q in sorted(winder["riser_lines"], key=fan_key):
+        risers.Add(Line.CreateBound(pt(p), pt(q)))
+    risers.Add(Line.CreateBound(pt(exit_in), pt(exit_out)))
+    path = List[Curve]()
+    path.Add(Line.CreateBound(pt((ax1, ay1)), pt((cx, cy))))
+    path.Add(Line.CreateBound(pt((cx, cy)), pt((bx0, by0))))
+    StairsRun.CreateSketchedRun(doc, stairs_id, z, boundary, risers, path)
+
+
+def _line_x_line(p1, d1, p2, d2):
+    """Intersection of two infinite lines given point + unit direction."""
+    den = d1[0] * d2[1] - d1[1] * d2[0]
+    t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den
+    return (p1[0] + d1[0] * t, p1[1] + d1[1] * t)

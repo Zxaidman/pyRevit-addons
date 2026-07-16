@@ -35,7 +35,27 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.49.0"  # STAIRCASE round 3 (0.48.0 feedback, four items): (1) the ARRIVAL
+__version__ = "0.50.0"  # STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
+#                         new stair are deleted after placement (user request) -- own transaction
+#                         after the edit scopes; (2) SHAPES: an L stair (two flights, one corner)
+#                         places via the winding path (relaxed to 2+ multi-direction runs); a
+#                         CIRCULAR stair is detected when the riser lines RADIATE from a common
+#                         centre (consistent radial band; tread measured on the walk line 300mm
+#                         off the inner edge) and places as one StairsRun.CreateSpiralRun; WINDER
+#                         corners -- angled risers drawn in a turn instead of a flat landing --
+#                         are detected (leftover riser-length lines pointing BETWEEN the flights,
+#                         all inside the corner square; ST-2's break-line diagonals proved the
+#                         endpoint rule necessary) and placed as a SKETCHED run through the
+#                         corner (boundary/riser/path chains per the CreateSketchedRun contract),
+#                         falling back to the automatic landing with a note if Revit refuses;
+#                         (3) riser positions closer than a tread merge as strays instead of
+#                         voiding the whole flight; (4) exports now carry the stairs OUTCOME
+#                         (created/skipped/errors + notes) for offline diagnosis -- the 0.49.0
+#                         project1 export replays all six stairs with every drawn line consumed,
+#                         so item 1 of the feedback ("not all lines picked") needs the outcome
+#                         data from a 0.50.0 run to pin down.
+#
+# 0.49.0                  STAIRCASE round 3 (0.48.0 feedback, four items): (1) the ARRIVAL
 #                         landing now spans the parallel flights like the half landing does --
 #                         runs parallel to the last one within 800mm across join its width (a
 #                         U stair gets the full ~3000; a winding stair's opposite flight sits

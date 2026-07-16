@@ -7,6 +7,19 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.50.0 — staircase round 4 (railings off, L/circular/winder shapes) → PR
+- Railings Revit auto-hosts on each new stair now deleted after placement.
+- Shapes: L (2-flight corner via winding path); CIRCULAR (radial riser detection →
+  CreateSpiralRun; tread at walk line = inner + 300mm); WINDER corners (angled risers
+  in a turn → sketched run through the corner, fallback automatic landing + note).
+  Phantom-winder guards: fan lines must be angled to every flight direction AND lie
+  wholly inside the corner square (ST-2's break-line diagonals caught this).
+- Stray riser positions (< 1 tread apart) merge instead of voiding the flight.
+- Exports carry stairs outcome now; 0.49.0 project1 replay consumes EVERY drawn line
+  (6 stairs, 22-24 risers each) — item 1 "not all lines picked" needs a 0.50.0 run's
+  outcome data to localize.
+- Suite 16 files, 23 stair tests; StaircasePlan/test1/project1 replays unchanged.
+
 ## v0.49.0 — staircase round 3 (winding stairs, arrival width, toggle, waist)
 - (1) Arrival landing spans parallel flights like the half landing (merge gap 800mm);
   winding stair's opposite flight sits across the well → stays one run wide.
