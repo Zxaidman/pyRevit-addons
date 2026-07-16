@@ -16,21 +16,33 @@ import math
 
 # StairsEditScope lives in Autodesk.Revit.DB (NOT .Architecture -- the run/
 # landing classes do): https://www.revitapidocs.com/2025/ StairsEditScope Class
-from Autodesk.Revit.DB import (BuiltInParameter, ElementId, ElementTypeGroup,
+from Autodesk.Revit.DB import (BuiltInParameter, CurveLoop, ElementId,
+                               ElementTypeGroup, FilteredElementCollector,
                                Line, StairsEditScope, Transaction, XYZ)
 from Autodesk.Revit.DB.Architecture import (StairsLanding, StairsRun,
-                                            StairsRunJustification)
+                                            StairsRunJustification, StairsType)
 
 from .. import config
+from ..compat import get_element_name
 from . import txn_failures
 
 _MM = config.MM_PER_FT
 
 
-def _stairs_type_id(doc, plan):
-    """A stairs type carrying the user's numbers: duplicate of the default type
-    named by them, reused across stairs of the same run (idempotent)."""
-    base_id = doc.GetDefaultElementTypeId(ElementTypeGroup.StairsType)
+def stairs_types(doc):
+    """[(label, ElementId)] of the model's stairs types (for the Build combo)."""
+    types = FilteredElementCollector(doc).OfClass(StairsType).ToElements()
+    rows = [(get_element_name(st), st.Id) for st in types]
+    return sorted(rows, key=lambda pair: pair[0])
+
+
+def _stairs_type_id(doc, plan, base_type_id=None):
+    """A stairs type carrying the user's numbers: duplicate of the PICKED type
+    (dialog combo; model default when none), named by the numbers and reused
+    across stairs of the same run (idempotent)."""
+    base_id = base_type_id
+    if base_id is None or base_id == ElementId.InvalidElementId:
+        base_id = doc.GetDefaultElementTypeId(ElementTypeGroup.StairsType)
     if base_id is None or base_id == ElementId.InvalidElementId:
         return None
     base = doc.GetElement(base_id)
@@ -79,19 +91,23 @@ def _set_length_param(element, builtin_names, value_mm):
     return False
 
 
-def place_stairs(doc, plans, base_level_id, top_level_id):
+def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
     """Create one dog-leg stair per plan. Returns created/skipped/errors lists.
 
     Each stair gets its own StairsEditScope + inner transaction; the landing
     between the two runs is Revit's automatic landing (it fills the 180-degree
-    turn between the run ends on its own).
+    turn between the run ends on its own), and the ARRIVAL landing at the top
+    is a sketched landing from the plan's top_landing ring (relative elevation
+    = the full storey; CreateSketchedLanding takes elevations relative to the
+    stairs base and rounds them to a riser multiple).
 
     Per the API contract for CreateStraightRun, a run's location line carries
     its BASE elevation in Z and points in the direction of ascent -- the first
     run starts on the base level, the second starts where the first ended
-    (base + first run's risers). The stair type (with the user's numbers) is
-    switched BEFORE the runs are created: Revit derives each run's riser/tread
-    counts from the type at creation time.
+    (base + first run's risers). The stair type (with the user's numbers,
+    duplicated from `base_type_id` -- the dialog's stair type pick) is switched
+    BEFORE the runs are created: Revit derives each run's riser/tread counts
+    from the type at creation time.
     """
     result = {"created": [], "skipped": [], "errors": []}
     base_level = doc.GetElement(base_level_id)
@@ -112,7 +128,7 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
             transaction = Transaction(doc, "Stair runs {0}".format(mark))
             transaction.Start()
             txn_failures.attach_warning_swallower(transaction)
-            type_id = _stairs_type_id(doc, plan)
+            type_id = _stairs_type_id(doc, plan, base_type_id)
             if type_id is not None:
                 stairs_element = doc.GetElement(stairs_id)
                 if stairs_element is not None:
@@ -143,6 +159,23 @@ def place_stairs(doc, plans, base_level_id, top_level_id):
                     result["skipped"].append("{0}: landing not created ({1})"
                                              .format(mark,
                                                      str(landing_error)[:120]))
+            top_ring = plan.get("top_landing")
+            if top_ring and risers_done:
+                try:
+                    z_top = base_level.Elevation + storey_ft
+                    loop = CurveLoop()
+                    n = len(top_ring)
+                    for i in range(n):
+                        ax, ay = top_ring[i]
+                        bx, by = top_ring[(i + 1) % n]
+                        loop.Append(Line.CreateBound(XYZ(ax, ay, z_top),
+                                                     XYZ(bx, by, z_top)))
+                    StairsLanding.CreateSketchedLanding(doc, stairs_id, loop,
+                                                        storey_ft)
+                except Exception as landing_error:
+                    result["skipped"].append(
+                        "{0}: top landing not created ({1})".format(
+                            mark, str(landing_error)[:120]))
             transaction.Commit()
             scope.Commit(txn_failures.WarningSwallower())
             result["created"].append(mark)

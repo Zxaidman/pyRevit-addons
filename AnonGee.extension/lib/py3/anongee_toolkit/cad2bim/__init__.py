@@ -35,7 +35,20 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.47.1"  # HOTFIX (user's pushbutton run): "cannot import name 'StairsEditScope'
+__version__ = "0.48.0"  # STAIRCASE round 2 (user's three items after the first stairs placed):
+#                         (1) Staircase tab gains RISER COUNT (0 = auto) + a live FLOOR HEIGHT
+#                         readout -- the count is ABSOLUTE: riser height syncs to storey / count
+#                         (level combo changes re-sync it), and the layout uses the count over
+#                         the max-riser rule; (2) Build tab gains a STAIR TYPE picker (defaults
+#                         to the type containing "cast" -- Cast-In-Place), the user's numbers
+#                         duplicate the PICKED type, and "Create staircases" is checked by
+#                         default (disabled only when the model has no stair type); (3) the
+#                         ARRIVAL landing: every plan now carries a top_landing rectangle
+#                         continuing past the last run's top end (depth = landing depth, width =
+#                         run width), placed via StairsLanding.CreateSketchedLanding at the full
+#                         storey elevation (relative to the stairs base per the API contract).
+#
+# 0.47.1                  HOTFIX (user's pushbutton run): "cannot import name 'StairsEditScope'
 #                         from 'Autodesk.Revit.DB.Architecture'" -- StairsEditScope lives in
 #                         Autodesk.Revit.DB (verified against revitapidocs.com/2025); only
 #                         StairsRun / StairsLanding / StairsRunJustification are in the

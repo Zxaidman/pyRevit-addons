@@ -280,7 +280,8 @@ class CadToBimWindow(object):
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
                  column_symbols, level_options, beam_symbols, floor_type_options=None,
-                 text_layer_rows=None, text_categories=None, default_text_mapping=None):
+                 text_layer_rows=None, text_categories=None, default_text_mapping=None,
+                 stair_type_options=None, level_elevations=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -314,6 +315,10 @@ class CadToBimWindow(object):
         _select_containing(self.cb_beam_family, ["rect"])
         self.cb_floor_type = find("cb_floor_type")
         self._floor_ids = self._fill_combo(self.cb_floor_type, floor_type_options or [])
+        self.cb_stair_type = find("cb_stair_type")
+        self._stair_ids = self._fill_combo(self.cb_stair_type, stair_type_options or [])
+        _select_containing(self.cb_stair_type, ["cast"])
+        self._level_elevations = level_elevations or {}
 
         self.chk_grids = find("chk_grids")
         self.chk_columns = find("chk_columns")
@@ -321,6 +326,8 @@ class CadToBimWindow(object):
         self.chk_slabs = find("chk_slabs")
         self.chk_stairs = find("chk_stairs")
         self.chk_export = find("chk_export")
+        self.tb_stair_count = find("tb_stair_count")
+        self.stair_floor_text = find("stair_floor_text")
         self.tb_stair_riser = find("tb_stair_riser")
         self.tb_stair_tread = find("tb_stair_tread")
         self.tb_stair_width = find("tb_stair_width")
@@ -363,6 +370,17 @@ class CadToBimWindow(object):
             self.chk_slabs.IsChecked = False
             self.chk_slabs.IsEnabled = False
             self.chk_slabs.Content = "Create slabs (the model has no floor type)"
+        if not stair_type_options:
+            self.chk_stairs.IsChecked = False
+            self.chk_stairs.IsEnabled = False
+            self.chk_stairs.Content = "Create staircases (the model has no stair type)"
+
+        # Staircase tab live sync: floor height follows the level picks; an
+        # ABSOLUTE riser count drives the riser height (storey / count)
+        self.cb_base_level.SelectionChanged += self._on_stair_sync
+        self.cb_top_level.SelectionChanged += self._on_stair_sync
+        self.tb_stair_count.LostFocus += self._on_stair_sync
+        self._stair_sync()
 
         find("btn_run").Click += self.on_run
         find("btn_cancel").Click += self.on_cancel
@@ -457,6 +475,7 @@ class CadToBimWindow(object):
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
         self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
+        self.tb_stair_count.Text = "0"
         self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
         self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
         self.tb_stair_landing.Text = str(int(d["stair_landing_mm"]))
@@ -485,6 +504,25 @@ class CadToBimWindow(object):
             "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
             "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
         }
+
+    def _storey_mm(self):
+        """Top minus base level elevation in mm, or None before both are picked."""
+        base = self._level_elevations.get(self.cb_base_level.SelectedItem)
+        top = self._level_elevations.get(self.cb_top_level.SelectedItem)
+        if base is None or top is None:
+            return None
+        return (top - base) * 304.8
+
+    def _on_stair_sync(self, sender, args):
+        self._stair_sync()
+
+    def _stair_sync(self):
+        storey = self._storey_mm()
+        self.stair_floor_text.Text = ("{0} mm".format(int(round(storey)))
+                                      if storey and storey > 0 else "-")
+        count = self._read_int(self.tb_stair_count, 0)
+        if storey and storey > 0 and count > 0:
+            self.tb_stair_riser.Text = "{0:.1f}".format(storey / count)
 
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
@@ -536,7 +574,9 @@ class CadToBimWindow(object):
             "create_beams": bool(self.chk_beams.IsChecked),
             "create_slabs": bool(self.chk_slabs.IsChecked),
             "create_stairs": bool(self.chk_stairs.IsChecked),
+            "stair_type_id": self._stair_ids.get(self.cb_stair_type.SelectedItem),
             "stair_params": {
+                "riser_count": self._read_int(self.tb_stair_count, 0),
                 "riser_mm": self._read_float(self.tb_stair_riser,
                                              config.DEFAULTS["stair_riser_mm"]),
                 "tread_mm": self._read_float(self.tb_stair_tread,
@@ -685,6 +725,9 @@ def main():
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
     floor_type_options = slabs.floor_types(doc)
+    stair_type_options = stairs.stairs_types(doc)
+    level_elevations = {label: doc.GetElement(level_id).Elevation
+                        for label, level_id in level_options}
 
     # Text layers (size marks) come from the DXF, routed separately from geometry.
     text_layer_counts = {}
@@ -699,7 +742,9 @@ def main():
                             column_symbols, level_options, beam_symbols,
                             floor_type_options,
                             text_layer_rows, list(layers.TEXT_CATEGORIES),
-                            default_text_mapping)
+                            default_text_mapping,
+                            stair_type_options=stair_type_options,
+                            level_elevations=level_elevations)
     window.show()
     if not window.result:
         return   # user cancelled -- nothing was flushed, console stays closed
@@ -1130,7 +1175,8 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
         _say("Stairs -- no staircase planned (see notes above).")
         return {"created": 0, "skipped": len(notes), "errors": 0}
 
-    result = stairs.place_stairs(doc, plans, base_id, top_id)
+    result = stairs.place_stairs(doc, plans, base_id, top_id,
+                                 base_type_id=selections.get("stair_type_id"))
     _say("Stairs -- source: {0}, planned: {1}, created: {2}, skipped: {3}, "
          "errors: {4} (storey {5} mm, {6} risers @ {7:.1f} mm)".format(
              plans[0].get("source") or "stair_text", len(plans),

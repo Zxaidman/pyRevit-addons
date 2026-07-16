@@ -145,9 +145,21 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_stairs"  Content="Create staircases (at STAIRCASE / ST-n texts)" IsChecked="False" Margin="0,6,0,0"/>
-                        <TextBlock Text="A generic dog-leg stair is laid out inside the bay holding the text, from the numbers on the Staircase tab. Base to top level."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
+                        <CheckBox x:Name="chk_stairs"  Content="Create staircases (from stair linework or STAIRCASE / ST-n texts)" IsChecked="True" Margin="0,6,0,0"/>
+                        <Grid Margin="20,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Stair type" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_stair_type" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Runs from the stair layer when drawn, else a dog-leg in the bay holding the text; numbers from the Staircase tab. Base to top level."
+                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
+                        </Grid>
                         <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -158,8 +170,12 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
                         <TextBlock Text="Generic staircase (mm)" FontWeight="Bold" Margin="0,0,0,4"/>
-                        <TextBlock Text="The stair AREA comes from the plan (the bay containing a STAIRCASE or ST-n text); everything else comes from these numbers. Riser count = storey height / riser, rounded up; the actual riser is recomputed from the count."
+                        <TextBlock Text="The stair AREA comes from the plan (drawn stair linework, else the bay containing a STAIRCASE or ST-n text); these numbers size it. Riser count 0 = automatic (storey height / max riser, rounded up); a count &gt; 0 is ABSOLUTE and the riser height syncs to storey / count."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <TextBlock Text="Floor height: " FontWeight="Bold"/>
+                            <TextBlock x:Name="stair_floor_text" Text="-"/>
+                        </StackPanel>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
@@ -170,17 +186,20 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="24"/>
                                 <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Riser height (max)" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_stair_riser" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Tread depth" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_stair_tread" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Run width" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_stair_width" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Landing depth" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_stair_landing" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Riser count (0 = auto)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_stair_count" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Riser height (max)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_stair_riser" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Tread depth" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_stair_tread" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Run width" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_stair_width" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Landing depth" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_stair_landing" Height="22" Margin="0,1,8,1"/>
                         </Grid>
-                        <TextBlock Text="Landing depth 0 = same as the run width. A DN/UP note inside the bay picks which end gets the landing."
+                        <TextBlock Text="Landing depth 0 = same as the run width. A DN/UP note inside the bay picks which end gets the landing; an arrival landing of the same depth is added at the top."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
                     </StackPanel>
                 </ScrollViewer>

@@ -141,6 +141,30 @@ class DoglegNumbers(unittest.TestCase):
         turn_x_mm = plan["runs"][0]["end"][0] * _MM
         self.assertAlmostEqual(turn_x_mm, 1250.0, places=3)
 
+    def test_riser_count_absolute(self):
+        params = dict(_PARAMS, riser_count=18)
+        plan, _n = stair_layout.plan_dogleg_stair(
+            self._ring(), 0.0, "ST-1", params, 3000.0)
+        self.assertEqual(plan["risers_total"], 18)     # count wins over riser max
+        self.assertAlmostEqual(plan["riser_mm"], 3000.0 / 18, places=4)
+        self.assertEqual([r["risers"] for r in plan["runs"]], [9, 9])
+
+    def test_top_landing_beyond_last_run(self):
+        plan, _n = stair_layout.plan_dogleg_stair(
+            self._ring(), 0.0, "ST-1", _PARAMS, 3000.0)
+        top = plan["top_landing"]
+        self.assertEqual(len(top), 4)
+        run2 = plan["runs"][1]
+        # the landing continues past run2's END in the run direction
+        (sx, sy), (ex, ey) = run2["start"], run2["end"]
+        dx = 1.0 if ex > sx else -1.0
+        xs = [p[0] for p in top]
+        self.assertAlmostEqual(min(xs) if dx < 0 else max(xs),
+                               ex + dx * plan["landing_mm"] / _MM, places=6)
+        # and spans the run's width across
+        ys = sorted(p[1] * _MM for p in top)
+        self.assertAlmostEqual(ys[-1] - ys[0], plan["run_width_mm"], places=3)
+
     def test_does_not_fit(self):
         plan, note = stair_layout.plan_dogleg_stair(
             self._ring(l_mm=3000.0), 0.0, "ST-1", _PARAMS, 3000.0)
@@ -214,6 +238,10 @@ class LineworkStairs(unittest.TestCase):
         # runs sit on the two run centrelines (y 23900 and 25400)
         centres = sorted(round(r["start"][1] * _MM) for r in plan["runs"])
         self.assertEqual(centres, [23900, 25400])
+        # arrival landing continues past run2's end (x 15350 + landing 1500)
+        top = plan["top_landing"]
+        self.assertEqual(len(top), 4)
+        self.assertAlmostEqual(max(p[0] for p in top) * _MM, 16850.0, places=2)
 
     def test_no_riser_lines_no_plan(self):
         recs = _wall_bay(0.0, 0.0, 4000.0, 4000.0)      # walls, no stair layer

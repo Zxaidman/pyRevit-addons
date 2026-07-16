@@ -7,6 +7,18 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.48.0 — staircase round 2 (riser count, type picker, arrival landing)
+- First Revit stairs placed OK (user images); three requested improvements:
+  (1) Staircase tab: riser count (0 = auto) + live floor-height readout; count is
+  ABSOLUTE — riser height syncs to storey/count on count or level changes, layout uses
+  count over the max-riser rule. (2) Build tab: stair type picker (default = "cast" type,
+  Cast-In-Place), user numbers duplicate the picked type; "Create staircases" checked by
+  default. (3) Arrival landing: plans carry top_landing (rect past the last run's top,
+  depth = landing, width = run width) placed via CreateSketchedLanding at the storey
+  elevation (relative to stairs base per API). Suite 16 files, 19 stair tests.
+
+## v0.47.1 — hotfix: StairsEditScope namespace (Autodesk.Revit.DB), run base Z, type-before-runs
+
 ## v0.47.0 — STAIRCASE option 2: drawn stair linework drives the layout
 - Riser lines cluster into stairs (bbox union-find, 2m gap); dominant parallel direction
   = risers (same-length filter stops the drawn landing boundary bridging the runs);

@@ -165,10 +165,16 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
     tread = float(params.get("tread_mm") or 300.0)
     width = float(params.get("run_width_mm") or 1250.0)
     landing = float(params.get("landing_mm") or 0.0) or width
+    riser_count = int(params.get("riser_count") or 0)
 
     if storey_mm <= 0 or riser_target <= 0 or tread <= 0 or width <= 0:
         return None, "{0}: invalid inputs (storey {1} mm)".format(mark, int(storey_mm))
-    risers_total = int(math.ceil(storey_mm / riser_target - 1e-9))
+    # an explicit riser count is ABSOLUTE (the dialog syncs riser height to it);
+    # otherwise the count comes from the target max riser height
+    if riser_count > 0:
+        risers_total = riser_count
+    else:
+        risers_total = int(math.ceil(storey_mm / riser_target - 1e-9))
     if risers_total < 2:
         risers_total = 2
     riser_actual = storey_mm / risers_total
@@ -241,9 +247,27 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
         (lc[0] - ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
          lc[1] - ay * lu / 2.0 - ny * short_mm / _MM / 2.0)]
     plan = {"mark": mark, "z": z, "runs": runs, "landing": landing_ring,
+            "top_landing": _top_landing_ring(runs[-1], landing) if runs else None,
             "risers_total": risers_total, "riser_mm": riser_actual,
             "tread_mm": tread, "run_width_mm": width, "landing_mm": landing}
     return plan, note
+
+
+def _top_landing_ring(run, depth_mm):
+    """The ARRIVAL landing: a rectangle continuing past the last run's top end
+    (the drawn plans show it; Revit's automatic landing only fills the turn)."""
+    (sx, sy), (ex, ey) = run["start"], run["end"]
+    length = math.hypot(ex - sx, ey - sy)
+    if length <= 0:
+        return None
+    ax, ay = (ex - sx) / length, (ey - sy) / length
+    nx, ny = -ay, ax
+    du = depth_mm / _MM
+    hw = (run["width_mm"] / _MM) / 2.0
+    return [(ex + nx * hw, ey + ny * hw),
+            (ex + ax * du + nx * hw, ey + ay * du + ny * hw),
+            (ex + ax * du - nx * hw, ey + ay * du - ny * hw),
+            (ex - nx * hw, ey - ny * hw)]
 
 
 # ------------------------------------------------------- option 2: stair linework
@@ -452,7 +476,11 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
                 "risers": len(positions),
                 "width_mm": (span_hi - span_lo) * _MM})
         plans.append({"mark": mark, "z": z, "runs": run_dicts,
-                      "landing": None, "risers_total": risers_total,
+                      "landing": None,
+                      "top_landing": (_top_landing_ring(run_dicts[-1],
+                                                        landing_mm)
+                                      if run_dicts else None),
+                      "risers_total": risers_total,
                       "riser_mm": riser_mm, "tread_mm": tread_mm,
                       "run_width_mm": width_mm, "landing_mm": landing_mm,
                       "source": "stair_linework"})
