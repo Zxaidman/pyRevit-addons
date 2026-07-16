@@ -7,6 +7,17 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.49.0 — staircase round 3 (winding stairs, arrival width, toggle, waist)
+- (1) Arrival landing spans parallel flights like the half landing (merge gap 800mm);
+  winding stair's opposite flight sits across the well → stays one run wide.
+- (2) WINDING stairs: riser pass keeps every direction bucket; flights ordered ccw
+  around the well centre, corner landings between all consecutive pairs. All six
+  Project1 squares replay as 4-run spirals (22-24 risers, tread 300, width 1500).
+- (3) Stair source toggle: Auto / Drawn linework / Text + numbers.
+- (4) Riser count defaults to ceil(storey/riser) (20 for 3000/150), live; waist
+  thickness field (200 default) → structural depth on duplicated run/landing types.
+- U replays unchanged; suite 16 files, 20 stair tests.
+
 ## v0.48.0 — staircase round 2 (riser count, type picker, arrival landing)
 - First Revit stairs placed OK (user images); three requested improvements:
   (1) Staircase tab: riser count (0 = auto) + live floor-height readout; count is

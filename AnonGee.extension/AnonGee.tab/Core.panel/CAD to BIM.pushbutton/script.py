@@ -327,7 +327,14 @@ class CadToBimWindow(object):
         self.chk_stairs = find("chk_stairs")
         self.chk_export = find("chk_export")
         self.tb_stair_count = find("tb_stair_count")
+        self.tb_stair_waist = find("tb_stair_waist")
+        self.cb_stair_source = find("cb_stair_source")
+        for label in ("Auto (linework, else text)", "Drawn stair linework",
+                      "Text + numbers"):
+            self.cb_stair_source.Items.Add(label)
+        self.cb_stair_source.SelectedIndex = 0
         self.stair_floor_text = find("stair_floor_text")
+        self._stair_count_manual = False
         self.tb_stair_riser = find("tb_stair_riser")
         self.tb_stair_tread = find("tb_stair_tread")
         self.tb_stair_width = find("tb_stair_width")
@@ -379,7 +386,8 @@ class CadToBimWindow(object):
         # ABSOLUTE riser count drives the riser height (storey / count)
         self.cb_base_level.SelectionChanged += self._on_stair_sync
         self.cb_top_level.SelectionChanged += self._on_stair_sync
-        self.tb_stair_count.LostFocus += self._on_stair_sync
+        self.tb_stair_count.LostFocus += self._on_stair_count_edit
+        self.tb_stair_riser.LostFocus += self._on_stair_sync
         self._stair_sync()
 
         find("btn_run").Click += self.on_run
@@ -475,6 +483,7 @@ class CadToBimWindow(object):
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
         self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
+        self.tb_stair_waist.Text = str(int(d["stair_waist_mm"]))
         self.tb_stair_count.Text = "0"
         self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
         self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
@@ -516,13 +525,36 @@ class CadToBimWindow(object):
     def _on_stair_sync(self, sender, args):
         self._stair_sync()
 
+    def _on_stair_count_edit(self, sender, args):
+        # the user typed a count: it becomes ABSOLUTE (0 returns to automatic)
+        self._stair_count_manual = self._read_int(self.tb_stair_count, 0) > 0
+        self._stair_sync()
+
     def _stair_sync(self):
+        """Riser count <-> riser height <-> storey, live.
+
+        AUTOMATIC (default): count = ceil(storey / max riser), e.g. 20 for
+        3000/150, refreshed when levels or the riser height change. MANUAL
+        (user typed a count): the count is absolute and the riser height
+        becomes storey / count instead."""
+        import math as _math
         storey = self._storey_mm()
         self.stair_floor_text.Text = ("{0} mm".format(int(round(storey)))
                                       if storey and storey > 0 else "-")
-        count = self._read_int(self.tb_stair_count, 0)
-        if storey and storey > 0 and count > 0:
-            self.tb_stair_riser.Text = "{0:.1f}".format(storey / count)
+        if not storey or storey <= 0:
+            return
+        if self._stair_count_manual:
+            count = self._read_int(self.tb_stair_count, 0)
+            if count > 0:
+                self.tb_stair_riser.Text = "{0:.1f}".format(storey / count)
+            else:
+                self._stair_count_manual = False
+        if not self._stair_count_manual:
+            riser = self._read_float(self.tb_stair_riser,
+                                     config.DEFAULTS["stair_riser_mm"])
+            if riser > 0:
+                self.tb_stair_count.Text = str(
+                    int(_math.ceil(storey / riser - 1e-9)))
 
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
@@ -575,8 +607,13 @@ class CadToBimWindow(object):
             "create_slabs": bool(self.chk_slabs.IsChecked),
             "create_stairs": bool(self.chk_stairs.IsChecked),
             "stair_type_id": self._stair_ids.get(self.cb_stair_type.SelectedItem),
+            "stair_source": ("linework" if self.cb_stair_source.SelectedIndex == 1
+                             else "text" if self.cb_stair_source.SelectedIndex == 2
+                             else "auto"),
             "stair_params": {
                 "riser_count": self._read_int(self.tb_stair_count, 0),
+                "waist_mm": self._read_float(self.tb_stair_waist,
+                                             config.DEFAULTS["stair_waist_mm"]),
                 "riser_mm": self._read_float(self.tb_stair_riser,
                                              config.DEFAULTS["stair_riser_mm"]),
                 "tread_mm": self._read_float(self.tb_stair_tread,
@@ -1168,7 +1205,8 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
 
     plans, notes = stair_layout.plan_stairs(
         records, (beam_segments or {}).get("segments"), column_rects, texts,
-        selections.get("stair_params") or {}, storey_mm)
+        selections.get("stair_params") or {}, storey_mm,
+        source=selections.get("stair_source") or "auto")
     for note in notes:
         _say("  stair: {0}".format(note))
     if not plans:

@@ -161,9 +161,9 @@ class DoglegNumbers(unittest.TestCase):
         xs = [p[0] for p in top]
         self.assertAlmostEqual(min(xs) if dx < 0 else max(xs),
                                ex + dx * plan["landing_mm"] / _MM, places=6)
-        # and spans the run's width across
+        # and spans BOTH flights like the half landing (the U-stair rule)
         ys = sorted(p[1] * _MM for p in top)
-        self.assertAlmostEqual(ys[-1] - ys[0], plan["run_width_mm"], places=3)
+        self.assertAlmostEqual(ys[-1] - ys[0], 3000.0, places=3)
 
     def test_does_not_fit(self):
         plan, note = stair_layout.plan_dogleg_stair(
@@ -239,9 +239,50 @@ class LineworkStairs(unittest.TestCase):
         centres = sorted(round(r["start"][1] * _MM) for r in plan["runs"])
         self.assertEqual(centres, [23900, 25400])
         # arrival landing continues past run2's end (x 15350 + landing 1500)
+        # and spans both flights (y 23150..26150) like the drawn half landing
         top = plan["top_landing"]
         self.assertEqual(len(top), 4)
         self.assertAlmostEqual(max(p[0] for p in top) * _MM, 16850.0, places=2)
+        ys = sorted(p[1] * _MM for p in top)
+        self.assertAlmostEqual(ys[-1] - ys[0], 3000.0, places=2)
+
+    def test_winding_four_flight_stair(self):
+        # Project1's square stair: four flights around a 1200 x 1800 well,
+        # drawn exactly as in the 0.48.0 export (cluster 0 geometry).
+        recs = []
+
+        def line(ax, ay, bx, by):
+            recs.append(_Rec("line", [(ax * _FT, ay * _FT), (bx * _FT, by * _FT)],
+                             layers.CATEGORY_STAIR))
+
+        for i in range(7):                       # left + right flights (7 each)
+            y = 28206.0 + i * 300.0
+            line(127801.0, y, 129301.0, y)
+            line(130501.0, y, 132001.0, y)
+        for i in range(5):                       # bottom flight (5 risers)
+            x = 129301.0 + i * 300.0
+            line(x, 26706.0, x, 28206.0)
+        for i in range(3):                       # top flight (3 risers)
+            x = 129901.0 + i * 300.0
+            line(x, 30006.0, x, 31506.0)
+        plans, notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        plan = plans[0]
+        self.assertEqual(len(plan["runs"]), 4)
+        self.assertEqual(plan["risers_total"], 22)
+        self.assertEqual([r["risers"] for r in plan["runs"]], [5, 7, 3, 7])
+        # consecutive flights meet at the corner landings (a well-sized hop)
+        for first, second in zip(plan["runs"], plan["runs"][1:]):
+            gap = math.hypot(second["start"][0] - first["end"][0],
+                             second["start"][1] - first["end"][1]) * _MM
+            self.assertLess(gap, 2300.0)
+        # the arrival slab stays ONE run wide: the parallel flight is across
+        # the well, not adjacent
+        top = plan["top_landing"]
+        span = (max(math.hypot(top[i][0] - top[j][0], top[i][1] - top[j][1])
+                    for i in range(4) for j in range(4))) * _MM
+        self.assertLess(span, 2300.0)            # 1500 wide x 1500 deep diagonal
 
     def test_no_riser_lines_no_plan(self):
         recs = _wall_bay(0.0, 0.0, 4000.0, 4000.0)      # walls, no stair layer

@@ -48,9 +48,9 @@ def _stairs_type_id(doc, plan, base_type_id=None):
     base = doc.GetElement(base_id)
     if base is None:
         return None
-    name = "cad2bim {0:.0f}R x {1:.0f}T x {2:.0f}W".format(
-        plan["riser_mm"], plan["tread_mm"], plan["run_width_mm"])
-    from Autodesk.Revit.DB import FilteredElementCollector
+    waist_mm = float(plan.get("waist_mm") or 0.0)
+    name = "cad2bim {0:.0f}R x {1:.0f}T x {2:.0f}W x {3:.0f}wst".format(
+        plan["riser_mm"], plan["tread_mm"], plan["run_width_mm"], waist_mm)
     for existing in FilteredElementCollector(doc).OfClass(type(base)):
         try:
             if existing.get_Parameter(
@@ -71,7 +71,60 @@ def _stairs_type_id(doc, plan, base_type_id=None):
     _set_length_param(dup, ("STAIRSTYPE_MINIMUM_RUN_WIDTH",
                             "STAIRS_ATTR_MINIMUM_RUN_WIDTH",
                             "STAIRSTYPE_MIN_RUN_WIDTH"), plan["run_width_mm"])
+    if waist_mm > 0:
+        _apply_waist(doc, dup, waist_mm)
     return dup.Id
+
+
+def _apply_waist(doc, stairs_type, waist_mm):
+    """Push the WAIST thickness onto the stair's run and landing types.
+
+    The waist lives on the RUN type (monolithic structural depth) and its
+    counterpart on the LANDING type; both hang off the stairs type. Each is
+    duplicated (idempotent by name) so the model's stock types stay untouched.
+    Best effort -- a family-based stair type without these parameters is left
+    as it is."""
+    for member_names, depth_names in (
+            (("STAIRSTYPE_RUN_TYPE",),
+             ("STAIRS_RUNTYPE_STRUCTURAL_DEPTH",
+              "STAIRSTYPE_RUN_STRUCTURAL_DEPTH")),
+            (("STAIRSTYPE_LANDING_TYPE",),
+             ("STAIRS_LANDINGTYPE_STRUCTURAL_DEPTH",
+              "STAIRS_LANDINGTYPE_TOTAL_THICKNESS"))):
+        try:
+            member_param = None
+            for name in member_names:
+                bip = getattr(BuiltInParameter, name, None)
+                if bip is not None:
+                    member_param = stairs_type.get_Parameter(bip)
+                    if member_param is not None:
+                        break
+            if member_param is None:
+                continue
+            member = doc.GetElement(member_param.AsElementId())
+            if member is None:
+                continue
+            dup_name = "cad2bim waist {0:.0f}".format(waist_mm)
+            dup = None
+            for existing in FilteredElementCollector(doc).OfClass(type(member)):
+                try:
+                    if existing.get_Parameter(
+                            BuiltInParameter.ALL_MODEL_TYPE_NAME
+                            ).AsString() == dup_name:
+                        dup = existing
+                        break
+                except Exception:
+                    continue
+            if dup is None:
+                dup = member.Duplicate(dup_name)
+                if not _set_length_param(dup, depth_names, waist_mm):
+                    lookup = dup.LookupParameter("Structural Depth")
+                    if lookup is not None and not lookup.IsReadOnly:
+                        lookup.Set(waist_mm / _MM)
+            if not member_param.IsReadOnly:
+                member_param.Set(dup.Id)
+        except Exception:
+            continue
 
 
 def _set_length_param(element, builtin_names, value_mm):
@@ -151,10 +204,11 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                     pass
                 run_ids.append(stairs_run.Id)
                 risers_done += run.get("risers") or 0
-            if len(run_ids) >= 2:
+            # a landing between EVERY consecutive pair of runs: the single turn
+            # of a dog-leg, the three corners of a four-flight winding stair
+            for first, second in zip(run_ids, run_ids[1:]):
                 try:
-                    StairsLanding.CreateAutomaticLanding(doc, run_ids[0],
-                                                         run_ids[1])
+                    StairsLanding.CreateAutomaticLanding(doc, first, second)
                 except Exception as landing_error:
                     result["skipped"].append("{0}: landing not created ({1})"
                                              .format(mark,

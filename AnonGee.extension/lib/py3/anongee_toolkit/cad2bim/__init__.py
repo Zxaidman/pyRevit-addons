@@ -35,7 +35,26 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.48.0"  # STAIRCASE round 2 (user's three items after the first stairs placed):
+__version__ = "0.49.0"  # STAIRCASE round 3 (0.48.0 feedback, four items): (1) the ARRIVAL
+#                         landing now spans the parallel flights like the half landing does --
+#                         runs parallel to the last one within 800mm across join its width (a
+#                         U stair gets the full ~3000; a winding stair's opposite flight sits
+#                         across the WELL, so there it stays one run wide); (2) WINDING stairs
+#                         (Project1's squares): the riser-line pass keeps EVERY direction
+#                         bucket, so a four-flight stair around a well comes back whole --
+#                         flights ordered counterclockwise around the well centre, each climbing
+#                         tangentially, corner landings between every consecutive pair (the
+#                         builder now bridges ALL pairs, not just the first two). All six
+#                         Project1 stairs replay as 4-run spirals (5/7/3/7 risers etc.);
+#                         (3) an explicit STAIR SOURCE toggle on the Staircase tab -- Auto
+#                         (linework, else text) / Drawn stair linework / Text + numbers -- so
+#                         the two options are user-selectable instead of implicit; (4) the riser
+#                         count now DEFAULTS to storey / max riser rounded up (20 for 3000/150,
+#                         live-refreshed on level changes; typing a count makes it absolute as
+#                         before), and a WAIST THICKNESS field (default 200) pushes the
+#                         structural depth onto duplicated run + landing types.
+#
+# 0.48.0                  STAIRCASE round 2 (user's three items after the first stairs placed):
 #                         (1) Staircase tab gains RISER COUNT (0 = auto) + a live FLOOR HEIGHT
 #                         readout -- the count is ABSOLUTE: riser height syncs to storey / count
 #                         (level combo changes re-sync it), and the layout uses the count over

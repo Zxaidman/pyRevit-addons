@@ -247,27 +247,64 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
         (lc[0] - ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
          lc[1] - ay * lu / 2.0 - ny * short_mm / _MM / 2.0)]
     plan = {"mark": mark, "z": z, "runs": runs, "landing": landing_ring,
-            "top_landing": _top_landing_ring(runs[-1], landing) if runs else None,
+            "top_landing": _arrival_landing(runs, landing),
             "risers_total": risers_total, "riser_mm": riser_actual,
-            "tread_mm": tread, "run_width_mm": width, "landing_mm": landing}
+            "tread_mm": tread, "run_width_mm": width, "landing_mm": landing,
+            "waist_mm": float(params.get("waist_mm") or 0.0)}
     return plan, note
 
 
-def _top_landing_ring(run, depth_mm):
+_ARRIVAL_MERGE_GAP_MM = 800.0   # runs this close across = one shared arrival slab
+
+
+def _arrival_landing(runs, depth_mm):
     """The ARRIVAL landing: a rectangle continuing past the last run's top end
-    (the drawn plans show it; Revit's automatic landing only fills the turn)."""
-    (sx, sy), (ex, ey) = run["start"], run["end"]
+    (the drawn plans show it; Revit's automatic landing only fills the turn).
+
+    Width: in a U stair the arrival platform spans BOTH flights like the half
+    landing does, so every run parallel to the last one and lying within
+    _ARRIVAL_MERGE_GAP_MM across joins the slab's width. A winding stair's
+    opposite flight sits across the WELL (a bigger gap), so there the slab
+    stays one run wide."""
+    if not runs:
+        return None
+    last = runs[-1]
+    (sx, sy), (ex, ey) = last["start"], last["end"]
     length = math.hypot(ex - sx, ey - sy)
     if length <= 0:
         return None
     ax, ay = (ex - sx) / length, (ey - sy) / length
     nx, ny = -ay, ax
+    gap_ft = config.mm_to_ft(_ARRIVAL_MERGE_GAP_MM)
+    intervals = []
+    for run in runs:
+        (qsx, qsy), (qex, qey) = run["start"], run["end"]
+        qlen = math.hypot(qex - qsx, qey - qsy)
+        if qlen <= 0:
+            continue
+        qax, qay = (qex - qsx) / qlen, (qey - qsy) / qlen
+        if abs(qax * ay - qay * ax) > 0.17:
+            continue                    # not parallel to the last run
+        mid_off = ((qsx + qex) / 2.0) * nx + ((qsy + qey) / 2.0) * ny
+        hw = (run["width_mm"] / _MM) / 2.0
+        intervals.append((mid_off - hw, mid_off + hw))
+    last_off = ((sx + ex) / 2.0) * nx + ((sy + ey) / 2.0) * ny
+    hw_last = (last["width_mm"] / _MM) / 2.0
+    lo, hi = last_off - hw_last, last_off + hw_last
+    changed = True
+    while changed:
+        changed = False
+        for a, b in intervals:
+            if a - gap_ft <= hi and lo - gap_ft <= b and (a < lo or b > hi):
+                lo, hi = min(lo, a), max(hi, b)
+                changed = True
     du = depth_mm / _MM
-    hw = (run["width_mm"] / _MM) / 2.0
-    return [(ex + nx * hw, ey + ny * hw),
-            (ex + ax * du + nx * hw, ey + ay * du + ny * hw),
-            (ex + ax * du - nx * hw, ey + ay * du - ny * hw),
-            (ex - nx * hw, ey - ny * hw)]
+    return [(ex + nx * (lo - last_off), ey + ny * (lo - last_off)),
+            (ex + ax * du + nx * (lo - last_off),
+             ey + ay * du + ny * (lo - last_off)),
+            (ex + ax * du + nx * (hi - last_off),
+             ey + ay * du + ny * (hi - last_off)),
+            (ex + nx * (hi - last_off), ey + ny * (hi - last_off))]
 
 
 # ------------------------------------------------------- option 2: stair linework
@@ -323,93 +360,173 @@ def _cluster_lines(lines, gap_ft):
 
 
 def _riser_runs(lines):
-    """RUNS from one stair's linework: (run_axis, runs) or (None, []).
+    """RUNS from one stair's linework, EVERY direction considered.
 
-    Riser lines = the dominant parallel direction. Lines whose ACROSS spans
-    overlap belong to the same run; each run's riser positions (deduped -- the
-    shared riser between adjacent panels is drawn once per panel) must be >= 3
-    and equidistant within tread limits. `runs` come back as
-    [(positions_ft_sorted, span_lo_ft, span_hi_ft)], run_axis the unit vector
-    the positions are measured along.
+    Riser lines bucket by direction; within a bucket, same-length lines whose
+    ACROSS spans overlap belong to the same run; each run's riser positions
+    (deduped -- the shared riser between adjacent panels is drawn once per
+    panel) must be >= 3 and equidistant within tread limits. A dog-leg keeps
+    one direction; a SQUARE stair (four flights around a well, Project1)
+    contributes runs from two perpendicular directions.
+
+    Returns [{"axis", "normal", "positions", "span_lo", "span_hi", "center"}]
+    -- axis is the unit vector positions are measured along, normal the riser
+    direction spans are measured along.
     """
     buckets = defaultdict(list)
     for a, b in lines:
         ang = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
         key = int(round(ang / _RISER_ANGLE_TOL))
         buckets[key].append((a, b))
-    best = None
-    for key, bucket in buckets.items():
+    runs = []
+    dedupe_ft = config.mm_to_ft(_POSITION_DEDUPE_MM)
+    for _key, bucket in sorted(buckets.items()):
         if len(bucket) < _RISER_MIN_LINES:
             continue
-        if best is None or len(bucket) > len(best):
-            best = bucket
-    if best is None:
-        return None, []
-    # risers are same-length; a boundary line in the same direction (the drawn
-    # landing edge, twice their length) would BRIDGE the two run groups
-    lengths = sorted(_dist(a, b) for a, b in best)
-    median_len = lengths[len(lengths) // 2]
-    best = [(a, b) for a, b in best
-            if 0.6 * median_len <= _dist(a, b) <= 1.4 * median_len]
-    if len(best) < _RISER_MIN_LINES:
-        return None, []
-    a0, b0 = best[0]
-    ang = math.atan2(b0[1] - a0[1], b0[0] - a0[0]) % math.pi
-    dx, dy = math.cos(ang), math.sin(ang)          # along a riser line
-    px, py = -dy, dx                               # the run axis
-    items = []
-    for a, b in best:
-        pos = ((a[0] + b[0]) / 2.0) * px + ((a[1] + b[1]) / 2.0) * py
-        lo = min(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
-        hi = max(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
-        items.append((pos, lo, hi))
-    parent = list(range(len(items)))
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    for i in range(len(items)):
-        for j in range(i + 1, len(items)):
-            lo = max(items[i][1], items[j][1])
-            hi = min(items[i][2], items[j][2])
-            shorter = min(items[i][2] - items[i][1], items[j][2] - items[j][1])
-            if shorter > 0 and (hi - lo) > 0.3 * shorter:
-                parent[find(i)] = find(j)
-    grouped = defaultdict(list)
-    for i in range(len(items)):
-        grouped[find(i)].append(items[i])
-    dedupe_ft = config.mm_to_ft(_POSITION_DEDUPE_MM)
-    runs = []
-    for group in grouped.values():
-        positions = []
-        for pos, _lo, _hi in sorted(group):
-            if not positions or pos - positions[-1] > dedupe_ft:
-                positions.append(pos)
-        if len(positions) < _RISER_MIN_LINES:
+        # risers are same-length; a boundary line in the same direction (the
+        # drawn landing edge, twice their length) would BRIDGE the run groups
+        lengths = sorted(_dist(a, b) for a, b in bucket)
+        median_len = lengths[len(lengths) // 2]
+        bucket = [(a, b) for a, b in bucket
+                  if 0.6 * median_len <= _dist(a, b) <= 1.4 * median_len]
+        if len(bucket) < _RISER_MIN_LINES:
             continue
-        gaps = [(positions[i + 1] - positions[i]) * _MM
-                for i in range(len(positions) - 1)]
-        if min(gaps) < _TREAD_MIN_MM or max(gaps) > _TREAD_MAX_MM:
-            continue
-        if max(gaps) - min(gaps) > 60.0:
-            continue                    # not equidistant: boundary lines, not risers
-        lo = min(g[1] for g in group)
-        hi = max(g[2] for g in group)
-        runs.append((positions, lo, hi))
-    return (px, py), runs
+        a0, b0 = bucket[0]
+        ang = math.atan2(b0[1] - a0[1], b0[0] - a0[0]) % math.pi
+        dx, dy = math.cos(ang), math.sin(ang)      # along a riser line
+        px, py = -dy, dx                           # the run axis
+        items = []
+        for a, b in bucket:
+            pos = ((a[0] + b[0]) / 2.0) * px + ((a[1] + b[1]) / 2.0) * py
+            lo = min(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
+            hi = max(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
+            items.append((pos, lo, hi))
+        parent = list(range(len(items)))
+
+        def find(i):
+            while parent[i] != i:
+                parent[i] = parent[parent[i]]
+                i = parent[i]
+            return i
+
+        for i in range(len(items)):
+            for j in range(i + 1, len(items)):
+                lo = max(items[i][1], items[j][1])
+                hi = min(items[i][2], items[j][2])
+                shorter = min(items[i][2] - items[i][1],
+                              items[j][2] - items[j][1])
+                if shorter > 0 and (hi - lo) > 0.3 * shorter:
+                    parent[find(i)] = find(j)
+        grouped = defaultdict(list)
+        for i in range(len(items)):
+            grouped[find(i)].append(items[i])
+        for group in grouped.values():
+            positions = []
+            for pos, _lo, _hi in sorted(group):
+                if not positions or pos - positions[-1] > dedupe_ft:
+                    positions.append(pos)
+            if len(positions) < _RISER_MIN_LINES:
+                continue
+            gaps = [(positions[i + 1] - positions[i]) * _MM
+                    for i in range(len(positions) - 1)]
+            if min(gaps) < _TREAD_MIN_MM or max(gaps) > _TREAD_MAX_MM:
+                continue
+            if max(gaps) - min(gaps) > 60.0:
+                continue                # not equidistant: boundary, not risers
+            lo = min(g[1] for g in group)
+            hi = max(g[2] for g in group)
+            mid_pos = (positions[0] + positions[-1]) / 2.0
+            mid_off = (lo + hi) / 2.0
+            runs.append({"axis": (px, py), "normal": (dx, dy),
+                         "positions": positions, "span_lo": lo, "span_hi": hi,
+                         "center": (px * mid_pos + dx * mid_off,
+                                    py * mid_pos + dy * mid_off)})
+    return runs
+
+
+def _dogleg_run_dicts(runs, cluster, params):
+    """Start/end run dicts for a one-direction stair (one or two flights).
+
+    The landing sits in the drawn leftover next to the riser extent; the first
+    run climbs INTO its edge, the second climbs OUT (the 180-degree turn).
+    Returns (run_dicts, landing_mm)."""
+    runs = sorted(runs, key=lambda r: r["span_lo"])[:2]
+    px, py = runs[0]["axis"]
+    projections = [x * px + y * py
+                   for a, b in cluster for x, y in (a, b)]
+    cluster_lo, cluster_hi = min(projections), max(projections)
+    pos_lo = min(r["positions"][0] for r in runs)
+    pos_hi = max(r["positions"][-1] for r in runs)
+    left_over_lo = (pos_lo - cluster_lo) * _MM
+    left_over_hi = (cluster_hi - pos_hi) * _MM
+    landing_at_lo = left_over_lo >= left_over_hi
+    landing_mm = max(left_over_lo, left_over_hi)
+    width_mm = min((r["span_hi"] - r["span_lo"]) * _MM for r in runs)
+    if landing_mm < width_mm * 0.5:
+        landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
+    dxn, dyn = py, -px                          # unit normal to the run axis
+    run_dicts = []
+    for number, run in enumerate(runs):
+        off = (run["span_lo"] + run["span_hi"]) / 2.0
+        s0, s1 = run["positions"][0], run["positions"][-1]
+        near_s, far_s = (s0, s1) if landing_at_lo else (s1, s0)
+        if number == 0:
+            start_s, end_s = far_s, near_s      # climbs INTO the landing
+        else:
+            start_s, end_s = near_s, far_s      # climbs OUT of it
+        run_dicts.append({
+            "start": (px * start_s + dxn * off, py * start_s + dyn * off),
+            "end": (px * end_s + dxn * off, py * end_s + dyn * off),
+            "risers": len(run["positions"]),
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+    return run_dicts, landing_mm
+
+
+def _winding_run_dicts(runs, params):
+    """Start/end run dicts for a MULTI-DIRECTION stair (flights around a well,
+    e.g. Project1's square stairs). Runs are ordered counterclockwise around
+    the well centre and each climbs in the counterclockwise direction, so
+    consecutive ends meet at the corner landings. Returns (run_dicts,
+    landing_mm) -- the corner landing is one run width unless the dialog says
+    otherwise."""
+    ox = sum(r["center"][0] for r in runs) / len(runs)
+    oy = sum(r["center"][1] for r in runs) / len(runs)
+    runs = sorted(runs, key=lambda r: math.atan2(r["center"][1] - oy,
+                                                 r["center"][0] - ox))
+    # start at the bottom-most flight; the rest follow counterclockwise
+    start_index = min(range(len(runs)), key=lambda i: runs[i]["center"][1])
+    runs = runs[start_index:] + runs[:start_index]
+    run_dicts = []
+    for run in runs:
+        apx, apy = run["axis"]
+        nx, ny = run["normal"]
+        cx, cy = run["center"]
+        off = (run["span_lo"] + run["span_hi"]) / 2.0
+        # climb along the counterclockwise tangent at this flight's position
+        tx, ty = -(cy - oy), (cx - ox)
+        s0, s1 = run["positions"][0], run["positions"][-1]
+        if apx * tx + apy * ty >= 0:
+            start_s, end_s = s0, s1
+        else:
+            start_s, end_s = s1, s0
+        run_dicts.append({
+            "start": (apx * start_s + nx * off, apy * start_s + ny * off),
+            "end": (apx * end_s + nx * off, apy * end_s + ny * off),
+            "risers": len(run["positions"]),
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+    width_mm = min(r["width_mm"] for r in run_dicts)
+    landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
+    return run_dicts, landing_mm
 
 
 def stair_plans_from_linework(records, params, storey_mm, texts=None):
-    """Option 2: dog-leg plans measured from the drawn stair-layer riser lines.
+    """Option 2: stair plans measured from the drawn stair-layer riser lines.
 
     Every drawn quantity wins over the dialog: tread = drawn spacing, run width
     = drawn riser length, riser count = drawn line count, landing = the drawn
-    leftover next to the riser extent. The dialog still contributes the riser
-    height limit only through storey / drawn-riser-count (reported per plan).
-    Returns (plans, notes).
+    leftover next to the riser extent. One drawn direction = a dog-leg (or a
+    single flight); two directions = a winding stair around a well, every
+    flight kept. Returns (plans, notes).
     """
     lines, z = _stair_lines(records)
     if not lines:
@@ -419,35 +536,33 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
     notes = []
     for index, cluster in enumerate(
             _cluster_lines(lines, config.mm_to_ft(_CLUSTER_GAP_MM)), start=1):
-        axis, runs = _riser_runs(cluster)
+        runs = _riser_runs(cluster)
         if not runs:
             notes.append("stair linework cluster {0}: no riser lines "
                          "(need >= {1} parallel equidistant lines)".format(
                              index, _RISER_MIN_LINES))
             continue
-        runs = sorted(runs, key=lambda r: r[1])[:2]      # dog-leg: two runs max
-        px, py = axis
-        xs = [q for a, b in cluster for q in (a[0], b[0])]
-        ys = [q for a, b in cluster for q in (a[1], b[1])]
-        cluster_lo = min(x * px + y * py for x, y in zip(xs, ys))
-        cluster_hi = max(x * px + y * py for x, y in zip(xs, ys))
-        pos_lo = min(r[0][0] for r in runs)
-        pos_hi = max(r[0][-1] for r in runs)
-        left_over_lo = (pos_lo - cluster_lo) * _MM
-        left_over_hi = (cluster_hi - pos_hi) * _MM
-        landing_at_lo = left_over_lo >= left_over_hi
-        landing_mm = max(left_over_lo, left_over_hi)
-        gaps = [(r[0][i + 1] - r[0][i]) * _MM
-                for r in runs for i in range(len(r[0]) - 1)]
+        axes_differ = any(
+            abs(r["axis"][0] * runs[0]["axis"][1] -
+                r["axis"][1] * runs[0]["axis"][0]) > 0.17 for r in runs)
+        if axes_differ and len(runs) >= 3:
+            run_dicts, landing_mm = _winding_run_dicts(runs, params)
+        else:
+            same_axis = [r for r in runs
+                         if abs(r["axis"][0] * runs[0]["axis"][1] -
+                                r["axis"][1] * runs[0]["axis"][0]) <= 0.17]
+            run_dicts, landing_mm = _dogleg_run_dicts(same_axis, cluster,
+                                                      params)
+        gaps = [(r["positions"][i + 1] - r["positions"][i]) * _MM
+                for r in runs for i in range(len(r["positions"]) - 1)]
         gaps.sort()
-        tread_mm = gaps[len(gaps) // 2]
-        widths = [(r[2] - r[1]) * _MM for r in runs]
-        width_mm = min(widths)
-        if landing_mm < width_mm * 0.5:
-            landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
-        risers_total = sum(len(r[0]) for r in runs)
+        tread_mm = gaps[len(gaps) // 2] if gaps else 300.0
+        width_mm = min(r["width_mm"] for r in run_dicts)
+        risers_total = sum(r["risers"] for r in run_dicts)
         riser_mm = storey_mm / risers_total if storey_mm > 0 else 0.0
         # nearest stair text names the stair
+        xs = [q for a, b in cluster for q in (a[0], b[0])]
+        ys = [q for a, b in cluster for q in (a[1], b[1])]
         cx = sum(xs) / len(xs)
         cy = sum(ys) / len(ys)
         mark = "ST-{0}".format(index)
@@ -456,51 +571,37 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
             d = math.hypot(tx - cx, ty - cy)
             if best_d is None or d < best_d:
                 best_d, mark = d, tmark
-        # (px, py) is the run axis and `off` the across offset: a point is
-        # p = axis * s + normal * off, with normal = the riser-line direction.
-        # The FIRST run climbs INTO the landing edge, the second climbs OUT of
-        # it back the other way (the 180-degree dog-leg turn).
-        dxn, dyn = py, -px                              # unit normal to the axis
-        run_dicts = []
-        for number, (positions, span_lo, span_hi) in enumerate(runs):
-            off = (span_lo + span_hi) / 2.0
-            s0, s1 = positions[0], positions[-1]
-            near_s, far_s = (s0, s1) if landing_at_lo else (s1, s0)
-            if number == 0:
-                start_s, end_s = far_s, near_s
-            else:
-                start_s, end_s = near_s, far_s
-            run_dicts.append({
-                "start": (px * start_s + dxn * off, py * start_s + dyn * off),
-                "end": (px * end_s + dxn * off, py * end_s + dyn * off),
-                "risers": len(positions),
-                "width_mm": (span_hi - span_lo) * _MM})
         plans.append({"mark": mark, "z": z, "runs": run_dicts,
                       "landing": None,
-                      "top_landing": (_top_landing_ring(run_dicts[-1],
-                                                        landing_mm)
-                                      if run_dicts else None),
+                      "top_landing": _arrival_landing(run_dicts, landing_mm),
                       "risers_total": risers_total,
                       "riser_mm": riser_mm, "tread_mm": tread_mm,
                       "run_width_mm": width_mm, "landing_mm": landing_mm,
+                      "waist_mm": float(params.get("waist_mm") or 0.0),
                       "source": "stair_linework"})
     return plans, notes
 
 
-def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm):
-    """The staircase chain (user's two options, drawn linework preferred):
+def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm,
+                source="auto"):
+    """The staircase chain (user's two options + explicit toggle):
 
-    (2) stair-layer LINEWORK -- runs measured from the drawn riser lines;
-    (1) TEXT + dialog numbers -- a generic dog-leg inside the bay that holds a
-        STAIRCASE / ST-n note (used when the plan has no usable stair layer).
+    source="auto"     -- drawn stair LINEWORK when the plan has any, else the
+                         TEXT + dialog-numbers dog-leg (the default chain);
+    source="linework" -- option 2 only (drawn riser lines drive the layout);
+    source="text"     -- option 1 only (generic dog-leg in the bay holding a
+                         STAIRCASE / ST-n note, sized by the dialog numbers).
 
     Returns (plans, notes). Every skipped stair leaves a human-readable note so
     the console says WHY a source produced no stair.
     """
-    plans, notes = stair_plans_from_linework(records, params, storey_mm,
-                                             texts=texts)
-    if plans:
-        return plans, notes
+    plans = []
+    notes = []
+    if source in ("auto", "linework"):
+        plans, notes = stair_plans_from_linework(records, params, storey_mm,
+                                                 texts=texts)
+        if plans or source == "linework":
+            return plans, notes
     areas, area_notes = stair_areas_from_texts(records, beam_segments,
                                                column_rects, texts)
     notes += area_notes

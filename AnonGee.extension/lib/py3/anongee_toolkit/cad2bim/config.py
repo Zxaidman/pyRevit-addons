@@ -54,6 +54,7 @@ DEFAULTS = {
     "stair_tread_mm": 300.0,      # tread depth (the fixtures' riser spacing)
     "stair_run_width_mm": 1250.0, # width of each run
     "stair_landing_mm": 0.0,      # landing depth along the runs; 0 = run width
+    "stair_waist_mm": 200.0,      # waist (structural depth) of runs + landings
 }
 
 
