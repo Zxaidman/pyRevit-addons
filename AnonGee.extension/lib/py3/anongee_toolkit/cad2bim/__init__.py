@@ -54,7 +54,16 @@ __version__ = "0.51.0"  # MULTI-STOREY from ONE dxf + generic stair SHAPES (0.50
 #                         spiral run sized on the walk line. (3) New stair source "Draw
 #                         region in Revit": the window closes, PickBox collects one box per
 #                         stair from the view (Esc ends), and the chosen shape is built in
-#                         each. Suite 17 files (9 floor-plan + 31 stair tests).
+#                         each. Suite 17 files (12 floor-plan + 31 stair tests).
+#                         VERIFIED on the user's new StructuralPlan-Test9/Test10: both split
+#                         into their 3 storeys, every record routed, each storey aligned onto
+#                         its origin POINT. Two reader fixes came out of them -- a bare POINT
+#                         is now read (it is the origin convention, and was being dropped),
+#                         and the markers are taken from the DXF records while the REVIT
+#                         records are what gets split, because Revit's import does not always
+#                         carry a POINT through. Test10's own titles order correctly
+#                         ("Ground Floor @0.00+ Level" -> 0, "1st Floor @3.00+ Level" -> 1,
+#                         "Typical Floor @7.00+..." -> sheet order).
 #
 # 0.50.0                  STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
 #                         new stair are deleted after placement (user request) -- own transaction

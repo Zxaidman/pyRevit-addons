@@ -244,8 +244,13 @@ def _shift_text(text, dx, dy):
     return clone
 
 
-def split_floors(records, texts=None, align=True):
+def split_floors(records, texts=None, align=True, marker_records=None):
     """Split one drawing into per-storey FloorRegions.
+
+    `marker_records` supplies the boundary/origin geometry when it is not in
+    `records` -- a plan's origin is usually a bare POINT, which the Revit link
+    does not always import, so the pushbutton reads the markers from the DXF
+    records and splits the Revit records by them.
 
     Returns (regions, notes). `regions` is bottom-up; every region's records
     and texts are shifted so its origin marker lands on (0, 0) (pass
@@ -254,13 +259,14 @@ def split_floors(records, texts=None, align=True):
     dropped instead of silently building one floor.
     """
     notes = []
-    boxes = boundary_regions(records)
+    markers = marker_records if marker_records is not None else records
+    boxes = boundary_regions(markers)
     if not boxes:
-        boxes = _boundary_lines_to_boxes(records)
+        boxes = _boundary_lines_to_boxes(markers)
     if not boxes:
         return [], ["no closed rectangle on the floor-boundary layer"]
 
-    origins = origin_points(records)
+    origins = origin_points(markers)
     regions = []
     for box in boxes:
         inside = [p for p in origins
@@ -306,7 +312,7 @@ def split_floors(records, texts=None, align=True):
                 next_order += 1
             region.order = next_order
             used.add(next_order)
-        if len(unnamed) == len(regions):
+        if len(unnamed) == len(regions) and len(regions) > 1:
             notes.append("no plan titles found -- storeys ordered by sheet "
                          "layout (top row first, then left to right)")
 

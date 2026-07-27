@@ -838,7 +838,7 @@ def main():
                                   layers.CATEGORY_FLOOR_ORIGIN)):
         if not layer_name:
             continue
-        for record in revit_result.records:
+        for record in list(revit_result.records) + list(dxf_result.records):
             if record.layer_key == layer_name:
                 record.category = category
     limits = selections.get("limits")
@@ -857,8 +857,12 @@ def main():
     # marker lands on the model origin.
     storeys = None
     if selections.get("multistorey"):
-        regions, floor_notes = floor_plans.split_floors(revit_result.records,
-                                                        dxf_result.texts)
+        # the boundary rectangle and origin POINT come from the DXF read (a
+        # bare POINT does not always survive Revit's import), and the RECORDS
+        # split by them are the Revit ones the pipeline builds from
+        regions, floor_notes = floor_plans.split_floors(
+            revit_result.records, dxf_result.texts,
+            marker_records=dxf_result.records)
         for note in floor_notes:
             _say("  storey: {0}".format(note))
         if len(regions) > 1:

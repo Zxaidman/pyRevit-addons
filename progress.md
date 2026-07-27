@@ -20,8 +20,12 @@ regression test left behind by every fix.
 - **Draw region in Revit** stair source: window closes, PickBox collects one box per
   stair (Esc ends), chosen shape built inside each.
 - Suite 17 files; 9 floor-plan tests, 31 stair tests.
-- NOTE: test9/test10 DXFs not in the repo yet — built against synthetic + paired real
-  plans; re-verify when the fixtures land.
+- **Verified on the real test9/test10** (landed mid-work): both split into 3 storeys,
+  all records routed, each aligned onto its origin POINT. Two reader fixes from them:
+  bare POINT entities are now read (the origin convention was being dropped), and the
+  markers come from the DXF records while the REVIT records get split (Revit's import
+  does not always carry a POINT). Test10's titles order right: "Ground Floor @0.00+
+  Level" → 0, "1st Floor @3.00+ Level" → 1, "Typical Floor @7.00+..." → sheet order.
 
 ## v0.50.0 — staircase round 4 (railings off, L/circular/winder shapes) → PR
 - Railings Revit auto-hosts on each new stair now deleted after placement.

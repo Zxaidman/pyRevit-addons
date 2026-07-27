@@ -110,6 +110,15 @@ class LevelNames(unittest.TestCase):
         self.assertIsNone(order("COLUMN SCHEDULE"))
         self.assertIsNone(order(None))
 
+    def test_real_fixture_titles(self):
+        # StructuralPlan-Test10's own plan titles (the elevation suffix must not
+        # be mistaken for the level number)
+        order = floor_plans.level_order_from_text
+        self.assertEqual(order("Ground Floor @0.00+ Level"), 0)
+        self.assertEqual(order("1st Floor @3.00+ Level"), 1)
+        # a "typical floor" covers several levels and names none: sheet order
+        self.assertIsNone(order("Typical Floor @7.00+, 11.00+, 14.00+ & 17.00+"))
+
 
 class SplitFloors(unittest.TestCase):
     def _two_sheets(self):
@@ -191,6 +200,34 @@ class SplitFloors(unittest.TestCase):
         columns = [r for r in regions[0].records
                    if r.category == layers.CATEGORY_COLUMN]
         self.assertAlmostEqual(_centre(columns[0])[0], -5000.0, places=3)
+
+    def test_point_marker_is_an_origin(self):
+        # real drawings mark the origin with a bare POINT (Test9 / Test10)
+        recs = [_box(0.0, 0.0, 20000.0, 20000.0),
+                _Rec("point", [(3000.0, 4000.0)],
+                     layers.CATEGORY_FLOOR_ORIGIN),
+                _column(5000.0, 5000.0)]
+        regions, notes = floor_plans.split_floors(recs, [])
+        self.assertEqual(notes, [])
+        self.assertEqual(len(regions), 1)
+        cx, cy = _centre(regions[0].records[0])
+        self.assertAlmostEqual(cx, 2000.0, places=3)
+        self.assertAlmostEqual(cy, 1000.0, places=3)
+
+    def test_markers_may_come_from_a_second_record_set(self):
+        # the pushbutton reads boundary/origin from the DXF records and splits
+        # the REVIT records by them (a bare POINT is not always imported)
+        markers = [_box(0.0, 0.0, 20000.0, 20000.0),
+                   _Rec("point", [(1000.0, 1000.0)],
+                        layers.CATEGORY_FLOOR_ORIGIN)]
+        build = [_column(5000.0, 5000.0)]
+        regions, notes = floor_plans.split_floors(build, [],
+                                                  marker_records=markers)
+        self.assertEqual(notes, [])
+        self.assertEqual(len(regions), 1)
+        self.assertEqual(len(regions[0].records), 1)
+        self.assertAlmostEqual(_centre(regions[0].records[0])[0], 4000.0,
+                               places=3)
 
     def test_no_boundary_layer_is_reported(self):
         regions, notes = floor_plans.split_floors([_column(1000.0, 1000.0)], [])
