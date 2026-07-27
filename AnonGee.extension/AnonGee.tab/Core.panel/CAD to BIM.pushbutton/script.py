@@ -97,9 +97,10 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
 
-# --- deferred console: nothing reaches the pyRevit output until the user hits Run on the
-# main window (the early link/read steps must not open the console). Output is buffered, then
-# flushed AFTER Run, after which a 10-cell [####------] progress bar advances per build phase.
+# --- deferred console: the whole run is buffered and only REVEALED when something
+# goes wrong (user request: a clean run should not open the pyRevit console at all).
+# Printing is what opens that window, so a successful run prints nothing; a failure
+# flushes the entire log -- progress bar, per-phase counts, notes -- for diagnosis.
 _REAL_PRINT = print   # the genuine print; only the buffer uses it
 
 
@@ -107,6 +108,7 @@ class _DeferredOut(object):
     def __init__(self):
         self._buf = []
         self.live = False
+        self.failed = False
 
     def say(self, msg=""):
         if self.live:
@@ -114,11 +116,32 @@ class _DeferredOut(object):
         else:
             self._buf.append(msg)
 
+    def fail(self):
+        """Mark the run as failed: the log is shown when it finishes."""
+        self.failed = True
+
     def flush(self):
         for msg in self._buf:
             _REAL_PRINT(msg)
         self._buf = []
         self.live = True
+
+    def finish(self, outcomes=None):
+        """Reveal the log only when the run failed; stay silent otherwise.
+
+        An outcome with errors, a rollback, or a category that produced nothing
+        while it was asked for all count as failure -- those are exactly the
+        runs where the console is worth opening.
+        """
+        for outcome in (outcomes or {}).values():
+            if not isinstance(outcome, dict):
+                continue
+            if outcome.get("errors") or outcome.get("rolled_back"):
+                self.failed = True
+        if self.failed:
+            self.flush()
+        else:
+            self._buf = []
 
 
 _OUT = _DeferredOut()
@@ -147,6 +170,7 @@ def _alert(title, message):
 
 
 def _error(title, message, detail=None):
+    _OUT.fail()
     body = message
     if detail:
         body += "\n\n--- technical detail ---\n{0}".format(detail)
@@ -168,6 +192,7 @@ def _rollback_alert(label, tstatus, gstatus):
         "at commit -- most often running into a project that already contains "
         "these elements. Try a fresh/empty project (or undo the previous run), "
         "then run again.".format(label, tstatus, gstatus))
+    _OUT.fail()
     _say(message)
     _error("{0} not saved".format(label), message)
 
@@ -743,6 +768,7 @@ def main():
                                        this_view_only=options.result["this_view_only"])
     except Exception:
         _error("Link failed", "Could not link the DXF.", traceback.format_exc())
+        _OUT.finish()
         return
 
     # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
@@ -753,11 +779,14 @@ def main():
     if revit_result.is_empty():
         _alert("Empty link", "The linked DXF produced no readable geometry in "
                "Revit. Check the link is visible in the active view.")
+        _OUT.fail()
+        _OUT.finish()
         return
     try:
         dxf_result = dxf_reader.read_dxf(path)
     except Exception:
         _error("DXF read failed", "Could not read the DXF for text.", traceback.format_exc())
+        _OUT.finish()
         return
 
     # Map DXF coords -> Revit feet using the GRID lines as anchors: they are the
@@ -823,10 +852,6 @@ def main():
     if not window.result:
         return   # user cancelled -- nothing was flushed, console stays closed
 
-    # Run was clicked: now (and only now) reveal the console -- banner + the buffered
-    # link/read progress -- then keep printing live through the build phases.
-    _OUT.flush()
-
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
     # The Multi-storey tab picks the boundary/origin layers BY NAME (they differ
@@ -888,16 +913,19 @@ def main():
             storey_selections["base_level_id"] = base_id
             storey_selections["top_level_id"] = top_id
             storey_result = _StoreyResult(revit_result, region.records)
-            _build_one_storey(doc, storey_result, region.texts, storey_selections,
-                              schedule_source=dxf_result.texts,
-                              path=path, comparison=comparison,
-                              transform_method=transform_method,
-                              storey_label=label)
+            outcomes = _build_one_storey(
+                doc, storey_result, region.texts, storey_selections,
+                schedule_source=dxf_result.texts, path=path,
+                comparison=comparison, transform_method=transform_method,
+                storey_label=label)
+            _OUT.finish(outcomes)
         return
 
-    _build_one_storey(doc, revit_result, dxf_result.texts, selections,
-                      schedule_source=dxf_result.texts, path=path,
-                      comparison=comparison, transform_method=transform_method)
+    outcomes = _build_one_storey(doc, revit_result, dxf_result.texts, selections,
+                                 schedule_source=dxf_result.texts, path=path,
+                                 comparison=comparison,
+                                 transform_method=transform_method)
+    _OUT.finish(outcomes)
 
 
 class _StoreyResult(object):
@@ -1122,6 +1150,7 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
                 outcomes, dxf_texts, comparison,
                 default_name=_export_name(path, selections,
                                           storey_label=storey_label))
+    return outcomes
 
 
 def _create_grids(doc, records, grid_texts=None):
@@ -1480,3 +1509,4 @@ if __name__ == "__main__":
         _error("Unexpected error",
                "An unexpected error occurred. The CPython3 engine is still running "
                "-- you do not need to restart Revit.", traceback.format_exc())
+        _OUT.finish()

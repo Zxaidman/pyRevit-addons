@@ -35,7 +35,23 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.51.0"  # MULTI-STOREY from ONE dxf + generic stair SHAPES (0.50.0 feedback).
+__version__ = "0.52.0"  # (1) THE MISSING STAIR LINES, found in the 0.50.0 test9 export's new
+#                         stairs OUTCOME: four clusters reported "no riser lines" although they
+#                         held 22-23 riser lines at a clean 300mm. Cause: a flight's positions
+#                         run 300, 300, ... and then jump 800mm to the LANDING and the boundary
+#                         line past it -- the group was rejected whole for being non-uniform.
+#                         FIX: gaps outside the tread range now SEGMENT the group into maximal
+#                         equidistant chains (_equidistant_chains), so each flight survives its
+#                         own landing. test9: 5 -> 7 stairs, zero notes; test10 (6) and project1
+#                         (6) unchanged; StaircasePlan/test1 replays byte-identical. Clusters
+#                         smaller than 1.5m (arrow glyphs) no longer emit a note.
+#                         (2) CONSOLE ON FAILURE ONLY (user request): the run is buffered from
+#                         start to end and the pyRevit console is only opened when something
+#                         actually goes wrong -- an exception, a rollback, or an outcome with
+#                         errors. A clean run prints nothing at all; a failed one flushes the
+#                         whole log (progress bar, per-phase counts, notes) for diagnosis.
+#
+# 0.51.0                  MULTI-STOREY from ONE dxf + generic stair SHAPES (0.50.0 feedback).
 #                         (1) New Multi-storey tab: the user boxes each floor plan on a
 #                         BOUNDARY layer and drops one marker per plan on an ORIGIN layer;
 #                         both layers are picked BY NAME in the tab (names differ per

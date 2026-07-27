@@ -284,6 +284,39 @@ class LineworkStairs(unittest.TestCase):
                     for i in range(4) for j in range(4))) * _MM
         self.assertLess(span, 2300.0)            # 1500 wide x 1500 deep diagonal
 
+    def test_landing_gap_splits_instead_of_voiding_the_flight(self):
+        """test9's stairs: 11 risers at 300 mm, then 800 mm gaps to the landing
+        and boundary lines. The odd gaps must SEGMENT the group, not reject it."""
+        recs = []
+
+        def line(ax, ay, bx, by):
+            recs.append(_Rec("line", [(ax * _FT, ay * _FT), (bx * _FT, by * _FT)],
+                             layers.CATEGORY_STAIR))
+
+        for i in range(11):                       # the flight itself
+            x = 1000.0 + i * 300.0
+            line(x, 0.0, x, 1600.0)
+        line(1000.0 + 10 * 300.0 + 800.0, 0.0, 1000.0 + 10 * 300.0 + 800.0, 1600.0)
+        line(1000.0 + 10 * 300.0 + 1600.0, 0.0, 1000.0 + 10 * 300.0 + 1600.0, 1600.0)
+        runs = stair_layout._riser_runs([(a, b) for a, b in
+                                         ((tuple(r.points[0][:2]),
+                                           tuple(r.points[1][:2])) for r in recs)])
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(len(runs[0]["positions"]), 11)
+
+    def test_equidistant_chains_segment_at_odd_gaps(self):
+        chains = stair_layout._equidistant_chains
+        step = 300.0 * _FT
+        pos = [(i * step, 0.0, 1.0) for i in range(11)]
+        pos += [(10 * step + 800.0 * _FT, 0.0, 1.0),
+                (10 * step + 1600.0 * _FT, 0.0, 1.0)]
+        out = chains(pos)
+        self.assertEqual([len(c) for c in out], [11])
+        # two separate flights either side of a landing both survive
+        pos2 = pos[:6] + [(20 * step, 0.0, 1.0), (21 * step, 0.0, 1.0),
+                          (22 * step, 0.0, 1.0), (23 * step, 0.0, 1.0)]
+        self.assertEqual([len(c) for c in chains(pos2)], [6, 4])
+
     def test_no_riser_lines_no_plan(self):
         recs = _wall_bay(0.0, 0.0, 4000.0, 4000.0)      # walls, no stair layer
         plans, _notes = stair_layout.stair_plans_from_linework(

@@ -459,6 +459,7 @@ _TREAD_MIN_MM = 150.0         # drawn riser spacing accepted as a tread
 _TREAD_MAX_MM = 500.0
 _CLUSTER_GAP_MM = 2000.0      # stair pieces closer than this belong together
 _POSITION_DEDUPE_MM = 10.0    # the same riser drawn per-run appears twice
+_MIN_STAIR_SPAN_MM = 1500.0   # a smaller cluster is an arrow/annotation glyph
 
 
 def _stair_lines(records):
@@ -567,29 +568,65 @@ def _riser_runs(lines):
             grouped[find(i)].append(items[i])
         stray_ft = config.mm_to_ft(_TREAD_MIN_MM * 0.9)
         for group in grouped.values():
-            positions = []
-            for pos, _lo, _hi in sorted(group):
+            merged = []
+            for pos, lo, hi in sorted(group):
                 # closer than a tread = the per-panel duplicate of the same
                 # riser, or a stray near-parallel line -- one position only
-                if not positions or pos - positions[-1] > stray_ft:
-                    positions.append(pos)
-            if len(positions) < _RISER_MIN_LINES:
-                continue
-            gaps = [(positions[i + 1] - positions[i]) * _MM
-                    for i in range(len(positions) - 1)]
-            if min(gaps) < _TREAD_MIN_MM or max(gaps) > _TREAD_MAX_MM:
-                continue
-            if max(gaps) - min(gaps) > 60.0:
-                continue                # not equidistant: boundary, not risers
-            lo = min(g[1] for g in group)
-            hi = max(g[2] for g in group)
-            mid_pos = (positions[0] + positions[-1]) / 2.0
-            mid_off = (lo + hi) / 2.0
-            runs.append({"axis": (px, py), "normal": (dx, dy),
-                         "positions": positions, "span_lo": lo, "span_hi": hi,
-                         "center": (px * mid_pos + dx * mid_off,
-                                    py * mid_pos + dy * mid_off)})
+                if merged and pos - merged[-1][0] <= stray_ft:
+                    prev = merged[-1]
+                    merged[-1] = (prev[0], min(prev[1], lo), max(prev[2], hi))
+                else:
+                    merged.append((pos, lo, hi))
+            for chain in _equidistant_chains(merged):
+                positions = [p for p, _lo, _hi in chain]
+                lo = min(c[1] for c in chain)
+                hi = max(c[2] for c in chain)
+                mid_pos = (positions[0] + positions[-1]) / 2.0
+                mid_off = (lo + hi) / 2.0
+                runs.append({"axis": (px, py), "normal": (dx, dy),
+                             "positions": positions, "span_lo": lo,
+                             "span_hi": hi,
+                             "center": (px * mid_pos + dx * mid_off,
+                                        py * mid_pos + dy * mid_off)})
     return runs
+
+
+def _equidistant_chains(merged):
+    """Split riser positions into maximal EQUIDISTANT chains (one per flight).
+
+    A drawn flight is a run of positions one tread apart; the landing and the
+    boundary lines past the last riser sit further away. Rejecting the whole
+    group when its gaps are not uniform threw away real flights (test9's stairs
+    lose 11 risers at 300 mm to two trailing 800 mm gaps), so the gaps that are
+    not a tread SEGMENT the group instead of disqualifying it.
+    """
+    chains = []
+    current = []
+    step = None
+    for i, item in enumerate(merged):
+        if not current:
+            current = [item]
+            step = None
+            continue
+        gap = (item[0] - current[-1][0]) * _MM
+        if gap < _TREAD_MIN_MM or gap > _TREAD_MAX_MM:
+            fits = False
+        elif step is None:
+            fits = True
+        else:
+            fits = abs(gap - step) <= 60.0
+        if fits:
+            if step is None:
+                step = gap
+            current.append(item)
+        else:
+            if len(current) >= _RISER_MIN_LINES:
+                chains.append(current)
+            current = [item]
+            step = None
+    if len(current) >= _RISER_MIN_LINES:
+        chains.append(current)
+    return chains
 
 
 def _dogleg_run_dicts(runs, cluster, params):
@@ -857,9 +894,14 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
             continue
         runs = _riser_runs(cluster)
         if not runs:
-            notes.append("stair linework cluster {0}: no riser lines "
-                         "(need >= {1} parallel equidistant lines)".format(
-                             index, _RISER_MIN_LINES))
+            xs = [q[0] for a, b in cluster for q in (a, b)]
+            ys = [q[1] for a, b in cluster for q in (a, b)]
+            span_mm = max(max(xs) - min(xs), max(ys) - min(ys)) * _MM
+            if span_mm >= _MIN_STAIR_SPAN_MM:
+                notes.append("stair linework cluster {0} at ({1:.0f}, {2:.0f}) mm: "
+                             "no riser lines (need >= {3} parallel equidistant "
+                             "lines)".format(index, min(xs) * _MM, min(ys) * _MM,
+                                             _RISER_MIN_LINES))
             continue
         axes_differ = any(
             abs(r["axis"][0] * runs[0]["axis"][1] -

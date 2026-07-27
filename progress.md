@@ -7,6 +7,19 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.52.0 — the missing stair lines (found via the outcome export) + quiet console
+- **Root cause of "not all lines picked"**, read straight from 0.50.0's new stairs
+  outcome on test9: 4 clusters said "no riser lines" while holding 22-23 risers at a
+  clean 300mm. A flight's gaps go 300, 300, … then jump 800mm to the LANDING and the
+  boundary line — and the whole group was rejected for being non-uniform. Fix:
+  non-tread gaps now SEGMENT the group into maximal equidistant chains
+  (`_equidistant_chains`). test9: 5 → 7 stairs, zero notes. test10 (6) and project1 (6)
+  unchanged; StaircasePlan-Test1 / StructuralPlan-Test1 replays byte-identical.
+  Clusters under 1.5m (arrow glyphs) stop emitting notes.
+- **Console only on failure**: the whole run buffers; the pyRevit console opens only on
+  an exception, a rollback, or an outcome carrying errors. A clean run prints nothing.
+- Suite 17 files, 33 stair tests.
+
 ## v0.51.0 — multi-storey from one DXF + generic stair shapes
 - **Multi-storey tab**: boundary layer (rect per floor) + origin layer (marker per floor),
   both picked BY NAME. floor_plans.split_floors → one record set per storey, shifted so
