@@ -712,9 +712,12 @@
     "skip_details": []
    },
    "stairs": {
-    "created": 0,
+    "created": 2,
     "skipped": 0,
-    "errors": 0
+    "errors": 0,
+    "planned": 2,
+    "notes": [],
+    "error_details": []
    },
    "beams": {
     "outcome": {
@@ -12125,9 +12128,12 @@
     "skip_details": []
    },
    "stairs": {
-    "created": 0,
+    "created": 2,
     "skipped": 0,
-    "errors": 0
+    "errors": 0,
+    "planned": 2,
+    "notes": [],
+    "error_details": []
    },
    "beams": {
     "outcome": {
@@ -25106,9 +25112,12 @@
     "skip_details": []
    },
    "stairs": {
-    "created": 0,
+    "created": 2,
     "skipped": 0,
-    "errors": 0
+    "errors": 0,
+    "planned": 2,
+    "notes": [],
+    "error_details": []
    },
    "beams": {
     "outcome": {
