@@ -133,11 +133,14 @@ class _DeferredOut(object):
         while it was asked for all count as failure -- those are exactly the
         runs where the console is worth opening.
         """
-        for outcome in (outcomes or {}).values():
+        pending = list((outcomes or {}).values())
+        while pending:                      # per-storey runs nest one level
+            outcome = pending.pop()
             if not isinstance(outcome, dict):
                 continue
             if outcome.get("errors") or outcome.get("rolled_back"):
                 self.failed = True
+            pending.extend(v for v in outcome.values() if isinstance(v, dict))
         if self.failed:
             self.flush()
         else:
@@ -161,6 +164,9 @@ def _progress(done, total, label):
 # A size label within this distance of a member refines it; also the proximity the
 # comparison uses to decide "this is the same member" (~half a column).
 _COMPARE_TOL_FT = 300.0 / 304.8
+
+# Picked stair detail lines chain into an outline when their ends are this close.
+_STAIR_LINE_CHAIN_MM = 50.0
 
 
 # --- dialogs / messaging (System.Windows only -- no pyRevit) -----------------
@@ -355,7 +361,7 @@ class CadToBimWindow(object):
         self.tb_stair_waist = find("tb_stair_waist")
         self.cb_stair_source = find("cb_stair_source")
         for label in ("Auto (linework, else shape)", "Drawn stair linework",
-                      "Shape at the plan text", "Draw region in Revit"):
+                      "Shape at the plan text", "Pick detail lines in Revit"):
             self.cb_stair_source.Items.Add(label)
         self.cb_stair_source.SelectedIndex = 0
         self.shape_buttons = [
@@ -407,6 +413,14 @@ class CadToBimWindow(object):
         self.tb_circ_max = find("tb_circ_max")
         self.tb_pair_min = find("tb_pair_min")
         self.tb_pair_max = find("tb_pair_max")
+        self.tb_slab_snap = find("tb_slab_snap")
+        self.tb_slab_heal = find("tb_slab_heal")
+        self.tb_slab_chain = find("tb_slab_chain")
+        self.tb_slab_width = find("tb_slab_width")
+        self.tb_stair_cluster = find("tb_stair_cluster")
+        self.tb_tread_min = find("tb_tread_min")
+        self.tb_tread_max = find("tb_tread_max")
+        self.tb_arrival_merge = find("tb_arrival_merge")
         self._init_sizing()
         self._init_tolerances()
 
@@ -527,6 +541,14 @@ class CadToBimWindow(object):
         self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+        self.tb_slab_snap.Text = str(int(d["slab_snap_mm"]))
+        self.tb_slab_heal.Text = str(int(d["slab_heal_mm"]))
+        self.tb_slab_chain.Text = str(int(d["slab_chain_mm"]))
+        self.tb_slab_width.Text = str(int(d["slab_min_width_mm"]))
+        self.tb_stair_cluster.Text = str(int(d["stair_cluster_mm"]))
+        self.tb_tread_min.Text = str(int(d["stair_tread_min_mm"]))
+        self.tb_tread_max.Text = str(int(d["stair_tread_max_mm"]))
+        self.tb_arrival_merge.Text = str(int(d["stair_arrival_merge_mm"]))
         self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
         self.tb_stair_waist.Text = str(int(d["stair_waist_mm"]))
         self.tb_storey_height.Text = str(int(d["storey_height_mm"]))
@@ -558,6 +580,19 @@ class CadToBimWindow(object):
             "circle_max_dia_mm": self._read_float(self.tb_circ_max, d["circle_max_dia_mm"]),
             "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
             "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
+            "slab_snap_mm": self._read_float(self.tb_slab_snap, d["slab_snap_mm"]),
+            "slab_heal_mm": self._read_float(self.tb_slab_heal, d["slab_heal_mm"]),
+            "slab_chain_mm": self._read_float(self.tb_slab_chain, d["slab_chain_mm"]),
+            "slab_min_width_mm": self._read_float(self.tb_slab_width,
+                                                  d["slab_min_width_mm"]),
+            "stair_cluster_mm": self._read_float(self.tb_stair_cluster,
+                                                 d["stair_cluster_mm"]),
+            "stair_tread_min_mm": self._read_float(self.tb_tread_min,
+                                                   d["stair_tread_min_mm"]),
+            "stair_tread_max_mm": self._read_float(self.tb_tread_max,
+                                                   d["stair_tread_max_mm"]),
+            "stair_arrival_merge_mm": self._read_float(self.tb_arrival_merge,
+                                                       d["stair_arrival_merge_mm"]),
         }
 
     def _storey_mm(self):
@@ -819,10 +854,23 @@ def main():
     # Map a copy of the DXF geometry the same way, only to report problem geometry.
     transform.apply_to_records(text_affine, dxf_result.records)
 
-    # Build the window from the REVIT records (the build source); no API calls.
+    # Build the window from the REVIT records (the build source) UNIONED with the
+    # DXF-only layers. Revit's import drops some entity types outright -- a bare
+    # POINT is the floor-ORIGIN convention and never survives it -- so a layer
+    # that exists only in the DXF was invisible in this table and unmappable,
+    # which left multi-storey runs without an origin and every storey shifted.
     layer_counts = report.build_layer_counts(revit_result.records)
-    names = _layer_names(revit_result.records)
-    layer_rows = [(name, layer_counts.get(name, {}).get("count", 0)) for name in names]
+    dxf_counts = report.build_layer_counts(dxf_result.records)
+    names = sorted(set(layer_counts) | set(dxf_counts))
+    layer_rows = []
+    for name in names:
+        revit_n = layer_counts.get(name, {}).get("count", 0)
+        dxf_n = dxf_counts.get(name, {}).get("count", 0)
+        layer_rows.append((name, revit_n if revit_n else dxf_n))
+    dxf_only = [name for name in names if not layer_counts.get(name)]
+    if dxf_only:
+        _say("Layers present in the DXF but not in the Revit link (still "
+             "mappable): {0}".format(", ".join(dxf_only)))
     default_mapping = layers.build_default_mapping(names)
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
@@ -854,6 +902,9 @@ def main():
 
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
+    # the DXF records carry the markers a Revit import drops, so they get the
+    # SAME mapping -- otherwise a DXF-only layer stays uncategorised
+    layers.apply_mapping(dxf_result.records, selections["mapping"])
     # The Multi-storey tab picks the boundary/origin layers BY NAME (they differ
     # per drawing), so route them here -- after the layer table, so an explicit
     # pick always wins over the naming convention.
@@ -869,6 +920,10 @@ def main():
     limits = selections.get("limits")
     standards = selections.get("standards")
     tolerances = selections.get("tolerances") or {}
+    # the Tolerances tab owns every tunable, including the ones that used to be
+    # module constants in the slab and stair geometry
+    slab_outlines.apply_tolerances(tolerances)
+    stair_layout.apply_tolerances(tolerances)
 
     # Diagnostic only: how much Revit's import dropped/clipped vs the raw DXF.
     compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
@@ -904,6 +959,8 @@ def main():
 
     if storeys:
         level_pairs = _storey_level_pairs(doc, selections, len(storeys))
+        storey_payloads = []
+        all_outcomes = {}
         for index, region in enumerate(storeys):
             base_id, top_id = level_pairs[index]
             label = region.label or "storey {0}".format(index + 1)
@@ -917,8 +974,12 @@ def main():
                 doc, storey_result, region.texts, storey_selections,
                 schedule_source=dxf_result.texts, path=path,
                 comparison=comparison, transform_method=transform_method,
-                storey_label=label)
-            _OUT.finish(outcomes)
+                storey_label=label, collect=storey_payloads)
+            all_outcomes["{0}".format(label)] = outcomes
+        if storey_payloads:
+            _export_storeys(storey_payloads, revit_result.source_name,
+                            _export_name(path, selections))
+        _OUT.finish(all_outcomes)
         return
 
     outcomes = _build_one_storey(doc, revit_result, dxf_result.texts, selections,
@@ -987,8 +1048,13 @@ def _storey_level_pairs(doc, selections, count):
 
 def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None,
                       path=None, comparison=None, transform_method=None,
-                      storey_label=None):
-    """Build ONE storey: columns, beams, slabs and stairs from its records."""
+                      storey_label=None, collect=None):
+    """Build ONE storey: columns, beams, slabs and stairs from its records.
+
+    `collect` is the multi-storey accumulator: when it is a list this storey
+    appends (label, payload) to it instead of writing its own JSON, so the run
+    ends with ONE file holding a section per storey.
+    """
     limits = selections.get("limits")
     standards = selections.get("standards")
     tolerances = selections.get("tolerances") or {}
@@ -1146,10 +1212,17 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
                                             selections,
                                             column_rects=column_footprints)
     if selections["export"]:
-        _export(revit_result, selections["mapping"], sections, beam_segments,
-                outcomes, dxf_texts, comparison,
-                default_name=_export_name(path, selections,
-                                          storey_label=storey_label))
+        if collect is not None:
+            collect.append((storey_label or "storey",
+                            report.build_export_payload(
+                                revit_result, selections["mapping"], sections,
+                                beam_segments, outcomes, texts=dxf_texts,
+                                comparison=comparison)))
+        else:
+            _export(revit_result, selections["mapping"], sections, beam_segments,
+                    outcomes, dxf_texts, comparison,
+                    default_name=_export_name(path, selections,
+                                              storey_label=storey_label))
     return outcomes
 
 
@@ -1378,37 +1451,92 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
             "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
 
 
-def _pick_stair_regions():
-    """Rectangles the user drags in the Revit view, [(ring), ...] in feet.
+class _CurveElementFilter(object):
+    """Selection filter: only the lines the user drew (detail or model).
 
-    Each PickBox gives two opposite corners; the loop keeps asking until the
-    user presses Escape, so several stairs can be placed in one run. Escape on
-    the FIRST box means "changed my mind" and returns nothing.
+    `__namespace__` is required by Python.NET 3 to build a real derived CLR
+    type from the ISelectionFilter interface -- without it the constructor
+    routes to the interface cast and raises "takes exactly one argument".
     """
-    from Autodesk.Revit.UI.Selection import PickBoxStyle
+
+    __namespace__ = "CadToBim"
+
+    def AllowElement(self, element):
+        from Autodesk.Revit.DB import CurveElement
+        return isinstance(element, CurveElement)
+
+    def AllowReference(self, reference, point):
+        return False
+
+
+def _pick_stair_regions():
+    """Stair outlines taken from DETAIL LINES the user drew in the view.
+
+    A drag-box is only as accurate as the drag; a detail line snaps to the CAD
+    link and to the model, so the boundary is exact and can be any shape. The
+    user draws the outlines with Revit's own line tools, then picks them here:
+    the picked curves are chained end-to-end into closed rings (arcs are
+    tessellated), one ring per stair. Returns [ring, ...] in internal feet.
+    """
+    from Autodesk.Revit.UI.Selection import ObjectType
+    from Autodesk.Revit.DB import Arc, Line
 
     uidoc = getattr(__revit__, "ActiveUIDocument", None)
     if uidoc is None:
         return []
-    rings = []
-    while True:
-        try:
-            picked = uidoc.Selection.PickBox(
-                PickBoxStyle.Directional,
-                "Drag a box around the stair area (Esc when done)")
-        except Exception:
-            break                       # Escape / cancelled: stop asking
-        if picked is None:
-            break
-        lo, hi = picked.Min, picked.Max
-        x0, x1 = min(lo.X, hi.X), max(lo.X, hi.X)
-        y0, y1 = min(lo.Y, hi.Y), max(lo.Y, hi.Y)
-        if (x1 - x0) < 1e-6 or (y1 - y0) < 1e-6:
+    try:
+        picked = uidoc.Selection.PickObjects(
+            ObjectType.Element, _wrap_selection_filter(),
+            "Select the detail lines outlining each stair, then click Finish")
+    except Exception:
+        return []                       # Escape / cancelled
+    pieces = []
+    for reference in picked or []:
+        element = uidoc.Document.GetElement(reference.ElementId)
+        curve = getattr(element, "GeometryCurve", None)
+        if curve is None:
             continue
-        rings.append([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
-        _say("Stairs -- region {0}: {1:.0f} x {2:.0f} mm".format(
-            len(rings), (x1 - x0) * 304.8, (y1 - y0) * 304.8))
+        if isinstance(curve, Line):
+            points = [curve.GetEndPoint(0), curve.GetEndPoint(1)]
+        else:                           # arc / spline: sample it
+            try:
+                points = list(curve.Tessellate())
+            except Exception:
+                points = [curve.GetEndPoint(0), curve.GetEndPoint(1)]
+        flat = [(p.X, p.Y) for p in points]
+        if len(flat) >= 2:
+            pieces.append((flat, points[0].Z))
+    if not pieces:
+        _say("Stairs -- no detail lines picked.")
+        return []
+
+    tol_ft = config.mm_to_ft(_STAIR_LINE_CHAIN_MM)
+    rings = []
+    for ring, _z in slab_outlines._chain_into_rings(pieces, tol_ft):
+        ring = slab_outlines._dedup_ring(ring)
+        if len(ring) >= 3:
+            rings.append(ring)
+    closed = len(rings)
+    if not closed:
+        _say("Stairs -- the picked lines do not close into an outline "
+             "(ends must meet within {0:.0f} mm).".format(_STAIR_LINE_CHAIN_MM))
+        return []
+    for index, ring in enumerate(rings, start=1):
+        area_m2 = abs(slab_outlines._signed_area(ring)) * 304.8 * 304.8 / 1e6
+        _say("Stairs -- outline {0}: {1} corners, {2:.1f} m2".format(
+            index, len(ring), area_m2))
     return rings
+
+
+def _wrap_selection_filter():
+    """The CLR-derived ISelectionFilter instance (built lazily so the module
+    imports outside Revit)."""
+    from Autodesk.Revit.UI.Selection import ISelectionFilter
+
+    class _Filter(ISelectionFilter, _CurveElementFilter):
+        __namespace__ = "CadToBim"
+
+    return _Filter()
 
 
 def _create_stairs(doc, records, beam_segments, texts, selections,
@@ -1438,7 +1566,7 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
     if source == "region":
         regions = _pick_stair_regions()
         if not regions:
-            _say("Stairs -- skipped (no region drawn in the view).")
+            _say("Stairs -- skipped (no closed outline picked in the view).")
             return {"created": 0, "skipped": 0, "errors": 0}
     plans, notes = stair_layout.plan_stairs(
         records, (beam_segments or {}).get("segments"), column_rects, texts,
@@ -1486,6 +1614,21 @@ def _export_name(cad_path, selections, storey_label=None):
         plan = "{0}-{1}".format(plan, re.sub(r"[^a-z0-9]+", "",
                                              storey_label.lower())[:12])
     return "{0}_{1}_{2}_{3}.json".format(cad2bim.__version__, element, plan, mode)
+
+
+def _export_storeys(storey_payloads, source_name, default_name):
+    """Write ONE JSON for a multi-storey run -- a section per storey."""
+    target = _save_json(default_name)
+    if not target:
+        return
+    try:
+        report.export_storeys_json(target, storey_payloads,
+                                   source_name=source_name)
+        _say("Exported JSON ({0} storeys in one file) -> {1}".format(
+            len(storey_payloads), target))
+    except (IOError, OSError) as write_error:
+        _error("JSON export failed", "Could not write the JSON file.",
+               str(write_error))
 
 
 def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison,

@@ -58,6 +58,18 @@ DEFAULTS = {
 
     # --- multi-storey (several floor plans in ONE dxf) ----------------------
     "storey_height_mm": 3000.0,   # level spacing when the model has no level yet
+
+    # --- slab outline tolerances (exposed on the Tolerances tab) ------------
+    "slab_snap_mm": 50.0,         # two boundary points this close are one node
+    "slab_heal_mm": 350.0,        # close a junction gap up to this far
+    "slab_chain_mm": 150.0,       # loose slab-edge lines chain within this
+    "slab_min_width_mm": 500.0,   # a face slimmer than this (2A/P) is a member
+
+    # --- staircase tolerances (exposed on the Tolerances tab) ---------------
+    "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair
+    "stair_tread_min_mm": 150.0,  # a drawn riser spacing below this is not a tread
+    "stair_tread_max_mm": 500.0,  # ... and above this it is a landing, not a tread
+    "stair_arrival_merge_mm": 800.0,  # parallel flights this close share the top slab
 }
 
 

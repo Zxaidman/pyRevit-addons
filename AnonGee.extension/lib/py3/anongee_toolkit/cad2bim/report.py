@@ -2630,11 +2630,12 @@ def _compact_texts(texts):
     return out
 
 
-def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
-                texts=None, comparison=None):
-    """Write a COMPACT run report (mm). No raw per-curve point dump -- just the
-    placed elements and the problem-geometry summary, so the file stays small and
-    is easy to paste/review. Each element list is one compact object per member.
+def build_export_payload(result, mapping, sections=None, beams=None,
+                         outcomes=None, texts=None, comparison=None):
+    """The COMPACT run report (mm) as a dict -- see export_json for the format.
+
+    Split out from export_json so a MULTI-STOREY run can put one payload per
+    storey inside a single file instead of writing one file per floor.
     """
     sections = sections or {}
     beams = beams or {"segments": [], "review": [], "status_counts": {}}
@@ -2671,6 +2672,47 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
         "texts_sized": _compact_texts(texts),
         "review": beams.get("review", []),
     }
+    return payload
+
+
+def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
+                texts=None, comparison=None):
+    """Write a COMPACT run report (mm). No raw per-curve point dump -- just the
+    placed elements and the problem-geometry summary, so the file stays small and
+    is easy to paste/review. Each element list is one compact object per member.
+    """
+    payload = build_export_payload(result, mapping, sections, beams, outcomes,
+                                   texts, comparison)
     with open(path, "w") as handle:
         json.dump(payload, handle, indent=1)
+    return path
+
+
+def export_storeys_json(path, storeys, source_name=None):
+    """Write ONE file for a multi-storey run: a `storeys` array of sections.
+
+    `storeys` is [(label, payload), ...] bottom-up. The shared header (source,
+    version, units) is lifted out of the first payload so the per-storey
+    sections carry only what actually differs between floors -- the user asked
+    for one JSON with a section per storey, not one file per floor.
+    """
+    sections = []
+    for label, payload in storeys:
+        section = dict(payload)
+        for shared in ("source", "cad2bim_version", "units"):
+            section.pop(shared, None)
+        section["storey"] = label
+        sections.append(section)
+    first = storeys[0][1] if storeys else {}
+    document = {
+        "source": source_name or first.get("source"),
+        "cad2bim_version": __version__,
+        "units": first.get("units",
+                           "mm (sizes and positions; positions derived from "
+                           "internal feet)"),
+        "storey_count": len(sections),
+        "storeys": sections,
+    }
+    with open(path, "w") as handle:
+        json.dump(document, handle, indent=1)
     return path

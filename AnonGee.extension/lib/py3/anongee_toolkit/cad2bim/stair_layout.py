@@ -40,6 +40,23 @@ _STAIR_TEXT = re.compile(r"^\s*(?:STAIRS?CASE|STAIRS?|ST[-_ ]?(\d+))\s*$", re.IG
 # "DN" / "DN." / "UP" -- the run direction note; DN sits at the TOP of the flight.
 _DIR_TEXT = re.compile(r"^\s*(DN|UP)\.?\s*$", re.IGNORECASE)
 
+
+def apply_tolerances(tolerances):
+    """Override the module's tunables from the dialog's Tolerances tab.
+
+    Called once per run by the pushbutton; anything absent keeps its default so
+    the offline tests and replays are unaffected.
+    """
+    global _CLUSTER_GAP_MM, _TREAD_MIN_MM, _TREAD_MAX_MM, _ARRIVAL_MERGE_GAP_MM
+    if not tolerances:
+        return
+    _CLUSTER_GAP_MM = float(tolerances.get("stair_cluster_mm", _CLUSTER_GAP_MM))
+    _TREAD_MIN_MM = float(tolerances.get("stair_tread_min_mm", _TREAD_MIN_MM))
+    _TREAD_MAX_MM = float(tolerances.get("stair_tread_max_mm", _TREAD_MAX_MM))
+    _ARRIVAL_MERGE_GAP_MM = float(tolerances.get("stair_arrival_merge_mm",
+                                                 _ARRIVAL_MERGE_GAP_MM))
+
+
 _MIN_STAIR_AREA_M2 = 4.0     # a bay smaller than this cannot hold a real stair
 _MAX_STAIR_AREA_M2 = 60.0    # bigger than this is a floor plate, not a stair bay
 

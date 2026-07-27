@@ -89,10 +89,11 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 2: Build -->
-            <TabItem Header="Build">
+            <!-- TAB: Structure -->
+            <TabItem Header="Structure">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
+                        <TextBlock Text="Structural elements" FontWeight="Bold" Margin="0,0,0,4"/>
                         <CheckBox x:Name="chk_grids"   Content="Create grids (from grid lines)" IsChecked="True"/>
                         <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True" Margin="0,6,0,0"/>
                         <Grid Margin="20,2,0,0">
@@ -115,6 +116,8 @@
                             <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="22" Margin="0,1"/>
                         </Grid>
+                        <TextBlock Text="The level pair is shared by every element in the run, architectural ones included."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
                         <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,6,0,0"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
@@ -145,22 +148,25 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_stairs"  Content="Create staircases (from stair linework or STAIRCASE / ST-n texts)" IsChecked="True" Margin="0,6,0,0"/>
-                        <Grid Margin="20,2,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="92"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Stair type" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_stair_type" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Runs from the stair layer when drawn, else a dog-leg in the bay holding the text; numbers from the Staircase tab. Base to top level."
-                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
-                        </Grid>
-                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True" Margin="0,6,0,0"/>
+                        <Separator Margin="0,10,0,6"/>
+                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True"/>
+                        <TextBlock Text="A multi-storey run writes ONE file with a section per storey."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB: Architecture -->
+            <TabItem Header="Architecture">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <TextBlock Text="Architectural elements" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="chk_stairs"  Content="Create staircases" IsChecked="True"/>
+                        <TextBlock Text="Every staircase setting -- type, source, shape and dimensions -- lives on the Staircase tab. Staircases run on the same base-to-top level pair as the structure."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,0"/>
+                        <Separator Margin="0,10,0,6"/>
+                        <TextBlock Text="Architectural walls and roofs are not built yet -- when they land they appear here."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -169,16 +175,22 @@
             <TabItem Header="Staircase">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
-                        <TextBlock Text="Generic staircase (mm)" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="Staircase" FontWeight="Bold" Margin="0,0,0,4"/>
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Stair source" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Column="1" x:Name="cb_stair_source" Height="22" Margin="0,1"/>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="26"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Stair type" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_stair_type" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Stair source" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_stair_source" Height="22" Margin="0,1"/>
                         </Grid>
-                        <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the generic shape below; the other sources force one path. &quot;Draw region in Revit&quot; closes this window, lets you drag one box per stair in the view, and builds the chosen shape inside each."
+                        <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the generic shape below; the other sources force one path. &quot;Pick detail lines in Revit&quot; closes this window and lets you select the detail lines you drew around each stair -- they snap to the CAD link and the model, so the outline is exact and can be any shape."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
 
                         <TextBlock Text="Shape (used when the CAD has no stair linework)" FontWeight="Bold" Margin="0,2,0,4"/>
@@ -383,6 +395,52 @@
                             <TextBlock Grid.Row="3" Grid.Column="2" Text="Beam pair width max" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="3" Grid.Column="3" x:Name="tb_pair_max" Height="22" Margin="0,1"/>
                         </Grid>
+
+                        <TextBlock Text="Slab outline tolerances (mm)" FontWeight="Bold" Margin="0,8,0,2"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="80"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Node weld distance" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_slab_snap" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Edge heal gap" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_slab_heal" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Loose edge chain gap" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_slab_chain" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Min bay width" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_slab_width" Height="22" Margin="0,1"/>
+                        </Grid>
+
+                        <TextBlock Text="Staircase tolerances (mm)" FontWeight="Bold" Margin="0,8,0,2"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="160"/>
+                                <ColumnDefinition Width="80"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Stair cluster gap" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_stair_cluster" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Drawn tread min" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_tread_min" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Drawn tread max" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_tread_max" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Arrival landing merge" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_arrival_merge" Height="22" Margin="0,1"/>
+                        </Grid>
+                        <TextBlock Text="Node weld distance decides when two boundary points are the same junction; edge heal closes small gaps; the drawn tread range is what a riser spacing must fall inside to count as a flight. Stair cluster gap groups drawn stair lines into one staircase."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
                     </StackPanel>
                 </ScrollViewer>

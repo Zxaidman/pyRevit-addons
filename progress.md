@@ -7,6 +7,21 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.53.0 — one JSON per run, detail-line stair regions, origin layer, tab split
+- **One JSON for a multi-storey run**: `build_export_payload` split out of `export_json`;
+  storeys collect into a single file with a `storeys` array (shared header lifted out).
+- **Stair regions from DETAIL LINES**: "Pick detail lines in Revit" replaces the drag
+  box — lines snap to the CAD link and model, chain into closed rings of any shape.
+- **Shifted-model bug fixed**: the layer table came from Revit records only, and Revit's
+  import drops bare POINTs (the origin convention), so the Origin layer never appeared
+  and every storey used a guessed centre. Table is now the UNION of Revit + DXF layers;
+  the mapping applies to both. Verified on test9/test10 (Origin = 3 POINTs, Boundary = 3
+  polylines, both routed by convention).
+- **UI**: Build splits into Structure and Architecture; all stair settings move to the
+  Staircase tab; the Tolerances tab gains the slab/stair tunables that were module
+  constants, applied via `apply_tolerances` at run start.
+- Suite 18 files.
+
 ## v0.52.0 — the missing stair lines (found via the outcome export) + quiet console
 - **Root cause of "not all lines picked"**, read straight from 0.50.0's new stairs
   outcome on test9: 4 clusters said "no riser lines" while holding 22-23 risers at a

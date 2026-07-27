@@ -57,6 +57,22 @@ _SLAB_LABEL = re.compile(
 _ARC_CHORDS = 16   # tessellation density for a boundary arc (geometry tests only)
 
 
+def apply_tolerances(tolerances):
+    """Override the module's tunables from the dialog's Tolerances tab.
+
+    The pushbutton calls this once per run; anything absent keeps its default,
+    so the offline tests and replays are unaffected.
+    """
+    global _SNAP_MM, _EDGE_HEAL_MM, _CHAIN_TOL_MM, _MIN_PANEL_WIDTH_MM
+    if not tolerances:
+        return
+    _SNAP_MM = float(tolerances.get("slab_snap_mm", _SNAP_MM))
+    _EDGE_HEAL_MM = float(tolerances.get("slab_heal_mm", _EDGE_HEAL_MM))
+    _CHAIN_TOL_MM = float(tolerances.get("slab_chain_mm", _CHAIN_TOL_MM))
+    _MIN_PANEL_WIDTH_MM = float(tolerances.get("slab_min_width_mm",
+                                               _MIN_PANEL_WIDTH_MM))
+
+
 def _tessellate_arc(pts):
     """3-point arc record -> (chord_points, (start, mid, end)) or (pts_2d, None).
 

@@ -35,7 +35,32 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.52.0"  # (1) THE MISSING STAIR LINES, found in the 0.50.0 test9 export's new
+__version__ = "0.53.0"  # 0.52.0 feedback, four items. (1) ONE JSON per multi-storey run: the
+#                         payload builder is split out of export_json, so the storeys collect
+#                         into a single file with a `storeys` array (shared source/version/units
+#                         lifted into the header, each section tagged with its storey) instead
+#                         of one file per floor. (2) STAIR REGIONS FROM DETAIL LINES: a drag-box
+#                         is only as accurate as the drag, so the "Draw region" source becomes
+#                         "Pick detail lines in Revit" -- the user draws the outline with Revit's
+#                         own tools (snapping to the CAD link and the model), picks the lines,
+#                         and they chain end-to-end into closed rings of ANY shape (arcs
+#                         tessellated). (3) THE SHIFTED-MODEL BUG: the layer table was built from
+#                         the REVIT records alone, and Revit's import drops a bare POINT -- the
+#                         floor-ORIGIN convention -- so the Origin layer never appeared in the
+#                         Layers tab or the Multi-storey combos and every storey built off a
+#                         guessed centre. The table is now the UNION of the Revit and DXF layers
+#                         (DXF-only ones are listed in the log) and the chosen mapping is applied
+#                         to both record sets. Verified on test9/test10: Origin (3 POINTs) and
+#                         Boundary (3 polylines) both surface and route by convention.
+#                         (4) UI: the Build tab splits into STRUCTURE (grids, columns, beams,
+#                         slabs, levels, export) and ARCHITECTURE (staircases); every stair
+#                         setting -- type, source, shape, dimensions -- now lives on the
+#                         Staircase tab; and the Tolerances tab gains the slab and stair tunables
+#                         that were module constants (node weld, edge heal, chain gap, min bay
+#                         width, stair cluster gap, drawn tread min/max, arrival landing merge),
+#                         pushed into the modules by apply_tolerances at run start.
+#
+# 0.52.0                  (1) THE MISSING STAIR LINES, found in the 0.50.0 test9 export's new
 #                         stairs OUTCOME: four clusters reported "no riser lines" although they
 #                         held 22-23 riser lines at a clean 300mm. Cause: a flight's positions
 #                         run 300, 300, ... and then jump 800mm to the LANDING and the boundary
