@@ -7,6 +7,21 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.54.0 — draw stair outlines in the view; storeys anchor on the base CAD
+- **Draw, don't pick**: the old source only offered already-drawn CurveElements and a CAD
+  link's lines are not selectable, so it looked broken. New "Draw stair outlines in
+  Revit..." button on the Staircase tab: window closes → PickPoint with real snapping
+  (CAD link + model) collects corners, drawing a detail line as the outline grows, Escape
+  closes a loop, Escape on an empty loop ends → window REOPENS with every setting restored
+  (`_apply_preset`). Run builds the stairs in those outlines.
+  (Revit will not run its Detail Line command from a modal dialog and the API cannot resume
+  a posted command, hence the script drives the outline itself.)
+- **Multi-storey alignment**: storeys were shifted onto (0,0) = Revit's origin, away from
+  the CAD. They now anchor on the BASE storey's marker — the lowest/left-most plan does
+  not move, so the model builds on top of its drawing and the upper storeys stack onto it.
+  Verified on test9/test10: base storey shift exactly 0.0 mm.
+- Suite 18 files.
+
 ## v0.53.0 — one JSON per run, detail-line stair regions, origin layer, tab split
 - **One JSON for a multi-storey run**: `build_export_payload` split out of `export_json`;
   storeys collect into a single file with a `storeys` array (shared header lifted out).

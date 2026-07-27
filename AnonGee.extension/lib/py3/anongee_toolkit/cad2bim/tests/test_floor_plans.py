@@ -143,15 +143,26 @@ class SplitFloors(unittest.TestCase):
         self.assertEqual([r.label for r in regions],
                          ["GROUND FLOOR PLAN", "FIRST FLOOR PLAN"])
         self.assertEqual([r.order for r in regions], [0, 1])
-        # each storey keeps ONLY its own column, shifted onto the model origin:
+        # every storey stacks onto the BASE storey's marker (2000, 2000), so
+        # the ground plan does not move and the upper one lands on top of it;
         # the column sat 1000mm past the marker in both sheets
         for region in regions:
             columns = [r for r in region.records
                        if r.category == layers.CATEGORY_COLUMN]
             self.assertEqual(len(columns), 1)
             cx, cy = _centre(columns[0])
-            self.assertAlmostEqual(cx, 1000.0, places=3)
-            self.assertAlmostEqual(cy, 0.0, places=3)
+            self.assertAlmostEqual(cx, 3000.0, places=3)
+            self.assertAlmostEqual(cy, 2000.0, places=3)
+
+    def test_base_storey_never_moves(self):
+        """The built model must land ON the base CAD, not at Revit's origin."""
+        recs, texts = self._two_sheets()
+        regions, _notes = floor_plans.split_floors(recs, texts)
+        drawn = [r for r in recs if r.category == layers.CATEGORY_COLUMN][0]
+        base = [r for r in regions[0].records
+                if r.category == layers.CATEGORY_COLUMN][0]
+        self.assertAlmostEqual(_centre(base)[0], _centre(drawn)[0], places=6)
+        self.assertAlmostEqual(_centre(base)[1], _centre(drawn)[1], places=6)
 
     def test_texts_travel_with_their_storey(self):
         recs, texts = self._two_sheets()
@@ -161,8 +172,8 @@ class SplitFloors(unittest.TestCase):
         self.assertIn("C1 400x400", marks[0])
         self.assertNotIn("C1 400x400", marks[1])
         moved = [t for t in regions[0].texts if t.text == "C1 400x400"][0]
-        self.assertAlmostEqual(moved.point_internal[0] * _MM, 1000.0, places=3)
-        self.assertAlmostEqual(moved.point_internal[1] * _MM, 600.0, places=3)
+        self.assertAlmostEqual(moved.point_internal[0] * _MM, 3000.0, places=3)
+        self.assertAlmostEqual(moved.point_internal[1] * _MM, 2600.0, places=3)
 
     def test_align_false_keeps_drawn_positions(self):
         recs, texts = self._two_sheets()
@@ -199,7 +210,8 @@ class SplitFloors(unittest.TestCase):
         self.assertTrue(any("no origin marker" in n for n in notes))
         columns = [r for r in regions[0].records
                    if r.category == layers.CATEGORY_COLUMN]
-        self.assertAlmostEqual(_centre(columns[0])[0], -5000.0, places=3)
+        # a lone storey is its own anchor, so nothing moves
+        self.assertAlmostEqual(_centre(columns[0])[0], 5000.0, places=3)
 
     def test_point_marker_is_an_origin(self):
         # real drawings mark the origin with a bare POINT (Test9 / Test10)
@@ -211,8 +223,9 @@ class SplitFloors(unittest.TestCase):
         self.assertEqual(notes, [])
         self.assertEqual(len(regions), 1)
         cx, cy = _centre(regions[0].records[0])
-        self.assertAlmostEqual(cx, 2000.0, places=3)
-        self.assertAlmostEqual(cy, 1000.0, places=3)
+        # single storey: it anchors on itself and stays where it is drawn
+        self.assertAlmostEqual(cx, 5000.0, places=3)
+        self.assertAlmostEqual(cy, 5000.0, places=3)
 
     def test_markers_may_come_from_a_second_record_set(self):
         # the pushbutton reads boundary/origin from the DXF records and splits
@@ -226,7 +239,7 @@ class SplitFloors(unittest.TestCase):
         self.assertEqual(notes, [])
         self.assertEqual(len(regions), 1)
         self.assertEqual(len(regions[0].records), 1)
-        self.assertAlmostEqual(_centre(regions[0].records[0])[0], 4000.0,
+        self.assertAlmostEqual(_centre(regions[0].records[0])[0], 5000.0,
                                places=3)
 
     def test_no_boundary_layer_is_reported(self):

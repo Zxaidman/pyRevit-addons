@@ -35,7 +35,28 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.53.0"  # 0.52.0 feedback, four items. (1) ONE JSON per multi-storey run: the
+__version__ = "0.54.0"  # 0.53.0 feedback. (1) DRAW the stair outlines instead of picking
+#                         existing lines: "Pick detail lines in Revit" only ever offered
+#                         already-drawn CurveElements, and a CAD link's lines are not
+#                         selectable, so the pick looked broken. The Staircase tab now carries a
+#                         "Draw stair outlines in Revit..." button -- the window CLOSES, the view
+#                         comes back, and PickPoint (with Revit's real snapping to the CAD link
+#                         and the model) collects corner after corner, drawing a detail line as
+#                         the outline grows and closing the loop on Escape; Escape on an empty
+#                         outline ends the session and the window REOPENS with every setting
+#                         restored (_apply_preset). Run then builds the stairs inside those
+#                         outlines. Revit forbids running its own line command from a modal
+#                         dialog and the API cannot resume a posted command, which is why the
+#                         outline is drawn by the script rather than by the Detail Line tool.
+#                         (2) MULTI-STOREY ALIGNMENT: every storey was shifted so its origin
+#                         marker landed on (0, 0), which put the model at REVIT's origin, far
+#                         from the drawing. Storeys now anchor on the BASE storey's marker, so
+#                         the lowest (left-most) plan does not move at all -- the model is built
+#                         straight on top of its CAD -- and the upper storeys stack onto that
+#                         same marker. Verified on test9/test10: base storey shift exactly
+#                         0.0 mm, all three storeys split as before.
+#
+# 0.53.0                  0.52.0 feedback, four items. (1) ONE JSON per multi-storey run: the
 #                         payload builder is split out of export_json, so the storeys collect
 #                         into a single file with a `storeys` array (shared source/version/units
 #                         lifted into the header, each section tagged with its storey) instead

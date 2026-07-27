@@ -190,6 +190,13 @@
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Stair source" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_stair_source" Height="22" Margin="0,1"/>
                         </Grid>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <Button x:Name="btn_draw_stairs" Content="Draw stair outlines in Revit..."
+                                    Width="200" Height="24"
+                                    ToolTip="Closes this window, lets you draw one closed outline per stair with Revit's detail lines, then comes back"/>
+                            <TextBlock x:Name="stair_outline_text" Text="no outlines drawn"
+                                       VerticalAlignment="Center" Margin="10,0,0,0" FontSize="10" Foreground="Gray"/>
+                        </StackPanel>
                         <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the generic shape below; the other sources force one path. &quot;Pick detail lines in Revit&quot; closes this window and lets you select the detail lines you drew around each stair -- they snap to the CAD link and the model, so the outline is exact and can be any shape."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
 

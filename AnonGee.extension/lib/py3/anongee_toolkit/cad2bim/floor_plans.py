@@ -252,11 +252,14 @@ def split_floors(records, texts=None, align=True, marker_records=None):
     does not always import, so the pushbutton reads the markers from the DXF
     records and splits the Revit records by them.
 
-    Returns (regions, notes). `regions` is bottom-up; every region's records
-    and texts are shifted so its origin marker lands on (0, 0) (pass
-    align=False to keep the drawn positions). `notes` explains anything the
-    convention could not resolve, so the console can say WHY a storey was
-    dropped instead of silently building one floor.
+    Returns (regions, notes). `regions` is bottom-up; every storey is shifted
+    so its origin marker lands on the BASE storey's marker -- the base plan
+    therefore does not move at all and the model is built straight on top of
+    the drawing, with the upper storeys stacked onto it. (Shifting everything
+    to (0, 0) instead put the model at Revit's origin, away from the CAD.)
+    Pass align=False to keep every plan at its drawn position. `notes`
+    explains anything the convention could not resolve, so the console can say
+    WHY a storey was dropped instead of silently building one floor.
     """
     notes = []
     markers = marker_records if marker_records is not None else records
@@ -316,8 +319,15 @@ def split_floors(records, texts=None, align=True, marker_records=None):
             notes.append("no plan titles found -- storeys ordered by sheet "
                          "layout (top row first, then left to right)")
 
+    # Anchor on the BASE storey's marker, not the model origin: the lowest
+    # storey stays exactly where it is drawn, so the built model sits on top of
+    # its CAD, and every storey above lands on the same marker.
+    anchor = (0.0, 0.0)
+    if align and regions:
+        anchor = min(regions, key=lambda r: r.order).origin
     for region in regions:
-        dx, dy = ((-region.origin[0], -region.origin[1]) if align else (0.0, 0.0))
+        dx, dy = ((anchor[0] - region.origin[0], anchor[1] - region.origin[1])
+                  if align else (0.0, 0.0))
         for record in records:
             if record.category in (CATEGORY_FLOOR_BOUNDARY,
                                    CATEGORY_FLOOR_ORIGIN):

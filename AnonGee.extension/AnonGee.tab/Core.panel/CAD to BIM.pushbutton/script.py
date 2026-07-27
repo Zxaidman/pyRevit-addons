@@ -312,7 +312,8 @@ class CadToBimWindow(object):
     def __init__(self, source_name, layer_rows, categories, default_mapping,
                  column_symbols, level_options, beam_symbols, floor_type_options=None,
                  text_layer_rows=None, text_categories=None, default_text_mapping=None,
-                 stair_type_options=None, level_elevations=None):
+                 stair_type_options=None, level_elevations=None,
+                 stair_regions=None, preset=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -384,6 +385,11 @@ class CadToBimWindow(object):
             combo.SelectedIndex = 0
         _select_containing(self.cb_boundary_layer, ["boundar", "bound", "extent"])
         _select_containing(self.cb_origin_layer, ["origin", "basept", "datum"])
+        self.btn_draw_stairs = find("btn_draw_stairs")
+        self.stair_outline_text = find("stair_outline_text")
+        self.btn_draw_stairs.Click += self.on_draw_stairs
+        self.stair_regions = list(stair_regions or [])
+        self._show_outline_count()
         self.stair_floor_text = find("stair_floor_text")
         self._stair_count_manual = False
         self.tb_stair_riser = find("tb_stair_riser")
@@ -448,6 +454,9 @@ class CadToBimWindow(object):
         self.tb_stair_count.LostFocus += self._on_stair_count_edit
         self.tb_stair_riser.LostFocus += self._on_stair_sync
         self._stair_sync()
+
+        if preset:
+            self._apply_preset(preset)
 
         find("btn_run").Click += self.on_run
         find("btn_cancel").Click += self.on_cancel
@@ -686,7 +695,24 @@ class CadToBimWindow(object):
         text_mapping = {}
         for layer, combo in self._text_combos:
             text_mapping[layer] = combo.SelectedItem or layers.CATEGORY_TEXT_IGNORE
-        self.result = {
+        self.result = self._collect(mapping=mapping, text_mapping=text_mapping)
+        self.window.Close()
+
+    def _collect(self, mapping=None, text_mapping=None, action=None):
+        """Every dialog value as one dict -- shared by Run and the draw button
+        so re-opening the window restores exactly what was on screen."""
+        if mapping is None:
+            mapping = {}
+            for layer, combo in self._combos:
+                mapping[layer] = combo.SelectedItem or layers.CATEGORY_UNMAPPED
+        if text_mapping is None:
+            text_mapping = {}
+            for layer, combo in self._text_combos:
+                text_mapping[layer] = (combo.SelectedItem
+                                       or layers.CATEGORY_TEXT_IGNORE)
+        return {
+            "action": action,
+            "stair_regions": list(self.stair_regions),
             "mapping": mapping,
             "text_mapping": text_mapping,
             "create_grids": bool(self.chk_grids.IsChecked),
@@ -734,6 +760,88 @@ class CadToBimWindow(object):
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
             },
         }
+
+    def _apply_preset(self, preset):
+        """Put a previous run of this dialog back on screen.
+
+        The window is rebuilt after the user draws stair outlines in the view,
+        so everything they had already chosen must come back with it. Anything
+        the preset does not name keeps the freshly computed default.
+        """
+        def combo(control, ids, wanted):
+            if wanted is None:
+                return
+            for label, element_id in ids.items():
+                if element_id == wanted:
+                    control.SelectedItem = label
+                    return
+
+        for layer, control in self._combos:
+            value = (preset.get("mapping") or {}).get(layer)
+            if value:
+                control.SelectedItem = value
+        for layer, control in self._text_combos:
+            value = (preset.get("text_mapping") or {}).get(layer)
+            if value:
+                control.SelectedItem = value
+        for key, box in (("create_grids", self.chk_grids),
+                         ("create_columns", self.chk_columns),
+                         ("create_beams", self.chk_beams),
+                         ("create_slabs", self.chk_slabs),
+                         ("create_stairs", self.chk_stairs),
+                         ("export", self.chk_export),
+                         ("multistorey", self.chk_multistorey)):
+            if key in preset and box.IsEnabled:
+                box.IsChecked = bool(preset[key])
+        combo(self.cb_family, self._family_ids, preset.get("column_family_id"))
+        combo(self.cb_circular_family, self._family_ids,
+              preset.get("circular_family_id"))
+        combo(self.cb_beam_family, self._beam_ids, preset.get("beam_family_id"))
+        combo(self.cb_floor_type, self._floor_ids, preset.get("floor_type_id"))
+        combo(self.cb_stair_type, self._stair_ids, preset.get("stair_type_id"))
+        combo(self.cb_base_level, self._level_ids, preset.get("base_level_id"))
+        combo(self.cb_top_level, self._level_ids, preset.get("top_level_id"))
+        source = preset.get("stair_source")
+        if source:
+            self.cb_stair_source.SelectedIndex = {
+                "auto": 0, "linework": 1, "text": 2, "region": 3}.get(source, 0)
+        shape = preset.get("stair_shape")
+        for radio, value in self.shape_buttons:
+            if value == shape:
+                radio.IsChecked = True
+        params = preset.get("stair_params") or {}
+        for key, box in (("riser_count", self.tb_stair_count),
+                         ("riser_mm", self.tb_stair_riser),
+                         ("tread_mm", self.tb_stair_tread),
+                         ("run_width_mm", self.tb_stair_width),
+                         ("landing_mm", self.tb_stair_landing),
+                         ("waist_mm", self.tb_stair_waist)):
+            if params.get(key) is not None:
+                box.Text = "{0:g}".format(params[key])
+        for name in ("boundary_layer", "origin_layer"):
+            wanted = preset.get(name)
+            control = (self.cb_boundary_layer if name == "boundary_layer"
+                       else self.cb_origin_layer)
+            if wanted:
+                control.SelectedItem = wanted
+        self._stair_sync()
+
+    def _show_outline_count(self):
+        count = len(self.stair_regions)
+        self.stair_outline_text.Text = (
+            "no outlines drawn" if not count
+            else "{0} outline(s) ready".format(count))
+
+    def on_draw_stairs(self, sender, args):
+        """Hand the view back to the user so they can DRAW the outlines.
+
+        Revit will not run its own line tool while a modal window is up and
+        the API cannot resume a posted command, so the window closes, the
+        script drives a snapped point-by-point outline picker (real detail
+        lines are created as feedback), and then this window is rebuilt with
+        every setting restored.
+        """
+        self.result = self._collect(action="draw_stairs")
         self.window.Close()
 
     def on_cancel(self, sender, args):
@@ -888,17 +996,31 @@ def main():
     text_layer_rows = [(name, text_layer_counts[name]) for name in text_names]
     default_text_mapping = layers.build_default_text_mapping(text_names)
 
-    window = CadToBimWindow(dxf_result.source_name, layer_rows,
-                            list(layers.ALL_CATEGORIES), default_mapping,
-                            column_symbols, level_options, beam_symbols,
-                            floor_type_options,
-                            text_layer_rows, list(layers.TEXT_CATEGORIES),
-                            default_text_mapping,
-                            stair_type_options=stair_type_options,
-                            level_elevations=level_elevations)
-    window.show()
-    if not window.result:
-        return   # user cancelled -- nothing was flushed, console stays closed
+    # The dialog can hand the view back so the user DRAWS the stair outlines:
+    # it closes, the outlines are picked in the model, and it reopens with every
+    # setting restored. Anything else falls straight through to the build.
+    preset = None
+    stair_regions = []
+    while True:
+        window = CadToBimWindow(dxf_result.source_name, layer_rows,
+                                list(layers.ALL_CATEGORIES), default_mapping,
+                                column_symbols, level_options, beam_symbols,
+                                floor_type_options,
+                                text_layer_rows, list(layers.TEXT_CATEGORIES),
+                                default_text_mapping,
+                                stair_type_options=stair_type_options,
+                                level_elevations=level_elevations,
+                                stair_regions=stair_regions, preset=preset)
+        window.show()
+        if not window.result:
+            return   # cancelled -- nothing was flushed, console stays closed
+        if window.result.get("action") != "draw_stairs":
+            break
+        preset = window.result
+        drawn = _draw_stair_outlines(doc)
+        if drawn:
+            stair_regions = drawn
+        preset["stair_regions"] = stair_regions
 
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
@@ -1469,17 +1591,83 @@ class _CurveElementFilter(object):
         return False
 
 
+def _draw_stair_outlines(doc):
+    """Let the user DRAW one closed outline per stair, snapped, in the view.
+
+    Revit will not run its own Detail Line command while a modal window is up,
+    and the API cannot resume a posted command, so the outline is drawn here:
+    PickPoint uses Revit's real snapping (to the CAD link and to the model), a
+    detail line is created after every second point so the shape is visible as
+    it grows, and Escape closes the current outline. Escape on the first point
+    of a new outline ends the session. Returns [ring, ...] in internal feet.
+    """
+    from Autodesk.Revit.DB import Line, Transaction, XYZ
+    from Autodesk.Revit.UI.Selection import ObjectSnapTypes
+
+    uidoc = getattr(__revit__, "ActiveUIDocument", None)
+    if uidoc is None:
+        return []
+    view = uidoc.ActiveView
+    snaps = (ObjectSnapTypes.Endpoints | ObjectSnapTypes.Intersections
+             | ObjectSnapTypes.Midpoints | ObjectSnapTypes.Nearest
+             | ObjectSnapTypes.Perpendicular | ObjectSnapTypes.WorkPlaneGrid)
+    rings = []
+    while True:
+        points = []
+        while True:
+            prompt = ("Stair outline {0}: click a corner (Esc closes this "
+                      "outline)".format(len(rings) + 1) if points else
+                      "Stair outline {0}: click the first corner (Esc when "
+                      "all stairs are drawn)".format(len(rings) + 1))
+            try:
+                picked = uidoc.Selection.PickPoint(snaps, prompt)
+            except Exception:
+                picked = None
+            if picked is None:
+                break
+            points.append(picked)
+            if len(points) >= 2:
+                transaction = Transaction(doc, "Stair outline")
+                try:
+                    transaction.Start()
+                    txn_failures.attach_warning_swallower(transaction)
+                    doc.Create.NewDetailCurve(
+                        view, Line.CreateBound(points[-2], points[-1]))
+                    transaction.Commit()
+                except Exception:
+                    if transaction.HasStarted() and not transaction.HasEnded():
+                        transaction.RollBack()
+        if len(points) < 3:
+            break                       # Escape on an empty/short outline: done
+        transaction = Transaction(doc, "Stair outline close")
+        try:                            # close the loop back to the first point
+            transaction.Start()
+            txn_failures.attach_warning_swallower(transaction)
+            doc.Create.NewDetailCurve(
+                view, Line.CreateBound(points[-1], points[0]))
+            transaction.Commit()
+        except Exception:
+            if transaction.HasStarted() and not transaction.HasEnded():
+                transaction.RollBack()
+        ring = slab_outlines._dedup_ring([(p.X, p.Y) for p in points])
+        if len(ring) >= 3:
+            rings.append(ring)
+            area_m2 = abs(slab_outlines._signed_area(ring)) * 304.8 * 304.8 / 1e6
+            _say("Stairs -- outline {0}: {1} corners, {2:.1f} m2".format(
+                len(rings), len(ring), area_m2))
+    return rings
+
+
 def _pick_stair_regions():
-    """Stair outlines taken from DETAIL LINES the user drew in the view.
+    """Stair outlines taken from DETAIL LINES already drawn in the view.
 
     A drag-box is only as accurate as the drag; a detail line snaps to the CAD
     link and to the model, so the boundary is exact and can be any shape. The
-    user draws the outlines with Revit's own line tools, then picks them here:
-    the picked curves are chained end-to-end into closed rings (arcs are
-    tessellated), one ring per stair. Returns [ring, ...] in internal feet.
+    picked curves are chained end-to-end into closed rings (arcs tessellated),
+    one ring per stair. Returns [ring, ...] in internal feet.
     """
     from Autodesk.Revit.UI.Selection import ObjectType
-    from Autodesk.Revit.DB import Arc, Line
+    from Autodesk.Revit.DB import Line
 
     uidoc = getattr(__revit__, "ActiveUIDocument", None)
     if uidoc is None:
@@ -1516,8 +1704,7 @@ def _pick_stair_regions():
         ring = slab_outlines._dedup_ring(ring)
         if len(ring) >= 3:
             rings.append(ring)
-    closed = len(rings)
-    if not closed:
+    if not rings:
         _say("Stairs -- the picked lines do not close into an outline "
              "(ends must meet within {0:.0f} mm).".format(_STAIR_LINE_CHAIN_MM))
         return []
@@ -1562,8 +1749,11 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
         return {"created": 0, "skipped": 0, "errors": 0}
 
     source = selections.get("stair_source") or "auto"
-    regions = None
-    if source == "region":
+    regions = list(selections.get("stair_regions") or []) or None
+    if regions:
+        # outlines the user drew from the Staircase tab win over any source
+        source = "region"
+    elif source == "region":
         regions = _pick_stair_regions()
         if not regions:
             _say("Stairs -- skipped (no closed outline picked in the view).")
