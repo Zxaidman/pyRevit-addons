@@ -35,7 +35,26 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.54.0"  # 0.53.0 feedback. (1) DRAW the stair outlines instead of picking
+__version__ = "0.55.0"  # 0.54.0 feedback (test7 drawn-outline stair + test10 grids).
+#                         (1) A stair built inside a DRAWN outline came out stretched: the two
+#                         flights were pushed to the bay's edges, so their width followed
+#                         whatever rectangle was drawn instead of the 1250 asked for, the half
+#                         landing spanned the whole bay, and the arrival landing shrank to a
+#                         stub. The flights now sit SIDE BY SIDE, centred across the bay, each
+#                         exactly the dialog run width; the half landing is a rectangle of the
+#                         landing depth spanning the pair (2 x run width) at the turn; and the
+#                         arrival landing spans the same pair. (2) The half landing was also
+#                         MISSING in the model: Revit's automatic landing did not fill the turn,
+#                         so the planned ring is now SKETCHED (CreateSketchedLanding at the
+#                         elevation after the first flight, rounded to a riser by the API) with
+#                         the automatic landing kept as the fallback and a note when it is used.
+#                         (3) GRIDS ONCE PER PROJECT: a grid is a datum spanning every level, so
+#                         a multi-storey run repeating the same grid per floor stacked copies.
+#                         create_grids now fingerprints each line by direction + perpendicular
+#                         offset (50mm), skips anything already in the model, and reports it as
+#                         skipped -- which also stops a re-run duplicating the first run's grids.
+#
+# 0.54.0                  0.53.0 feedback. (1) DRAW the stair outlines instead of picking
 #                         existing lines: "Pick detail lines in Revit" only ever offered
 #                         already-drawn CurveElements, and a CAD link's lines are not
 #                         selectable, so the pick looked broken. The Staircase tab now carries a

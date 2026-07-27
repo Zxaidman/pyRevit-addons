@@ -377,9 +377,13 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None,
     lu = landing / _MM                                # landing depth, ft
     wu = width / _MM                                  # run width, ft
     far_u = long_mm / _MM / 2.0                       # centre -> either end
-    # run centrelines sit half a width off the bay's centreline, each side
-    off1, off2 = wu / 2.0 + (short_mm / _MM - 2.0 * wu) / 2.0, -(
-        wu / 2.0 + (short_mm / _MM - 2.0 * wu) / 2.0)
+    # The two flights sit SIDE BY SIDE and centred across the bay, so both keep
+    # the run width the dialog asked for and the landing spans exactly the pair.
+    # (Pushing them out to the bay's edges instead stretched the stair to
+    # whatever the drawn outline happened to be and left the landing adrift.)
+    off1, off2 = wu / 2.0, -wu / 2.0
+    if single_flight:
+        off1 = off2 = 0.0
     # both runs anchor at the landing edge (axis coordinate far_u - lu from the
     # centre): run1 climbs INTO it, run2 leaves it climbing back -- a 180 turn
     def _at(s, off):
@@ -397,16 +401,20 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None,
             start, end = _at(turn_u, off), _at(turn_u - length_u, off)
         runs.append({"start": start, "end": end, "risers": risers,
                      "width_mm": width})
-    lc = (cx + ax * (far_u - lu / 2.0), cy + ay * (far_u - lu / 2.0))
-    landing_ring = [
-        (lc[0] - ax * lu / 2.0 + nx * short_mm / _MM / 2.0,
-         lc[1] - ay * lu / 2.0 + ny * short_mm / _MM / 2.0),
-        (lc[0] + ax * lu / 2.0 + nx * short_mm / _MM / 2.0,
-         lc[1] + ay * lu / 2.0 + ny * short_mm / _MM / 2.0),
-        (lc[0] + ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
-         lc[1] + ay * lu / 2.0 - ny * short_mm / _MM / 2.0),
-        (lc[0] - ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
-         lc[1] - ay * lu / 2.0 - ny * short_mm / _MM / 2.0)]
+    # the HALF landing fills the turn: from the last riser to the bay end,
+    # spanning both flights (their outer edges), never the whole drawn bay
+    half_span = (wu if not single_flight else wu / 2.0)
+    landing_ring = None
+    if not single_flight:
+        landing_ring = [
+            (_at(turn_u, 0.0)[0] + nx * half_span,
+             _at(turn_u, 0.0)[1] + ny * half_span),
+            (_at(turn_u + lu, 0.0)[0] + nx * half_span,
+             _at(turn_u + lu, 0.0)[1] + ny * half_span),
+            (_at(turn_u + lu, 0.0)[0] - nx * half_span,
+             _at(turn_u + lu, 0.0)[1] - ny * half_span),
+            (_at(turn_u, 0.0)[0] - nx * half_span,
+             _at(turn_u, 0.0)[1] - ny * half_span)]
     plan = {"mark": mark, "z": z, "runs": runs, "landing": landing_ring,
             "top_landing": _arrival_landing(runs, landing),
             "risers_total": risers_total, "riser_mm": riser_actual,

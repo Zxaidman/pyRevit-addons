@@ -161,9 +161,31 @@ class DoglegNumbers(unittest.TestCase):
         xs = [p[0] for p in top]
         self.assertAlmostEqual(min(xs) if dx < 0 else max(xs),
                                ex + dx * plan["landing_mm"] / _MM, places=6)
-        # and spans BOTH flights like the half landing (the U-stair rule)
+        # and spans BOTH flights like the half landing (the U-stair rule):
+        # two runs of the dialog width, side by side
         ys = sorted(p[1] * _MM for p in top)
-        self.assertAlmostEqual(ys[-1] - ys[0], 3000.0, places=3)
+        self.assertAlmostEqual(ys[-1] - ys[0], 2 * 1250.0, places=3)
+
+    def test_flights_keep_the_dialog_run_width(self):
+        """A wide drawn outline must not stretch the flights: both keep the
+        run width the dialog asked for, and the half landing spans the pair."""
+        plan, note = stair_layout.plan_dogleg_stair(
+            self._ring(w_mm=6000.0), 0.0, "ST-1", _PARAMS, 3000.0)
+        self.assertIsNone(note)
+        for run in plan["runs"]:
+            self.assertAlmostEqual(run["width_mm"], 1250.0, places=6)
+        # the two centrelines sit exactly one run width apart
+        gap = abs(plan["runs"][0]["start"][1] - plan["runs"][1]["start"][1]) * _MM
+        self.assertAlmostEqual(gap, 1250.0, places=3)
+        # the half landing spans both flights, not the 6 m bay
+        landing = plan["landing"]
+        self.assertEqual(len(landing), 4)
+        span = sorted(p[1] * _MM for p in landing)
+        self.assertAlmostEqual(span[-1] - span[0], 2 * 1250.0, places=3)
+        # ... and is exactly the landing depth deep, at the turn
+        depth = sorted(p[0] * _MM for p in landing)
+        self.assertAlmostEqual(depth[-1] - depth[0], plan["landing_mm"],
+                               places=3)
 
     def test_does_not_fit(self):
         plan, note = stair_layout.plan_dogleg_stair(

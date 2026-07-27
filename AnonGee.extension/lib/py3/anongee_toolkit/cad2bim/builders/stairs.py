@@ -230,6 +230,7 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             # the turn between consecutive flights: drawn WINDER risers become
             # a sketched run through the corner; otherwise Revit's automatic
             # landing fills it (dog-leg turn, winding-stair corners)
+            mid_ring = plan.get("landing")
             for number, (first, second) in enumerate(zip(run_ids,
                                                          run_ids[1:])):
                 winder = winders.get(number) if not spiral else None
@@ -243,6 +244,17 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                         result["skipped"].append(
                             "{0}: winder corner fell back to a landing "
                             "({1})".format(mark, str(winder_error)[:120]))
+                if mid_ring and number == 0 and not spiral:
+                    risers_below = sum(r.get("risers") or 0
+                                       for r in runs[:number + 1])
+                    if _create_sketched_landing(
+                            doc, stairs_id, mid_ring,
+                            storey_ft * float(risers_below) / risers_total,
+                            base_level.Elevation):
+                        continue
+                    result["skipped"].append(
+                        "{0}: planned half landing did not sketch -- using "
+                        "Revit's automatic landing".format(mark))
                 try:
                     StairsLanding.CreateAutomaticLanding(doc, first, second)
                 except Exception as landing_error:
@@ -251,21 +263,11 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                                                      str(landing_error)[:120]))
             top_ring = plan.get("top_landing")
             if top_ring and risers_done:
-                try:
-                    z_top = base_level.Elevation + storey_ft
-                    loop = CurveLoop()
-                    n = len(top_ring)
-                    for i in range(n):
-                        ax, ay = top_ring[i]
-                        bx, by = top_ring[(i + 1) % n]
-                        loop.Append(Line.CreateBound(XYZ(ax, ay, z_top),
-                                                     XYZ(bx, by, z_top)))
-                    StairsLanding.CreateSketchedLanding(doc, stairs_id, loop,
-                                                        storey_ft)
-                except Exception as landing_error:
+                if not _create_sketched_landing(doc, stairs_id, top_ring,
+                                                storey_ft,
+                                                base_level.Elevation):
                     result["skipped"].append(
-                        "{0}: top landing not created ({1})".format(
-                            mark, str(landing_error)[:120]))
+                        "{0}: top landing not created".format(mark))
             transaction.Commit()
             scope.Commit(txn_failures.WarningSwallower())
             created_stairs_ids.append(stairs_id)
@@ -314,6 +316,33 @@ def _delete_auto_railings(doc, stairs_ids, result):
                 transaction.RollBack()
         except Exception:
             pass
+
+
+def _create_sketched_landing(doc, stairs_id, ring, relative_elevation,
+                             base_elevation):
+    """Sketch one landing from a planned ring. True when Revit accepted it.
+
+    `relative_elevation` is measured from the stairs base, as the API requires
+    (it rounds the value to a riser multiple itself); the curve loop is drawn
+    at the matching absolute height.
+    """
+    if not ring or len(ring) < 3:
+        return False
+    try:
+        z = base_elevation + relative_elevation
+        loop = CurveLoop()
+        count = len(ring)
+        for index in range(count):
+            ax, ay = ring[index]
+            bx, by = ring[(index + 1) % count]
+            if math.hypot(bx - ax, by - ay) <= 1e-9:
+                continue
+            loop.Append(Line.CreateBound(XYZ(ax, ay, z), XYZ(bx, by, z)))
+        StairsLanding.CreateSketchedLanding(doc, stairs_id, loop,
+                                            relative_elevation)
+        return True
+    except Exception:
+        return False
 
 
 def _create_winder_run(doc, stairs_id, base_level, storey_ft, risers_total,

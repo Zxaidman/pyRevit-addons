@@ -7,6 +7,20 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.55.0 — drawn-outline stair geometry + grids created once per project
+- **Stair in a drawn outline was stretched**: flights hugged the bay edges, so run width
+  followed the drawn rectangle instead of the dialog's 1250, the half landing spanned the
+  whole bay and the arrival landing was a stub. Flights now sit side by side, centred,
+  each exactly the dialog run width; half landing = landing depth × (2 × run width) at the
+  turn; arrival landing spans the same pair.
+- **Half landing was missing in Revit**: the automatic landing did not fill the turn, so
+  the planned ring is now sketched (`CreateSketchedLanding` at the post-first-flight
+  elevation), with the automatic landing as fallback + a note when used.
+- **Grids once per project**: a grid is a datum spanning all levels, so a multi-storey run
+  stacked one copy per floor. `create_grids` fingerprints direction + perpendicular offset
+  (50mm) and skips anything already in the model — also stops re-runs duplicating grids.
+- Suite 18 files, 34 stair tests; drawn-linework replays unchanged.
+
 ## v0.54.0 — draw stair outlines in the view; storeys anchor on the base CAD
 - **Draw, don't pick**: the old source only offered already-drawn CurveElements and a CAD
   link's lines are not selectable, so it looked broken. New "Draw stair outlines in
