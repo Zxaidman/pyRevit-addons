@@ -317,7 +317,7 @@ class CadToBimWindow(object):
         self._floor_ids = self._fill_combo(self.cb_floor_type, floor_type_options or [])
         self.cb_stair_type = find("cb_stair_type")
         self._stair_ids = self._fill_combo(self.cb_stair_type, stair_type_options or [])
-        _select_containing(self.cb_stair_type, ["cast"])
+        _select_containing(self.cb_stair_type, ["mono"])
         self._level_elevations = level_elevations or {}
 
         self.chk_grids = find("chk_grids")
