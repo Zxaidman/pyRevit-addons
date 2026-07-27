@@ -1,0 +1,5 @@
+title:
+  en_us: ToggleLinkedRevit
+
+tooltip:
+  en_us: Toggles visibility of linked Revit categories on current view.
