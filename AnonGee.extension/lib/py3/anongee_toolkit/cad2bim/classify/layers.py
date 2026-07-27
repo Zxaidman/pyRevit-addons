@@ -25,6 +25,12 @@ CATEGORY_SLAB_EDGE = "slab_edge"
 CATEGORY_STRUCT_WALL = "structural wall"
 CATEGORY_ARCH_WALL = "arch wall"
 CATEGORY_STAIR = "stair"
+# MULTI-STOREY from ONE dxf (user convention): each floor plan is enclosed by a
+# rectangle on a BOUNDARY layer, and carries a single marker on an ORIGIN layer
+# that fixes where that plan sits in the model. Names differ per drawing, so the
+# convention below is only a proposal -- the dialog's layer table overrides it.
+CATEGORY_FLOOR_BOUNDARY = "floor boundary"
+CATEGORY_FLOOR_ORIGIN = "floor origin"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -51,6 +57,8 @@ DEFAULT_CONVENTION = (
     (r"beam|girder|joist", CATEGORY_BEAM),
     (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
     (r"stair|strs|step", CATEGORY_STAIR),
+    (r"boundar|bound|extent|sheet.?box", CATEGORY_FLOOR_BOUNDARY),
+    (r"origin|basept|base.?point|datum", CATEGORY_FLOOR_ORIGIN),
     (r"shear|retain", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
     (r"wall|parapet", CATEGORY_ARCH_WALL),
 )
@@ -58,7 +66,8 @@ DEFAULT_CONVENTION = (
 ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
     CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
-    CATEGORY_STAIR, CATEGORY_UNMAPPED,
+    CATEGORY_STAIR, CATEGORY_FLOOR_BOUNDARY, CATEGORY_FLOOR_ORIGIN,
+    CATEGORY_UNMAPPED,
 )
 
 # Text/label layers carry the size marks (e.g. "S-COLS-IDEN", "S-BEAM-IDEN").

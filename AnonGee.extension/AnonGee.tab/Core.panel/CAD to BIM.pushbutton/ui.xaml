@@ -178,8 +178,59 @@
                             <TextBlock Grid.Column="0" Text="Stair source" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Column="1" x:Name="cb_stair_source" Height="22" Margin="0,1"/>
                         </Grid>
-                        <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the text mode; the other two force one source. Text mode lays a generic dog-leg inside the bay holding a STAIRCASE / ST-n note, sized by these numbers. A riser count &gt; 0 is ABSOLUTE and the riser height syncs to storey / count."
+                        <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the generic shape below; the other sources force one path. &quot;Draw region in Revit&quot; closes this window, lets you drag one box per stair in the view, and builds the chosen shape inside each."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+
+                        <TextBlock Text="Shape (used when the CAD has no stair linework)" FontWeight="Bold" Margin="0,2,0,4"/>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                            <RadioButton x:Name="rb_shape_u" GroupName="stair_shape" IsChecked="True" Margin="0,0,10,0" ToolTip="U / dog-leg: two flights, half landing">
+                                <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                    <Canvas Width="46" Height="40">
+                                        <Path Stroke="#333" StrokeThickness="2" Fill="#E8E8E8" Data="M 6,4 L 20,4 L 20,36 L 40,36 L 40,22 L 26,22 L 26,18 L 6,18 Z"/>
+                                        <Path Stroke="#B00" StrokeThickness="1.5" Data="M 13,34 L 13,11 L 33,11"/>
+                                    </Canvas>
+                                    <TextBlock Text="U" FontSize="10" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="rb_shape_straight" GroupName="stair_shape" Margin="0,0,10,0" ToolTip="Straight: one flight end to end">
+                                <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                    <Canvas Width="46" Height="40">
+                                        <Path Stroke="#333" StrokeThickness="2" Fill="#E8E8E8" Data="M 6,12 L 40,12 L 40,28 L 6,28 Z"/>
+                                        <Path Stroke="#999" StrokeThickness="1" Data="M 13,12 L 13,28 M 20,12 L 20,28 M 27,12 L 27,28 M 34,12 L 34,28"/>
+                                        <Path Stroke="#B00" StrokeThickness="1.5" Data="M 6,20 L 40,20"/>
+                                    </Canvas>
+                                    <TextBlock Text="Straight" FontSize="10" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="rb_shape_l" GroupName="stair_shape" Margin="0,0,10,0" ToolTip="L: two flights at 90 degrees, corner landing">
+                                <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                    <Canvas Width="46" Height="40">
+                                        <Path Stroke="#333" StrokeThickness="2" Fill="#E8E8E8" Data="M 6,22 L 30,22 L 30,4 L 40,4 L 40,36 L 6,36 Z"/>
+                                        <Path Stroke="#B00" StrokeThickness="1.5" Data="M 9,32 L 35,32 L 35,8"/>
+                                    </Canvas>
+                                    <TextBlock Text="L" FontSize="10" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="rb_shape_c" GroupName="stair_shape" Margin="0,0,10,0" ToolTip="C: three flights around three sides">
+                                <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                    <Canvas Width="46" Height="40">
+                                        <Path Stroke="#333" StrokeThickness="2" Fill="#E8E8E8" Data="M 6,4 L 40,4 L 40,14 L 18,14 L 18,26 L 40,26 L 40,36 L 6,36 Z"/>
+                                        <Path Stroke="#B00" StrokeThickness="1.5" Data="M 36,9 L 11,9 L 11,31 L 36,31"/>
+                                    </Canvas>
+                                    <TextBlock Text="C" FontSize="10" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                            <RadioButton x:Name="rb_shape_circular" GroupName="stair_shape" ToolTip="Circular: one spiral flight around the bay centre">
+                                <StackPanel Orientation="Vertical" HorizontalAlignment="Center">
+                                    <Canvas Width="46" Height="40">
+                                        <Ellipse Canvas.Left="6" Canvas.Top="2" Width="34" Height="34" Stroke="#333" StrokeThickness="2" Fill="#E8E8E8"/>
+                                        <Ellipse Canvas.Left="18" Canvas.Top="14" Width="10" Height="10" Stroke="#333" StrokeThickness="1.5" Fill="White"/>
+                                        <Path Stroke="#999" StrokeThickness="1" Data="M 23,2 L 23,14 M 40,19 L 28,19 M 23,36 L 23,24 M 6,19 L 18,19 M 11,7 L 19,15 M 35,7 L 27,15"/>
+                                    </Canvas>
+                                    <TextBlock Text="Circular" FontSize="10" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </RadioButton>
+                        </StackPanel>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                             <TextBlock Text="Floor height: " FontWeight="Bold"/>
                             <TextBlock x:Name="stair_floor_text" Text="-"/>
@@ -211,6 +262,37 @@
                         </Grid>
                         <TextBlock Text="Riser count defaults to storey / riser rounded up (20 for 3000 / 150) and refreshes when the levels change; edit it to override. Landing depth 0 = run width. A DN/UP note picks the landing end; the arrival landing at the top spans the parallel flights like the half landing."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- TAB: Multi-storey -->
+            <TabItem Header="Multi-storey">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <CheckBox x:Name="chk_multistorey" Content="This DXF holds several floor plans -- build them as storeys" IsChecked="False"/>
+                        <TextBlock Text="Draw one rectangle around each floor plan on a BOUNDARY layer, and one marker inside each rectangle on an ORIGIN layer. Every plan is moved so its marker lands on the model origin, so the storeys stack instead of sitting side by side. Pick the two layers below -- any names work."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,6"/>
+                        <Grid Margin="20,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="26"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Boundary layer" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_boundary_layer" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Origin layer" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_origin_layer" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Storey height (mm)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_storey_height" Height="22" Margin="0,1"/>
+                        </Grid>
+                        <TextBlock Text="Storeys are ordered by the plan title inside each rectangle (GROUND FLOOR PLAN, LEVEL 2, TERRACE) and fall back to the sheet layout -- top row first, then left to right. The lowest storey builds onto the chosen base level and each one above it onto the next level up; levels are created at the storey height when the model runs out of them."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,6,0,0"/>
+                        <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="10" Margin="20,6,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

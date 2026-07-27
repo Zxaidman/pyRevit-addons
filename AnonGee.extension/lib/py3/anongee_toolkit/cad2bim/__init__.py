@@ -35,7 +35,28 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.50.0"  # STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
+__version__ = "0.51.0"  # MULTI-STOREY from ONE dxf + generic stair SHAPES (0.50.0 feedback).
+#                         (1) New Multi-storey tab: the user boxes each floor plan on a
+#                         BOUNDARY layer and drops one marker per plan on an ORIGIN layer;
+#                         both layers are picked BY NAME in the tab (names differ per
+#                         drawing), floor_plans.split_floors turns them into one record set
+#                         per storey, each SHIFTED so its marker lands on the model origin,
+#                         and the build loop runs the whole pipeline once per storey on its
+#                         own level pair (levels created at the tab's storey height when the
+#                         model runs out). Storeys order by the plan title inside the box
+#                         ("GROUND FLOOR PLAN", "LEVEL 2", "TERRACE"), else by sheet layout;
+#                         a shared schedule is read from the WHOLE file, and each storey
+#                         exports its own JSON. Verified on test1+test2 laid side by side:
+#                         2376/2376 records routed, both storeys aligned to 0.0mm.
+#                         (2) Staircase tab gains a SHAPE picker with drawn icons -- U,
+#                         straight, L, C and circular -- used whenever the CAD has no stair
+#                         linework to measure; L/C wrap the bay's sides, circular becomes a
+#                         spiral run sized on the walk line. (3) New stair source "Draw
+#                         region in Revit": the window closes, PickBox collects one box per
+#                         stair from the view (Esc ends), and the chosen shape is built in
+#                         each. Suite 17 files (9 floor-plan + 31 stair tests).
+#
+# 0.50.0                  STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
 #                         new stair are deleted after placement (user request) -- own transaction
 #                         after the edit scopes; (2) SHAPES: an L stair (two flights, one corner)
 #                         places via the winding path (relaxed to 2+ multi-direction runs); a

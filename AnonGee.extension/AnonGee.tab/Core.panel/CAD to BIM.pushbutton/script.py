@@ -85,8 +85,8 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, config, report, slab_outlines,
-                                     stair_layout)
+from anongee_toolkit.cad2bim import (compat, config, floor_plans, report,
+                                     slab_outlines, stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -329,10 +329,30 @@ class CadToBimWindow(object):
         self.tb_stair_count = find("tb_stair_count")
         self.tb_stair_waist = find("tb_stair_waist")
         self.cb_stair_source = find("cb_stair_source")
-        for label in ("Auto (linework, else text)", "Drawn stair linework",
-                      "Text + numbers"):
+        for label in ("Auto (linework, else shape)", "Drawn stair linework",
+                      "Shape at the plan text", "Draw region in Revit"):
             self.cb_stair_source.Items.Add(label)
         self.cb_stair_source.SelectedIndex = 0
+        self.shape_buttons = [
+            (find("rb_shape_u"), stair_layout.SHAPE_U),
+            (find("rb_shape_straight"), stair_layout.SHAPE_STRAIGHT),
+            (find("rb_shape_l"), stair_layout.SHAPE_L),
+            (find("rb_shape_c"), stair_layout.SHAPE_C),
+            (find("rb_shape_circular"), stair_layout.SHAPE_CIRCULAR),
+        ]
+        self.chk_multistorey = find("chk_multistorey")
+        self.cb_boundary_layer = find("cb_boundary_layer")
+        self.cb_origin_layer = find("cb_origin_layer")
+        self.tb_storey_height = find("tb_storey_height")
+        self.multistorey_preview = find("multistorey_preview")
+        layer_names = [name for name, _count in layer_rows]
+        for combo in (self.cb_boundary_layer, self.cb_origin_layer):
+            combo.Items.Add("(none)")
+            for name in layer_names:
+                combo.Items.Add(name)
+            combo.SelectedIndex = 0
+        _select_containing(self.cb_boundary_layer, ["boundar", "bound", "extent"])
+        _select_containing(self.cb_origin_layer, ["origin", "basept", "datum"])
         self.stair_floor_text = find("stair_floor_text")
         self._stair_count_manual = False
         self.tb_stair_riser = find("tb_stair_riser")
@@ -484,6 +504,7 @@ class CadToBimWindow(object):
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
         self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
         self.tb_stair_waist.Text = str(int(d["stair_waist_mm"]))
+        self.tb_storey_height.Text = str(int(d["storey_height_mm"]))
         self.tb_stair_count.Text = "0"
         self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
         self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
@@ -556,6 +577,13 @@ class CadToBimWindow(object):
                 self.tb_stair_count.Text = str(
                     int(_math.ceil(storey / riser - 1e-9)))
 
+    def _stair_shape(self):
+        """The generic stair shape picked on the Staircase tab (U by default)."""
+        for button, shape in self.shape_buttons:
+            if button.IsChecked:
+                return shape
+        return stair_layout.SHAPE_U
+
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
         return {
@@ -609,11 +637,20 @@ class CadToBimWindow(object):
             "stair_type_id": self._stair_ids.get(self.cb_stair_type.SelectedItem),
             "stair_source": ("linework" if self.cb_stair_source.SelectedIndex == 1
                              else "text" if self.cb_stair_source.SelectedIndex == 2
+                             else "region" if self.cb_stair_source.SelectedIndex == 3
                              else "auto"),
+            "multistorey": bool(self.chk_multistorey.IsChecked),
+            "boundary_layer": (None if self.cb_boundary_layer.SelectedIndex <= 0
+                               else self.cb_boundary_layer.SelectedItem),
+            "origin_layer": (None if self.cb_origin_layer.SelectedIndex <= 0
+                             else self.cb_origin_layer.SelectedItem),
+            "storey_height_mm": self._read_float(
+                self.tb_storey_height, config.DEFAULTS["storey_height_mm"]),
             "stair_params": {
                 "riser_count": self._read_int(self.tb_stair_count, 0),
                 "waist_mm": self._read_float(self.tb_stair_waist,
                                              config.DEFAULTS["stair_waist_mm"]),
+                "shape": self._stair_shape(),
                 "riser_mm": self._read_float(self.tb_stair_riser,
                                              config.DEFAULTS["stair_riser_mm"]),
                 "tread_mm": self._read_float(self.tb_stair_tread,
@@ -792,6 +829,18 @@ def main():
 
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
+    # The Multi-storey tab picks the boundary/origin layers BY NAME (they differ
+    # per drawing), so route them here -- after the layer table, so an explicit
+    # pick always wins over the naming convention.
+    for layer_name, category in ((selections.get("boundary_layer"),
+                                  layers.CATEGORY_FLOOR_BOUNDARY),
+                                 (selections.get("origin_layer"),
+                                  layers.CATEGORY_FLOOR_ORIGIN)):
+        if not layer_name:
+            continue
+        for record in revit_result.records:
+            if record.layer_key == layer_name:
+                record.category = category
     limits = selections.get("limits")
     standards = selections.get("standards")
     tolerances = selections.get("tolerances") or {}
@@ -802,19 +851,132 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
+    # MULTI-STOREY: one dxf holding several floor plans, each boxed on the
+    # boundary layer with an origin marker inside. Each storey is built by the
+    # SAME pipeline below, on its own level pair, from records shifted so its
+    # marker lands on the model origin.
+    storeys = None
+    if selections.get("multistorey"):
+        regions, floor_notes = floor_plans.split_floors(revit_result.records,
+                                                        dxf_result.texts)
+        for note in floor_notes:
+            _say("  storey: {0}".format(note))
+        if len(regions) > 1:
+            _say("Multi-storey: {0} floor plan(s) found -- {1}".format(
+                len(regions),
+                ", ".join((r.label or "storey {0}".format(i + 1))
+                          for i, r in enumerate(regions))))
+            storeys = regions
+        elif regions:
+            _say("Multi-storey: only one floor plan found -- building it alone.")
+        else:
+            _say("Multi-storey: no floor boundaries found -- building the whole "
+                 "drawing as one storey.")
+
+    if storeys:
+        level_pairs = _storey_level_pairs(doc, selections, len(storeys))
+        for index, region in enumerate(storeys):
+            base_id, top_id = level_pairs[index]
+            label = region.label or "storey {0}".format(index + 1)
+            _say("")
+            _say("=== {0} ({1} records) ===".format(label, len(region.records)))
+            storey_selections = dict(selections)
+            storey_selections["base_level_id"] = base_id
+            storey_selections["top_level_id"] = top_id
+            storey_result = _StoreyResult(revit_result, region.records)
+            _build_one_storey(doc, storey_result, region.texts, storey_selections,
+                              schedule_source=dxf_result.texts,
+                              path=path, comparison=comparison,
+                              transform_method=transform_method,
+                              storey_label=label)
+        return
+
+    _build_one_storey(doc, revit_result, dxf_result.texts, selections,
+                      schedule_source=dxf_result.texts, path=path,
+                      comparison=comparison, transform_method=transform_method)
+
+
+class _StoreyResult(object):
+    """One storey's read result: the parent result with its records swapped."""
+
+    def __init__(self, base_result, records):
+        self.__dict__.update(base_result.__dict__)
+        self.records = records
+
+
+def _storey_level_pairs(doc, selections, count):
+    """[(base_level_id, top_level_id)] for `count` storeys, lowest first.
+
+    The lowest storey sits on the chosen base level; each one above it moves up
+    one level in the model. When the model runs out of levels, new ones are
+    created at the Multi-storey tab's storey height.
+    """
+    from Autodesk.Revit.DB import Level, Transaction, FilteredElementCollector
+
+    existing = sorted(FilteredElementCollector(doc).OfClass(Level).ToElements(),
+                      key=lambda lv: lv.Elevation)
+    base_id = selections.get("base_level_id")
+    start = 0
+    for i, level in enumerate(existing):
+        if level.Id == base_id:
+            start = i
+            break
+    ladder = existing[start:]
+    needed = count + 1
+    if len(ladder) < needed:
+        step = config.mm_to_ft(selections.get("storey_height_mm")
+                               or config.DEFAULTS["storey_height_mm"])
+        transaction = Transaction(doc, "CAD to BIM: storey levels")
+        transaction.Start()
+        try:
+            txn_failures.attach_warning_swallower(transaction)
+            while len(ladder) < needed:
+                elevation = ladder[-1].Elevation + step
+                new_level = Level.Create(doc, elevation)
+                try:
+                    new_level.Name = "CAD Level {0}".format(len(ladder) + 1)
+                except Exception:
+                    pass          # a name clash keeps Revit's default name
+                ladder.append(new_level)
+            transaction.Commit()
+            _say("Multi-storey: created {0} level(s) at {1} mm spacing".format(
+                needed - len(existing[start:]),
+                int(selections.get("storey_height_mm")
+                    or config.DEFAULTS["storey_height_mm"])))
+        except Exception as level_error:
+            if transaction.HasStarted() and not transaction.HasEnded():
+                transaction.RollBack()
+            _say("Multi-storey: could not create levels ({0}) -- storeys will "
+                 "share the chosen pair".format(str(level_error)[:120]))
+            return [(selections.get("base_level_id"),
+                     selections.get("top_level_id"))] * count
+    return [(ladder[i].Id, ladder[i + 1].Id) for i in range(count)]
+
+
+def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None,
+                      path=None, comparison=None, transform_method=None,
+                      storey_label=None):
+    """Build ONE storey: columns, beams, slabs and stairs from its records."""
+    limits = selections.get("limits")
+    standards = selections.get("standards")
+    tolerances = selections.get("tolerances") or {}
+    dxf_texts = texts
+
     _progress(3, 9, "build columns")
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
 
     # Route text labels by their (user-confirmed) layer.
     text_mapping = selections.get("text_mapping") or {}
-    column_texts = [t for t in dxf_result.texts
+    column_texts = [t for t in dxf_texts
                     if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
-    grid_texts = [t for t in dxf_result.texts
+    grid_texts = [t for t in dxf_texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
-    schedule_texts = [t for t in dxf_result.texts
+    # A shared schedule can live on ONE sheet of a multi-storey drawing, so the
+    # schedule text is read from the WHOLE file, not just this storey's box.
+    schedule_texts = [t for t in (schedule_source or dxf_texts)
                       if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
-    beam_texts = [t for t in dxf_result.texts
+    beam_texts = [t for t in dxf_texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
 
     # The schedule (mark -> size) sizes MARK-ONLY plan labels (columns AND beams). The
@@ -917,8 +1079,9 @@ def main():
     if split_beams:
         _say("beams: split {0} beam(s) drawn across column footprints".format(split_beams))
 
-    _say("### CAD to BIM {0}".format(cad2bim.__version__))
-    for line in compare.format_console(comparison):
+    if storey_label is None:
+        _say("### CAD to BIM {0}".format(cad2bim.__version__))
+    for line in compare.format_console(comparison or {}):
         _say(line)
     for line in report.format_console(revit_result, selections["mapping"],
                                       sections, beam_segments):
@@ -940,20 +1103,21 @@ def main():
     _progress(8, 9, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
-                                          dxf_result.texts, selections, schedule,
+                                          dxf_texts, selections, schedule,
                                           column_rects=column_footprints)
     # STAIRS (option 1, parametric): a STAIRCASE / ST-n text marks the bay; a
     # generic dog-leg from the Staircase tab numbers is laid out inside it.
     _progress(9, 9, "create stairs")
     if selections.get("create_stairs"):
         outcomes["stairs"] = _create_stairs(doc, revit_result.records,
-                                            slab_beam_segments, dxf_result.texts,
+                                            slab_beam_segments, dxf_texts,
                                             selections,
                                             column_rects=column_footprints)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
-                outcomes, dxf_result.texts, comparison,
-                default_name=_export_name(path, selections))
+                outcomes, dxf_texts, comparison,
+                default_name=_export_name(path, selections,
+                                          storey_label=storey_label))
 
 
 def _create_grids(doc, records, grid_texts=None):
@@ -1181,6 +1345,39 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
             "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
 
 
+def _pick_stair_regions():
+    """Rectangles the user drags in the Revit view, [(ring), ...] in feet.
+
+    Each PickBox gives two opposite corners; the loop keeps asking until the
+    user presses Escape, so several stairs can be placed in one run. Escape on
+    the FIRST box means "changed my mind" and returns nothing.
+    """
+    from Autodesk.Revit.UI.Selection import PickBoxStyle
+
+    uidoc = getattr(__revit__, "ActiveUIDocument", None)
+    if uidoc is None:
+        return []
+    rings = []
+    while True:
+        try:
+            picked = uidoc.Selection.PickBox(
+                PickBoxStyle.Directional,
+                "Drag a box around the stair area (Esc when done)")
+        except Exception:
+            break                       # Escape / cancelled: stop asking
+        if picked is None:
+            break
+        lo, hi = picked.Min, picked.Max
+        x0, x1 = min(lo.X, hi.X), max(lo.X, hi.X)
+        y0, y1 = min(lo.Y, hi.Y), max(lo.Y, hi.Y)
+        if (x1 - x0) < 1e-6 or (y1 - y0) < 1e-6:
+            continue
+        rings.append([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        _say("Stairs -- region {0}: {1:.0f} x {2:.0f} mm".format(
+            len(rings), (x1 - x0) * 304.8, (y1 - y0) * 304.8))
+    return rings
+
+
 def _create_stairs(doc, records, beam_segments, texts, selections,
                    column_rects=None):
     """Place generic dog-leg staircases at the plan's STAIRCASE / ST-n texts.
@@ -1203,10 +1400,17 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
         _say("Stairs -- skipped (top level is not above the base level).")
         return {"created": 0, "skipped": 0, "errors": 0}
 
+    source = selections.get("stair_source") or "auto"
+    regions = None
+    if source == "region":
+        regions = _pick_stair_regions()
+        if not regions:
+            _say("Stairs -- skipped (no region drawn in the view).")
+            return {"created": 0, "skipped": 0, "errors": 0}
     plans, notes = stair_layout.plan_stairs(
         records, (beam_segments or {}).get("segments"), column_rects, texts,
         selections.get("stair_params") or {}, storey_mm,
-        source=selections.get("stair_source") or "auto")
+        source=source, regions=regions)
     for note in notes:
         _say("  stair: {0}".format(note))
     if not plans:
@@ -1229,7 +1433,7 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
             "error_details": [str(e)[:220] for e in result["errors"][:8]]}
 
 
-def _export_name(cad_path, selections):
+def _export_name(cad_path, selections, storey_label=None):
     """Default export file name (user convention):
     [version]_[main element]_[testN from the CAD name]_[textmode].json
     e.g. "0.44.0_slab_test1_with_textmode.json"."""
@@ -1245,6 +1449,9 @@ def _export_name(cad_path, selections):
     routed = any(cat and cat != layers.CATEGORY_TEXT_IGNORE
                  for cat in text_mapping.values())
     mode = "with_textmode" if routed else "no_text"
+    if storey_label:
+        plan = "{0}-{1}".format(plan, re.sub(r"[^a-z0-9]+", "",
+                                             storey_label.lower())[:12])
     return "{0}_{1}_{2}_{3}.json".format(cad2bim.__version__, element, plan, mode)
 
 

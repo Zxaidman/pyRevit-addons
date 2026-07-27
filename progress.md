@@ -7,6 +7,22 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.51.0 — multi-storey from one DXF + generic stair shapes
+- **Multi-storey tab**: boundary layer (rect per floor) + origin layer (marker per floor),
+  both picked BY NAME. floor_plans.split_floors → one record set per storey, shifted so
+  its marker hits the model origin; build loop runs the full pipeline per storey on its
+  own level pair (levels auto-created at the tab's storey height). Order from plan title
+  else sheet layout; schedule read file-wide; per-storey JSON export.
+  Verified on test1+test2 side by side: 2376/2376 records routed, alignment 0.0mm.
+- **Stair shape picker** (drawn icons): U / straight / L / C / circular — used when the
+  CAD has no stair linework. L and C wrap the bay's sides; circular → spiral run sized
+  on the walk line.
+- **Draw region in Revit** stair source: window closes, PickBox collects one box per
+  stair (Esc ends), chosen shape built inside each.
+- Suite 17 files; 9 floor-plan tests, 31 stair tests.
+- NOTE: test9/test10 DXFs not in the repo yet — built against synthetic + paired real
+  plans; re-verify when the fixtures land.
+
 ## v0.50.0 — staircase round 4 (railings off, L/circular/winder shapes) → PR
 - Railings Revit auto-hosts on each new stair now deleted after placement.
 - Shapes: L (2-flight corner via winding path); CIRCULAR (radial riser detection →

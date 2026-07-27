@@ -55,6 +55,9 @@ DEFAULTS = {
     "stair_run_width_mm": 1250.0, # width of each run
     "stair_landing_mm": 0.0,      # landing depth along the runs; 0 = run width
     "stair_waist_mm": 200.0,      # waist (structural depth) of runs + landings
+
+    # --- multi-storey (several floor plans in ONE dxf) ----------------------
+    "storey_height_mm": 3000.0,   # level spacing when the model has no level yet
 }
 
 

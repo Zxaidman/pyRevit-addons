@@ -147,7 +147,148 @@ def _oriented_extents(ring):
     return (cx, cy), (-uy, ux), (v1 - v0), (u1 - u0)
 
 
-def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
+# The generic shapes the dialog offers when the CAD has no stair linework.
+SHAPE_U = "u"                 # two parallel flights, half landing (dog-leg)
+SHAPE_STRAIGHT = "straight"   # one flight end to end
+SHAPE_L = "l"                 # two flights at 90 degrees, corner landing
+SHAPE_C = "c"                 # three flights around three sides of the bay
+SHAPE_CIRCULAR = "circular"   # one spiral flight around the bay's centre
+STAIR_SHAPES = (SHAPE_U, SHAPE_STRAIGHT, SHAPE_L, SHAPE_C, SHAPE_CIRCULAR)
+
+
+def plan_shaped_stair(ring, z, mark, params, storey_mm, direction_texts=None,
+                      shape=SHAPE_U):
+    """A generic stair of the requested SHAPE inside `ring` -> (plan, note).
+
+    `shape` is one of STAIR_SHAPES; it is what the Staircase tab's shape picker
+    sends when the drawing carries no stair linework to measure. Every shape
+    shares the dialog numbers (riser height/count, tread, run width, landing,
+    waist) and differs only in how the flights are laid inside the bay.
+    """
+    if shape == SHAPE_CIRCULAR:
+        return _plan_circular_stair(ring, z, mark, params, storey_mm)
+    if shape in (SHAPE_L, SHAPE_C):
+        return _plan_cornered_stair(ring, z, mark, params, storey_mm, shape,
+                                    direction_texts=direction_texts)
+    return plan_dogleg_stair(ring, z, mark, params, storey_mm,
+                             direction_texts=direction_texts,
+                             single_flight=(shape == SHAPE_STRAIGHT))
+
+
+def _riser_split(params, storey_mm, flights):
+    """(risers_total, riser_mm, [per-flight riser counts]) for the dialog numbers."""
+    riser_target = float(params.get("riser_mm") or 150.0)
+    riser_count = int(params.get("riser_count") or 0)
+    if riser_count > 0:
+        total = riser_count
+    else:
+        total = int(math.ceil(storey_mm / riser_target - 1e-9))
+    total = max(total, flights)
+    base = total // flights
+    extra = total - base * flights
+    counts = [base + (1 if i < extra else 0) for i in range(flights)]
+    return total, storey_mm / total, counts
+
+
+def _plan_circular_stair(ring, z, mark, params, storey_mm):
+    """One spiral flight around the bay's centre, sized by the dialog numbers."""
+    tread = float(params.get("tread_mm") or 300.0)
+    width = float(params.get("run_width_mm") or 1250.0)
+    if storey_mm <= 0 or tread <= 0 or width <= 0:
+        return None, "{0}: invalid inputs for a circular stair".format(mark)
+    (cx, cy), _axis, long_mm, short_mm = _oriented_extents(ring)
+    outer_mm = min(long_mm, short_mm) * _MM / 2.0
+    if outer_mm <= width:
+        return None, ("{0}: bay {1} mm across cannot hold a {2} mm wide spiral"
+                      .format(mark, int(min(long_mm, short_mm) * _MM),
+                              int(width)))
+    risers_total, riser_mm, _counts = _riser_split(params, storey_mm, 1)
+    inner_mm = outer_mm - width
+    walk_mm = inner_mm + 300.0                    # tread measured on the walk line
+    included = (risers_total * tread) / walk_mm   # radians
+    if included > 2.0 * math.pi * 0.95:
+        included = 2.0 * math.pi * 0.95
+    spiral = {"center": (cx, cy), "radius": config.mm_to_ft(inner_mm + width / 2.0),
+              "width_mm": width, "start_angle": 0.0,
+              "included_angle": included, "clockwise": False,
+              "risers": risers_total, "tread_mm": tread}
+    plan = {"mark": mark, "z": z, "runs": [], "spiral": spiral,
+            "landing": None, "top_landing": None,
+            "risers_total": risers_total, "riser_mm": riser_mm,
+            "tread_mm": tread, "run_width_mm": width,
+            "landing_mm": float(params.get("landing_mm") or 0.0) or width,
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": SHAPE_CIRCULAR}
+    return plan, None
+
+
+def _plan_cornered_stair(ring, z, mark, params, storey_mm, shape,
+                         direction_texts=None):
+    """An L (two flights, one corner) or C (three flights, two corners) stair.
+
+    The flights hug the bay's sides counterclockwise from its lower-left
+    corner, each inset half a run width so the runs sit inside the boundary.
+    """
+    tread = float(params.get("tread_mm") or 300.0)
+    width = float(params.get("run_width_mm") or 1250.0)
+    landing = float(params.get("landing_mm") or 0.0) or width
+    if storey_mm <= 0 or tread <= 0 or width <= 0:
+        return None, "{0}: invalid inputs for an {1} stair".format(
+            mark, shape.upper())
+    flights = 2 if shape == SHAPE_L else 3
+    risers_total, riser_mm, counts = _riser_split(params, storey_mm, flights)
+    (cx, cy), (ux, uy), long_mm, short_mm = _oriented_extents(ring)
+    nx, ny = -uy, ux
+    half_long = long_mm / 2.0
+    half_short = short_mm / 2.0
+    inset = config.mm_to_ft(width / 2.0)
+
+    def at(along_ft, across_ft):
+        return (cx + ux * along_ft + nx * across_ft,
+                cy + uy * along_ft + ny * across_ft)
+
+    # flight 1 runs along the long axis on the near side, flight 2 up the far
+    # short side, flight 3 (C only) back along the long axis on the far side
+    corner_a = half_long - config.mm_to_ft(landing)
+    corner_b = half_short - config.mm_to_ft(landing)
+    legs = [
+        (at(-half_long + inset, -half_short + inset), at(corner_a, -half_short + inset)),
+        (at(half_long - inset, -half_short + inset), at(half_long - inset, corner_b)),
+        (at(half_long - inset, half_short - inset), at(-corner_a, half_short - inset)),
+    ][:flights]
+    runs = []
+    note = None
+    for (start, end), risers in zip(legs, counts):
+        span_mm = math.hypot(end[0] - start[0], end[1] - start[1]) * _MM
+        needed = risers * tread
+        if needed > span_mm + 1.0:
+            note = ("{0}: {1} stair needs {2} mm per flight but the bay gives "
+                    "{3} mm -- flights trimmed".format(mark, shape.upper(),
+                                                       int(needed),
+                                                       int(span_mm)))
+            scale = span_mm / needed if needed else 1.0
+            end = (start[0] + (end[0] - start[0]) * scale,
+                   start[1] + (end[1] - start[1]) * scale)
+        else:
+            length_ft = config.mm_to_ft(needed)
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            total = math.hypot(dx, dy)
+            if total > 0:
+                end = (start[0] + dx / total * length_ft,
+                       start[1] + dy / total * length_ft)
+        runs.append({"start": start, "end": end, "risers": risers,
+                     "width_mm": width})
+    plan = {"mark": mark, "z": z, "runs": runs, "landing": None,
+            "top_landing": _arrival_landing(runs, landing),
+            "risers_total": risers_total, "riser_mm": riser_mm,
+            "tread_mm": tread, "run_width_mm": width, "landing_mm": landing,
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": shape}
+    return plan, note
+
+
+def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None,
+                      single_flight=False):
     """One dog-leg stair plan inside `ring`, or (None, note) when it cannot fit.
 
     params (mm): riser_mm (target MAX riser height), tread_mm (tread depth),
@@ -178,8 +319,11 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
     if risers_total < 2:
         risers_total = 2
     riser_actual = storey_mm / risers_total
-    run1_risers = int(math.ceil(risers_total / 2.0))
-    run2_risers = risers_total - run1_risers
+    if single_flight:
+        run1_risers, run2_risers = risers_total, 0
+    else:
+        run1_risers = int(math.ceil(risers_total / 2.0))
+        run2_risers = risers_total - run1_risers
 
     (cx, cy), (ux, uy), long_mm, short_mm = _oriented_extents(ring)
     long_mm *= _MM
@@ -250,7 +394,8 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
             "top_landing": _arrival_landing(runs, landing),
             "risers_total": risers_total, "riser_mm": riser_actual,
             "tread_mm": tread, "run_width_mm": width, "landing_mm": landing,
-            "waist_mm": float(params.get("waist_mm") or 0.0)}
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": SHAPE_STRAIGHT if single_flight else SHAPE_U}
     return plan, note
 
 
@@ -762,20 +907,44 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
 
 
 def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm,
-                source="auto"):
-    """The staircase chain (user's two options + explicit toggle):
+                source="auto", regions=None):
+    """The staircase chain (drawn linework, plan text, or a picked region):
 
     source="auto"     -- drawn stair LINEWORK when the plan has any, else the
-                         TEXT + dialog-numbers dog-leg (the default chain);
-    source="linework" -- option 2 only (drawn riser lines drive the layout);
-    source="text"     -- option 1 only (generic dog-leg in the bay holding a
-                         STAIRCASE / ST-n note, sized by the dialog numbers).
+                         TEXT + dialog-numbers layout (the default chain);
+    source="linework" -- drawn riser lines drive the layout, nothing else;
+    source="text"     -- the generic SHAPE from the dialog, laid inside the bay
+                         holding a STAIRCASE / ST-n note;
+    source="region"   -- the generic SHAPE laid inside `regions`, the
+                         rectangles the user drew in the Revit view.
 
-    Returns (plans, notes). Every skipped stair leaves a human-readable note so
-    the console says WHY a source produced no stair.
+    `params["shape"]` picks the generic shape (STAIR_SHAPES); it is ignored
+    when the layout comes from drawn linework. Returns (plans, notes) -- every
+    skipped stair leaves a human-readable note so the console says WHY.
     """
     plans = []
     notes = []
+    shape = (params.get("shape") or SHAPE_U).lower()
+    if shape not in STAIR_SHAPES:
+        notes.append("unknown stair shape '{0}' -- using U".format(shape))
+        shape = SHAPE_U
+    direction_texts = find_direction_texts(texts or [])
+
+    if source == "region":
+        if not regions:
+            return [], ["no region picked in the Revit view"]
+        for index, ring in enumerate(regions, start=1):
+            plan, note = plan_shaped_stair(ring, 0.0, "ST-{0}".format(index),
+                                           params, storey_mm,
+                                           direction_texts=direction_texts,
+                                           shape=shape)
+            if note:
+                notes.append(note)
+            if plan:
+                plan["source"] = "picked_region"
+                plans.append(plan)
+        return plans, notes
+
     if source in ("auto", "linework"):
         plans, notes = stair_plans_from_linework(records, params, storey_mm,
                                                  texts=texts)
@@ -784,10 +953,10 @@ def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm,
     areas, area_notes = stair_areas_from_texts(records, beam_segments,
                                                column_rects, texts)
     notes += area_notes
-    direction_texts = find_direction_texts(texts)
     for ring, z, mark in areas:
-        plan, note = plan_dogleg_stair(ring, z, mark, params, storey_mm,
-                                       direction_texts=direction_texts)
+        plan, note = plan_shaped_stair(ring, z, mark, params, storey_mm,
+                                       direction_texts=direction_texts,
+                                       shape=shape)
         if note:
             notes.append(note)
         if plan:

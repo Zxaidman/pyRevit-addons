@@ -392,6 +392,87 @@ class ShapeStairs(unittest.TestCase):
         self.assertAlmostEqual(plan["riser_mm"], 3000.0 / 24, places=3)
 
 
+class GenericShapes(unittest.TestCase):
+    def _ring(self, w_mm=4000.0, l_mm=8000.0):
+        return [(0.0, 0.0), (l_mm * _FT, 0.0), (l_mm * _FT, w_mm * _FT),
+                (0.0, w_mm * _FT)]
+
+    def test_straight_is_one_flight(self):
+        plan, _n = stair_layout.plan_shaped_stair(
+            self._ring(), 0.0, "ST-1", _PARAMS, 3000.0,
+            shape=stair_layout.SHAPE_STRAIGHT)
+        self.assertEqual(len(plan["runs"]), 1)
+        self.assertEqual(plan["runs"][0]["risers"], 20)
+        self.assertEqual(plan["shape"], stair_layout.SHAPE_STRAIGHT)
+
+    def test_u_is_two_flights(self):
+        plan, _n = stair_layout.plan_shaped_stair(
+            self._ring(), 0.0, "ST-1", _PARAMS, 3000.0,
+            shape=stair_layout.SHAPE_U)
+        self.assertEqual([r["risers"] for r in plan["runs"]], [10, 10])
+        self.assertEqual(plan["shape"], stair_layout.SHAPE_U)
+
+    def test_l_turns_one_corner(self):
+        plan, _n = stair_layout.plan_shaped_stair(
+            self._ring(), 0.0, "ST-1", _PARAMS, 3000.0,
+            shape=stair_layout.SHAPE_L)
+        self.assertEqual(len(plan["runs"]), 2)
+        self.assertEqual(sum(r["risers"] for r in plan["runs"]), 20)
+        first, second = plan["runs"]
+        d1 = (first["end"][0] - first["start"][0],
+              first["end"][1] - first["start"][1])
+        d2 = (second["end"][0] - second["start"][0],
+              second["end"][1] - second["start"][1])
+        dot = d1[0] * d2[0] + d1[1] * d2[1]
+        self.assertAlmostEqual(dot, 0.0, places=6)
+
+    def test_c_wraps_three_sides(self):
+        plan, _n = stair_layout.plan_shaped_stair(
+            self._ring(), 0.0, "ST-1", _PARAMS, 3000.0,
+            shape=stair_layout.SHAPE_C)
+        self.assertEqual(len(plan["runs"]), 3)
+        self.assertEqual(sum(r["risers"] for r in plan["runs"]), 20)
+        d1 = plan["runs"][0]["end"][0] - plan["runs"][0]["start"][0]
+        d3 = plan["runs"][2]["end"][0] - plan["runs"][2]["start"][0]
+        self.assertLess(d1 * d3, 0.0)
+
+    def test_circular_makes_a_spiral(self):
+        plan, _n = stair_layout.plan_shaped_stair(
+            self._ring(w_mm=5000.0, l_mm=5000.0), 0.0, "ST-1", _PARAMS, 3000.0,
+            shape=stair_layout.SHAPE_CIRCULAR)
+        spiral = plan["spiral"]
+        self.assertEqual(plan["runs"], [])
+        self.assertEqual(spiral["risers"], 20)
+        self.assertAlmostEqual(spiral["width_mm"], 1250.0)
+        self.assertGreater(spiral["included_angle"], 0.0)
+        self.assertLessEqual(spiral["included_angle"], 2 * math.pi)
+
+    def test_riser_count_absolute_across_shapes(self):
+        params = dict(_PARAMS, riser_count=18)
+        for shape in stair_layout.STAIR_SHAPES:
+            plan, _n = stair_layout.plan_shaped_stair(
+                self._ring(w_mm=5000.0, l_mm=8000.0), 0.0, "ST-1", params,
+                3000.0, shape=shape)
+            self.assertIsNotNone(plan, shape)
+            self.assertEqual(plan["risers_total"], 18, shape)
+
+    def test_region_source_uses_the_picked_rectangles(self):
+        ring = self._ring()
+        params = dict(_PARAMS, shape=stair_layout.SHAPE_L)
+        plans, notes = stair_layout.plan_stairs([], [], None, [], params,
+                                                3000.0, source="region",
+                                                regions=[ring])
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["source"], "picked_region")
+        self.assertEqual(plans[0]["shape"], stair_layout.SHAPE_L)
+
+    def test_region_source_without_regions_reports(self):
+        plans, notes = stair_layout.plan_stairs([], [], None, [], _PARAMS,
+                                                3000.0, source="region")
+        self.assertEqual(plans, [])
+        self.assertTrue(any("no region" in n for n in notes))
+
+
 class FullPipeline(unittest.TestCase):
     def test_plan_stairs_from_texts(self):
         recs = _wall_bay(0.0, 0.0, 6000.0, 3000.0)
