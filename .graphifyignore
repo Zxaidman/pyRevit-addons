@@ -1,0 +1,28 @@
+# graphify scope: first-party code only.
+# Keeps the knowledge graph (and --watch / --update rebuilds) focused on the
+# AnonGee extension's own code and excludes vendored third-party libraries
+# bundled under lib/py3 and lib/py2. anongee_toolkit is first-party — keep it.
+
+# --- Vendored Python 3 libraries (keep anongee_toolkit) ---
+/AnonGee.extension/lib/py3/cffi/
+/AnonGee.extension/lib/py3/clr_loader/
+/AnonGee.extension/lib/py3/et_xmlfile/
+/AnonGee.extension/lib/py3/ezdxf/
+/AnonGee.extension/lib/py3/fontTools/
+/AnonGee.extension/lib/py3/numpy/
+/AnonGee.extension/lib/py3/numpy.libs/
+/AnonGee.extension/lib/py3/openpyxl/
+/AnonGee.extension/lib/py3/pycparser/
+/AnonGee.extension/lib/py3/pyparsing/
+/AnonGee.extension/lib/py3/pythonnet/
+/AnonGee.extension/lib/py3/share/
+/AnonGee.extension/lib/py3/clr.py
+/AnonGee.extension/lib/py3/typing_extensions.py
+
+# --- Vendored Python 2 libraries (entire tree is third-party) ---
+/AnonGee.extension/lib/py2/
+
+# --- Decorative UI assets (button icons, window chrome glyphs) ---
+icon.png
+icons8-*.png
+*_512.png

@@ -1,0 +1,2152 @@
+{
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/MultiFilterParameter.pushbutton/script.py": {
+    "mtime": 1781793268.2210329,
+    "ast_hash": "952b48e292310d35ce0a77567ce72208",
+    "semantic_hash": "952b48e292310d35ce0a77567ce72208"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/OneFilterParameter.pushbutton/script.py": {
+    "mtime": 1781793268.2270436,
+    "ast_hash": "95c40af22fc6c4b51ed1a94df60580c2",
+    "semantic_hash": "95c40af22fc6c4b51ed1a94df60580c2"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/script.py": {
+    "mtime": 1782406683.3199434,
+    "ast_hash": "865077c72deaed06faf895afdb9b5661",
+    "semantic_hash": "865077c72deaed06faf895afdb9b5661"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/BIM Generation.pushbutton/core.py": {
+    "mtime": 1781793268.2296023,
+    "ast_hash": "268d751b4f99f7f610ad01e7131f9d97",
+    "semantic_hash": "268d751b4f99f7f610ad01e7131f9d97"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/BIM Generation.pushbutton/parser_service.py": {
+    "mtime": 1781793268.2296023,
+    "ast_hash": "779492a71790c88fda791415fa565c6e",
+    "semantic_hash": "779492a71790c88fda791415fa565c6e"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/BIM Generation.pushbutton/script.py": {
+    "mtime": 1781793268.2296023,
+    "ast_hash": "678889b2f0d9c8cda0dc1ef188fcff8f",
+    "semantic_hash": "678889b2f0d9c8cda0dc1ef188fcff8f"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/script.py": {
+    "mtime": 1784195500.7917423,
+    "ast_hash": "4942a07e9447a8affcaa26d5efe16eeb",
+    "semantic_hash": "4942a07e9447a8affcaa26d5efe16eeb"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/FramewinToBIM.pushbutton/script.py": {
+    "mtime": 1781887857.4901917,
+    "ast_hash": "646ec1230de9737f7e422a1e65b1cbae",
+    "semantic_hash": "646ec1230de9737f7e422a1e65b1cbae"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/__init__.py": {
+    "mtime": 1781887857.4917047,
+    "ast_hash": "d29bbab0a6b147695bb0db56f0927949",
+    "semantic_hash": "d29bbab0a6b147695bb0db56f0927949"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/bar_mark_manager.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "2cb3ef5f2a2643cc2c680e59324a9513",
+    "semantic_hash": "2cb3ef5f2a2643cc2c680e59324a9513"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/bar_record.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "ea347f58a1276caae80904e793c81f6f",
+    "semantic_hash": "ea347f58a1276caae80904e793c81f6f"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/rebar_reader.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "451fb8b64e49ab768e505a465eec5e42",
+    "semantic_hash": "451fb8b64e49ab768e505a465eec5e42"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/revision_tracker.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "613c37d78c089e512911ba276c919065",
+    "semantic_hash": "613c37d78c089e512911ba276c919065"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/core/shape_resolver.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "2ddd214942a8e8d2d2679f99279bdf2f",
+    "semantic_hash": "2ddd214942a8e8d2d2679f99279bdf2f"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/output/__init__.py": {
+    "mtime": 1781887857.4917974,
+    "ast_hash": "d29bbab0a6b147695bb0db56f0927949",
+    "semantic_hash": "d29bbab0a6b147695bb0db56f0927949"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/output/excel_writer.py": {
+    "mtime": 1781887857.493546,
+    "ast_hash": "04407501197a71459fcb064a90d81a84",
+    "semantic_hash": "04407501197a71459fcb064a90d81a84"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/output/pdf_exporter.py": {
+    "mtime": 1781887857.493546,
+    "ast_hash": "6ab16d17b1cea19827a15b1816648e14",
+    "semantic_hash": "6ab16d17b1cea19827a15b1816648e14"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/script.py": {
+    "mtime": 1781887857.493546,
+    "ast_hash": "80ffa6398be388b02066a2866ce75580",
+    "semantic_hash": "80ffa6398be388b02066a2866ce75580"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/ACI_315_2018.py": {
+    "mtime": 1781887857.493546,
+    "ast_hash": "f635ae56bfafb23831404a089f0b2205",
+    "semantic_hash": "f635ae56bfafb23831404a089f0b2205"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/BS_8666_2020.py": {
+    "mtime": 1781887857.4954498,
+    "ast_hash": "f9170968b283e87103418ab420183984",
+    "semantic_hash": "f9170968b283e87103418ab420183984"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/IS_2502_2019.py": {
+    "mtime": 1781887857.4954498,
+    "ast_hash": "2e255b7b5b95d591fb1cc03775aa25a4",
+    "semantic_hash": "2e255b7b5b95d591fb1cc03775aa25a4"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/standards/__init__.py": {
+    "mtime": 1781887857.4954498,
+    "ast_hash": "ad45465e517767781a2ca1b8168fdac9",
+    "semantic_hash": "ad45465e517767781a2ca1b8168fdac9"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/ui/__init__.py": {
+    "mtime": 1781887857.4954498,
+    "ast_hash": "d29bbab0a6b147695bb0db56f0927949",
+    "semantic_hash": "d29bbab0a6b147695bb0db56f0927949"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/ui/main_window.py": {
+    "mtime": 1781887857.4963794,
+    "ast_hash": "36367b5b8479302136e74cf9f2a4ba27",
+    "semantic_hash": "36367b5b8479302136e74cf9f2a4ba27"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/ui/xaml/bbs_window.py": {
+    "mtime": 1781887857.4963794,
+    "ast_hash": "57735a5c4d72703e74e5b968bdf3c3e0",
+    "semantic_hash": "57735a5c4d72703e74e5b968bdf3c3e0"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/Brand Guidelines.pushbutton/script.py": {
+    "mtime": 1781793268.2383037,
+    "ast_hash": "67ecfadb8166e9951650cbbb4b6e235e",
+    "semantic_hash": "67ecfadb8166e9951650cbbb4b6e235e"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/CPython3 engine.pushbutton/script.py": {
+    "mtime": 1781887857.4972634,
+    "ast_hash": "90e4953953049b1dbfd7e23cb2a59c7d",
+    "semantic_hash": "90e4953953049b1dbfd7e23cb2a59c7d"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/Create Button.pushbutton/script.py": {
+    "mtime": 1782068113.8681052,
+    "ast_hash": "e81af3d2ebe8918655d6a386a9501165",
+    "semantic_hash": "e81af3d2ebe8918655d6a386a9501165"
+  },
+  "AnonGee.extension/lib/path_resolver.py": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "1e9fdcacbfa2a29570ee4089161947b6",
+    "semantic_hash": "1e9fdcacbfa2a29570ee4089161947b6"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/__init__.py": {
+    "mtime": 1781887857.546153,
+    "ast_hash": "c65c97d1782d401039aa73da0a999b03",
+    "semantic_hash": "c65c97d1782d401039aa73da0a999b03"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/__init__.py": {
+    "mtime": 1784200416.107717,
+    "ast_hash": "5a4dad3423cdb888cca27db11bdb118b",
+    "semantic_hash": "5a4dad3423cdb888cca27db11bdb118b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/__init__.py": {
+    "mtime": 1782032199.6520925,
+    "ast_hash": "ac80361d90b3f251cc92845c578ef960",
+    "semantic_hash": "ac80361d90b3f251cc92845c578ef960"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/beams.py": {
+    "mtime": 1782553814.6580367,
+    "ast_hash": "0fd5075cfa29aec0e8afedce126875f5",
+    "semantic_hash": "0fd5075cfa29aec0e8afedce126875f5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/columns.py": {
+    "mtime": 1782125150.4111426,
+    "ast_hash": "bb749271b9b530c16b5591156776eed8",
+    "semantic_hash": "bb749271b9b530c16b5591156776eed8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/grids.py": {
+    "mtime": 1781887857.546785,
+    "ast_hash": "660f535cf549b65362d101dafe3da233",
+    "semantic_hash": "660f535cf549b65362d101dafe3da233"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/txn_failures.py": {
+    "mtime": 1781887857.5492635,
+    "ast_hash": "903bbd6ddb92ecf2692900e5df3b0851",
+    "semantic_hash": "903bbd6ddb92ecf2692900e5df3b0851"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/classify/__init__.py": {
+    "mtime": 1782032199.6489203,
+    "ast_hash": "d8757caecabe4e62ab1e08567384e1d2",
+    "semantic_hash": "d8757caecabe4e62ab1e08567384e1d2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/classify/layers.py": {
+    "mtime": 1784015521.2360485,
+    "ast_hash": "74dda1fc0f33d9b4d6e26e4b4b4da91d",
+    "semantic_hash": "74dda1fc0f33d9b4d6e26e4b4b4da91d"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/classify/marks.py": {
+    "mtime": 1783751164.3588178,
+    "ast_hash": "90a923698df1b6f9c66839b76beb4c74",
+    "semantic_hash": "90a923698df1b6f9c66839b76beb4c74"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/compat.py": {
+    "mtime": 1781887857.546785,
+    "ast_hash": "4b1127ac356c20c1b1bc67c57d8dcae4",
+    "semantic_hash": "4b1127ac356c20c1b1bc67c57d8dcae4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/config.py": {
+    "mtime": 1784195444.8493173,
+    "ast_hash": "dab908c5e467376d9ae7cbb3acf64478",
+    "semantic_hash": "dab908c5e467376d9ae7cbb3acf64478"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/geom/__init__.py": {
+    "mtime": 1782032199.6470823,
+    "ast_hash": "4009ebffd3c968d4f129aec26c093744",
+    "semantic_hash": "4009ebffd3c968d4f129aec26c093744"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/geom/compare.py": {
+    "mtime": 1781887857.546785,
+    "ast_hash": "d855e92f13278773b5cf2ab74af2ba7e",
+    "semantic_hash": "d855e92f13278773b5cf2ab74af2ba7e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/geom/shapes.py": {
+    "mtime": 1782107832.7832494,
+    "ast_hash": "cbffeddd7d6b77d4e6588922ac4f36a4",
+    "semantic_hash": "cbffeddd7d6b77d4e6588922ac4f36a4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/geom/transform.py": {
+    "mtime": 1781887857.5492635,
+    "ast_hash": "0b90ca5e32e77049fbce5813ca04b168",
+    "semantic_hash": "0b90ca5e32e77049fbce5813ca04b168"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/model.py": {
+    "mtime": 1783422717.0621123,
+    "ast_hash": "75e3cc65c32c63df5ded3cffc89f38d1",
+    "semantic_hash": "75e3cc65c32c63df5ded3cffc89f38d1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/readers/__init__.py": {
+    "mtime": 1782032199.6504405,
+    "ast_hash": "a1abb9cab48ee469a383470bf29cf3a9",
+    "semantic_hash": "a1abb9cab48ee469a383470bf29cf3a9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/readers/cad_links.py": {
+    "mtime": 1782032255.8980427,
+    "ast_hash": "9587eb7454297bd74c0833b2c12ef500",
+    "semantic_hash": "9587eb7454297bd74c0833b2c12ef500"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/readers/dxf_linker.py": {
+    "mtime": 1781887857.546785,
+    "ast_hash": "4aace12732d62936f5ef25039e684711",
+    "semantic_hash": "4aace12732d62936f5ef25039e684711"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/readers/dxf_reader.py": {
+    "mtime": 1783422717.0621123,
+    "ast_hash": "25b8b6514554c574713a33cb96c31bd0",
+    "semantic_hash": "25b8b6514554c574713a33cb96c31bd0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/readers/geometry_reader.py": {
+    "mtime": 1782032253.9860427,
+    "ast_hash": "7744f15ed08cccc471fac60caedebfaf",
+    "semantic_hash": "7744f15ed08cccc471fac60caedebfaf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/report.py": {
+    "mtime": 1784200049.282577,
+    "ast_hash": "db2329b7d9662a83710200de242af58f",
+    "semantic_hash": "db2329b7d9662a83710200de242af58f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/__init__.py": {
+    "mtime": 1781890446.865961,
+    "ast_hash": "600702fe793bf7c6be6bc6a289591a05",
+    "semantic_hash": "600702fe793bf7c6be6bc6a289591a05"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/generate_stress_columns_adversarial.py": {
+    "mtime": 1781975438.899813,
+    "ast_hash": "c2f0f051409d4ee5ddce1e010c581cd4",
+    "semantic_hash": "c2f0f051409d4ee5ddce1e010c581cd4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/generate_stress_columns_dxf.py": {
+    "mtime": 1781964179.8775349,
+    "ast_hash": "d3cef8bf59ca23d64b9e0b81cb19f9dd",
+    "semantic_hash": "d3cef8bf59ca23d64b9e0b81cb19f9dd"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_beam_text_sizing.py": {
+    "mtime": 1782219815.290993,
+    "ast_hash": "3c458a4d573ca744d94f7b591e4d07b9",
+    "semantic_hash": "3c458a4d573ca744d94f7b591e4d07b9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_circle_marks.py": {
+    "mtime": 1782038371.4422274,
+    "ast_hash": "1263095eb934faee30877070ff1cd11a",
+    "semantic_hash": "1263095eb934faee30877070ff1cd11a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_core_detection.py": {
+    "mtime": 1782106871.6855972,
+    "ast_hash": "08e6549e556d6a811117641f16ec9599",
+    "semantic_hash": "08e6549e556d6a811117641f16ec9599"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_core_wall_labels.py": {
+    "mtime": 1782146687.1783223,
+    "ast_hash": "0198eb6b96ca03b1c4819ab16c667f40",
+    "semantic_hash": "0198eb6b96ca03b1c4819ab16c667f40"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_curved_beams.py": {
+    "mtime": 1782280656.9604,
+    "ast_hash": "a1762e267e3cbb3745adc0e7d190c929",
+    "semantic_hash": "a1762e267e3cbb3745adc0e7d190c929"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_label_recovery.py": {
+    "mtime": 1782129254.2405646,
+    "ast_hash": "1fc2455a734deb7040902ac6e3972a3b",
+    "semantic_hash": "1fc2455a734deb7040902ac6e3972a3b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_oriented_circle_recovery.py": {
+    "mtime": 1782107999.0872593,
+    "ast_hash": "e5a1d81f11c65d1704c8f012fe1db882",
+    "semantic_hash": "e5a1d81f11c65d1704c8f012fe1db882"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_perimeter_beams.py": {
+    "mtime": 1782477225.8823137,
+    "ast_hash": "ae5731a28e2380e11b23d7918ea5d043",
+    "semantic_hash": "ae5731a28e2380e11b23d7918ea5d043"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_rectilinear_recovery.py": {
+    "mtime": 1782032317.3140414,
+    "ast_hash": "2a5bc123577bf0e791983cfb02f157e0",
+    "semantic_hash": "2a5bc123577bf0e791983cfb02f157e0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_schedule_parsing.py": {
+    "mtime": 1782407967.8801692,
+    "ast_hash": "1614a7ec2a45d0e3204aabdefbab4af1",
+    "semantic_hash": "1614a7ec2a45d0e3204aabdefbab4af1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_text_correction_ownership.py": {
+    "mtime": 1782110965.9821775,
+    "ast_hash": "0179b521ad00e93acf485fbc0e6ed631",
+    "semantic_hash": "0179b521ad00e93acf485fbc0e6ed631"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/unit_convert.py": {
+    "mtime": 1781887857.5492635,
+    "ast_hash": "860ec556c6f5c9f1b8989d51082c6b1c",
+    "semantic_hash": "860ec556c6f5c9f1b8989d51082c6b1c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/io/__init__.py": {
+    "mtime": 1781887857.5492635,
+    "ast_hash": "dbe8a7f1aa0c3f9a5de6df27c6739275",
+    "semantic_hash": "dbe8a7f1aa0c3f9a5de6df27c6739275"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/io/excel.py": {
+    "mtime": 1781887857.5518465,
+    "ast_hash": "fac0f2349a3479e6245dedc5207a67f2",
+    "semantic_hash": "fac0f2349a3479e6245dedc5207a67f2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/operations/__init__.py": {
+    "mtime": 1781887857.5518465,
+    "ast_hash": "00d95346ed334f55a138117653f7da7c",
+    "semantic_hash": "00d95346ed334f55a138117653f7da7c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/operations/bulk_delete.py": {
+    "mtime": 1781887857.5523474,
+    "ast_hash": "4d5f465f39a793291a218ddb0c0fe165",
+    "semantic_hash": "4d5f465f39a793291a218ddb0c0fe165"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/operations/bulk_rename.py": {
+    "mtime": 1781887857.5523474,
+    "ast_hash": "48892a803ac8b3c8dfd4bc7867eb9e81",
+    "semantic_hash": "48892a803ac8b3c8dfd4bc7867eb9e81"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/__init__.py": {
+    "mtime": 1781887857.5523474,
+    "ast_hash": "e99812b818353001ac2dd93ac2d3cd53",
+    "semantic_hash": "e99812b818353001ac2dd93ac2d3cd53"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/application.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "87ceea41f3437b82d3fc3ba21b3df14f",
+    "semantic_hash": "87ceea41f3437b82d3fc3ba21b3df14f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/compatibility.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "33e81c8f7ec7065a58d349d1436c0e66",
+    "semantic_hash": "33e81c8f7ec7065a58d349d1436c0e66"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/elements.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "a51a0044e1cfdca8f74fc386687d5434",
+    "semantic_hash": "a51a0044e1cfdca8f74fc386687d5434"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/filtering.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "637d62ebdda6ca6b84e8e5624e609475",
+    "semantic_hash": "637d62ebdda6ca6b84e8e5624e609475"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/geometry.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "1f0aad97272b9d30b6a8d127e5036eae",
+    "semantic_hash": "1f0aad97272b9d30b6a8d127e5036eae"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/parameters.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "09aa9926016a7d5724d253b59459673b",
+    "semantic_hash": "09aa9926016a7d5724d253b59459673b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/selection.py": {
+    "mtime": 1781887857.5530279,
+    "ast_hash": "58ec685e0390031b736c6f9527571947",
+    "semantic_hash": "58ec685e0390031b736c6f9527571947"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/transactions.py": {
+    "mtime": 1781887857.5532634,
+    "ast_hash": "040e962c596f50617f4739469dafdc14",
+    "semantic_hash": "040e962c596f50617f4739469dafdc14"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/units.py": {
+    "mtime": 1781887857.5532634,
+    "ast_hash": "be8e4ca68debbe6803efaa9bd90a8ed8",
+    "semantic_hash": "be8e4ca68debbe6803efaa9bd90a8ed8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/revit/views.py": {
+    "mtime": 1781887857.5532634,
+    "ast_hash": "2d34881882daa9cf269796621aaf1a26",
+    "semantic_hash": "2d34881882daa9cf269796621aaf1a26"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/structural/__init__.py": {
+    "mtime": 1781887857.5532634,
+    "ast_hash": "a950fbf8ff59c7b89eed8db0ea7a27f1",
+    "semantic_hash": "a950fbf8ff59c7b89eed8db0ea7a27f1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/structural/rebars.py": {
+    "mtime": 1781887857.5543287,
+    "ast_hash": "15a745610b4632f6b323307babbae387",
+    "semantic_hash": "15a745610b4632f6b323307babbae387"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/ui/__init__.py": {
+    "mtime": 1781887857.5543287,
+    "ast_hash": "25bb4e6660db026d4fb08eeb4e138c05",
+    "semantic_hash": "25bb4e6660db026d4fb08eeb4e138c05"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/ui/dialogs.py": {
+    "mtime": 1781887857.5548947,
+    "ast_hash": "9c4bc8f8d9bc449f549d9f44301a20d4",
+    "semantic_hash": "9c4bc8f8d9bc449f549d9f44301a20d4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/ui/forms.py": {
+    "mtime": 1781887857.5548947,
+    "ast_hash": "ab275a4093ffcdf2ddbd79986aa0d644",
+    "semantic_hash": "ab275a4093ffcdf2ddbd79986aa0d644"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/ui/xaml.py": {
+    "mtime": 1781887857.5548947,
+    "ast_hash": "3295c57277b82257512f9533952d3021",
+    "semantic_hash": "3295c57277b82257512f9533952d3021"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/utils/__init__.py": {
+    "mtime": 1781887857.5548947,
+    "ast_hash": "0adaa9c8a377c86ccb3121a017ab3902",
+    "semantic_hash": "0adaa9c8a377c86ccb3121a017ab3902"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/utils/helpers.py": {
+    "mtime": 1781887857.5556617,
+    "ast_hash": "966f872df7494975a64079e34f53c45d",
+    "semantic_hash": "966f872df7494975a64079e34f53c45d"
+  },
+  "extension.json": {
+    "mtime": 1782028152.9129665,
+    "ast_hash": "752a198845b1adc1142651ca69545701",
+    "semantic_hash": "752a198845b1adc1142651ca69545701"
+  },
+  "tools/CombineFileReader.py": {
+    "mtime": 1781793268.977033,
+    "ast_hash": "2fbd3ab0a20c38930a7f4f9d353ae51f",
+    "semantic_hash": "2fbd3ab0a20c38930a7f4f9d353ae51f"
+  },
+  "tools/FolderStructuralReader.py": {
+    "mtime": 1781793268.979829,
+    "ast_hash": "4871b2e899e21ebb13c117364ccd87fd",
+    "semantic_hash": "4871b2e899e21ebb13c117364ccd87fd"
+  },
+  "tools/auto_provision.py": {
+    "mtime": 1781887857.9817984,
+    "ast_hash": "3ee03c15f58c03bed736bf15ccd033db",
+    "semantic_hash": "3ee03c15f58c03bed736bf15ccd033db"
+  },
+  "tools/verify_toolkit.py": {
+    "mtime": 1781887857.9852633,
+    "ast_hash": "938992f1dadfd775570d0b997e98895f",
+    "semantic_hash": "938992f1dadfd775570d0b997e98895f"
+  },
+  ".claude/commands/brainstorming.md": {
+    "mtime": 1782407967.8656504,
+    "ast_hash": "a9c1c8fd0cd58760a492144dae93bdc6",
+    "semantic_hash": "a9c1c8fd0cd58760a492144dae93bdc6"
+  },
+  ".claude/commands/caveman.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "532e16f5fdb386a7d96c4d3a9cb59737",
+    "semantic_hash": "532e16f5fdb386a7d96c4d3a9cb59737"
+  },
+  ".claude/commands/dispatching-parallel-agents.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "9a0c487f564686dc40bac7268bac7c26",
+    "semantic_hash": "9a0c487f564686dc40bac7268bac7c26"
+  },
+  ".claude/commands/executing-plans.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "c40c551aadb093167265ebaee1525b53",
+    "semantic_hash": "c40c551aadb093167265ebaee1525b53"
+  },
+  ".claude/commands/finishing-a-development-branch.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "6a6e201fa956b6b126c2a07a8735c0f6",
+    "semantic_hash": "6a6e201fa956b6b126c2a07a8735c0f6"
+  },
+  ".claude/commands/graphify.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "c38e899ba93acb6321eb07c5523e5188",
+    "semantic_hash": "c38e899ba93acb6321eb07c5523e5188"
+  },
+  ".claude/commands/plan.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "e37341f4931382584a90605cb9a03a1b",
+    "semantic_hash": "e37341f4931382584a90605cb9a03a1b"
+  },
+  ".claude/commands/planning-with-files.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "95a49f724ca2a16539b9b8146854a345",
+    "semantic_hash": "95a49f724ca2a16539b9b8146854a345"
+  },
+  ".claude/commands/receiving-code-review.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "2fba4bbb4f9d4c876550dee78d28aa12",
+    "semantic_hash": "2fba4bbb4f9d4c876550dee78d28aa12"
+  },
+  ".claude/commands/requesting-code-review.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "1d37cc9294f9a11a460390cb0da0fb88",
+    "semantic_hash": "1d37cc9294f9a11a460390cb0da0fb88"
+  },
+  ".claude/commands/status.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "cfb2f4b2d272b0128e1af4a093506014",
+    "semantic_hash": "cfb2f4b2d272b0128e1af4a093506014"
+  },
+  ".claude/commands/subagent-driven-development.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "2c86b74ca49adac6dcb6ef640ae7ebfa",
+    "semantic_hash": "2c86b74ca49adac6dcb6ef640ae7ebfa"
+  },
+  ".claude/commands/systematic-debugging.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "63f407e2ca5044c20743c44dd753eff1",
+    "semantic_hash": "63f407e2ca5044c20743c44dd753eff1"
+  },
+  ".claude/commands/test-driven-development.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "de24cc20584d578fd0aefc2c9f88570c",
+    "semantic_hash": "de24cc20584d578fd0aefc2c9f88570c"
+  },
+  ".claude/commands/test.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "e32f7087d35448b9e1d3d7918b42efbf",
+    "semantic_hash": "e32f7087d35448b9e1d3d7918b42efbf"
+  },
+  ".claude/commands/using-git-worktrees.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "dfa82139dec017144c235ea40ad42cde",
+    "semantic_hash": "dfa82139dec017144c235ea40ad42cde"
+  },
+  ".claude/commands/using-superpowers.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "a3003ba5bbb593e5ebf463f06b9864ba",
+    "semantic_hash": "a3003ba5bbb593e5ebf463f06b9864ba"
+  },
+  ".claude/commands/verification-before-completion.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "f3cdb85eefb0df588de4f762097592d4",
+    "semantic_hash": "f3cdb85eefb0df588de4f762097592d4"
+  },
+  ".claude/commands/writing-plans.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "5874a9e096cab502dd5f20a45652f29c",
+    "semantic_hash": "5874a9e096cab502dd5f20a45652f29c"
+  },
+  ".claude/commands/writing-skills.md": {
+    "mtime": 1782407967.8658307,
+    "ast_hash": "99d45eb1421ab59eb2f046a4ba03c90a",
+    "semantic_hash": "99d45eb1421ab59eb2f046a4ba03c90a"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/MultiFilterParameter.pushbutton/bundle.yaml": {
+    "mtime": 1781793268.2179463,
+    "ast_hash": "8810ab36b52bb5be977187f3b9ff1ac5",
+    "semantic_hash": "8810ab36b52bb5be977187f3b9ff1ac5"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/OneFilterParameter.pushbutton/bundle.yaml": {
+    "mtime": 1781793268.2250328,
+    "ast_hash": "395f78cdd2f4127a92dde4f0a54d8c42",
+    "semantic_hash": "395f78cdd2f4127a92dde4f0a54d8c42"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/bundle.yaml": {
+    "mtime": 1781793268.2270436,
+    "ast_hash": "ebc583d8a985a8228ad78e2d8618b1ac",
+    "semantic_hash": "ebc583d8a985a8228ad78e2d8618b1ac"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/bundle.yaml": {
+    "mtime": 1782406683.3199434,
+    "ast_hash": "39a782e4b7271cd33dd25c555f648bf5",
+    "semantic_hash": "39a782e4b7271cd33dd25c555f648bf5"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/bundle.yaml": {
+    "mtime": 1781793268.2270436,
+    "ast_hash": "b1141d997d036bde6e1319dac15936cc",
+    "semantic_hash": "b1141d997d036bde6e1319dac15936cc"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/BIM Generation.pushbutton/bundle.yaml": {
+    "mtime": 1781793268.2290385,
+    "ast_hash": "9ae69033b0175d9919008b4e3bf5392e",
+    "semantic_hash": "9ae69033b0175d9919008b4e3bf5392e"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/CAD_data_extraction.md": {
+    "mtime": 1781793268.23197,
+    "ast_hash": "0b491c66913eb9fcbe88c56c44df67e3",
+    "semantic_hash": "0b491c66913eb9fcbe88c56c44df67e3"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/findings_report.md": {
+    "mtime": 1781793268.2326624,
+    "ast_hash": "a746379c1be5d91bd16b0bf9f9545859",
+    "semantic_hash": "a746379c1be5d91bd16b0bf9f9545859"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/implemented.md": {
+    "mtime": 1781887857.4852633,
+    "ast_hash": "03c9e5d15309602bde9d1eaed40b874a",
+    "semantic_hash": "03c9e5d15309602bde9d1eaed40b874a"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/placement.md": {
+    "mtime": 1781793268.2326624,
+    "ast_hash": "c6810696398ab190b1355a7c44080bd8",
+    "semantic_hash": "c6810696398ab190b1355a7c44080bd8"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/plan.md": {
+    "mtime": 1781793268.2326624,
+    "ast_hash": "d3625d9618a7955248e410734d86a878",
+    "semantic_hash": "d3625d9618a7955248e410734d86a878"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/progress_report.md": {
+    "mtime": 1781793268.2326624,
+    "ast_hash": "00923930b221aa85ea94bb96ba91106f",
+    "semantic_hash": "00923930b221aa85ea94bb96ba91106f"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/project_summary.md": {
+    "mtime": 1781793268.2326624,
+    "ast_hash": "7ca79cd04cbf8cca60be92df30758bc4",
+    "semantic_hash": "7ca79cd04cbf8cca60be92df30758bc4"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/.md/roadmap.md": {
+    "mtime": 1781887857.4852633,
+    "ast_hash": "0f126526ce10ea9ed3723db27e88171a",
+    "semantic_hash": "0f126526ce10ea9ed3723db27e88171a"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/bundle.yaml": {
+    "mtime": 1781887857.4852633,
+    "ast_hash": "4562b7320c7029b70d89094cdc187a36",
+    "semantic_hash": "4562b7320c7029b70d89094cdc187a36"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/bundle.yaml": {
+    "mtime": 1781793268.233033,
+    "ast_hash": "dd9aac36f9b30b247842849ee4c311b8",
+    "semantic_hash": "dd9aac36f9b30b247842849ee4c311b8"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/BBS Generator.pushbutton/bundle.yaml": {
+    "mtime": 1781887857.4901917,
+    "ast_hash": "61d26a4b5aeebc57d91c7d84607d36ea",
+    "semantic_hash": "61d26a4b5aeebc57d91c7d84607d36ea"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/Brand Guidelines.pushbutton/bundle.yaml": {
+    "mtime": 1781793268.2375934,
+    "ast_hash": "5688d358059950b711ca57a245b0b07d",
+    "semantic_hash": "5688d358059950b711ca57a245b0b07d"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/bundle.yaml": {
+    "mtime": 1781793268.2403574,
+    "ast_hash": "9ef67233b561ca0dab0e0a30cfdd8fc9",
+    "semantic_hash": "9ef67233b561ca0dab0e0a30cfdd8fc9"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/bundle.yaml": {
+    "mtime": 1784023095.9370108,
+    "ast_hash": "2c7f2bd7f8685991c962eb0ae4055735",
+    "semantic_hash": "2c7f2bd7f8685991c962eb0ae4055735"
+  },
+  "AnonGee.extension/AnonGee.tab/bundle.yaml": {
+    "mtime": 1781793268.256805,
+    "ast_hash": "3643b8e26c6359ca8bf59c87fcc28a2d",
+    "semantic_hash": "3643b8e26c6359ca8bf59c87fcc28a2d"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/API.md": {
+    "mtime": 1782032620.2340345,
+    "ast_hash": "a25185d722ea06fd199713222fb19a36",
+    "semantic_hash": "a25185d722ea06fd199713222fb19a36"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/README.md": {
+    "mtime": 1781975438.899813,
+    "ast_hash": "f6c44fe83b9708bd7c08bc358ea9bb9c",
+    "semantic_hash": "f6c44fe83b9708bd7c08bc358ea9bb9c"
+  },
+  "AnonGee_BIM_Tools_Brand_Guidelines.md": {
+    "mtime": 1781793268.973033,
+    "ast_hash": "6c2ac28da2552e41688fcb784037a54a",
+    "semantic_hash": "6c2ac28da2552e41688fcb784037a54a"
+  },
+  "README.md": {
+    "mtime": 1782028152.9129665,
+    "ast_hash": "0ab0e35706ff45b3d7df04e1d1d9d857",
+    "semantic_hash": "0ab0e35706ff45b3d7df04e1d1d9d857"
+  },
+  "UI_Templates/README.md": {
+    "mtime": 1781793268.973033,
+    "ast_hash": "fb3fd018a9535921aa71d5c89e218711",
+    "semantic_hash": "fb3fd018a9535921aa71d5c89e218711"
+  },
+  "findings.md": {
+    "mtime": 1784111937.053552,
+    "ast_hash": "7ebd353c85171fc91ee8cec0dcb40319",
+    "semantic_hash": "7ebd353c85171fc91ee8cec0dcb40319"
+  },
+  "modules_plan.md": {
+    "mtime": 1781887857.9817984,
+    "ast_hash": "a31a48cc78d747393cb40886d7fe4842",
+    "semantic_hash": "a31a48cc78d747393cb40886d7fe4842"
+  },
+  "progress.md": {
+    "mtime": 1784200416.108445,
+    "ast_hash": "79fb69bdd2e685f6b4e95f61d6b59ded",
+    "semantic_hash": "79fb69bdd2e685f6b4e95f61d6b59ded"
+  },
+  "task_plan.md": {
+    "mtime": 1784117876.7833462,
+    "ast_hash": "b2d7ddac488ebcbe0d2879742e902490",
+    "semantic_hash": "b2d7ddac488ebcbe0d2879742e902490"
+  },
+  "tools/data/Folder_Structure_Report.txt": {
+    "mtime": 1781887857.9852633,
+    "ast_hash": "d09d58b0c0646d164761c9bc9a04cb1f",
+    "semantic_hash": "d09d58b0c0646d164761c9bc9a04cb1f"
+  },
+  "tools/data/combined_codebase_report.txt": {
+    "mtime": 1781793268.9823236,
+    "ast_hash": "309b5722d01e48af39f0a1c8ff22e4ef",
+    "semantic_hash": "309b5722d01e48af39f0a1c8ff22e4ef"
+  },
+  "tools/data/requirements.txt": {
+    "mtime": 1781793268.9823236,
+    "ast_hash": "ef034cae542f04a996db8feadf24f920",
+    "semantic_hash": "ef034cae542f04a996db8feadf24f920"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_beam_snap.py": {
+    "mtime": 1783424874.7794895,
+    "ast_hash": "3996b1fe02fc0edb34fbf846fc7c48ee",
+    "semantic_hash": "3996b1fe02fc0edb34fbf846fc7c48ee"
+  },
+  "docs/superpowers/specs/2026-06-26-beam-join-and-deferred-console-design.md": {
+    "mtime": 1782492191.9462712,
+    "ast_hash": "610a86200e389ba45c5f544face3c78b",
+    "semantic_hash": "610a86200e389ba45c5f544face3c78b"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/MultiFilterParameter.pushbutton/ui.xaml": {
+    "mtime": 1781793268.2210329,
+    "ast_hash": "015081252292eadd8be1e58d06f52fc7",
+    "semantic_hash": "015081252292eadd8be1e58d06f52fc7"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/FilterParameter.splitbutton/OneFilterParameter.pushbutton/ui.xaml": {
+    "mtime": 1781793268.2270436,
+    "ast_hash": "fd1c9d3e986e4308174ea48c616e0cde",
+    "semantic_hash": "fd1c9d3e986e4308174ea48c616e0cde"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/picker.xaml": {
+    "mtime": 1782406683.3199434,
+    "ast_hash": "b30e0dec80bc41be038246ce21779f74",
+    "semantic_hash": "b30e0dec80bc41be038246ce21779f74"
+  },
+  "AnonGee.extension/AnonGee.tab/Advance.panel/Parameter Combine.pushbutton/ui.xaml": {
+    "mtime": 1782406683.3199434,
+    "ast_hash": "5f53a9945a98cb82dfe655e4b64402de",
+    "semantic_hash": "5f53a9945a98cb82dfe655e4b64402de"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/BIM Generation.pushbutton/ui.xaml": {
+    "mtime": 1781887857.4852633,
+    "ast_hash": "0f855a606b801cd2252933d55ac8b2d6",
+    "semantic_hash": "0f855a606b801cd2252933d55ac8b2d6"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/link_options.xaml": {
+    "mtime": 1781975438.8835263,
+    "ast_hash": "56f4512423872dfcfb45e75e4e41a30c",
+    "semantic_hash": "56f4512423872dfcfb45e75e4e41a30c"
+  },
+  "AnonGee.extension/AnonGee.tab/Core.panel/CAD to BIM.pushbutton/ui.xaml": {
+    "mtime": 1784195476.0213184,
+    "ast_hash": "4a00b9b93889f7414c58b2c0eea66ef1",
+    "semantic_hash": "4a00b9b93889f7414c58b2c0eea66ef1"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/Brand Guidelines.pushbutton/ui.xaml": {
+    "mtime": 1781793268.2383037,
+    "ast_hash": "fd37bca9869acaae0aa4174456ec6183",
+    "semantic_hash": "fd37bca9869acaae0aa4174456ec6183"
+  },
+  "AnonGee.extension/AnonGee.tab/Dev.panel/Create Button.pushbutton/ui.xaml": {
+    "mtime": 1781963984.795518,
+    "ast_hash": "5fe7cbaf888f977a96d4972eafb1ad3e",
+    "semantic_hash": "5fe7cbaf888f977a96d4972eafb1ad3e"
+  },
+  "AnonGee.extension/Resources/AnonGeeTheme.xaml": {
+    "mtime": 1781793268.2570329,
+    "ast_hash": "bfad440bc9fdd6037fcb559062450747",
+    "semantic_hash": "bfad440bc9fdd6037fcb559062450747"
+  },
+  "AnonGee.extension/Resources/Colors.xaml": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "f1e349bb9f05e6ca5dec06c254301cf2",
+    "semantic_hash": "f1e349bb9f05e6ca5dec06c254301cf2"
+  },
+  "AnonGee.extension/Resources/Controls.xaml": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "c636edc26cff32d8cd2f2552d750bffc",
+    "semantic_hash": "c636edc26cff32d8cd2f2552d750bffc"
+  },
+  "AnonGee.extension/Resources/Icons.xaml": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "4772124fa05fd733aa00d71c14cebea5",
+    "semantic_hash": "4772124fa05fd733aa00d71c14cebea5"
+  },
+  "AnonGee.extension/Resources/Panels.xaml": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "cd9eca774577b4da3041bf1becb33c46",
+    "semantic_hash": "cd9eca774577b4da3041bf1becb33c46"
+  },
+  "AnonGee.extension/Resources/Typography.xaml": {
+    "mtime": 1781793268.2594407,
+    "ast_hash": "6c56e612cdd33dee7e206a1c21561472",
+    "semantic_hash": "6c56e612cdd33dee7e206a1c21561472"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/slabs.py": {
+    "mtime": 1784111888.4908905,
+    "ast_hash": "0634a3c52dde502c6f2dd66df21531ac",
+    "semantic_hash": "0634a3c52dde502c6f2dd66df21531ac"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/demo_slabs.py": {
+    "mtime": 1784111909.543681,
+    "ast_hash": "c8bf02569a72c894bf3b19b600ac93dc",
+    "semantic_hash": "c8bf02569a72c894bf3b19b600ac93dc"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/make_stress_plan.py": {
+    "mtime": 1784029924.3545535,
+    "ast_hash": "82be72d579114136b1fce75dce9165ea",
+    "semantic_hash": "82be72d579114136b1fce75dce9165ea"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/replay_beams.py": {
+    "mtime": 1783422717.0622375,
+    "ast_hash": "25ac1a3165f69d7b7900b84ae24598ea",
+    "semantic_hash": "25ac1a3165f69d7b7900b84ae24598ea"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_beam_stress.py": {
+    "mtime": 1784029876.6105545,
+    "ast_hash": "22243cfed1b71e5a739b7e505b4662cd",
+    "semantic_hash": "22243cfed1b71e5a739b7e505b4662cd"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete FillPatterns.pushbutton/script.py": {
+    "mtime": 1784023095.9304695,
+    "ast_hash": "00da384562b60d2420dcd336a212b113",
+    "semantic_hash": "00da384562b60d2420dcd336a212b113"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete FillPatterns.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9304695,
+    "ast_hash": "ed4f88d79560530caa9145e5a92f9b44",
+    "semantic_hash": "ed4f88d79560530caa9145e5a92f9b44"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/script.py": {
+    "mtime": 1784023095.9314146,
+    "ast_hash": "9fc11a9ade2754deb591373b9c611a21",
+    "semantic_hash": "9fc11a9ade2754deb591373b9c611a21"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9314146,
+    "ast_hash": "bd4ad8ab6a7eab43bd870360220937db",
+    "semantic_hash": "bd4ad8ab6a7eab43bd870360220937db"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LineStyles.pushbutton/script.py": {
+    "mtime": 1784023095.9318955,
+    "ast_hash": "506c18260cb870ec8d1f5b887e5d5173",
+    "semantic_hash": "506c18260cb870ec8d1f5b887e5d5173"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LineStyles.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9318955,
+    "ast_hash": "d04fceeaf74bf536442890ef8dae4edd",
+    "semantic_hash": "d04fceeaf74bf536442890ef8dae4edd"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename FillPatterns.pushbutton/script.py": {
+    "mtime": 1784023095.9326773,
+    "ast_hash": "6b7dbfcd6ec58afea1f283ce33015e83",
+    "semantic_hash": "6b7dbfcd6ec58afea1f283ce33015e83"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename FillPatterns.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9326773,
+    "ast_hash": "0bac7f250bd941d53dc3d8d4fc087b68",
+    "semantic_hash": "0bac7f250bd941d53dc3d8d4fc087b68"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LinePatterns.pushbutton/script.py": {
+    "mtime": 1784023095.9331563,
+    "ast_hash": "d59223925f8716c4ae407cfac0174b4f",
+    "semantic_hash": "d59223925f8716c4ae407cfac0174b4f"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LinePatterns.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9331563,
+    "ast_hash": "f911baf08893d970034006b5df6c2086",
+    "semantic_hash": "f911baf08893d970034006b5df6c2086"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LineStyles.pushbutton/script.py": {
+    "mtime": 1784023095.9335089,
+    "ast_hash": "6a82919a2b87bdf1af2eb52e2dbfe8b3",
+    "semantic_hash": "6a82919a2b87bdf1af2eb52e2dbfe8b3"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LineStyles.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9335089,
+    "ast_hash": "42a39dff6faca9851597762771356dbf",
+    "semantic_hash": "42a39dff6faca9851597762771356dbf"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Copy Rebar Visibility.pushbutton/script.py": {
+    "mtime": 1784023095.9338448,
+    "ast_hash": "84c916f4b2f5c7496fe557dd41de12c2",
+    "semantic_hash": "84c916f4b2f5c7496fe557dd41de12c2"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Copy Rebar Visibility.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9338448,
+    "ast_hash": "f1f5739e8c6866470b167a612bf71e2c",
+    "semantic_hash": "f1f5739e8c6866470b167a612bf71e2c"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Obscured Rebar.pushbutton/script.py": {
+    "mtime": 1784023095.9344034,
+    "ast_hash": "edd7e1e11cae5b2a602b31abc317ceca",
+    "semantic_hash": "edd7e1e11cae5b2a602b31abc317ceca"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Obscured Rebar.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9344034,
+    "ast_hash": "6271dab1fa1fbb7b2041e9442be725ed",
+    "semantic_hash": "6271dab1fa1fbb7b2041e9442be725ed"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/ExportSchedule.pushbutton/script.py": {
+    "mtime": 1784023095.9354098,
+    "ast_hash": "af0d674162162c8b336b88e046f48ce8",
+    "semantic_hash": "af0d674162162c8b336b88e046f48ce8"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/ExportSchedule.pushbutton/ui.xaml": {
+    "mtime": 1784023095.9354098,
+    "ast_hash": "adf18a527df5de6dbe6cba7105e9a6ed",
+    "semantic_hash": "adf18a527df5de6dbe6cba7105e9a6ed"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/RVTLinked.pushbutton/script.py": {
+    "mtime": 1784023095.936007,
+    "ast_hash": "674b84b206690f1d9df00a88d8fb4807",
+    "semantic_hash": "674b84b206690f1d9df00a88d8fb4807"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/RotateColumn.pushbutton/script.py": {
+    "mtime": 1784023095.9365969,
+    "ast_hash": "c91868ff3fc23bd54ce7911912347a83",
+    "semantic_hash": "c91868ff3fc23bd54ce7911912347a83"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/SelfDim.pushbutton/script.py": {
+    "mtime": 1784023095.9370108,
+    "ast_hash": "be4daf30a245324cd5492cc0ba0ec6c6",
+    "semantic_hash": "be4daf30a245324cd5492cc0ba0ec6c6"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/builders/stairs.py": {
+    "mtime": 1784200028.9041352,
+    "ast_hash": "3e77234545b8c0b557747dc1535878c6",
+    "semantic_hash": "3e77234545b8c0b557747dc1535878c6"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/slab_outlines.py": {
+    "mtime": 1784116854.156481,
+    "ast_hash": "def5b408bd5691cf74cff8ace792ec0e",
+    "semantic_hash": "def5b408bd5691cf74cff8ace792ec0e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/stair_layout.py": {
+    "mtime": 1784200329.1265707,
+    "ast_hash": "e0f313f1092a51895b378e8ef689eb2e",
+    "semantic_hash": "e0f313f1092a51895b378e8ef689eb2e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.26.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.155686,
+    "ast_hash": "ec9130c26c10d15274f2fed783c8b6c9",
+    "semantic_hash": "ec9130c26c10d15274f2fed783c8b6c9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.26.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.156137,
+    "ast_hash": "d24b1ceb9876cb9f739cdaae3b29a82a",
+    "semantic_hash": "d24b1ceb9876cb9f739cdaae3b29a82a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.26.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.156137,
+    "ast_hash": "04b3cecc8ad9aeb56a13fcb7e1f252d8",
+    "semantic_hash": "04b3cecc8ad9aeb56a13fcb7e1f252d8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.27.0_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.156137,
+    "ast_hash": "345b0aad948c802942311d2ca5b49410",
+    "semantic_hash": "345b0aad948c802942311d2ca5b49410"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.27.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "bfc4073bc0810b438556196e6ac92abf",
+    "semantic_hash": "bfc4073bc0810b438556196e6ac92abf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.27.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "8aec42e57e89d17f5e5263cb714e2b13",
+    "semantic_hash": "8aec42e57e89d17f5e5263cb714e2b13"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.27.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "1180d5cd24257d1fb646765e7e9af6ea",
+    "semantic_hash": "1180d5cd24257d1fb646765e7e9af6ea"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.28.1_beam_test10_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "2a062054999335b60b6a9651f5432623",
+    "semantic_hash": "2a062054999335b60b6a9651f5432623"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.28.1_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "5fcf70dfff6c04aafe6c355f76366576",
+    "semantic_hash": "5fcf70dfff6c04aafe6c355f76366576"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.28.1_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "a410f48ad6ae1f76b26582388afdff66",
+    "semantic_hash": "a410f48ad6ae1f76b26582388afdff66"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.28.1_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "40d01194157d0bd0cb7da23f9be595b0",
+    "semantic_hash": "40d01194157d0bd0cb7da23f9be595b0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.28.1_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "02c9f7866bb5968c63d3ae5c8e27583a",
+    "semantic_hash": "02c9f7866bb5968c63d3ae5c8e27583a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.29.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "02c9f7866bb5968c63d3ae5c8e27583a",
+    "semantic_hash": "02c9f7866bb5968c63d3ae5c8e27583a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.30.0_beam_test10_with_textmode.json": {
+    "mtime": 1783750937.1570575,
+    "ast_hash": "4597ebe4cee9def8f5b8a25764391210",
+    "semantic_hash": "4597ebe4cee9def8f5b8a25764391210"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.30.0_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.1610575,
+    "ast_hash": "74c40e130ff63839cc8e3a31126f635a",
+    "semantic_hash": "74c40e130ff63839cc8e3a31126f635a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.30.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.1610575,
+    "ast_hash": "23f9fb06e1774d668ee8bb778e1c26c3",
+    "semantic_hash": "23f9fb06e1774d668ee8bb778e1c26c3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.30.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.1610575,
+    "ast_hash": "626a4e815b55efd357cb425b8df7011a",
+    "semantic_hash": "626a4e815b55efd357cb425b8df7011a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.30.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.1610575,
+    "ast_hash": "937113f4d781ee0b35cd5623f4f75328",
+    "semantic_hash": "937113f4d781ee0b35cd5623f4f75328"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.31.0_beam_test10_with_textmode.json": {
+    "mtime": 1783750937.1610575,
+    "ast_hash": "3b0bf659bce879200c6c6ee4fd5f1bef",
+    "semantic_hash": "3b0bf659bce879200c6c6ee4fd5f1bef"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.31.0_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.1650574,
+    "ast_hash": "a04e1248bbf0b7cbe1acfcda36db0abe",
+    "semantic_hash": "a04e1248bbf0b7cbe1acfcda36db0abe"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.31.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.1650574,
+    "ast_hash": "5c83cbf2fbde470087b0dd76d1dac95c",
+    "semantic_hash": "5c83cbf2fbde470087b0dd76d1dac95c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.31.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.1650574,
+    "ast_hash": "a8966acf566e70744e1003cc74b84067",
+    "semantic_hash": "a8966acf566e70744e1003cc74b84067"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.31.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.1650574,
+    "ast_hash": "a0c069d535932d5e86ca91607a357276",
+    "semantic_hash": "a0c069d535932d5e86ca91607a357276"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test10_with_textmode.json": {
+    "mtime": 1783750937.3010576,
+    "ast_hash": "e1f2e3bcf136f35bc06268c4a054bff8",
+    "semantic_hash": "e1f2e3bcf136f35bc06268c4a054bff8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test11_with_textmode.json": {
+    "mtime": 1783750937.3010576,
+    "ast_hash": "3ee77006fba954ed4e3f0e9480599ed5",
+    "semantic_hash": "3ee77006fba954ed4e3f0e9480599ed5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test14_with_textmode.json": {
+    "mtime": 1783750937.3010576,
+    "ast_hash": "9b28f789327f082081acb729caa5d0d2",
+    "semantic_hash": "9b28f789327f082081acb729caa5d0d2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.3050575,
+    "ast_hash": "55173b910abbc715c4ac723f60c91c3a",
+    "semantic_hash": "55173b910abbc715c4ac723f60c91c3a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.3050575,
+    "ast_hash": "1fe65f03124e2d13aaf0355a4fe865b7",
+    "semantic_hash": "1fe65f03124e2d13aaf0355a4fe865b7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.3050575,
+    "ast_hash": "3b0580c0e38d02bb1e598f6c88355422",
+    "semantic_hash": "3b0580c0e38d02bb1e598f6c88355422"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.32.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.3050575,
+    "ast_hash": "1a44d5ab3b792f1b3f69cb05e807c5b1",
+    "semantic_hash": "1a44d5ab3b792f1b3f69cb05e807c5b1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test11_with_textmode.json": {
+    "mtime": 1783750937.3050575,
+    "ast_hash": "f352b417786ca50316e4b6976323a238",
+    "semantic_hash": "f352b417786ca50316e4b6976323a238"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test14_with_textmode.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "cdf7e0407bafacb7c230cc454905fae1",
+    "semantic_hash": "cdf7e0407bafacb7c230cc454905fae1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test15_with_textmode.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "764d01eb43f416647efdce71a8b7f924",
+    "semantic_hash": "764d01eb43f416647efdce71a8b7f924"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "1fe65f03124e2d13aaf0355a4fe865b7",
+    "semantic_hash": "1fe65f03124e2d13aaf0355a4fe865b7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test18_redrawn-fix_with_textmode.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "3b0580c0e38d02bb1e598f6c88355422",
+    "semantic_hash": "3b0580c0e38d02bb1e598f6c88355422"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.33.0_beam_test19_with_textmode.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "1a44d5ab3b792f1b3f69cb05e807c5b1",
+    "semantic_hash": "1a44d5ab3b792f1b3f69cb05e807c5b1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_beam_0.25.0_to_0.34.0/0.34.0_beam_test20_StressPlan-Beams.json": {
+    "mtime": 1783750937.3090575,
+    "ast_hash": "8963958e5a9397dfff5ea13073d7a936",
+    "semantic_hash": "8963958e5a9397dfff5ea13073d7a936"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_10th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_10th_test_cad2bim_without_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "88fd728e82b716966135d59a5b15f706",
+    "semantic_hash": "88fd728e82b716966135d59a5b15f706"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_18th_test_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "6ecb40e413ce874c81bdbac0c0cbd56c",
+    "semantic_hash": "6ecb40e413ce874c81bdbac0c0cbd56c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_18th_test_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "af0beebe768014162dd1b4ea068d9605",
+    "semantic_hash": "af0beebe768014162dd1b4ea068d9605"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_18th_test_fix_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "f5f0b6b1a5ebad59500aa14ac33dcebf",
+    "semantic_hash": "f5f0b6b1a5ebad59500aa14ac33dcebf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.16.1_version_18th_test_fix_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "3ade8ea231b61e186f937317e5afaf6b",
+    "semantic_hash": "3ade8ea231b61e186f937317e5afaf6b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.17.0_version_10th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.17.0_version_18th_test_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "b4c2419cd513992ca221bd06457b6554",
+    "semantic_hash": "b4c2419cd513992ca221bd06457b6554"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.17.0_version_18th_test_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "7668069ff310650c7340df68ab79d628",
+    "semantic_hash": "7668069ff310650c7340df68ab79d628"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.17.0_version_18th_test_fix_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "f5f0b6b1a5ebad59500aa14ac33dcebf",
+    "semantic_hash": "f5f0b6b1a5ebad59500aa14ac33dcebf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.17.0_version_18th_test_fix_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "3ade8ea231b61e186f937317e5afaf6b",
+    "semantic_hash": "3ade8ea231b61e186f937317e5afaf6b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_10th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_10th_test_cad2bim_without_textLayer.json": {
+    "mtime": 1783750937.3810575,
+    "ast_hash": "88fd728e82b716966135d59a5b15f706",
+    "semantic_hash": "88fd728e82b716966135d59a5b15f706"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_18th_test_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "74f0842d0255eb6a4b5aa2f4d439a6ec",
+    "semantic_hash": "74f0842d0255eb6a4b5aa2f4d439a6ec"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_18th_test_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "8fbd4d1a4ca84cf0522bead5019c16a1",
+    "semantic_hash": "8fbd4d1a4ca84cf0522bead5019c16a1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_18th_test_fix_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "fdfe0422c2ab94a7f7967e6f180f0929",
+    "semantic_hash": "fdfe0422c2ab94a7f7967e6f180f0929"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.18.0_version_18th_test_fix_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "748d347fea1615f909a4620a709b924a",
+    "semantic_hash": "748d347fea1615f909a4620a709b924a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_10th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_10th_test_cad2bim_without_textLayer.json": {
+    "mtime": 1783750937.3850574,
+    "ast_hash": "88fd728e82b716966135d59a5b15f706",
+    "semantic_hash": "88fd728e82b716966135d59a5b15f706"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_13th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4490576,
+    "ast_hash": "968e98b6555fa19d77ed7a7949397826",
+    "semantic_hash": "968e98b6555fa19d77ed7a7949397826"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_15th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4490576,
+    "ast_hash": "983d9a884b61a8f38b0e6e4ee069d2ed",
+    "semantic_hash": "983d9a884b61a8f38b0e6e4ee069d2ed"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_15th_test_cad2bim_without_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "a9f9d16ec2afe69ad62b72d6a41f68bf",
+    "semantic_hash": "a9f9d16ec2afe69ad62b72d6a41f68bf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_16th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "f373095194085cbfbc0e4f234082bf61",
+    "semantic_hash": "f373095194085cbfbc0e4f234082bf61"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_17th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "b01d0b977d88882ba6f0acfa2038b47b",
+    "semantic_hash": "b01d0b977d88882ba6f0acfa2038b47b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_17th_test_cad2bim_without_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "725e0ffc3cbd2ec2100187783a6a6251",
+    "semantic_hash": "725e0ffc3cbd2ec2100187783a6a6251"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_18th_test_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "04d6cc172dcef305efa03d583e94119c",
+    "semantic_hash": "04d6cc172dcef305efa03d583e94119c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_18th_test_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "29999fe202c7088d546915db06791b69",
+    "semantic_hash": "29999fe202c7088d546915db06791b69"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_18th_test_fix_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "0299cf878a71945132003e1942485196",
+    "semantic_hash": "0299cf878a71945132003e1942485196"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.20.0_version_18th_test_fix_cad2bim_without_schedule_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "57300845169635c184f90a8668efcce1",
+    "semantic_hash": "57300845169635c184f90a8668efcce1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_10th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_13th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "968e98b6555fa19d77ed7a7949397826",
+    "semantic_hash": "968e98b6555fa19d77ed7a7949397826"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_15th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "983d9a884b61a8f38b0e6e4ee069d2ed",
+    "semantic_hash": "983d9a884b61a8f38b0e6e4ee069d2ed"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_16th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.4530575,
+    "ast_hash": "f373095194085cbfbc0e4f234082bf61",
+    "semantic_hash": "f373095194085cbfbc0e4f234082bf61"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_17th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "f877aa1c4a56c4eb8ad7d3a8bdaf8e38",
+    "semantic_hash": "f877aa1c4a56c4eb8ad7d3a8bdaf8e38"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_18th_test_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "ef2995c0bbd468c4cbcc870ad525c021",
+    "semantic_hash": "ef2995c0bbd468c4cbcc870ad525c021"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_18th_test_cad2bim_with_textLayer.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "e0be7cbe9a590237363b76cba35d19ca",
+    "semantic_hash": "e0be7cbe9a590237363b76cba35d19ca"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/0.22.0_version_18th_test_fix_cad2bim_with_schedule_textLayer.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "a7f7e70d8121b2e7407ddd10b7758ea0",
+    "semantic_hash": "a7f7e70d8121b2e7407ddd10b7758ea0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/10test_cad2bim_0.23.0_with_text.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0",
+    "semantic_hash": "fe4c6a6deed1b8fad34c2646d5a4e5d0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/10test_cad2bim_0.23.0_without_text.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "88fd728e82b716966135d59a5b15f706",
+    "semantic_hash": "88fd728e82b716966135d59a5b15f706"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/13test_cad2bim_0.23.0_with_text.json": {
+    "mtime": 1783750937.8210576,
+    "ast_hash": "968e98b6555fa19d77ed7a7949397826",
+    "semantic_hash": "968e98b6555fa19d77ed7a7949397826"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/15test_cad2bim_0.23.0_with_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "983d9a884b61a8f38b0e6e4ee069d2ed",
+    "semantic_hash": "983d9a884b61a8f38b0e6e4ee069d2ed"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/16test_cad2bim_0.23.0_with_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "f373095194085cbfbc0e4f234082bf61",
+    "semantic_hash": "f373095194085cbfbc0e4f234082bf61"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/17test_cad2bim_0.23.0_with_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "f877aa1c4a56c4eb8ad7d3a8bdaf8e38",
+    "semantic_hash": "f877aa1c4a56c4eb8ad7d3a8bdaf8e38"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/17test_cad2bim_0.23.0_without_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "725e0ffc3cbd2ec2100187783a6a6251",
+    "semantic_hash": "725e0ffc3cbd2ec2100187783a6a6251"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.0_fragmented_with_schedule_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "ec10ea23eef4d7297d16d2c32bb83a1d",
+    "semantic_hash": "ec10ea23eef4d7297d16d2c32bb83a1d"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.0_fragmented_without_schedule_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "d8b4fa7d092b8a1d5285aa0c9b8ae7e2",
+    "semantic_hash": "d8b4fa7d092b8a1d5285aa0c9b8ae7e2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.0_redrawn-fix_with_Schedule_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "f737cfdc1b8c81766580a4335700fd14",
+    "semantic_hash": "f737cfdc1b8c81766580a4335700fd14"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.0_redrawn-fix_without_Schedule_text.json": {
+    "mtime": 1783750937.8250575,
+    "ast_hash": "7e85bf24ce24992ea86b1551c6e8c486",
+    "semantic_hash": "7e85bf24ce24992ea86b1551c6e8c486"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.1_fragmented_with_schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "94fc4cfd4c10389ce24af75d403604a3",
+    "semantic_hash": "94fc4cfd4c10389ce24af75d403604a3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.1_fragmented_without_schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "f36de3d2186bd6307bba09454e3997d3",
+    "semantic_hash": "f36de3d2186bd6307bba09454e3997d3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.1_redrawn-fix_with_Schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "ea8ee0f0c9c6d862e7f0c71636538b79",
+    "semantic_hash": "ea8ee0f0c9c6d862e7f0c71636538b79"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.1_redrawn-fix_without_Schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "7e85bf24ce24992ea86b1551c6e8c486",
+    "semantic_hash": "7e85bf24ce24992ea86b1551c6e8c486"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.2_fragmented_with_schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "94fc4cfd4c10389ce24af75d403604a3",
+    "semantic_hash": "94fc4cfd4c10389ce24af75d403604a3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.2_fragmented_without_schedule_text.json": {
+    "mtime": 1783750937.9930575,
+    "ast_hash": "f36de3d2186bd6307bba09454e3997d3",
+    "semantic_hash": "f36de3d2186bd6307bba09454e3997d3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.2_redrawn-fix_with_Schedule_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "c94e9394f7ab80e5d0aac1575a315ebf",
+    "semantic_hash": "c94e9394f7ab80e5d0aac1575a315ebf"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/18test_cad2bim_0.23.2_redrawn-fix_without_Schedule_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "7e85bf24ce24992ea86b1551c6e8c486",
+    "semantic_hash": "7e85bf24ce24992ea86b1551c6e8c486"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/19test_cad2bim_0.23.1_no_schedule_with_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "e0be7cbe9a590237363b76cba35d19ca",
+    "semantic_hash": "e0be7cbe9a590237363b76cba35d19ca"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/19test_cad2bim_0.23.1_no_schedule_without_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "49054e913751afe8c1f864d56a366001",
+    "semantic_hash": "49054e913751afe8c1f864d56a366001"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/19test_cad2bim_0.23.2_no_schedule_with_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "68590366f4fcb2980bfd4b7c73f1c702",
+    "semantic_hash": "68590366f4fcb2980bfd4b7c73f1c702"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/19test_cad2bim_0.23.2_no_schedule_without_text.json": {
+    "mtime": 1783750938.2410574,
+    "ast_hash": "49054e913751afe8c1f864d56a366001",
+    "semantic_hash": "49054e913751afe8c1f864d56a366001"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/19test_cad2bim_0.24.0_no_schedule_with_text.json": {
+    "mtime": 1783750938.2970574,
+    "ast_hash": "5628b300e814d71a45459548b1eb732b",
+    "semantic_hash": "5628b300e814d71a45459548b1eb732b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/new 18test_cad2bim_0.23.0_no_schedule_only_text.json": {
+    "mtime": 1783750938.2970574,
+    "ast_hash": "e0be7cbe9a590237363b76cba35d19ca",
+    "semantic_hash": "e0be7cbe9a590237363b76cba35d19ca"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_column_0.10.0_to_0.24.0/new 18test_cad2bim_0.23.0_no_schedule_without_text.json": {
+    "mtime": 1783750938.2970574,
+    "ast_hash": "3dade2fbd9ef82dfacc92a11d42f6413",
+    "semantic_hash": "3dade2fbd9ef82dfacc92a11d42f6413"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_slab_0.35.0_to_/0.35.0_slab_test10_with_textmode.json": {
+    "mtime": 1783750938.3010576,
+    "ast_hash": "1402229749b5d6ac4acd1d5af3b780a1",
+    "semantic_hash": "1402229749b5d6ac4acd1d5af3b780a1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_slab_0.35.0_to_/0.35.0_slab_test15_with_textmode.json": {
+    "mtime": 1783750938.3010576,
+    "ast_hash": "62828a49e82eb0659af9c96e549342e7",
+    "semantic_hash": "62828a49e82eb0659af9c96e549342e7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_slab_0.35.0_to_/0.35.0_slab_test18_fragmanted_with_textmode.json": {
+    "mtime": 1783750938.3010576,
+    "ast_hash": "f66858d3cf31c3786295c6ebd5dea4e2",
+    "semantic_hash": "f66858d3cf31c3786295c6ebd5dea4e2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_slab_0.35.0_to_/0.35.0_slab_test19_with_textmode.json": {
+    "mtime": 1783750938.3010576,
+    "ast_hash": "f953b6c059a9b84501185abd48c65cf9",
+    "semantic_hash": "f953b6c059a9b84501185abd48c65cf9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.archive_fixtures/.old_fixtures_json/old_slab_0.35.0_to_/0.35.0_slab_test20_with_textmode.json": {
+    "mtime": 1783750938.3010576,
+    "ast_hash": "00e0c0bbf97b2d69dd4be1aeeb4e9527",
+    "semantic_hash": "00e0c0bbf97b2d69dd4be1aeeb4e9527"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test0_with_textmode.json": {
+    "mtime": 1784023095.9370108,
+    "ast_hash": "c4508369dc99aa56b8d4685d064d926a",
+    "semantic_hash": "c4508369dc99aa56b8d4685d064d926a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "b51a6552610ce1eaf89641cc804e0ac4",
+    "semantic_hash": "b51a6552610ce1eaf89641cc804e0ac4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "a6c827d8d4a941432546d757e5ae3567",
+    "semantic_hash": "a6c827d8d4a941432546d757e5ae3567"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "ecaf4097367beeb658f7377a61e43c9f",
+    "semantic_hash": "ecaf4097367beeb658f7377a61e43c9f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "66a137cb6187d8e9590019ce6b0e0a6c",
+    "semantic_hash": "66a137cb6187d8e9590019ce6b0e0a6c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "e6b3cdc2c48c0d5aaac736dca27ceb93",
+    "semantic_hash": "e6b3cdc2c48c0d5aaac736dca27ceb93"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "1be89e66e39cb1f3840c2fa057fbf545",
+    "semantic_hash": "1be89e66e39cb1f3840c2fa057fbf545"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.36.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "8741ea2f28c41d2eac8a171391eaa63e",
+    "semantic_hash": "8741ea2f28c41d2eac8a171391eaa63e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test0_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "3c86b0de1790c4b8f96eb8d7324fe0d9",
+    "semantic_hash": "3c86b0de1790c4b8f96eb8d7324fe0d9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "b51a6552610ce1eaf89641cc804e0ac4",
+    "semantic_hash": "b51a6552610ce1eaf89641cc804e0ac4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "a6c827d8d4a941432546d757e5ae3567",
+    "semantic_hash": "a6c827d8d4a941432546d757e5ae3567"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "ecaf4097367beeb658f7377a61e43c9f",
+    "semantic_hash": "ecaf4097367beeb658f7377a61e43c9f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.9392312,
+    "ast_hash": "e9c8cd7b9a664ae0014d6d89ed7d4b2e",
+    "semantic_hash": "e9c8cd7b9a664ae0014d6d89ed7d4b2e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "fc81c38ef1f16a3c8aa637732a0118ca",
+    "semantic_hash": "fc81c38ef1f16a3c8aa637732a0118ca"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "270eb9f63c97ea7e34b200ccfe87a412",
+    "semantic_hash": "270eb9f63c97ea7e34b200ccfe87a412"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "8741ea2f28c41d2eac8a171391eaa63e",
+    "semantic_hash": "8741ea2f28c41d2eac8a171391eaa63e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.37.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "079f3fb8d67afb9b6233eaf690356689",
+    "semantic_hash": "079f3fb8d67afb9b6233eaf690356689"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "c2f198ae0ace03d39714bfc7c392439e",
+    "semantic_hash": "c2f198ae0ace03d39714bfc7c392439e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.941244,
+    "ast_hash": "1f6759b4d87077318e6b332fbe3c3463",
+    "semantic_hash": "1f6759b4d87077318e6b332fbe3c3463"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.945244,
+    "ast_hash": "e3b639f3e21f4c36febfea695a74eeb9",
+    "semantic_hash": "e3b639f3e21f4c36febfea695a74eeb9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.945244,
+    "ast_hash": "68b50cbe796b41b32f610b8a88cbe90a",
+    "semantic_hash": "68b50cbe796b41b32f610b8a88cbe90a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.945244,
+    "ast_hash": "54891665728ae9f14396376a927d1a45",
+    "semantic_hash": "54891665728ae9f14396376a927d1a45"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "c6d07d52adf9599a8f5ff9e7e329c889",
+    "semantic_hash": "c6d07d52adf9599a8f5ff9e7e329c889"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.38.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "ba924981d86795446082dc3debe83c38",
+    "semantic_hash": "ba924981d86795446082dc3debe83c38"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "c7895b3819ec31b76990ee62aff4b4dd",
+    "semantic_hash": "c7895b3819ec31b76990ee62aff4b4dd"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "6a207d7e69eb498323aaaa9eb2217ff4",
+    "semantic_hash": "6a207d7e69eb498323aaaa9eb2217ff4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "26dd685dc63d89a7ab963b8641ad1256",
+    "semantic_hash": "26dd685dc63d89a7ab963b8641ad1256"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.949244,
+    "ast_hash": "7c24580718a785d8838f8c84daed4661",
+    "semantic_hash": "7c24580718a785d8838f8c84daed4661"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.953244,
+    "ast_hash": "8df4aa5d4b07485134572f87d6744000",
+    "semantic_hash": "8df4aa5d4b07485134572f87d6744000"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.953244,
+    "ast_hash": "5eb8dc49db899d1394c1600f1d1ef921",
+    "semantic_hash": "5eb8dc49db899d1394c1600f1d1ef921"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.953244,
+    "ast_hash": "c5c56b5f14afcc59be4a944ecfe21ed5",
+    "semantic_hash": "c5c56b5f14afcc59be4a944ecfe21ed5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.39.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.953244,
+    "ast_hash": "1d839647b7c908411faf4aaa0b05432b",
+    "semantic_hash": "1d839647b7c908411faf4aaa0b05432b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.953244,
+    "ast_hash": "1c84f8104abf563b31800270fe8b9bef",
+    "semantic_hash": "1c84f8104abf563b31800270fe8b9bef"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.957244,
+    "ast_hash": "4e3f8fd37b7f115f696f1e856226cf4b",
+    "semantic_hash": "4e3f8fd37b7f115f696f1e856226cf4b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.957244,
+    "ast_hash": "978354c54f2a4a3f4715b3a10d2dae6a",
+    "semantic_hash": "978354c54f2a4a3f4715b3a10d2dae6a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.957244,
+    "ast_hash": "a10a4ae84ef70cf1b145d0d27e200ff7",
+    "semantic_hash": "a10a4ae84ef70cf1b145d0d27e200ff7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "f91414417daa10246cec774a1b916d67",
+    "semantic_hash": "f91414417daa10246cec774a1b916d67"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "73b1f10e9640c5fe5a3b0a05ce3223d8",
+    "semantic_hash": "73b1f10e9640c5fe5a3b0a05ce3223d8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "c670f219b4007b3200b042a22552c472",
+    "semantic_hash": "c670f219b4007b3200b042a22552c472"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.40.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "e2bb12411c7140bd4afd3bb10411d022",
+    "semantic_hash": "e2bb12411c7140bd4afd3bb10411d022"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "9dadde2a1cf4cc12cf42ddc7edf4dc6d",
+    "semantic_hash": "9dadde2a1cf4cc12cf42ddc7edf4dc6d"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.961244,
+    "ast_hash": "ccdb4b865b082f219d7e909910a1095c",
+    "semantic_hash": "ccdb4b865b082f219d7e909910a1095c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.965244,
+    "ast_hash": "2e25d2984016fb3dcfad591aebee19d5",
+    "semantic_hash": "2e25d2984016fb3dcfad591aebee19d5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.965244,
+    "ast_hash": "dff63b380dfbd8d07855f28ae4cf633e",
+    "semantic_hash": "dff63b380dfbd8d07855f28ae4cf633e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.965244,
+    "ast_hash": "928b2e185fa7ed73c0064eaef213b4b9",
+    "semantic_hash": "928b2e185fa7ed73c0064eaef213b4b9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "08deb67dc898ae61c7565b9533a1d03a",
+    "semantic_hash": "08deb67dc898ae61c7565b9533a1d03a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "cc5b30bc33862ca1d6f1e3151009f042",
+    "semantic_hash": "cc5b30bc33862ca1d6f1e3151009f042"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.41.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "9e2d73462b45f4a90b12da581a09d431",
+    "semantic_hash": "9e2d73462b45f4a90b12da581a09d431"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "7579ab16563294cee8023f860f125e31",
+    "semantic_hash": "7579ab16563294cee8023f860f125e31"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "d150eac48f6d0020e9835a53fba6f54a",
+    "semantic_hash": "d150eac48f6d0020e9835a53fba6f54a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.969244,
+    "ast_hash": "39c73bd36d83d722808e0cad54ce072e",
+    "semantic_hash": "39c73bd36d83d722808e0cad54ce072e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.973244,
+    "ast_hash": "8725e7693fd859e5fb239256f4c6858f",
+    "semantic_hash": "8725e7693fd859e5fb239256f4c6858f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.973244,
+    "ast_hash": "5316a44995ea3ebf83f1f22b0e82750f",
+    "semantic_hash": "5316a44995ea3ebf83f1f22b0e82750f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.973244,
+    "ast_hash": "f4802b603036196479fe84e8e9aad22b",
+    "semantic_hash": "f4802b603036196479fe84e8e9aad22b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.973244,
+    "ast_hash": "0252ffec5e3cfdc946d39ecf1a5049d1",
+    "semantic_hash": "0252ffec5e3cfdc946d39ecf1a5049d1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.42.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.977244,
+    "ast_hash": "fcd2bcd4e3049dc2cc895693585b1d8a",
+    "semantic_hash": "fcd2bcd4e3049dc2cc895693585b1d8a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_Layout_project1_with_textmode.json": {
+    "mtime": 1784023095.977244,
+    "ast_hash": "712368649530e10a9f6c0ef922bba0a8",
+    "semantic_hash": "712368649530e10a9f6c0ef922bba0a8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test1_with_textmode.json": {
+    "mtime": 1784023095.977244,
+    "ast_hash": "9c32b9be605312e1a40d668bc777ed38",
+    "semantic_hash": "9c32b9be605312e1a40d668bc777ed38"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test2_with_textmode.json": {
+    "mtime": 1784023095.977244,
+    "ast_hash": "32ec0101b8026e1875a719e590bcb1e7",
+    "semantic_hash": "32ec0101b8026e1875a719e590bcb1e7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test3_with_textmode.json": {
+    "mtime": 1784023095.981244,
+    "ast_hash": "c47162be6fb5a984ac1b534b26c393c8",
+    "semantic_hash": "c47162be6fb5a984ac1b534b26c393c8"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test4_with_textmode.json": {
+    "mtime": 1784023095.981244,
+    "ast_hash": "d9342a36a1dc640a345067e68cf82a24",
+    "semantic_hash": "d9342a36a1dc640a345067e68cf82a24"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test5_with_textmode.json": {
+    "mtime": 1784023095.981244,
+    "ast_hash": "5a8229461e917cc8c449ccc9fdfe26ed",
+    "semantic_hash": "5a8229461e917cc8c449ccc9fdfe26ed"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test6_with_textmode.json": {
+    "mtime": 1784023095.981244,
+    "ast_hash": "7c431116a2b85591033e2419ba46f765",
+    "semantic_hash": "7c431116a2b85591033e2419ba46f765"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test7_with_textmode.json": {
+    "mtime": 1784023095.985244,
+    "ast_hash": "419785ef1d3c45bcceb9cc6ca453ae36",
+    "semantic_hash": "419785ef1d3c45bcceb9cc6ca453ae36"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.43.0_slab_test8_with_textmode.json": {
+    "mtime": 1784023095.985244,
+    "ast_hash": "c385b6d928432bf5451289554cdcf403",
+    "semantic_hash": "c385b6d928432bf5451289554cdcf403"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_project1_with_textmode.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "8c43ff462118d4b92d425d68815051f3",
+    "semantic_hash": "8c43ff462118d4b92d425d68815051f3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test1_with_textmode.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "b5c5e019519d39726a00dcdb60a2fb83",
+    "semantic_hash": "b5c5e019519d39726a00dcdb60a2fb83"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test1_with_textmode_slablayer.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "f51b9943cacabcfe53244e4f8066c8c4",
+    "semantic_hash": "f51b9943cacabcfe53244e4f8066c8c4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test2_with_textmode.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "c939f85a03da9ea9dd477fcfbe34e162",
+    "semantic_hash": "c939f85a03da9ea9dd477fcfbe34e162"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test2_with_textmode_slablayer.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "2861d49eaf3e16d2ce6d1b7cfab7ebb5",
+    "semantic_hash": "2861d49eaf3e16d2ce6d1b7cfab7ebb5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test3_with_textmode.json": {
+    "mtime": 1784107626.5813468,
+    "ast_hash": "ba647661e7a4fc491b01f06a55bc24b2",
+    "semantic_hash": "ba647661e7a4fc491b01f06a55bc24b2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test3_with_textmode_slablayer.json": {
+    "mtime": 1784107626.5853467,
+    "ast_hash": "ae58a192dafd84d57b00b306e3363cdb",
+    "semantic_hash": "ae58a192dafd84d57b00b306e3363cdb"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test4_with_textmode.json": {
+    "mtime": 1784107626.5853467,
+    "ast_hash": "13ca2a2b32f10f9fcce6256dca2bc3f9",
+    "semantic_hash": "13ca2a2b32f10f9fcce6256dca2bc3f9"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test5_with_textmode.json": {
+    "mtime": 1784107626.5853467,
+    "ast_hash": "5a0a8f850b503646eefe0767867c513c",
+    "semantic_hash": "5a0a8f850b503646eefe0767867c513c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test6_with_textmode.json": {
+    "mtime": 1784107626.589347,
+    "ast_hash": "6c2c2b3e731bf5b479140639e7589480",
+    "semantic_hash": "6c2c2b3e731bf5b479140639e7589480"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test6_with_textmode_slablayer.json": {
+    "mtime": 1784107626.589347,
+    "ast_hash": "3739e3f373bfa0d8a839bd399f752642",
+    "semantic_hash": "3739e3f373bfa0d8a839bd399f752642"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test7_with_textmode.json": {
+    "mtime": 1784107626.589347,
+    "ast_hash": "57ff6a83b3485c3b54ae34d95af072ff",
+    "semantic_hash": "57ff6a83b3485c3b54ae34d95af072ff"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_slab_test8_with_textmode.json": {
+    "mtime": 1784107626.589347,
+    "ast_hash": "22240a5ecd5fbdb4914a043d8e2fdd6b",
+    "semantic_hash": "22240a5ecd5fbdb4914a043d8e2fdd6b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.new_slab_0.36.0_to_0.44.0/0.44.0_stair_test1_with_textmode.json": {
+    "mtime": 1784107626.589347,
+    "ast_hash": "e3fa212097eacf6f14dc5f3949a23212",
+    "semantic_hash": "e3fa212097eacf6f14dc5f3949a23212"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test1_with_textmode.json": {
+    "mtime": 1784199646.3825862,
+    "ast_hash": "5595629ac770588c9e64f468dd7db74e",
+    "semantic_hash": "5595629ac770588c9e64f468dd7db74e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test2_with_textmode.json": {
+    "mtime": 1784199646.3835282,
+    "ast_hash": "a25c53a24a81605fe6503e15f2443fa5",
+    "semantic_hash": "a25c53a24a81605fe6503e15f2443fa5"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test3_with_textmode.json": {
+    "mtime": 1784199646.3835282,
+    "ast_hash": "11c26faa8076849e5cda37006e8b7898",
+    "semantic_hash": "11c26faa8076849e5cda37006e8b7898"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test4_with_textmode.json": {
+    "mtime": 1784199646.3835282,
+    "ast_hash": "630a0f439cc5baf568a96b3332c5a15b",
+    "semantic_hash": "630a0f439cc5baf568a96b3332c5a15b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test5_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "d67fcf5cfd50e2053cae027653ffdaac",
+    "semantic_hash": "d67fcf5cfd50e2053cae027653ffdaac"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test6_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "6d860750302ab2ee8f5dc798658584e4",
+    "semantic_hash": "6d860750302ab2ee8f5dc798658584e4"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test7_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "176df4d115825fd221185c39a770c993",
+    "semantic_hash": "176df4d115825fd221185c39a770c993"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.0_slab_test8_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "888c6e34015c6d0bbc37dd3a6d6d3543",
+    "semantic_hash": "888c6e34015c6d0bbc37dd3a6d6d3543"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test1_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "d00bf5ee3a2082914822dd1977dd3c98",
+    "semantic_hash": "d00bf5ee3a2082914822dd1977dd3c98"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test2_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "86aef74e3bd3a1fa507055e6ec0a89fe",
+    "semantic_hash": "86aef74e3bd3a1fa507055e6ec0a89fe"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test3_with_textmode.json": {
+    "mtime": 1784199646.3865862,
+    "ast_hash": "fe6f343d270f5402f99f13faf7674364",
+    "semantic_hash": "fe6f343d270f5402f99f13faf7674364"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test4_with_textmode.json": {
+    "mtime": 1784199646.3905864,
+    "ast_hash": "20118ceb23b39b7d35bbde640774a93c",
+    "semantic_hash": "20118ceb23b39b7d35bbde640774a93c"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test5_with_textmode.json": {
+    "mtime": 1784199646.3905864,
+    "ast_hash": "94dcb0facb6736bb902f38353a1a0c7b",
+    "semantic_hash": "94dcb0facb6736bb902f38353a1a0c7b"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.1_slab_test6_with_textmode.json": {
+    "mtime": 1784199646.3905864,
+    "ast_hash": "f438a28abd171e9e910cb3d3cbb03b51",
+    "semantic_hash": "f438a28abd171e9e910cb3d3cbb03b51"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test1_with_textmode.json": {
+    "mtime": 1784199646.3945863,
+    "ast_hash": "65ce6e7dd4b46ca5b422206c451a4ef1",
+    "semantic_hash": "65ce6e7dd4b46ca5b422206c451a4ef1"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test2_with_textmode.json": {
+    "mtime": 1784199646.3945863,
+    "ast_hash": "59b6e3b0d1a4f9c23ad36dc0755c176e",
+    "semantic_hash": "59b6e3b0d1a4f9c23ad36dc0755c176e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test3_with_textmode.json": {
+    "mtime": 1784199646.3945863,
+    "ast_hash": "cb8bdb19fedcb2f517226328a3ad1145",
+    "semantic_hash": "cb8bdb19fedcb2f517226328a3ad1145"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test4_with_textmode.json": {
+    "mtime": 1784199646.3945863,
+    "ast_hash": "314df1d1d2d57d3fb39c6fecf25b55c2",
+    "semantic_hash": "314df1d1d2d57d3fb39c6fecf25b55c2"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test5_with_textmode.json": {
+    "mtime": 1784199646.3985863,
+    "ast_hash": "f4ebc87235c8228ebfbbe7c058d290cb",
+    "semantic_hash": "f4ebc87235c8228ebfbbe7c058d290cb"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.2_slab_test6_with_textmode.json": {
+    "mtime": 1784199646.3985863,
+    "ast_hash": "c889a690f2e15c3dddffd77684ccdab3",
+    "semantic_hash": "c889a690f2e15c3dddffd77684ccdab3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test1_with_textmode.json": {
+    "mtime": 1784199646.3985863,
+    "ast_hash": "fa25b44b4809cca25f940c2959740c62",
+    "semantic_hash": "fa25b44b4809cca25f940c2959740c62"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test2_with_textmode.json": {
+    "mtime": 1784199646.4025862,
+    "ast_hash": "9271c514d3be4a876de384e71789517a",
+    "semantic_hash": "9271c514d3be4a876de384e71789517a"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test3_with_textmode.json": {
+    "mtime": 1784199646.4025862,
+    "ast_hash": "12567a8b4f5e33556d3ee54013dd44a3",
+    "semantic_hash": "12567a8b4f5e33556d3ee54013dd44a3"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test4_with_textmode.json": {
+    "mtime": 1784199646.4025862,
+    "ast_hash": "58667c578605b4dadba10791ded96418",
+    "semantic_hash": "58667c578605b4dadba10791ded96418"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test5_with_textmode.json": {
+    "mtime": 1784199646.4065862,
+    "ast_hash": "7b4e46405219a4836cf0aef6fe641170",
+    "semantic_hash": "7b4e46405219a4836cf0aef6fe641170"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.slab_0.45.0_to_0.46.0/0.45.3_slab_test6_with_textmode.json": {
+    "mtime": 1784199646.4065862,
+    "ast_hash": "d4476f1fba41c6f26fc571a9e53a2234",
+    "semantic_hash": "d4476f1fba41c6f26fc571a9e53a2234"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.stair_0.47.0_to_/0.47.1_stair_test1_with_textmode.json": {
+    "mtime": 1784199646.4065862,
+    "ast_hash": "71fd03b50eb56dd86278a114c0116961",
+    "semantic_hash": "71fd03b50eb56dd86278a114c0116961"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.stair_0.47.0_to_/0.48.0_stair_project1_with_textmode.json": {
+    "mtime": 1784199646.4105864,
+    "ast_hash": "0a19c2dada116cb1e9a1fc43e23d21d7",
+    "semantic_hash": "0a19c2dada116cb1e9a1fc43e23d21d7"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.stair_0.47.0_to_/0.48.0_stair_test1_with_textmode.json": {
+    "mtime": 1784199646.4105864,
+    "ast_hash": "4d8582f4b0beb954b918b87874afc65e",
+    "semantic_hash": "4d8582f4b0beb954b918b87874afc65e"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.stair_0.47.0_to_/0.48.0_stair_test3_with_textmode.json": {
+    "mtime": 1784199646.4105864,
+    "ast_hash": "8d34db552762a6d21db2389b0ff12165",
+    "semantic_hash": "8d34db552762a6d21db2389b0ff12165"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/.stair_0.47.0_to_/0.48.0_stair_test6_with_textmode.json": {
+    "mtime": 1784199646.4105864,
+    "ast_hash": "b359425a9e9139e5c7a93ee34337259f",
+    "semantic_hash": "b359425a9e9139e5c7a93ee34337259f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/0.49.0_stair_project1_with_textmode.json": {
+    "mtime": 1784199646.4145863,
+    "ast_hash": "cc6080fc5ad4e84d394d96a77075345f",
+    "semantic_hash": "cc6080fc5ad4e84d394d96a77075345f"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/0.49.0_stair_test1_with_textmode.json": {
+    "mtime": 1784199646.4145863,
+    "ast_hash": "cf057549af203292b6ab7fd14539a018",
+    "semantic_hash": "cf057549af203292b6ab7fd14539a018"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/fixtures/cad/.json/0.49.0_stair_test3_with_textmode.json": {
+    "mtime": 1784199646.4145863,
+    "ast_hash": "9a3222f859524468826a6fc6a9e2412d",
+    "semantic_hash": "9a3222f859524468826a6fc6a9e2412d"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_beam_split.py": {
+    "mtime": 1783934267.2626994,
+    "ast_hash": "89cb6803a207ed6c4cfe13de561c4d53",
+    "semantic_hash": "89cb6803a207ed6c4cfe13de561c4d53"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_slab_outlines.py": {
+    "mtime": 1784111909.5434375,
+    "ast_hash": "df3406e3875e5fe5d4cef8bd45c06ca0",
+    "semantic_hash": "df3406e3875e5fe5d4cef8bd45c06ca0"
+  },
+  "AnonGee.extension/lib/py3/anongee_toolkit/cad2bim/tests/test_stair_layout.py": {
+    "mtime": 1784200246.4619198,
+    "ast_hash": "c793d2351eec86f7fe1fa94eba61de40",
+    "semantic_hash": "c793d2351eec86f7fe1fa94eba61de40"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete FillPatterns.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9301245,
+    "ast_hash": "51571beeeb5690796aefed96c20f57ae",
+    "semantic_hash": "51571beeeb5690796aefed96c20f57ae"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LinePatterns.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9304695,
+    "ast_hash": "da31d62a949cf0b367dd1d0c0847b007",
+    "semantic_hash": "da31d62a949cf0b367dd1d0c0847b007"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/Delete LineStyles.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9314146,
+    "ast_hash": "88a1ebb359292fadf7055677d18072fa",
+    "semantic_hash": "88a1ebb359292fadf7055677d18072fa"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Delete.pulldown/bundle.yaml": {
+    "mtime": 1784023095.9318955,
+    "ast_hash": "54fd29ce69bb5b95784ba9a6b9ba6144",
+    "semantic_hash": "54fd29ce69bb5b95784ba9a6b9ba6144"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename FillPatterns.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.932413,
+    "ast_hash": "b7585991d6be58ce090f4bc4be519d8e",
+    "semantic_hash": "b7585991d6be58ce090f4bc4be519d8e"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LinePatterns.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9326773,
+    "ast_hash": "2cce8a7085a558d8aa9e70a41ec7c9d8",
+    "semantic_hash": "2cce8a7085a558d8aa9e70a41ec7c9d8"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/Rename LineStyles.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9331563,
+    "ast_hash": "d1315604d6839790044b702308fdcc0f",
+    "semantic_hash": "d1315604d6839790044b702308fdcc0f"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Bulk Rename.pulldown/bundle.yaml": {
+    "mtime": 1784023095.9335089,
+    "ast_hash": "9c62d72031f0d5fc3c6597171dddc9a6",
+    "semantic_hash": "9c62d72031f0d5fc3c6597171dddc9a6"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Copy Rebar Visibility.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.93369,
+    "ast_hash": "ff1c4a517b370ccae1329e1add828a3d",
+    "semantic_hash": "ff1c4a517b370ccae1329e1add828a3d"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/Rebar.pulldown/Obscured Rebar.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9338448,
+    "ast_hash": "e018ef8517ead9d1cf000174e3e330d6",
+    "semantic_hash": "e018ef8517ead9d1cf000174e3e330d6"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/BulkTool.stack/bundle.yaml": {
+    "mtime": 1784023095.9344034,
+    "ast_hash": "0fa2fc96b5e278ef05148be360e257e6",
+    "semantic_hash": "0fa2fc96b5e278ef05148be360e257e6"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/ExportSchedule.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9344034,
+    "ast_hash": "11770417a1ecededfdc982f00efc848f",
+    "semantic_hash": "11770417a1ecededfdc982f00efc848f"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/RVTLinked.pushbutton/bundle.yaml": {
+    "mtime": 1784023095.9354098,
+    "ast_hash": "96ab2bed8c2d194ea030ae19623bd244",
+    "semantic_hash": "96ab2bed8c2d194ea030ae19623bd244"
+  },
+  "AnonGee.extension/AnonGee.tab/Essential.panel/RVTLinked.pushbutton/icon.dark.png": {
+    "mtime": 1784023095.936007,
+    "ast_hash": "5fdde243befd53e64522b57dfaf17b7b",
+    "semantic_hash": "5fdde243befd53e64522b57dfaf17b7b"
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "runs": [
+    {
+      "date": "2026-06-26T11:35:54.296992+00:00",
+      "input_tokens": 328290,
+      "output_tokens": 0,
+      "files": 237
+    },
+    {
+      "date": "2026-06-27T09:45:45.021105+00:00",
+      "input_tokens": 55375,
+      "output_tokens": 0,
+      "files": 248
+    },
+    {
+      "date": "2026-07-07T18:26:47.680006+00:00",
+      "input_tokens": 88000,
+      "output_tokens": 4000,
+      "files": 51,
+      "note": "incremental: beam campaign close + slab pipeline"
+    },
+    {
+      "date": "2026-07-16T11:25:20.934813+00:00",
+      "input_tokens": 140870,
+      "output_tokens": 0,
+      "files": 274
+    }
+  ],
+  "total_input_tokens": 612535,
+  "total_output_tokens": 4000
+}

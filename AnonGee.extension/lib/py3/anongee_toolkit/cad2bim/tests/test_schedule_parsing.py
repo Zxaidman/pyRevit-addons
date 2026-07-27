@@ -75,6 +75,23 @@ class SingleTable(unittest.TestCase):
         cells += _row(300, (0, "C1"), (1500, "400x600"))
         self.assertEqual(marks.parse_schedule(cells), {"C1": (400.0, 600.0)})
 
+    def test_beam_table_w_h_l_reads_wxh_ignores_span(self):
+        # Test18 beam schedule is Mark|W|H|L: H is the section DEPTH, L is the SPAN.
+        # A beam's size is W x H; the (longer) span L must be ignored, NOT read as depth.
+        cells = []
+        cells += _row(1000, (0, "Mark"), (900, "W"), (1800, "H"), (2700, "L"))
+        cells += _row(300, (0, "B1"), (900, "300"), (1800, "600"), (2700, "2960"))
+        cells += _row(-400, (0, "B14"), (900, "400"), (1800, "900"), (2700, "4325"))
+        self.assertEqual(marks.parse_schedule(cells),
+                         {"B1": (300.0, 600.0), "B14": (400.0, 900.0)})
+
+    def test_column_w_h_l_still_reads_wxl(self):
+        # The SAME W H L header for a COLUMN keeps W x L (footprint); H is storey height.
+        cells = []
+        cells += _row(1000, (0, "Mark"), (900, "W"), (1800, "H"), (2700, "L"))
+        cells += _row(300, (0, "C1"), (900, "600"), (1800, "3000"), (2700, "900"))
+        self.assertEqual(marks.parse_schedule(cells), {"C1": (600.0, 900.0)})
+
 
 class StackedTablesOnOneLayer(unittest.TestCase):
     """Test17: a beam table sits above a column table on the same layer, with a

@@ -30,6 +30,7 @@ __author__ = "AnonGee"
 __min_revit_ver__ = 2022
 
 import os
+import re
 import sys
 import traceback
 
@@ -84,15 +85,55 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import compat, config, report
+from anongee_toolkit.cad2bim import (compat, config, report, slab_outlines,
+                                     stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
-from anongee_toolkit.cad2bim.builders import columns, beams, grids, txn_failures
+from anongee_toolkit.cad2bim.builders import (columns, beams, grids, slabs,
+                                              stairs, txn_failures)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
+
+# --- deferred console: nothing reaches the pyRevit output until the user hits Run on the
+# main window (the early link/read steps must not open the console). Output is buffered, then
+# flushed AFTER Run, after which a 10-cell [####------] progress bar advances per build phase.
+_REAL_PRINT = print   # the genuine print; only the buffer uses it
+
+
+class _DeferredOut(object):
+    def __init__(self):
+        self._buf = []
+        self.live = False
+
+    def say(self, msg=""):
+        if self.live:
+            _REAL_PRINT(msg)
+        else:
+            self._buf.append(msg)
+
+    def flush(self):
+        for msg in self._buf:
+            _REAL_PRINT(msg)
+        self._buf = []
+        self.live = True
+
+
+_OUT = _DeferredOut()
+
+
+def _say(msg=""):
+    _OUT.say(msg)
+
+
+def _progress(done, total, label):
+    """Print a 10-cell progress bar line: ``[####------]  40%  beams``."""
+    frac = (float(done) / total) if total else 1.0
+    fill = int(round(frac * 10))
+    _say("[{0}{1}] {2:3d}%  {3}".format("#" * fill, "-" * (10 - fill),
+                                        int(round(frac * 100)), label))
 
 # A size label within this distance of a member refines it; also the proximity the
 # comparison uses to decide "this is the same member" (~half a column).
@@ -127,7 +168,7 @@ def _rollback_alert(label, tstatus, gstatus):
         "at commit -- most often running into a project that already contains "
         "these elements. Try a fresh/empty project (or undo the previous run), "
         "then run again.".format(label, tstatus, gstatus))
-    print(message)
+    _say(message)
     _error("{0} not saved".format(label), message)
 
 
@@ -238,8 +279,9 @@ class CadToBimWindow(object):
     """
 
     def __init__(self, source_name, layer_rows, categories, default_mapping,
-                 column_symbols, level_options, beam_symbols,
-                 text_layer_rows=None, text_categories=None, default_text_mapping=None):
+                 column_symbols, level_options, beam_symbols, floor_type_options=None,
+                 text_layer_rows=None, text_categories=None, default_text_mapping=None,
+                 stair_type_options=None, level_elevations=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -271,12 +313,32 @@ class CadToBimWindow(object):
             self.cb_top_level.SelectedIndex = 1
         self._beam_ids = self._fill_combo(self.cb_beam_family, beam_symbols)
         _select_containing(self.cb_beam_family, ["rect"])
+        self.cb_floor_type = find("cb_floor_type")
+        self._floor_ids = self._fill_combo(self.cb_floor_type, floor_type_options or [])
+        self.cb_stair_type = find("cb_stair_type")
+        self._stair_ids = self._fill_combo(self.cb_stair_type, stair_type_options or [])
+        _select_containing(self.cb_stair_type, ["cast"])
+        self._level_elevations = level_elevations or {}
 
         self.chk_grids = find("chk_grids")
         self.chk_columns = find("chk_columns")
         self.chk_beams = find("chk_beams")
         self.chk_slabs = find("chk_slabs")
+        self.chk_stairs = find("chk_stairs")
         self.chk_export = find("chk_export")
+        self.tb_stair_count = find("tb_stair_count")
+        self.tb_stair_waist = find("tb_stair_waist")
+        self.cb_stair_source = find("cb_stair_source")
+        for label in ("Auto (linework, else text)", "Drawn stair linework",
+                      "Text + numbers"):
+            self.cb_stair_source.Items.Add(label)
+        self.cb_stair_source.SelectedIndex = 0
+        self.stair_floor_text = find("stair_floor_text")
+        self._stair_count_manual = False
+        self.tb_stair_riser = find("tb_stair_riser")
+        self.tb_stair_tread = find("tb_stair_tread")
+        self.tb_stair_width = find("tb_stair_width")
+        self.tb_stair_landing = find("tb_stair_landing")
 
         self.tb_beam_min = find("tb_beam_min")
         self.tb_beam_max = find("tb_beam_max")
@@ -311,6 +373,22 @@ class CadToBimWindow(object):
             self.chk_beams.IsChecked = False
             self.chk_beams.IsEnabled = False
             self.chk_beams.Content = "Create beams (load a structural framing family first)"
+        if not floor_type_options:
+            self.chk_slabs.IsChecked = False
+            self.chk_slabs.IsEnabled = False
+            self.chk_slabs.Content = "Create slabs (the model has no floor type)"
+        if not stair_type_options:
+            self.chk_stairs.IsChecked = False
+            self.chk_stairs.IsEnabled = False
+            self.chk_stairs.Content = "Create staircases (the model has no stair type)"
+
+        # Staircase tab live sync: floor height follows the level picks; an
+        # ABSOLUTE riser count drives the riser height (storey / count)
+        self.cb_base_level.SelectionChanged += self._on_stair_sync
+        self.cb_top_level.SelectionChanged += self._on_stair_sync
+        self.tb_stair_count.LostFocus += self._on_stair_count_edit
+        self.tb_stair_riser.LostFocus += self._on_stair_sync
+        self._stair_sync()
 
         find("btn_run").Click += self.on_run
         find("btn_cancel").Click += self.on_cancel
@@ -330,7 +408,7 @@ class CadToBimWindow(object):
         to combo_store so the caller can read the chosen mapping back."""
         for layer, count in layer_rows:
             row = WpfGrid()
-            row.Margin = Thickness(0, 2, 0, 2)
+            row.Margin = Thickness(0, 1, 0, 1)
             for width in (None, 70, 180):   # None -> star column
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if width is None
@@ -348,6 +426,7 @@ class CadToBimWindow(object):
             WpfGrid.SetColumn(count_block, 1)
 
             combo = ComboBox()
+            combo.Height = 22.0
             for category in categories:
                 combo.Items.Add(category)
             combo.SelectedItem = default_mapping.get(layer)
@@ -403,6 +482,12 @@ class CadToBimWindow(object):
         self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+        self.tb_stair_riser.Text = str(int(d["stair_riser_mm"]))
+        self.tb_stair_waist.Text = str(int(d["stair_waist_mm"]))
+        self.tb_stair_count.Text = "0"
+        self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
+        self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
+        self.tb_stair_landing.Text = str(int(d["stair_landing_mm"]))
 
     def _read_int(self, textbox, fallback):
         try:
@@ -428,6 +513,48 @@ class CadToBimWindow(object):
             "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
             "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
         }
+
+    def _storey_mm(self):
+        """Top minus base level elevation in mm, or None before both are picked."""
+        base = self._level_elevations.get(self.cb_base_level.SelectedItem)
+        top = self._level_elevations.get(self.cb_top_level.SelectedItem)
+        if base is None or top is None:
+            return None
+        return (top - base) * 304.8
+
+    def _on_stair_sync(self, sender, args):
+        self._stair_sync()
+
+    def _on_stair_count_edit(self, sender, args):
+        # the user typed a count: it becomes ABSOLUTE (0 returns to automatic)
+        self._stair_count_manual = self._read_int(self.tb_stair_count, 0) > 0
+        self._stair_sync()
+
+    def _stair_sync(self):
+        """Riser count <-> riser height <-> storey, live.
+
+        AUTOMATIC (default): count = ceil(storey / max riser), e.g. 20 for
+        3000/150, refreshed when levels or the riser height change. MANUAL
+        (user typed a count): the count is absolute and the riser height
+        becomes storey / count instead."""
+        import math as _math
+        storey = self._storey_mm()
+        self.stair_floor_text.Text = ("{0} mm".format(int(round(storey)))
+                                      if storey and storey > 0 else "-")
+        if not storey or storey <= 0:
+            return
+        if self._stair_count_manual:
+            count = self._read_int(self.tb_stair_count, 0)
+            if count > 0:
+                self.tb_stair_riser.Text = "{0:.1f}".format(storey / count)
+            else:
+                self._stair_count_manual = False
+        if not self._stair_count_manual:
+            riser = self._read_float(self.tb_stair_riser,
+                                     config.DEFAULTS["stair_riser_mm"])
+            if riser > 0:
+                self.tb_stair_count.Text = str(
+                    int(_math.ceil(storey / riser - 1e-9)))
 
     def _read_limits(self):
         defaults = report.DEFAULT_LIMITS
@@ -477,6 +604,26 @@ class CadToBimWindow(object):
             "create_grids": bool(self.chk_grids.IsChecked),
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
+            "create_slabs": bool(self.chk_slabs.IsChecked),
+            "create_stairs": bool(self.chk_stairs.IsChecked),
+            "stair_type_id": self._stair_ids.get(self.cb_stair_type.SelectedItem),
+            "stair_source": ("linework" if self.cb_stair_source.SelectedIndex == 1
+                             else "text" if self.cb_stair_source.SelectedIndex == 2
+                             else "auto"),
+            "stair_params": {
+                "riser_count": self._read_int(self.tb_stair_count, 0),
+                "waist_mm": self._read_float(self.tb_stair_waist,
+                                             config.DEFAULTS["stair_waist_mm"]),
+                "riser_mm": self._read_float(self.tb_stair_riser,
+                                             config.DEFAULTS["stair_riser_mm"]),
+                "tread_mm": self._read_float(self.tb_stair_tread,
+                                             config.DEFAULTS["stair_tread_mm"]),
+                "run_width_mm": self._read_float(self.tb_stair_width,
+                                                 config.DEFAULTS["stair_run_width_mm"]),
+                "landing_mm": self._read_float(self.tb_stair_landing,
+                                               config.DEFAULTS["stair_landing_mm"]),
+            },
+            "floor_type_id": self._floor_ids.get(self.cb_floor_type.SelectedItem),
             "column_family_id": self._family_ids.get(self.cb_family.SelectedItem),
             "circular_family_id": self._family_ids.get(self.cb_circular_family.SelectedItem),
             "beam_family_id": self._beam_ids.get(self.cb_beam_family.SelectedItem),
@@ -530,10 +677,10 @@ def main():
     doc = uidoc.Document
 
     module_dir = os.path.dirname(os.path.abspath(report.__file__))
-    print("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
-    print(compat.runtime_summary())
+    _say("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
+    _say(compat.runtime_summary())
     try:
-        print("Host: Revit {0}".format(__revit__.Application.VersionNumber))
+        _say("Host: Revit {0}".format(__revit__.Application.VersionNumber))
     except Exception:
         pass
 
@@ -552,6 +699,7 @@ def main():
     if not options.result:
         return
     path = options.result["path"]
+    _progress(1, 9, "link DXF")
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
                                        options.result["placement"],
@@ -563,6 +711,7 @@ def main():
     # 2. Hybrid read: Revit link geometry is the BUILD source (already in Revit
     #    coordinates and pre-merged into polylines). The DXF (ezdxf) supplies TEXT
     #    only, mapped into Revit coordinates by the link's own exact transform.
+    _progress(2, 9, "read link geometry")
     revit_result = geometry_reader.read_link(doc, instance)
     if revit_result.is_empty():
         _alert("Empty link", "The linked DXF produced no readable geometry in "
@@ -576,17 +725,26 @@ def main():
 
     # Map DXF coords -> Revit feet using the GRID lines as anchors: they are the
     # same lines in both the Revit and DXF extractions, so aligning their bounding
-    # boxes is exact (no symbol-space unit guessing). Fall back to the link's own
-    # transform only if no grid geometry is available.
+    # boxes is exact (no symbol-space unit guessing). A plan with NO grid layer
+    # (Test20 stress plan) anchors on ALL shared geometry instead -- the two reads
+    # are the same drawing, so their overall bboxes align the same way. Only when
+    # both anchors are empty do we trust the link's own transform: Revit can bake
+    # the unit scale into the imported geometry and report an identity instance
+    # transform, which threw every Test20 label 304.8x off and killed all sizing.
     rev_grids = [r for r in revit_result.records
                  if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
     dxf_grids = [r for r in dxf_result.records
                  if layers.classify_layer(r.layer_key) == layers.CATEGORY_GRID]
     rev_bbox = transform.bbox_of_records(rev_grids)
     dxf_bbox = transform.bbox_of_records(dxf_grids)
+    rev_all = transform.bbox_of_records(revit_result.records)
+    dxf_all = transform.bbox_of_records(dxf_result.records)
     if rev_bbox and dxf_bbox:
         text_affine = transform.empirical_affine(dxf_bbox, rev_bbox)
         transform_method = "grid_anchored"
+    elif rev_all and dxf_all:
+        text_affine = transform.empirical_affine(dxf_all, rev_all)
+        transform_method = "geometry_anchored"
     else:
         text_affine = transform.from_link(instance)
         transform_method = "link_GetTotalTransform"
@@ -603,6 +761,10 @@ def main():
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
+    floor_type_options = slabs.floor_types(doc)
+    stair_type_options = stairs.stairs_types(doc)
+    level_elevations = {label: doc.GetElement(level_id).Elevation
+                        for label, level_id in level_options}
 
     # Text layers (size marks) come from the DXF, routed separately from geometry.
     text_layer_counts = {}
@@ -615,11 +777,18 @@ def main():
     window = CadToBimWindow(dxf_result.source_name, layer_rows,
                             list(layers.ALL_CATEGORIES), default_mapping,
                             column_symbols, level_options, beam_symbols,
+                            floor_type_options,
                             text_layer_rows, list(layers.TEXT_CATEGORIES),
-                            default_text_mapping)
+                            default_text_mapping,
+                            stair_type_options=stair_type_options,
+                            level_elevations=level_elevations)
     window.show()
     if not window.result:
-        return
+        return   # user cancelled -- nothing was flushed, console stays closed
+
+    # Run was clicked: now (and only now) reveal the console -- banner + the buffered
+    # link/read progress -- then keep printing live through the build phases.
+    _OUT.flush()
 
     selections = window.result
     layers.apply_mapping(revit_result.records, selections["mapping"])
@@ -633,12 +802,9 @@ def main():
     comparison = compare.diff(revit_result.records, dxf_result.records, compare_tol_ft)
     comparison["transform"] = {"method": transform_method}
 
+    _progress(3, 9, "build columns")
     sections = report.build_column_sections(revit_result.records, limits, standards,
                                             texts=None, tolerances=tolerances)
-    beam_segments = report.build_beam_segments(revit_result.records,
-                                               sections.get("circles"),
-                                               limits, standards,
-                                               texts=None, tolerances=tolerances)
 
     # Route text labels by their (user-confirmed) layer.
     text_mapping = selections.get("text_mapping") or {}
@@ -648,9 +814,11 @@ def main():
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
     schedule_texts = [t for t in dxf_result.texts
                       if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
+    beam_texts = [t for t in dxf_result.texts
+                  if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
 
-    # The column schedule (mark -> size) sizes MARK-ONLY plan labels. The table is
-    # authoritative; any sized plan label supplements a mark the table omits.
+    # The schedule (mark -> size) sizes MARK-ONLY plan labels (columns AND beams). The
+    # table is authoritative; any sized plan label supplements a mark the table omits.
     schedule = marks.parse_schedule(schedule_texts)
     # Plan labels are NOT a table: only adopt an INLINE size ("C9 400x600") from one,
     # never split-pair a markless size label with a far mark sharing its row (which
@@ -658,7 +826,20 @@ def main():
     for mark, size in marks.parse_schedule(column_texts, allow_split=False).items():
         schedule.setdefault(mark, size)
     if schedule:
-        print("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
+        _say("columns: parsed {0} schedule size(s) from text".format(len(schedule)))
+
+    # Beam DEPTH (the larger label dimension) cannot be read from a 2D plan outline, so a
+    # beam is sized from its label -- an inline "B1 300x600" OR a mark-only "B1" via the
+    # schedule. Pass beam labels + the schedule so each segment gets its width/depth + mark.
+    _progress(4, 9, "build beams")
+    beam_segments = report.build_beam_segments(revit_result.records,
+                                               sections.get("circles"),
+                                               limits, standards,
+                                               texts=beam_texts, tolerances=tolerances,
+                                               schedule=schedule)
+    sized_beams = beam_segments["status_counts"].get("text_sized", 0)
+    if sized_beams:
+        _say("beams: sized {0} segment(s) from labels (width + depth)".format(sized_beams))
 
     # Grid-line axis positions (internal feet) -> snap text-corrected column
     # centres onto the grid (columns sit on grid intersections).
@@ -676,16 +857,16 @@ def main():
     # names the now-correctly-placed walls instead of resizing a mis-centred piece.
     retiled = report.recover_core_walls_from_labels(sections, column_texts, schedule)
     if retiled:
-        print("columns: re-tiled {0} fused core(s) from labels".format(retiled))
+        _say("columns: re-tiled {0} fused core(s) from labels".format(retiled))
     fixed = report.correct_columns_with_text(sections, column_texts, mark_radius_ft,
                                              schedule=schedule,
                                              grid_x=grid_x, grid_y=grid_y,
                                              grid_snap_ft=grid_snap_ft)
     if fixed:
-        print("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
+        _say("columns: text-corrected {0} (clipped/merged from size labels)".format(fixed))
     named_circles = report.apply_circle_marks(sections, column_texts, mark_radius_ft)
     if named_circles:
-        print("columns: named {0} circular column(s) from labels".format(named_circles))
+        _say("columns: named {0} circular column(s) from labels".format(named_circles))
 
     # Last resort: a small column cast against a bigger one can fragment so badly that
     # recovery folds it into the neighbour, orphaning its label. Recover it from its
@@ -693,26 +874,86 @@ def main():
     recovered_labeled = report.recover_unplaced_labeled_columns(
         sections, column_texts, schedule, limits=limits)
     if recovered_labeled:
-        print("columns: recovered {0} absorbed labelled column(s) from "
+        _say("columns: recovered {0} absorbed labelled column(s) from "
               "schedule+geometry".format(recovered_labeled))
 
-    print("### CAD to BIM {0}".format(cad2bim.__version__))
+    # Blade / wall-columns beyond the size limits (dropped by detection) whose
+    # outlines are drawn CLOSED on the column layer: place them at drawn size,
+    # position and angle (test8's AC19..BC28 strips).
+    recovered_outline = report.recover_outline_columns(
+        sections, revit_result.records, column_texts)
+    if recovered_outline:
+        _say("columns: placed {0} blade/outline column(s) beyond the size "
+             "limits".format(recovered_outline))
+
+    # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
+    # end to the column centre (columns are now final). Axis-aligned columns are untouched.
+    snapped_ends = report.snap_beam_ends_to_columns(
+        beam_segments, sections, sections.get("circles"))
+    if snapped_ends:
+        _say("beams: snapped {0} end(s) to round/rotated column centres".format(snapped_ends))
+
+    # A messy beam outline that RETRACES its own edges decomposes into the same
+    # centreline twice -> two beams z-fighting in Revit (test8's column strips).
+    deduped_beams = report.dedupe_beam_segments(beam_segments)
+    if deduped_beams:
+        _say("beams: removed {0} duplicate segment(s)".format(deduped_beams))
+
+    # A beam outline drawn straight ACROSS a column would bury a beam inside it: split
+    # such beams at the column faces so they frame IN, not through (client request).
+    # Obstacles include closed rectangular column-LAYER outlines the detector dropped
+    # (blade columns beyond the size limits are still real columns). Slabs keep the
+    # PRE-SPLIT centrelines -- the beam-graph slab source needs its bay loops to run
+    # continuously over the columns (split never mutates kept dicts).
+    slab_beam_segments = dict(beam_segments)
+    slab_beam_segments["segments"] = list(beam_segments["segments"])
+    # recover_outline_columns has PLACED every usable closed outline, so the placed
+    # footprints cover everything -- passing the outline fits AS WELL doubled every
+    # ring (two slightly-offset squares per column = 0.42.0's jagged diamond trims)
+    # and doubled the slab graph cost.
+    column_footprints = report.column_trim_footprints(sections)
+    split_beams = report.split_beams_at_columns(
+        beam_segments, sections, sections.get("circles"))
+    if split_beams:
+        _say("beams: split {0} beam(s) drawn across column footprints".format(split_beams))
+
+    _say("### CAD to BIM {0}".format(cad2bim.__version__))
     for line in compare.format_console(comparison):
-        print(line)
+        _say(line)
     for line in report.format_console(revit_result, selections["mapping"],
                                       sections, beam_segments):
-        print(line)
+        _say(line)
 
     outcomes = {}
+    _progress(5, 9, "create grids")
     if selections["create_grids"]:
         outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
+    _progress(6, 9, "create columns")
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
+    _progress(7, 9, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
+    # SLABS: outlines from the slab-edge (A-FLOR) rings, falling back to the
+    # PLACED beams + column footprints when the DWG has no slab layer;
+    # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
+    _progress(8, 9, "create slabs")
+    if selections["create_slabs"]:
+        outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
+                                          dxf_result.texts, selections, schedule,
+                                          column_rects=column_footprints)
+    # STAIRS (option 1, parametric): a STAIRCASE / ST-n text marks the bay; a
+    # generic dog-leg from the Staircase tab numbers is laid out inside it.
+    _progress(9, 9, "create stairs")
+    if selections.get("create_stairs"):
+        outcomes["stairs"] = _create_stairs(doc, revit_result.records,
+                                            slab_beam_segments, dxf_result.texts,
+                                            selections,
+                                            column_rects=column_footprints)
     if selections["export"]:
         _export(revit_result, selections["mapping"], sections, beam_segments,
-                outcomes, dxf_result.texts, comparison)
+                outcomes, dxf_result.texts, comparison,
+                default_name=_export_name(path, selections))
 
 
 def _create_grids(doc, records, grid_texts=None):
@@ -727,7 +968,7 @@ def _create_grids(doc, records, grid_texts=None):
     grid_records = [r for r in records
                     if r.category == layers.CATEGORY_GRID and r.kind in ("line", "arc")]
     if not grid_records:
-        print("Grids -- no grid-category lines to create.")
+        _say("Grids -- no grid-category lines to create.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
     namer = grids.build_grid_namer(grid_records, grid_texts)
@@ -752,10 +993,10 @@ def _create_grids(doc, records, grid_texts=None):
         _rollback_alert("Grids", tstatus, gstatus)
         return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
+    _say("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"]:
-        print("  grid: {0}".format(message))
+        _say("  grid: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
@@ -770,7 +1011,7 @@ def _create_columns(doc, sections, selections):
         _alert("Columns skipped", "Choose a column family and base/top levels.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
     if not sections.get("entries"):
-        print("Columns -- no column sections to place.")
+        _say("Columns -- no column sections to place.")
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Columns")
@@ -789,7 +1030,7 @@ def _create_columns(doc, sections, selections):
             circular = columns.place_circular_columns(
                 doc, circles, circular_id, base_id, top_id)
         elif circles:
-            print("  circular columns skipped: no circular family selected")
+            _say("  circular columns skipped: no circular family selected")
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
     except Exception as creation_error:
@@ -804,11 +1045,11 @@ def _create_columns(doc, sections, selections):
         _rollback_alert("Columns", tstatus, gstatus)
         return {"rect": 0, "circular": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
+    _say("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
         len(result["created"]), len(circular["created"]),
         len(result["skipped"]), len(result["errors"]) + len(circular["errors"])))
     for message in result["errors"] + circular["errors"] + result["skipped"]:
-        print("  column: {0}".format(message))
+        _say("  column: {0}".format(message))
     return {"rect": len(result["created"]), "circular": len(circular["created"]),
             "skipped": len(result["skipped"]),
             "errors": len(result["errors"]) + len(circular["errors"])}
@@ -823,8 +1064,9 @@ def _create_beams(doc, beam_segments, selections):
         _alert("Beams skipped", "Choose a beam family and a top level.")
         return {"created": 0, "skipped": 0, "errors": 0}
     segments = beam_segments.get("segments", [])
-    if not segments:
-        print("Beams -- no beam segments to place.")
+    curved = beam_segments.get("curved_segments", [])
+    if not segments and not curved:
+        _say("Beams -- no beam segments to place.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
     group = TransactionGroup(doc, "CAD to BIM: Beams")
@@ -834,6 +1076,11 @@ def _create_beams(doc, beam_segments, selections):
     try:
         txn_failures.attach_warning_swallower(transaction)
         result = beams.place_beams(doc, segments, beam_id, level_id)
+        # Curved beams (concentric arc pairs, e.g. a curved perimeter member) are placed
+        # along an Arc; fold their outcome into the same result tallies.
+        curved_result = beams.place_curved_beams(doc, curved, beam_id, level_id)
+        for key in ("created", "skipped", "errors"):
+            result[key] = result[key] + curved_result[key]
         tstatus = transaction.Commit()
         gstatus = group.Assimilate()
     except Exception as creation_error:
@@ -848,23 +1095,169 @@ def _create_beams(doc, beam_segments, selections):
         _rollback_alert("Beams", tstatus, gstatus)
         return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
 
-    print("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
+    _say("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"] + result["skipped"]:
-        print("  beam: {0}".format(message))
+        _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"])}
 
 
-def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison):
+def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
+                  column_rects=None):
+    """Place floor slabs after the beams, in a transaction group.
+
+    Outline sources, in order: (1) closed rings on the slab-edge (A-FLOR) layer;
+    (2) faces of the PLACED beam edge lines with the placed column footprints
+    trimming the corners (exact boundary, re-derived onto the carrier lines).
+    Thickness and mark come from slab notes ("S1 150 THK", "150 THK.") lying
+    INSIDE the loop -- content-driven, any text layer. The floor type is the one
+    picked in the window, duplicated per thickness; the level is the beams' level.
+    """
+    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    level_id = selections.get("top_level_id")
+    if level_id is None:
+        _say("Slabs -- skipped (no top level chosen).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    base_type_id = selections.get("floor_type_id")
+    if base_type_id is None:
+        _say("Slabs -- skipped (no floor type chosen).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    # Outline source chain (user directive: these TWO only): (1) slab-edge layer
+    # rings as drawn; (2) faces of the PLACED geometry -- the placed beams' edge
+    # lines form the boundary, and the column footprint rings inside it trim the
+    # corners. The beams are placed aligned, so the slab edges align with them by
+    # construction; the drawn-linework fallbacks are retired.
+    loops = slab_outlines.slab_loops_from_edges(records)
+    source = "slab_edges"
+    if not loops:
+        # Column trimming is back ON (the 0.45.1 beam-edges-only isolation proved
+        # the misalignment lived in the trim interaction): the exactness pass now
+        # picks each vertex's carriers by RING-EDGE DIRECTION, so a diamond
+        # column's 45-degree edges can no longer out-crowd the beam edge and weld
+        # a long boundary onto the column apex.
+        loops = slab_outlines.slab_loops_from_placed_members(
+            records, beam_segments.get("segments"), column_rects=column_rects)
+        source = "placed_members"
+    if not loops:
+        _say("Slabs -- no closed slab outline found (any source).")
+        return {"created": 0, "skipped": 0, "errors": 0, "source": source}
+    slab_schedule = {m: v for m, v in (schedule or {}).items()
+                     if str(m)[:1].upper() == "S" and str(m)[1:2].isdigit()}
+    slab_defs = slab_outlines.apply_slab_labels(loops, texts, schedule=slab_schedule)
+
+    group = TransactionGroup(doc, "CAD to BIM: Slabs")
+    transaction = Transaction(doc, "Create slabs")
+    group.Start()
+    transaction.Start()
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        result = slabs.place_slabs(doc, slab_defs, base_type_id, level_id)
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
+    except Exception as creation_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        if group.HasStarted() and not group.HasEnded():
+            group.RollBack()
+        _error("Slab creation failed", "Slab creation failed.", str(creation_error))
+        return {"created": 0, "skipped": 0, "errors": 1, "source": source}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Slabs", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True,
+                "source": source}
+
+    sized = sum(1 for sd in slab_defs if sd.get("thickness_mm") is not None)
+    _say("Slabs -- source: {0}, loops: {1}, thickness-noted: {2}, "
+         "created: {3}, skipped: {4}, errors: {5}".format(
+             source, len(slab_defs), sized, len(result["created"]),
+             len(result["skipped"]), len(result["errors"])))
+    for message in result["errors"] + result["skipped"]:
+        _say("  slab: {0}".format(message))
+    return {"created": len(result["created"]), "skipped": len(result["skipped"]),
+            "errors": len(result["errors"]), "source": source, "loops": len(slab_defs),
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
+
+
+def _create_stairs(doc, records, beam_segments, texts, selections,
+                   column_rects=None):
+    """Place generic dog-leg staircases at the plan's STAIRCASE / ST-n texts.
+
+    Option 1 (no stair linework): the bay containing the text is the stair's
+    area (placed-members faces with the shaft filter relaxed); riser count,
+    tread, run width and landing come from the Staircase tab plus the base-to-
+    top storey height. The builder runs its own StairsEditScope per stair --
+    NO outer transaction group here (Revit forbids nesting an edit scope).
+    """
+    base_id = selections.get("base_level_id")
+    top_id = selections.get("top_level_id")
+    if base_id is None or top_id is None:
+        _say("Stairs -- skipped (base and top levels are both required).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+    base_level = doc.GetElement(base_id)
+    top_level = doc.GetElement(top_id)
+    storey_mm = (top_level.Elevation - base_level.Elevation) * 304.8
+    if storey_mm <= 0:
+        _say("Stairs -- skipped (top level is not above the base level).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+
+    plans, notes = stair_layout.plan_stairs(
+        records, (beam_segments or {}).get("segments"), column_rects, texts,
+        selections.get("stair_params") or {}, storey_mm,
+        source=selections.get("stair_source") or "auto")
+    for note in notes:
+        _say("  stair: {0}".format(note))
+    if not plans:
+        _say("Stairs -- no staircase planned (see notes above).")
+        return {"created": 0, "skipped": len(notes), "errors": 0}
+
+    result = stairs.place_stairs(doc, plans, base_id, top_id,
+                                 base_type_id=selections.get("stair_type_id"))
+    _say("Stairs -- source: {0}, planned: {1}, created: {2}, skipped: {3}, "
+         "errors: {4} (storey {5} mm, {6} risers @ {7:.1f} mm)".format(
+             plans[0].get("source") or "stair_text", len(plans),
+             len(result["created"]), len(result["skipped"]),
+             len(result["errors"]), int(storey_mm), plans[0]["risers_total"],
+             plans[0]["riser_mm"]))
+    for message in result["errors"] + result["skipped"]:
+        _say("  stair: {0}".format(message))
+    return {"created": len(result["created"]), "skipped": len(result["skipped"]),
+            "errors": len(result["errors"]), "planned": len(plans),
+            "notes": notes[:8],
+            "error_details": [str(e)[:220] for e in result["errors"][:8]]}
+
+
+def _export_name(cad_path, selections):
+    """Default export file name (user convention):
+    [version]_[main element]_[testN from the CAD name]_[textmode].json
+    e.g. "0.44.0_slab_test1_with_textmode.json"."""
+    element = ("stair" if selections.get("create_stairs")
+               else "slab" if selections.get("create_slabs")
+               else "beam" if selections.get("create_beams")
+               else "column" if selections.get("create_columns")
+               else "grid")
+    stem = os.path.splitext(os.path.basename(cad_path or ""))[0]
+    m = re.search(r"(test|project)\s*-?_?(\d+)", stem, re.IGNORECASE)
+    plan = "{0}{1}".format(m.group(1).lower(), m.group(2)) if m else (stem or "plan")
+    text_mapping = selections.get("text_mapping") or {}
+    routed = any(cat and cat != layers.CATEGORY_TEXT_IGNORE
+                 for cat in text_mapping.values())
+    mode = "with_textmode" if routed else "no_text"
+    return "{0}_{1}_{2}_{3}.json".format(cad2bim.__version__, element, plan, mode)
+
+
+def _export(read_result, mapping, sections, beam_segments, outcomes, texts, comparison,
+            default_name="cad_to_bim_read.json"):
     """Write the intermediate JSON (the user opted in via the window)."""
-    target = _save_json("cad_to_bim_read.json")
+    target = _save_json(default_name)
     if not target:
         return
     try:
         report.export_json(target, read_result, mapping, sections, beam_segments,
                            outcomes, texts=texts, comparison=comparison)
-        print("Exported JSON (with report) -> {0}".format(target))
+        _say("Exported JSON (with report) -> {0}".format(target))
     except (IOError, OSError) as write_error:
         _error("JSON export failed", "Could not write the JSON file.", str(write_error))
 

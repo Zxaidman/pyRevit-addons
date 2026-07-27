@@ -17,6 +17,14 @@ CATEGORY_GRID = "grid"
 CATEGORY_COLUMN = "column"
 CATEGORY_BEAM = "beam"
 CATEGORY_SLAB_EDGE = "slab_edge"
+# Upcoming layer-driven passes (user roadmap): structural walls rise base-to-top
+# like columns; arch walls sit ON beams (to the level above, else free-standing);
+# stairs come from the stair-plan linework. Mapped now so real projects
+# (LayoutPlan-Project1: A-WALL-CUT-Brick, PARAPET WALL, A-STAIR-Steps;
+# StaircasePlan-Test1: S-STRS) can already be routed in the override dialog.
+CATEGORY_STRUCT_WALL = "structural wall"
+CATEGORY_ARCH_WALL = "arch wall"
+CATEGORY_STAIR = "stair"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -33,18 +41,24 @@ EXCLUSION_PATTERNS = (
 )
 
 # Order matters: first regex (case-insensitive) to match wins.
-# 'floor' is intentionally NOT a slab token -- A-FLOR is architectural finish,
-# not a structural slab edge (structural slabs derive from the beam graph).
+# A perimeter beam's inner edge is clipped against the floor/slab outline at import, so the
+# floor edge (A-FLOR) IS the surviving partner edge for half the beams. It is routed to
+# slab_edge so the beam pass can pair a lone beam line against it (label-confirmed only --
+# a slab edge alone never becomes a beam).
 DEFAULT_CONVENTION = (
     (r"grid|axis", CATEGORY_GRID),
     (r"col", CATEGORY_COLUMN),
     (r"beam|girder|joist", CATEGORY_BEAM),
-    (r"slab", CATEGORY_SLAB_EDGE),
+    (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
+    (r"stair|strs|step", CATEGORY_STAIR),
+    (r"shear|retain", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
+    (r"wall|parapet", CATEGORY_ARCH_WALL),
 )
 
 ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
-    CATEGORY_SLAB_EDGE, CATEGORY_UNMAPPED,
+    CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
+    CATEGORY_STAIR, CATEGORY_UNMAPPED,
 )
 
 # Text/label layers carry the size marks (e.g. "S-COLS-IDEN", "S-BEAM-IDEN").
@@ -57,7 +71,7 @@ CATEGORY_GRID_TEXT = "grid text"
 # The column-schedule table: mark<->size rows that size MARK-ONLY plan labels
 # (e.g. "C9" on the plan, "C9 400x600" in the table). Routed apart from plan
 # column text because the table is a block of cells, not member-adjacent labels.
-CATEGORY_COLUMN_SCHEDULE = "column schedule"
+CATEGORY_COLUMN_SCHEDULE = "schedule (column/beam/slab)"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
                    CATEGORY_GRID_TEXT, CATEGORY_COLUMN_SCHEDULE,

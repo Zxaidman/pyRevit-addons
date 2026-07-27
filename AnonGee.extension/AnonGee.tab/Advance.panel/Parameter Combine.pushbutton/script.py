@@ -11,6 +11,7 @@ clr.AddReference('RevitAPI')
 clr.AddReference('RevitAPIUI')
 from Autodesk.Revit import DB
 from Autodesk.Revit.UI import TaskDialog
+from Autodesk.Revit.UI.Selection import ObjectType
 
 # Load .NET/WPF Libraries
 clr.AddReference('PresentationCore')
@@ -20,7 +21,7 @@ clr.AddReference('System')
 clr.AddReference('System.Data')
 
 from System.Windows.Markup import XamlReader
-from System.Windows.Media import Brushes
+from System.Windows.Media import Color, SolidColorBrush
 from System.Windows.Documents import TextRange, TextElement, LogicalDirection, TextPointerContext
 from System.Windows import FontWeights, Visibility
 from System.IO import FileStream, FileMode, FileAccess
@@ -30,6 +31,7 @@ from System import String, Predicate, Object, Boolean
 from System.Collections.Generic import List
 from System.Windows.Data import CollectionViewSource
 from System.Windows.Input import Key
+from System.Windows.Controls import CheckBox, ListBoxItem, TextBlock
 from System.Data import DataTable
 
 # Safe Math Dictionary for eval()
@@ -43,6 +45,20 @@ for k, v in base_math.items():
     SAFE_MATH[k] = v
     SAFE_MATH[k.capitalize()] = v
     SAFE_MATH[k.upper()] = v
+
+
+def _make_brush(r, g, b):
+    """Frozen SolidColorBrush from an RGB triple (AnonGee brand tokens)."""
+    brush = SolidColorBrush(Color.FromRgb(r, g, b))
+    brush.Freeze()
+    return brush
+
+
+# AnonGee brand brushes for run-time styling (see AnonGee_BIM_Tools_Brand_Guidelines.md §3)
+BRUSH_TEXT   = _make_brush(0x14, 0x14, 0x14)  # Charcoal Black — primary text / formula body
+BRUSH_MUTED  = _make_brush(0x6B, 0x72, 0x80)  # Mid Grey — secondary text / placeholders
+BRUSH_ERROR  = _make_brush(0xDC, 0x26, 0x26)  # Error Red — failures
+BRUSH_ACCENT = _make_brush(0xE0, 0x20, 0x20)  # Vivid Red — formula tokens / key highlight
 
 # ====================================================================
 # HELPER FUNCTIONS
@@ -170,6 +186,7 @@ class ParameterCombinerApp(object):
         self.document = document
         self.is_updating = False
         self.apply_changes = False
+        self._suppress_recalc = False   # mute per-row Apply recalc during bulk edits
         
         stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
         self.window = XamlReader.Load(stream)
@@ -314,35 +331,47 @@ class ParameterCombinerApp(object):
         self.dt.ColumnChanged += self.on_dt_column_changed
 
     def on_dt_column_changed(self, sender, args):
+        # Muted during bulk edits (Select All/None, spacebar) so the preview is
+        # recomputed once afterwards instead of once per row (was O(n^2)).
+        if self._suppress_recalc:
+            return
         if args.Column.ColumnName == "Apply":
             self.update_previews()
 
     def show_error(self, message, is_error=True):
         self.StatusBar.Text = message
-        self.StatusBar.Foreground = Brushes.Red if is_error else Brushes.Gray
+        self.StatusBar.Foreground = BRUSH_ERROR if is_error else BRUSH_MUTED
 
     # ====================================================================
     # QOL GRID ACTIONS
     # ====================================================================
     def on_select_all(self, sender, args):
-        for row in self.dt.Rows: row["Apply"] = True
-        self.dt.AcceptChanges()
-        self.update_previews()
+        self._set_all_apply(True)
 
     def on_select_none(self, sender, args):
-        for row in self.dt.Rows: row["Apply"] = False
-        self.dt.AcceptChanges()
+        self._set_all_apply(False)
+
+    def _set_all_apply(self, value):
+        # Flip every row's Apply with the recalc handler muted, then recompute
+        # the preview a single time (one O(n) pass, not one per row).
+        self._suppress_recalc = True
+        try:
+            for row in self.dt.Rows:
+                row["Apply"] = value
+            self.dt.AcceptChanges()
+        finally:
+            self._suppress_recalc = False
         self.update_previews()
 
     def on_filter_focus(self, sender, args):
         if self.FilterGridTextBox.Text == "Filter results...":
             self.FilterGridTextBox.Text = ""
-            self.FilterGridTextBox.Foreground = Brushes.Black
+            self.FilterGridTextBox.Foreground = BRUSH_TEXT
 
     def on_filter_lost_focus(self, sender, args):
         if not self.FilterGridTextBox.Text:
             self.FilterGridTextBox.Text = "Filter results..."
-            self.FilterGridTextBox.Foreground = Brushes.Gray
+            self.FilterGridTextBox.Foreground = BRUSH_MUTED
 
     def on_filter_changed(self, sender, args):
         search_text = self.FilterGridTextBox.Text.lower()
@@ -360,9 +389,13 @@ class ParameterCombinerApp(object):
             try:
                 first_row = self.ElementGrid.SelectedItems[0].Row
                 new_state = not first_row["Apply"]
-                for item in self.ElementGrid.SelectedItems:
-                    item.Row["Apply"] = new_state
-                self.dt.AcceptChanges()
+                self._suppress_recalc = True
+                try:
+                    for item in self.ElementGrid.SelectedItems:
+                        item.Row["Apply"] = new_state
+                    self.dt.AcceptChanges()
+                finally:
+                    self._suppress_recalc = False
                 self.update_previews()
                 args.Handled = True
             except: pass
@@ -471,7 +504,7 @@ class ParameterCombinerApp(object):
     # ====================================================================
     def highlight_syntax(self):
         doc_range = TextRange(self.FormulaRichTextBox.Document.ContentStart, self.FormulaRichTextBox.Document.ContentEnd)
-        doc_range.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.Black)
+        doc_range.ApplyPropertyValue(TextElement.ForegroundProperty, BRUSH_TEXT)
         doc_range.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal)
 
         ranges_to_highlight = []
@@ -488,7 +521,7 @@ class ParameterCombinerApp(object):
             ptr = ptr.GetNextContextPosition(LogicalDirection.Forward)
 
         for tr in ranges_to_highlight:
-            tr.ApplyPropertyValue(TextElement.ForegroundProperty, Brushes.DodgerBlue)
+            tr.ApplyPropertyValue(TextElement.ForegroundProperty, BRUSH_ACCENT)
             tr.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Bold)
 
     def on_rtb_text_changed(self, sender, args):
@@ -616,27 +649,209 @@ class ParameterCombinerApp(object):
 
 
 # ====================================================================
+# SCOPE / CATEGORY PICKER (Stage 1)
+# ====================================================================
+
+class ScopePickerApp(object):
+    """First-stage popup: pick a scope (Active View / Whole Model) and the
+    element categories to load. No prior Revit selection is required."""
+
+    def __init__(self, xaml_path, uidoc, document):
+        self.uidoc = uidoc
+        self.document = document
+        self.selected_elements = []   # populated on Load Elements
+        self.pick_in_view = False     # set when the user chooses Select in View
+
+        stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
+        self.window = XamlReader.Load(stream)
+        stream.Close()
+        WindowInteropHelper(self.window).Owner = Process.GetCurrentProcess().MainWindowHandle
+
+        f = self.window.FindName
+        self.rb_view       = f("rb_view")
+        self.rb_whole      = f("rb_whole")
+        self.category_list = f("category_list")
+        self.cat_count     = f("cat_count")
+        self.status_text   = f("status_text")
+        self.btn_all       = f("btn_all")
+        self.btn_none      = f("btn_none")
+        self.btn_pick      = f("btn_pick")
+        self.btn_load      = f("btn_load")
+        self.btn_cancel    = f("btn_cancel")
+
+        self.rb_view.Checked  += self.on_scope_changed
+        self.rb_whole.Checked += self.on_scope_changed
+        self.btn_all.Click    += self.on_all
+        self.btn_none.Click   += self.on_none
+        self.btn_pick.Click   += self.on_pick_in_view
+        self.btn_load.Click   += self.on_load
+        self.btn_cancel.Click += self.on_cancel
+
+        self.refresh_category_list()
+
+    # ── Revit collection helpers ────────────────────────────────────
+    def get_categories_by_scope(self):
+        cats = set()
+        try:
+            if self.rb_whole.IsChecked:
+                for c in self.document.Settings.Categories:
+                    if c.CategoryType == DB.CategoryType.Model and c.AllowsBoundParameters:
+                        try:
+                            cf = DB.ElementCategoryFilter(c.Id)
+                            if DB.FilteredElementCollector(self.document).WherePasses(cf) \
+                                    .WhereElementIsNotElementType().GetElementCount() > 0:
+                                cats.add(c.Name)
+                        except Exception:
+                            pass
+            else:
+                col = DB.FilteredElementCollector(self.document, self.document.ActiveView.Id) \
+                        .WhereElementIsNotElementType()
+                for e in col:
+                    if e.Category and e.Category.CategoryType == DB.CategoryType.Model:
+                        cats.add(e.Category.Name)
+        except Exception:
+            return []
+        return sorted(cats)
+
+    def get_elements_by_categories(self, category_names):
+        if not category_names:
+            return []
+        cat_ids = [c.Id for c in self.document.Settings.Categories if c.Name in category_names]
+        if not cat_ids:
+            return []
+        cat_list = List[DB.ElementId]()
+        for cid in cat_ids:
+            cat_list.Add(cid)
+        mf = DB.ElementMulticategoryFilter(cat_list)
+        if self.rb_whole.IsChecked:
+            collector = DB.FilteredElementCollector(self.document).WherePasses(mf)
+        else:
+            collector = DB.FilteredElementCollector(self.document, self.document.ActiveView.Id).WherePasses(mf)
+        return list(collector.WhereElementIsNotElementType().ToElements())
+
+    # ── Category list UI ────────────────────────────────────────────
+    def _checked_cat_names(self):
+        names = []
+        for item in self.category_list.Items:
+            chk = item.Content
+            if chk.IsChecked:
+                names.append(chk.Content.Text)
+        return names
+
+    def refresh_category_list(self):
+        self.category_list.Items.Clear()
+        cats = self.get_categories_by_scope()
+        for name in cats:
+            tb = TextBlock()
+            tb.Text = name
+            chk = CheckBox()
+            chk.Content = tb
+            chk.IsChecked = False
+            item = ListBoxItem()
+            item.Content = chk
+            self.category_list.Items.Add(item)
+
+        n = len(cats)
+        self.cat_count.Text = "{} categor{}".format(n, "y" if n == 1 else "ies")
+        if not cats:
+            self.set_status("No model categories found in this scope.", True)
+        else:
+            self.set_status("Tick categories to load, then Load Elements.")
+
+    def set_status(self, message, is_error=False):
+        self.status_text.Text = message
+        self.status_text.Foreground = BRUSH_ERROR if is_error else BRUSH_MUTED
+
+    # ── Events ──────────────────────────────────────────────────────
+    def on_scope_changed(self, sender, args):
+        self.refresh_category_list()
+
+    def on_all(self, sender, args):
+        for item in self.category_list.Items:
+            item.Content.IsChecked = True
+
+    def on_none(self, sender, args):
+        for item in self.category_list.Items:
+            item.Content.IsChecked = False
+
+    def on_pick_in_view(self, sender, args):
+        # Close first — the interactive pick needs Revit's UI thread, which is
+        # blocked while this modal dialog is open. main() runs the pick after.
+        self.pick_in_view = True
+        self.window.Close()
+
+    def on_cancel(self, sender, args):
+        self.selected_elements = []
+        self.window.Close()
+
+    def on_load(self, sender, args):
+        cats = self._checked_cat_names()
+        if not cats:
+            self.set_status("Select at least one category.", True)
+            return
+        try:
+            elements = self.get_elements_by_categories(cats)
+        except Exception as ex:
+            self.set_status("Could not collect elements: {}".format(ex), True)
+            return
+        if not elements:
+            self.set_status("No elements found in the selected categories.", True)
+            return
+        self.selected_elements = elements
+        self.window.Close()
+
+
+def pick_elements_in_view(uidoc, document):
+    """Let the user pick elements directly in the active Revit view. Returns
+    the picked elements, or [] if the user cancels (Esc)."""
+    try:
+        refs = uidoc.Selection.PickObjects(
+            ObjectType.Element,
+            "Select elements for Parameter Combination, then click Finish (Esc to cancel)")
+    except Exception:
+        # OperationCanceledException on Esc, or a non-graphical active view
+        return []
+    out = []
+    for r in refs:
+        el = document.GetElement(r.ElementId)
+        if el is not None:
+            out.append(el)
+    return out
+
+
+# ====================================================================
 # MAIN EXECUTION
 # ====================================================================
 
 if __name__ == "__main__":
     uidoc = __revit__.ActiveUIDocument
-    doc = uidoc.Document
+    selected_elements = []
 
-    selection_ids = uidoc.Selection.GetElementIds()
-    selected_elements = [doc.GetElement(e_id) for e_id in selection_ids]
-
-    if not selected_elements:
-        TaskDialog.Show("Error", "Please select elements before running this tool.")
+    if uidoc is None:
+        TaskDialog.Show("Parameter Combination", "Open a Revit model to run this tool.")
     else:
+        doc = uidoc.Document
         script_dir = os.path.dirname(__file__)
+        picker_path = os.path.join(script_dir, 'picker.xaml')
         xaml_path = os.path.join(script_dir, 'ui.xaml')
-        
+
+        # Stage 1 — scope & category picker (no prior selection required)
+        picker = ScopePickerApp(picker_path, uidoc, doc)
+        picker.window.ShowDialog()
+
+        if picker.pick_in_view:
+            # Manual pick in the Revit view (dialog already closed)
+            selected_elements = pick_elements_in_view(uidoc, doc)
+        else:
+            selected_elements = picker.selected_elements
+
+    if selected_elements:
+        # Stage 2 — main parameter-combination window
         app = ParameterCombinerApp(xaml_path, selected_elements, doc)
         app.window.ShowDialog()
 
         if app.apply_changes:
-            transaction = DB.Transaction(doc, "Combine Parameters")
+            transaction = DB.Transaction(doc, "AnonGee · Parameter Combination")
             transaction.Start()
             
             error_encountered = False

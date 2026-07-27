@@ -86,10 +86,11 @@ def _walk(entities, records, texts, depth):
                 _read_insert(entity, records, texts, depth)
             elif dxftype in ("TEXT", "ATTRIB", "ATTDEF"):
                 _add_text(texts, _safe(lambda: entity.dxf.text),
-                          _layer(entity), _insert_point(entity))
+                          _layer(entity), _insert_point(entity),
+                          _text_rotation(entity))
             elif dxftype == "MTEXT":
                 _add_text(texts, _safe(entity.plain_text), _layer(entity),
-                          _xyz(entity.dxf.insert))
+                          _xyz(entity.dxf.insert), _text_rotation(entity))
             else:
                 record = _geometry_record(entity, dxftype)
                 if record is not None:
@@ -103,7 +104,7 @@ def _read_insert(insert, records, texts, depth):
     """Explode a block reference: nested geometry (WCS) + its ATTRIB tag text."""
     for attrib in getattr(insert, "attribs", []):
         _add_text(texts, _safe(lambda: attrib.dxf.text), _layer(attrib),
-                  _insert_point(attrib))
+                  _insert_point(attrib), _text_rotation(attrib))
     if depth >= 3:
         return   # bound nesting depth
     try:
@@ -186,13 +187,28 @@ def _flatten(entity):
 
 # --- text helpers -----------------------------------------------------------
 
-def _add_text(texts, value, layer, point):
+def _add_text(texts, value, layer, point, rotation_deg=0.0):
     if value is None:
         return
     cleaned = value.strip()
     if not cleaned:
         return
-    texts.append(TextRecord(cleaned, layer, point))
+    texts.append(TextRecord(cleaned, layer, point, rotation_deg))
+
+
+def _text_rotation(entity):
+    """Text rotation in degrees (0 = horizontal); best-effort, defaults to 0.
+
+    MTEXT stores its angle as a DIRECTION VECTOR (text_direction, which overrides
+    any rotation attribute) -- a vertical beam label is (0, 1, 0), not rotation=90.
+    """
+    try:
+        if entity.dxf.hasattr("text_direction"):
+            d = entity.dxf.text_direction
+            return math.degrees(math.atan2(d[1], d[0]))
+        return float(entity.dxf.rotation) if entity.dxf.hasattr("rotation") else 0.0
+    except Exception:
+        return 0.0
 
 
 def _insert_point(entity):

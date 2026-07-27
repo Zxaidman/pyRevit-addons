@@ -23,7 +23,7 @@ def mm_to_ft(mm):
 DEFAULTS = {
     # --- acceptance limits (mm) ---------------------------------------------
     "beam_width_min_mm": 150,
-    "beam_width_max_mm": 600,
+    "beam_width_max_mm": 1000,
     "col_b_min_mm": 150,
     "col_b_max_mm": 1500,
     "col_h_min_mm": 150,
@@ -48,6 +48,13 @@ DEFAULTS = {
     "parallel_angle_deg": 3.0,
     "junction_tol_mm": 200.0,     # arc centred this close to a round column = junction
     "concentric_tol_mm": 60.0,    # two arcs sharing a centre this closely = concentric
+
+    # --- staircase (generic dog-leg from the dialog's Staircase tab, mm) -----
+    "stair_riser_mm": 150.0,      # target MAX riser height; count = storey / this
+    "stair_tread_mm": 300.0,      # tread depth (the fixtures' riser spacing)
+    "stair_run_width_mm": 1250.0, # width of each run
+    "stair_landing_mm": 0.0,      # landing depth along the runs; 0 = run width
+    "stair_waist_mm": 200.0,      # waist (structural depth) of runs + landings
 }
 
 
