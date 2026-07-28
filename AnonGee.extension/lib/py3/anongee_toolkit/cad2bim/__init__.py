@@ -35,7 +35,28 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.56.0"  # (1) KEYED SIZE SCHEDULES (test9's "B20(c)"): a label may carry a
+__version__ = "0.57.0"  # StaircasePlan-Test2, from the fixture the user pushed mid-round.
+#                         (1) ITS SCHEDULE READ NOTHING: the table is a Revit export whose mark
+#                         column is headed "Comments", not "Mark", so no header was recognised
+#                         and no table was found. "comments"/"comment"/"name" now head a mark
+#                         column: 0 -> 119 schedule entries on that fixture (C1..C15 300x900,
+#                         B1..B* 300x600), with the Height/Length columns ignored as before.
+#                         (2) MOST RISERS WERE LOST, two independent causes. A line's direction
+#                         is UNSIGNED, but the bucket key did not wrap, so a flight with some
+#                         risers drawn end-for-end split across a "0 degrees" and a "180 degrees"
+#                         bucket and lost most of its lines. And a gap of exactly TWO treads --
+#                         one riser simply not drawn, a break line over it -- ended the flight,
+#                         because only a gap inside the tread range continued it; such a gap now
+#                         counts as k treads and the missing riser lines are rebuilt, so the
+#                         count stays right. Test2 stair 1: 4+4 -> 10+10 risers; stair 6: one
+#                         10-riser run -> 10+8. StaircasePlan-Test1 and StructuralPlan-Test1
+#                         replay byte-identical.
+#                         STILL OPEN on Test2: two stairs are drawn with ARCS (62 on S-STRS) and
+#                         the riser pass reads straight lines only, so they find no flight; one
+#                         more resolves a single 3-riser run. The reversed orientation of stair 2
+#                         needs its DN note read for the climb direction -- next round.
+#
+# 0.56.0                  (1) KEYED SIZE SCHEDULES (test9's "B20(c)"): a label may carry a
 #                         parenthesised KEY instead of a size, with a MARK/SIZE table
 #                         ("SCHEDULE OF BEAM SIZE": (a) = 200x600) holding the sections.
 #                         marks.size_key parses the key onto every text, the table reader

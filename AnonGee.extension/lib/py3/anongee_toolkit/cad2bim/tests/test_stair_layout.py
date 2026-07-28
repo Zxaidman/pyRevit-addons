@@ -560,5 +560,60 @@ class FullPipeline(unittest.TestCase):
         self.assertTrue(any("ST-9" in n for n in notes))
 
 
+class RiserRecovery(unittest.TestCase):
+    """StaircasePlan-Test2 lost most of its risers to two detection bugs."""
+
+    def _flight(self, positions_mm, reverse_every=0):
+        """Vertical riser lines at the given x positions, 1500 long.
+
+        `reverse_every`: draw every Nth line from the other end, which is what a
+        real drawing does and what used to split the flight across two
+        direction buckets (0 degrees and 180 degrees are ONE direction).
+        """
+        recs = []
+        for index, x in enumerate(positions_mm):
+            a = (x * _FT, 0.0)
+            b = (x * _FT, 1500.0 * _FT)
+            if reverse_every and index % reverse_every == 0:
+                a, b = b, a
+            recs.append(_Rec("line", [a, b], layers.CATEGORY_STAIR))
+        return recs
+
+    def test_direction_buckets_wrap(self):
+        """Lines drawn end-for-end are the same direction, not two."""
+        positions = [1000.0 + 300.0 * i for i in range(11)]
+        runs = stair_layout._riser_runs(
+            [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
+             for r in self._flight(positions, reverse_every=3)])
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(len(runs[0]["positions"]), 11)
+
+    def test_missing_riser_lines_are_rebuilt(self):
+        """A 600mm gap in a 300mm flight is ONE undrawn riser, not the end."""
+        positions = [0.0, 300.0, 600.0, 1200.0, 1500.0, 1800.0]   # 900 absent
+        runs = stair_layout._riser_runs(
+            [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
+             for r in self._flight(positions)])
+        self.assertEqual(len(runs), 1)
+        self.assertEqual(len(runs[0]["positions"]), 7)   # the 900 is restored
+
+    def test_a_landing_still_ends_the_flight(self):
+        """A jump far beyond a few treads is a landing: two separate flights."""
+        positions = ([0.0, 300.0, 600.0, 900.0]
+                     + [4000.0, 4300.0, 4600.0, 4900.0])
+        runs = stair_layout._riser_runs(
+            [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
+             for r in self._flight(positions)])
+        self.assertEqual(sorted(len(r["positions"]) for r in runs), [4, 4])
+
+    def test_tread_multiple_rules(self):
+        self.assertEqual(stair_layout._tread_multiple(300.0, 300.0), 1)
+        self.assertEqual(stair_layout._tread_multiple(600.0, 300.0), 2)
+        self.assertEqual(stair_layout._tread_multiple(900.0, 300.0), 3)
+        self.assertEqual(stair_layout._tread_multiple(1200.0, 300.0), 0)  # landing
+        self.assertEqual(stair_layout._tread_multiple(450.0, 300.0), 0)   # not a multiple
+        self.assertEqual(stair_layout._tread_multiple(300.0, None), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -157,7 +157,10 @@ def parse_schedule(texts, allow_split=True):
 # Schedule header keywords -> column role. Plan size is W x L; H is the column's
 # vertical height (ignored for the footprint). Single letters cover terse CAD
 # headers ("W L H"); full words cover verbose ones.
-_HDR_MARK = ("mark", "ref", "col", "column", "type", "no", "id")
+# "comments": a schedule exported FROM Revit keeps the element name in the
+# Comments column (StaircasePlan-Test2), so that column heads the table there
+_HDR_MARK = ("mark", "ref", "col", "column", "type", "no", "id",
+             "comments", "comment", "name")
 _HDR_W = ("w", "b", "width", "breadth")
 _HDR_L = ("l", "d", "depth", "length")
 _HDR_H = ("h", "ht", "height", "lvl", "level")

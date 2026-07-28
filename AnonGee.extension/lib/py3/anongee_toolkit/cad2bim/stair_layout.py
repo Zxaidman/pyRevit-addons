@@ -545,9 +545,14 @@ def _riser_runs(lines):
     direction spans are measured along.
     """
     buckets = defaultdict(list)
+    # a line's direction is unsigned, so the bucket key WRAPS: an angle just
+    # under pi is the same direction as one just over zero. Without the wrap a
+    # flight drawn with some risers "backwards" split into two buckets and lost
+    # most of its lines (StaircasePlan-Test2's stairs).
+    bucket_count = max(1, int(round(math.pi / _RISER_ANGLE_TOL)))
     for a, b in lines:
         ang = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
-        key = int(round(ang / _RISER_ANGLE_TOL))
+        key = int(round(ang / _RISER_ANGLE_TOL)) % bucket_count
         buckets[key].append((a, b))
     runs = []
     dedupe_ft = config.mm_to_ft(_POSITION_DEDUPE_MM)
@@ -625,33 +630,56 @@ def _equidistant_chains(merged):
     lose 11 risers at 300 mm to two trailing 800 mm gaps), so the gaps that are
     not a tread SEGMENT the group instead of disqualifying it.
     """
+    step = _tread_step(merged)
     chains = []
     current = []
-    step = None
-    for i, item in enumerate(merged):
+    for item in merged:
         if not current:
             current = [item]
-            step = None
             continue
         gap = (item[0] - current[-1][0]) * _MM
-        if gap < _TREAD_MIN_MM or gap > _TREAD_MAX_MM:
-            fits = False
-        elif step is None:
-            fits = True
-        else:
-            fits = abs(gap - step) <= 60.0
-        if fits:
-            if step is None:
-                step = gap
+        multiple = _tread_multiple(gap, step)
+        if multiple:
+            # a gap of exactly k treads means k-1 riser lines were not drawn
+            # (a break line, a landing edge drawn over them): rebuild them so
+            # the flight stays whole and its riser count stays right
+            previous = current[-1]
+            for missing in range(1, multiple):
+                fraction = float(missing) / multiple
+                current.append((previous[0] + (item[0] - previous[0]) * fraction,
+                                previous[1], previous[2]))
             current.append(item)
         else:
             if len(current) >= _RISER_MIN_LINES:
                 chains.append(current)
             current = [item]
-            step = None
     if len(current) >= _RISER_MIN_LINES:
         chains.append(current)
     return chains
+
+
+def _tread_step(merged):
+    """The flight's tread: the median gap that falls inside the tread range."""
+    gaps = sorted((merged[i + 1][0] - merged[i][0]) * _MM
+                  for i in range(len(merged) - 1))
+    inside = [g for g in gaps if _TREAD_MIN_MM <= g <= _TREAD_MAX_MM]
+    if not inside:
+        return None
+    return inside[len(inside) // 2]
+
+
+_MAX_MISSING_RISERS = 3      # a bigger jump is a landing, not a gap in a flight
+
+
+def _tread_multiple(gap, step):
+    """How many treads this gap spans (1 = the next riser), or 0 if it is not
+    a whole multiple of the tread -- that is where the flight really ends."""
+    if step is None or step <= 0:
+        return 0
+    for multiple in range(1, _MAX_MISSING_RISERS + 1):
+        if abs(gap - step * multiple) <= 60.0:
+            return multiple
+    return 0
 
 
 def _dogleg_run_dicts(runs, cluster, params):

@@ -7,6 +7,19 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.57.0 — StaircasePlan-Test2: schedule header + lost risers
+- **Schedule read nothing**: Test2's table is a Revit export whose mark column is headed
+  **"Comments"**, not "Mark", so no header matched and no table was found.
+  "comments"/"comment"/"name" now head a mark column → **0 → 119 entries**.
+- **Most risers lost**, two causes: (a) direction buckets didn't wrap, so a flight with
+  some risers drawn end-for-end split across "0°" and "180°" buckets; (b) a gap of exactly
+  two treads (one riser not drawn) ended the flight. Gaps that are k treads now continue
+  it and the missing riser lines are rebuilt. Test2 stair 1: 4+4 → 10+10; stair 6: 10 → 10+8.
+- Prior fixtures replay byte-identical; suite 18 files, 38 stair tests.
+- **Still open on Test2**: two stairs are drawn with ARCS (62 on S-STRS) — the riser pass
+  reads straight lines only; one more yields a single 3-riser run; stair 2's reversed
+  orientation needs its DN note to drive the climb direction.
+
 ## v0.56.0 — keyed size schedules, name parameter, sloped corner trims
 - **Keyed schedules** (test9 "B20(c)"): `marks.size_key` parses the parenthesised key,
   the table reader accepts "(a)" as a mark, and `_label_size` resolves inline →
