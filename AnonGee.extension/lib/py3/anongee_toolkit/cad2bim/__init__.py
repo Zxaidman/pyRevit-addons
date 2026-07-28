@@ -35,7 +35,19 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.57.1"  # HOTFIX for the SW10/SW11 shift the user spotted after 0.57.0 -- a
+__version__ = "0.58.0"  # StaircasePlan-Test2 stair 1 came out 3100 wide with its centreline
+#                         300mm off. Its ten risers span x 11200..13700 (2500, the flight) but
+#                         the bottom LANDING EDGE is drawn 11200..14300, straight across the
+#                         600 well between the flights -- and the run's width was the UNION of
+#                         its members' ends, so that one line stretched the flight over the well.
+#                         A flight's span is now the MODAL riser span (the extent most of its
+#                         lines actually have, always a real drawn one) instead of the union:
+#                         stair 1 lands on 11200..13700 and 14300..16800 with the 600 well
+#                         between, exactly as drawn. This also corrects StaircasePlan-Test1's
+#                         ST-2 from 1500 to 1450 -- 16 of its risers are 1450 long and only the
+#                         few boundary lines were 1500, so the union had been over-reading it.
+#
+# 0.57.1                  HOTFIX for the SW10/SW11 shift the user spotted after 0.57.0 -- a
 #                         REGRESSION from making that fixture's schedule readable. A wall
 #                         crossed by another wall is decomposed into pieces, so SW10's drawn
 #                         piece stops at SW9's face: y 100..7550, 7450 long, centred 3825. Once

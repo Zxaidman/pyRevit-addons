@@ -615,5 +615,37 @@ class RiserRecovery(unittest.TestCase):
         self.assertEqual(stair_layout._tread_multiple(300.0, None), 0)
 
 
+class FlightWidthFromTypicalRiser(unittest.TestCase):
+    """A line that runs PAST the flight must not stretch its width.
+
+    StaircasePlan-Test2 stair 1: ten risers span x 11200..13700 (2500 wide)
+    and the bottom landing edge runs 11200..14300, right across the 600 well.
+    Taking the union made the flight 3100 wide and moved its centreline 300mm.
+    """
+
+    def _flight(self, spans_mm, ys_mm):
+        recs = []
+        for y, (x0, x1) in zip(ys_mm, spans_mm):
+            recs.append(_Rec("line", [(x0 * _FT, y * _FT), (x1 * _FT, y * _FT)],
+                             layers.CATEGORY_STAIR))
+        return [(tuple(r.points[0][:2]), tuple(r.points[1][:2])) for r in recs]
+
+    def test_overrunning_line_does_not_widen_the_flight(self):
+        ys = [2600.0 + 300.0 * i for i in range(10)]
+        spans = [(11200.0, 14300.0)] + [(11200.0, 13700.0)] * 9   # first overruns
+        runs = stair_layout._riser_runs(self._flight(spans, ys))
+        self.assertEqual(len(runs), 1)
+        width_mm = (runs[0]["span_hi"] - runs[0]["span_lo"]) * _MM
+        self.assertAlmostEqual(width_mm, 2500.0, places=3)
+        centre_mm = (runs[0]["span_lo"] + runs[0]["span_hi"]) / 2.0 * _MM
+        self.assertAlmostEqual(centre_mm, 12450.0, places=3)
+
+    def test_modal_span_is_a_real_drawn_extent(self):
+        chain = [(0.0, 10.0, 20.0), (1.0, 10.0, 20.0), (2.0, 10.0, 30.0)]
+        lo, hi = stair_layout._modal_span(chain)
+        self.assertAlmostEqual(lo, 10.0)
+        self.assertAlmostEqual(hi, 20.0)      # the pair two of the three share
+
+
 if __name__ == "__main__":
     unittest.main()

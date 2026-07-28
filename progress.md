@@ -7,6 +7,15 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.58.0 — flight width from the TYPICAL riser, not the union
+- Test2 stair 1 came out 3100 wide, centreline 300mm off: its ten risers span 11200..13700
+  (2500) but the bottom landing edge is drawn 11200..14300, across the 600 well — and the
+  run span was the UNION of member ends. A flight's span is now the MODAL riser span
+  (always a real drawn extent). Stair 1 → 11200..13700 + 14300..16800 with the 600 well.
+- Also corrects StaircasePlan-Test1 ST-2 from 1500 to 1450: 16 of its risers are 1450 and
+  only a few boundary lines are 1500, so the union had been over-reading it.
+- Suite 18 files, 40 stair tests.
+
 ## v0.57.1 — hotfix: SW10/SW11 moved 200mm (regression from the readable schedule)
 - A wall crossed by another is decomposed, so SW10's drawn piece stops at SW9's face
   (y 100..7550, 7450 long, centre 3825). Once 0.57.0 made the schedule readable it gave

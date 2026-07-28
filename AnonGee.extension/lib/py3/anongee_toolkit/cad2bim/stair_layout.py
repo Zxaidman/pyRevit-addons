@@ -609,8 +609,11 @@ def _riser_runs(lines):
                     merged.append((pos, lo, hi))
             for chain in _equidistant_chains(merged):
                 positions = [p for p, _lo, _hi in chain]
-                lo = min(c[1] for c in chain)
-                hi = max(c[2] for c in chain)
+                # the flight's width is the TYPICAL riser span, not the union:
+                # one line often runs past the flight (a U's bottom landing edge
+                # crosses the well), and taking the extremes stretched the run
+                # over that well and threw its centreline off (Test2 stair 1).
+                lo, hi = _modal_span(chain)
                 mid_pos = (positions[0] + positions[-1]) / 2.0
                 mid_off = (lo + hi) / 2.0
                 runs.append({"axis": (px, py), "normal": (dx, dy),
@@ -619,6 +622,26 @@ def _riser_runs(lines):
                              "center": (px * mid_pos + dx * mid_off,
                                         py * mid_pos + dy * mid_off)})
     return runs
+
+
+_SPAN_BUCKET_MM = 5.0        # riser ends within this are the same drawn span
+
+
+def _modal_span(chain):
+    """The (lo, hi) span MOST of the chain's riser lines actually have.
+
+    Always a real drawn extent, unlike a per-end median, which can pair the low
+    end of one line with the high end of another and invent a width no riser
+    has.
+    """
+    bucket = config.mm_to_ft(_SPAN_BUCKET_MM)
+    tally = defaultdict(list)
+    for _pos, lo, hi in chain:
+        tally[(round(lo / bucket), round(hi / bucket))].append((lo, hi))
+    best = max(tally.values(), key=lambda group: (len(group),
+                                                  group[0][1] - group[0][0]))
+    return (sum(g[0] for g in best) / len(best),
+            sum(g[1] for g in best) / len(best))
 
 
 def _equidistant_chains(merged):
