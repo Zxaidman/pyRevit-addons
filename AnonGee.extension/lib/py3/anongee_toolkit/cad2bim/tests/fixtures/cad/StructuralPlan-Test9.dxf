@@ -33,19 +33,19 @@ $INSBASE
   9
 $EXTMIN
  10
--0.0000000000291038
+-3.93828427203698
  20
-0.0
+-1.302238287535146
  30
--0.0062589766846139
+-0.0062616694007731
   9
 $EXTMAX
  10
-129059.5453376827
+129063.4842229351
  20
-42675.0
+42676.30243700847
  30
-0.0819826786198923
+0.0819853717469587
   9
 $LIMMIN
  10
@@ -501,19 +501,19 @@ $TDUCREATE
   9
 $TDUPDATE
  40
-2461249.514386574
+2461250.511134259
   9
 $TDUUPDATE
  40
-2461249.285219907
+2461250.281967592
   9
 $TDINDWG
  40
-0.0328703704
+0.0347453704
   9
 $TDUSRTIMER
  40
-0.0328703704
+0.0347453704
   9
 $USRTIMER
  70
@@ -553,7 +553,7 @@ $SPLINESEGS
   9
 $HANDSEED
   5
-316F
+3179
   9
 $SURFTAB1
  70
@@ -937,7 +937,7 @@ $FINGERPRINTGUID
   9
 $VERSIONGUID
   2
-{68F3DA32-7122-CC4F-A97B-FA4F657F73A1}
+{D2766BD1-0AB6-DF44-B673-98B483BA52A7}
   9
 $EXTNAMES
 290
@@ -1247,7 +1247,7 @@ ObjectDBX Classes
  90
      1152
  91
-        4
+        2
 280
      0
 281
@@ -1279,7 +1279,7 @@ ObjectDBX Classes
  90
      1153
  91
-        1
+        0
 280
      0
 281
@@ -1391,7 +1391,7 @@ ObjectDBX Classes
  90
      1025
  91
-        3
+        0
 280
      0
 281
@@ -1407,7 +1407,7 @@ ObjectDBX Classes
  90
      1152
  91
-        3
+        0
 280
      0
 281
@@ -1423,7 +1423,7 @@ ObjectDBX Classes
  90
      1152
  91
-        3
+        0
 280
      0
 281
@@ -1517,9 +1517,9 @@ AcDbViewportTableRecord
  21
 1.0
  12
-7352.390376840303
+7352.390677330499
  22
-7525.397855257939
+7525.397954618409
  13
 0.0
  23
@@ -1545,7 +1545,7 @@ AcDbViewportTableRecord
  37
 -0.0000005648676653
  40
-67972.25702147162
+67976.40571880442
  41
 1.905910735826296
  42
@@ -1635,7 +1635,7 @@ LTYPE
 100
 AcDbSymbolTable
  70
-     4
+     3
   0
 LTYPE
   5
@@ -3231,7 +3231,7 @@ VIEW
 100
 AcDbSymbolTable
  70
-     2
+     0
   0
 ENDTAB
   0
@@ -4377,7 +4377,7 @@ BLOCK_RECORD
 100
 AcDbSymbolTable
  70
-   214
+   211
   0
 BLOCK_RECORD
   5
@@ -4467,21 +4467,9 @@ _Oblique
 102
 {BLKREFS
 331
-3158
+1080
 331
-3160
-331
-3161
-331
-3143
-331
-3144
-331
-3157
-331
-2EB9
-331
-2EBA
+1081
 331
 2EC2
 331
@@ -4534,54 +4522,6 @@ _Oblique
 2F03
 331
 2F04
-331
-2F0C
-331
-2F0D
-331
-2F15
-331
-2F16
-331
-2FAE
-331
-2FAF
-331
-2FB7
-331
-2FB8
-331
-2FC2
-331
-2FC3
-331
-2A55
-331
-2A56
-331
-2A5E
-331
-2A5F
-331
-2A67
-331
-2A68
-331
-2DEF
-331
-2DF0
-331
-2DDD
-331
-2DDE
-331
-2DE6
-331
-2DE7
-331
-2FCB
-331
-2FCC
 331
 2FD4
 331
@@ -4636,6 +4576,128 @@ _Oblique
 2E9C
 331
 2E9D
+331
+2E15
+331
+2E16
+331
+2E1E
+331
+2E1F
+331
+1EC4
+331
+1EC5
+331
+1ED2
+331
+1ED3
+331
+F76
+331
+F77
+331
+F82
+331
+F83
+331
+F8E
+331
+F8F
+331
+F9A
+331
+F9B
+331
+FA6
+331
+FA7
+331
+FB2
+331
+FB3
+331
+FBE
+331
+FBF
+331
+FCA
+331
+FCB
+331
+1BD5
+331
+1BD6
+331
+1BDE
+331
+1BDF
+331
+1BE7
+331
+3158
+331
+3160
+331
+3161
+331
+3143
+331
+3144
+331
+3157
+331
+2EB9
+331
+2EBA
+331
+2F0C
+331
+2F0D
+331
+2F15
+331
+2F16
+331
+2FAE
+331
+2FAF
+331
+2FB7
+331
+2FB8
+331
+2FC2
+331
+2FC3
+331
+2A55
+331
+2A56
+331
+2A5E
+331
+2A5F
+331
+2A67
+331
+2A68
+331
+2DEF
+331
+2DF0
+331
+2DDD
+331
+2DDE
+331
+2DE6
+331
+2DE7
+331
+2FCB
+331
+2FCC
 331
 2EA5
 331
@@ -4697,115 +4759,61 @@ _Oblique
 331
 2E0D
 331
-2E15
+F2E
 331
-2E16
+F2F
 331
-2E1E
+F3A
 331
-2E1F
+F3B
 331
-1EC4
+F46
 331
-1EC5
+F47
 331
-1ED2
+F52
 331
-1ED3
+F53
 331
-F76
+F5E
 331
-F77
+F5F
 331
-F82
+F6A
 331
-F83
+F6B
 331
-F8E
+1BA6
 331
-F8F
+1BA7
 331
-F9A
+1BAF
 331
-F9B
+1BB0
 331
-FA6
+1BBA
 331
-FA7
+1BBB
 331
-FB2
+1BC3
 331
-FB3
+1BC4
 331
-FBE
+1BCC
 331
-FBF
+1BCD
 331
-FCA
+1DD2
 331
-FCB
+1DD3
 331
-1BD5
+1DDE
 331
-1BD6
+1DDF
 331
-1BDE
+1DEA
 331
-1BDF
-331
-1BE7
-331
-1BE8
-331
-1BF0
-331
-1BF1
-331
-2E27
-331
-2E28
-331
-2E30
-331
-2E31
-331
-2E39
-331
-2E3A
-331
-2E42
-331
-2E43
-331
-2E4B
-331
-2E4C
-331
-2E54
-331
-2E55
-331
-2E5D
-331
-2E5E
-331
-2E66
-331
-2E67
-331
-2E6F
-331
-2F81
-331
-2F82
-331
-2F8A
-331
-2F8B
-331
-2F93
-331
-2F94
+1DEB
 331
 2F9C
 331
@@ -4923,61 +4931,57 @@ F22
 331
 F23
 331
-F2E
+1BE8
 331
-F2F
+1BF0
 331
-F3A
+1BF1
 331
-F3B
+2E27
 331
-F46
+2E28
 331
-F47
+2E30
 331
-F52
+2E31
 331
-F53
+2E39
 331
-F5E
+2E3A
 331
-F5F
+2E42
 331
-F6A
+2E43
 331
-F6B
+2E4B
 331
-1BA6
+2E4C
 331
-1BA7
+2E54
 331
-1BAF
+2E55
 331
-1BB0
+2E5D
 331
-1BBA
+2E5E
 331
-1BBB
+2E66
 331
-1BC3
+2E67
 331
-1BC4
+2E6F
 331
-1BCC
+2F81
 331
-1BCD
+2F82
 331
-1DD2
+2F8A
 331
-1DD3
+2F8B
 331
-1DDE
+2F93
 331
-1DDF
-331
-1DEA
-331
-1DEB
+2F94
 331
 1DF6
 331
@@ -5159,6 +5163,42 @@ FEE
 331
 FEF
 331
+1DBA
+331
+1DBB
+331
+1DC6
+331
+1DC7
+331
+3BC
+331
+3BD
+331
+3C8
+331
+3C9
+331
+3D4
+331
+3D5
+331
+3E0
+331
+3E1
+331
+3EC
+331
+3ED
+331
+3F8
+331
+3F9
+331
+404
+331
+405
+331
 FFA
 331
 FFB
@@ -5218,46 +5258,6 @@ EF1
 1DAE
 331
 1DAF
-331
-1DBA
-331
-1DBB
-331
-1DC6
-331
-1DC7
-331
-3BC
-331
-3BD
-331
-3C8
-331
-3C9
-331
-3D4
-331
-3D5
-331
-3E0
-331
-3E1
-331
-3EC
-331
-3ED
-331
-3F8
-331
-3F9
-331
-404
-331
-405
-331
-1080
-331
-1081
 102
 }
  70
@@ -6635,7 +6635,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D68
+*D67
 340
 0
  70
@@ -6655,7 +6655,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D69
+*D68
 340
 0
  70
@@ -6675,7 +6675,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D70
+*D69
 340
 0
  70
@@ -6695,7 +6695,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D71
+*D70
 340
 0
  70
@@ -6715,7 +6715,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D72
+*D71
 340
 0
  70
@@ -6735,7 +6735,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D73
+*D72
 340
 0
  70
@@ -6755,7 +6755,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D74
+*D73
 340
 0
  70
@@ -6775,7 +6775,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D75
+*D74
 340
 0
  70
@@ -6795,7 +6795,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D76
+*D75
 340
 0
  70
@@ -6815,7 +6815,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D77
+*D76
 340
 0
  70
@@ -6835,7 +6835,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D78
+*D77
 340
 0
  70
@@ -6855,7 +6855,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D79
+*D78
 340
 0
  70
@@ -6875,7 +6875,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D80
+*D79
 340
 0
  70
@@ -6895,7 +6895,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D81
+*D80
 340
 0
  70
@@ -6915,7 +6915,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D82
+*D81
 340
 0
  70
@@ -6935,7 +6935,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D83
+*D82
 340
 0
  70
@@ -6955,7 +6955,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D84
+*D83
 340
 0
  70
@@ -6975,7 +6975,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D85
+*D84
 340
 0
  70
@@ -6995,7 +6995,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D86
+*D85
 340
 0
  70
@@ -7015,7 +7015,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D87
+*D86
 340
 0
  70
@@ -7035,7 +7035,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D88
+*D87
 340
 0
  70
@@ -7055,7 +7055,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D89
+*D88
 340
 0
  70
@@ -7075,7 +7075,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D90
+*D89
 340
 0
  70
@@ -7095,7 +7095,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D91
+*D90
 340
 0
  70
@@ -7115,7 +7115,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D92
+*D91
 340
 0
  70
@@ -7135,7 +7135,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D93
+*D92
 340
 0
  70
@@ -7155,7 +7155,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D94
+*D93
 340
 0
  70
@@ -7175,7 +7175,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D95
+*D94
 340
 0
  70
@@ -7195,7 +7195,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D96
+*D95
 340
 0
  70
@@ -7215,7 +7215,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D97
+*D96
 340
 0
  70
@@ -7235,7 +7235,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*T98
+*T97
 340
 0
  70
@@ -7255,7 +7255,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D99
+*D98
 340
 0
  70
@@ -7275,7 +7275,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D100
+*D99
 340
 0
  70
@@ -7295,7 +7295,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D101
+*D100
 340
 0
  70
@@ -7315,7 +7315,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D102
+*D101
 340
 0
  70
@@ -7335,7 +7335,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*T103
+*T102
 340
 0
  70
@@ -7355,7 +7355,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D104
+*D103
 340
 0
  70
@@ -7375,7 +7375,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D105
+*D104
 340
 0
  70
@@ -7395,7 +7395,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D106
+*D105
 340
 0
  70
@@ -7415,7 +7415,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D107
+*D106
 340
 0
  70
@@ -7435,7 +7435,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D108
+*D107
 340
 0
  70
@@ -7455,7 +7455,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D109
+*D108
 340
 0
  70
@@ -7475,7 +7475,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D110
+*D109
 340
 0
  70
@@ -7495,7 +7495,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D111
+*D110
 340
 0
  70
@@ -7515,7 +7515,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D112
+*D111
 340
 0
  70
@@ -7535,7 +7535,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D113
+*D112
 340
 0
  70
@@ -7555,7 +7555,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D114
+*D113
 340
 0
  70
@@ -7575,7 +7575,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D115
+*D114
 340
 0
  70
@@ -7595,7 +7595,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D116
+*D115
 340
 0
  70
@@ -7615,7 +7615,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D117
+*D116
 340
 0
  70
@@ -7635,7 +7635,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D118
+*D117
 340
 0
  70
@@ -7655,7 +7655,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D119
+*D118
 340
 0
  70
@@ -7675,7 +7675,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D120
+*D119
 340
 0
  70
@@ -7695,7 +7695,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D121
+*D120
 340
 0
  70
@@ -7715,7 +7715,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D122
+*D121
 340
 0
  70
@@ -7735,7 +7735,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D123
+*D122
 340
 0
  70
@@ -7755,7 +7755,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D124
+*D123
 340
 0
  70
@@ -7775,7 +7775,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D125
+*D124
 340
 0
  70
@@ -7795,7 +7795,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D126
+*D125
 340
 0
  70
@@ -7815,7 +7815,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D127
+*D126
 340
 0
  70
@@ -7835,7 +7835,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D128
+*D127
 340
 0
  70
@@ -7855,7 +7855,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D129
+*D128
 340
 0
  70
@@ -7875,7 +7875,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D130
+*D129
 340
 0
  70
@@ -7895,7 +7895,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D131
+*D130
 340
 0
  70
@@ -7915,7 +7915,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D132
+*D131
 340
 0
  70
@@ -7935,7 +7935,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D133
+*D132
 340
 0
  70
@@ -7955,7 +7955,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D135
+*D133
 340
 0
  70
@@ -7975,7 +7975,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D136
+*D134
 340
 0
  70
@@ -7995,7 +7995,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D137
+*D135
 340
 0
  70
@@ -8015,7 +8015,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D138
+*D136
 340
 0
  70
@@ -8155,7 +8155,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*T141
+*T139
 340
 0
  70
@@ -8175,7 +8175,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D142
+*D140
 340
 0
  70
@@ -8195,7 +8195,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D143
+*D141
 340
 0
  70
@@ -8215,7 +8215,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D144
+*D142
 340
 0
  70
@@ -8235,7 +8235,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D145
+*D143
 340
 0
  70
@@ -8255,7 +8255,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D146
+*D144
 340
 0
  70
@@ -8275,7 +8275,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D147
+*D145
 340
 0
  70
@@ -8295,7 +8295,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D148
+*D146
 340
 0
  70
@@ -8315,7 +8315,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D149
+*D147
 340
 0
  70
@@ -8335,7 +8335,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D150
+*D148
 340
 0
  70
@@ -8355,7 +8355,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D151
+*D149
 340
 0
  70
@@ -8375,7 +8375,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D152
+*D150
 340
 0
  70
@@ -8395,7 +8395,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D153
+*D151
 340
 0
  70
@@ -8415,7 +8415,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D154
+*D152
 340
 0
  70
@@ -8435,7 +8435,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D155
+*D153
 340
 0
  70
@@ -8455,7 +8455,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D156
+*D154
 340
 0
  70
@@ -8475,7 +8475,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D157
+*D155
 340
 0
  70
@@ -8495,7 +8495,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D158
+*D156
 340
 0
  70
@@ -8515,7 +8515,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D159
+*D157
 340
 0
  70
@@ -8535,7 +8535,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D160
+*D158
 340
 0
  70
@@ -8555,7 +8555,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D161
+*D159
 340
 0
  70
@@ -8575,7 +8575,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D162
+*D160
 340
 0
  70
@@ -8595,7 +8595,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D163
+*D161
 340
 0
  70
@@ -8615,7 +8615,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D164
+*D162
 340
 0
  70
@@ -8635,7 +8635,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D165
+*D163
 340
 0
  70
@@ -8655,7 +8655,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D166
+*D164
 340
 0
  70
@@ -8675,7 +8675,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D167
+*D165
 340
 0
  70
@@ -8695,7 +8695,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D168
+*D166
 340
 0
  70
@@ -8715,7 +8715,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D169
+*D167
 340
 0
  70
@@ -8735,7 +8735,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D170
+*D168
 340
 0
  70
@@ -8755,7 +8755,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D171
+*D169
 340
 0
  70
@@ -8775,7 +8775,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D172
+*D170
 340
 0
  70
@@ -8795,7 +8795,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D173
+*D171
 340
 0
  70
@@ -8815,7 +8815,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D174
+*D172
 340
 0
  70
@@ -8835,7 +8835,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D175
+*D173
 340
 0
  70
@@ -8855,7 +8855,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D176
+*D174
 340
 0
  70
@@ -8875,7 +8875,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*T177
+*T175
 340
 0
  70
@@ -8895,7 +8895,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D179
+*D176
 340
 0
  70
@@ -8915,7 +8915,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D180
+*D177
 340
 0
  70
@@ -8935,7 +8935,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D181
+*D178
 340
 0
  70
@@ -8955,7 +8955,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D182
+*D179
 340
 0
  70
@@ -8975,7 +8975,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D183
+*D180
 340
 0
  70
@@ -8995,7 +8995,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D184
+*D181
 340
 0
  70
@@ -9015,7 +9015,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D185
+*D182
 340
 0
  70
@@ -9035,7 +9035,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D186
+*D183
 340
 0
  70
@@ -9055,7 +9055,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D187
+*D184
 340
 0
  70
@@ -9075,7 +9075,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D188
+*D185
 340
 0
  70
@@ -9095,7 +9095,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D189
+*D186
 340
 0
  70
@@ -9115,7 +9115,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D190
+*D187
 340
 0
  70
@@ -9135,7 +9135,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D191
+*D188
 340
 0
  70
@@ -9155,7 +9155,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D192
+*D189
 340
 0
  70
@@ -9175,7 +9175,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D193
+*D190
 340
 0
  70
@@ -9195,7 +9195,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D194
+*D191
 340
 0
  70
@@ -9215,7 +9215,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D195
+*D192
 340
 0
  70
@@ -9235,7 +9235,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D196
+*D193
 340
 0
  70
@@ -9255,7 +9255,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D197
+*D194
 340
 0
  70
@@ -9275,7 +9275,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D198
+*D195
 340
 0
  70
@@ -9295,7 +9295,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D199
+*D196
 340
 0
  70
@@ -9315,7 +9315,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D200
+*D197
 340
 0
  70
@@ -9335,7 +9335,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D201
+*D198
 340
 0
  70
@@ -9355,7 +9355,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D202
+*D199
 340
 0
  70
@@ -9375,7 +9375,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D203
+*D200
 340
 0
  70
@@ -9395,7 +9395,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D204
+*D201
 340
 0
  70
@@ -9415,7 +9415,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D205
+*D202
 340
 0
  70
@@ -9435,7 +9435,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D206
+*D203
 340
 0
  70
@@ -9455,7 +9455,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D207
+*D204
 340
 0
  70
@@ -9475,7 +9475,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D208
+*D205
 340
 0
  70
@@ -9495,7 +9495,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D209
+*D206
 340
 0
  70
@@ -9515,7 +9515,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D210
+*D207
 340
 0
  70
@@ -9535,7 +9535,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D211
+*D208
 340
 0
  70
@@ -9555,7 +9555,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D212
+*D209
 340
 0
  70
@@ -9575,7 +9575,7 @@ AcDbSymbolTableRecord
 100
 AcDbBlockTableRecord
   2
-*D213
+*D210
 340
 0
  70
@@ -32109,7 +32109,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D68
+*D67
  70
      1
  10
@@ -32119,7 +32119,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D68
+*D67
   1
 
   0
@@ -32403,7 +32403,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D69
+*D68
  70
      1
  10
@@ -32413,7 +32413,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D69
+*D68
   1
 
   0
@@ -32697,7 +32697,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D70
+*D69
  70
      1
  10
@@ -32707,7 +32707,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D70
+*D69
   1
 
   0
@@ -32991,7 +32991,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D71
+*D70
  70
      1
  10
@@ -33001,7 +33001,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D71
+*D70
   1
 
   0
@@ -33285,7 +33285,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D72
+*D71
  70
      1
  10
@@ -33295,7 +33295,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D72
+*D71
   1
 
   0
@@ -33579,7 +33579,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D73
+*D72
  70
      1
  10
@@ -33589,7 +33589,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D73
+*D72
   1
 
   0
@@ -33925,7 +33925,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D74
+*D73
  70
      1
  10
@@ -33935,7 +33935,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D74
+*D73
   1
 
   0
@@ -34219,7 +34219,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D75
+*D74
  70
      1
  10
@@ -34229,7 +34229,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D75
+*D74
   1
 
   0
@@ -34513,7 +34513,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D76
+*D75
  70
      1
  10
@@ -34523,7 +34523,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D76
+*D75
   1
 
   0
@@ -34807,7 +34807,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D77
+*D76
  70
      1
  10
@@ -34817,7 +34817,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D77
+*D76
   1
 
   0
@@ -35101,7 +35101,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D78
+*D77
  70
      1
  10
@@ -35111,7 +35111,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D78
+*D77
   1
 
   0
@@ -35395,7 +35395,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D79
+*D78
  70
      1
  10
@@ -35405,7 +35405,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D79
+*D78
   1
 
   0
@@ -35689,7 +35689,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D80
+*D79
  70
      1
  10
@@ -35699,7 +35699,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D80
+*D79
   1
 
   0
@@ -35991,7 +35991,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D81
+*D80
  70
      1
  10
@@ -36001,7 +36001,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D81
+*D80
   1
 
   0
@@ -36293,7 +36293,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D82
+*D81
  70
      1
  10
@@ -36303,7 +36303,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D82
+*D81
   1
 
   0
@@ -36595,7 +36595,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D83
+*D82
  70
      1
  10
@@ -36605,7 +36605,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D83
+*D82
   1
 
   0
@@ -36897,7 +36897,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D84
+*D83
  70
      1
  10
@@ -36907,7 +36907,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D84
+*D83
   1
 
   0
@@ -37199,7 +37199,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D85
+*D84
  70
      1
  10
@@ -37209,7 +37209,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D85
+*D84
   1
 
   0
@@ -37501,7 +37501,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D86
+*D85
  70
      1
  10
@@ -37511,7 +37511,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D86
+*D85
   1
 
   0
@@ -37803,7 +37803,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D87
+*D86
  70
      1
  10
@@ -37813,7 +37813,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D87
+*D86
   1
 
   0
@@ -38105,7 +38105,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D88
+*D87
  70
      1
  10
@@ -38115,7 +38115,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D88
+*D87
   1
 
   0
@@ -38407,7 +38407,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D89
+*D88
  70
      1
  10
@@ -38417,7 +38417,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D89
+*D88
   1
 
   0
@@ -38709,7 +38709,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D90
+*D89
  70
      1
  10
@@ -38719,7 +38719,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D90
+*D89
   1
 
   0
@@ -39011,7 +39011,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D91
+*D90
  70
      1
  10
@@ -39021,7 +39021,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D91
+*D90
   1
 
   0
@@ -39313,7 +39313,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D92
+*D91
  70
      1
  10
@@ -39323,7 +39323,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D92
+*D91
   1
 
   0
@@ -39615,7 +39615,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D93
+*D92
  70
      1
  10
@@ -39625,7 +39625,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D93
+*D92
   1
 
   0
@@ -39917,7 +39917,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D94
+*D93
  70
      1
  10
@@ -39927,7 +39927,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D94
+*D93
   1
 
   0
@@ -40271,7 +40271,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D95
+*D94
  70
      1
  10
@@ -40281,7 +40281,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D95
+*D94
   1
 
   0
@@ -40573,7 +40573,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D96
+*D95
  70
      1
  10
@@ -40583,7 +40583,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D96
+*D95
   1
 
   0
@@ -40875,7 +40875,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D97
+*D96
  70
      1
  10
@@ -40885,7 +40885,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D97
+*D96
   1
 
   0
@@ -41177,7 +41177,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*T98
+*T97
  70
      1
  10
@@ -41187,7 +41187,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*T98
+*T97
   1
 
   0
@@ -42419,7 +42419,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D99
+*D98
  70
      1
  10
@@ -42429,7 +42429,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D99
+*D98
   1
 
   0
@@ -42723,7 +42723,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D100
+*D99
  70
      1
  10
@@ -42733,7 +42733,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D100
+*D99
   1
 
   0
@@ -43019,7 +43019,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D101
+*D100
  70
      1
  10
@@ -43029,7 +43029,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D101
+*D100
   1
 
   0
@@ -43323,7 +43323,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D102
+*D101
  70
      1
  10
@@ -43333,7 +43333,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D102
+*D101
   1
 
   0
@@ -43617,7 +43617,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*T103
+*T102
  70
      1
  10
@@ -43627,7 +43627,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*T103
+*T102
   1
 
   0
@@ -44855,7 +44855,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D104
+*D103
  70
      1
  10
@@ -44865,7 +44865,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D104
+*D103
   1
 
   0
@@ -45139,7 +45139,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D105
+*D104
  70
      1
  10
@@ -45149,7 +45149,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D105
+*D104
   1
 
   0
@@ -45423,7 +45423,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D106
+*D105
  70
      1
  10
@@ -45433,7 +45433,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D106
+*D105
   1
 
   0
@@ -45707,7 +45707,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D107
+*D106
  70
      1
  10
@@ -45717,7 +45717,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D107
+*D106
   1
 
   0
@@ -45991,7 +45991,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D108
+*D107
  70
      1
  10
@@ -46001,7 +46001,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D108
+*D107
   1
 
   0
@@ -46275,7 +46275,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D109
+*D108
  70
      1
  10
@@ -46285,7 +46285,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D109
+*D108
   1
 
   0
@@ -46611,7 +46611,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D110
+*D109
  70
      1
  10
@@ -46621,7 +46621,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D110
+*D109
   1
 
   0
@@ -46895,7 +46895,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D111
+*D110
  70
      1
  10
@@ -46905,7 +46905,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D111
+*D110
   1
 
   0
@@ -47179,7 +47179,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D112
+*D111
  70
      1
  10
@@ -47189,7 +47189,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D112
+*D111
   1
 
   0
@@ -47463,7 +47463,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D113
+*D112
  70
      1
  10
@@ -47473,7 +47473,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D113
+*D112
   1
 
   0
@@ -47747,7 +47747,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D114
+*D113
  70
      1
  10
@@ -47757,7 +47757,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D114
+*D113
   1
 
   0
@@ -48031,7 +48031,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D115
+*D114
  70
      1
  10
@@ -48041,7 +48041,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D115
+*D114
   1
 
   0
@@ -48315,7 +48315,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D116
+*D115
  70
      1
  10
@@ -48325,7 +48325,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D116
+*D115
   1
 
   0
@@ -48607,7 +48607,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D117
+*D116
  70
      1
  10
@@ -48617,7 +48617,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D117
+*D116
   1
 
   0
@@ -48899,7 +48899,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D118
+*D117
  70
      1
  10
@@ -48909,7 +48909,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D118
+*D117
   1
 
   0
@@ -49191,7 +49191,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D119
+*D118
  70
      1
  10
@@ -49201,7 +49201,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D119
+*D118
   1
 
   0
@@ -49483,7 +49483,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D120
+*D119
  70
      1
  10
@@ -49493,7 +49493,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D120
+*D119
   1
 
   0
@@ -49775,7 +49775,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D121
+*D120
  70
      1
  10
@@ -49785,7 +49785,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D121
+*D120
   1
 
   0
@@ -50067,7 +50067,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D122
+*D121
  70
      1
  10
@@ -50077,7 +50077,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D122
+*D121
   1
 
   0
@@ -50359,7 +50359,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D123
+*D122
  70
      1
  10
@@ -50369,7 +50369,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D123
+*D122
   1
 
   0
@@ -50651,7 +50651,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D124
+*D123
  70
      1
  10
@@ -50661,7 +50661,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D124
+*D123
   1
 
   0
@@ -50943,7 +50943,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D125
+*D124
  70
      1
  10
@@ -50953,7 +50953,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D125
+*D124
   1
 
   0
@@ -51235,7 +51235,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D126
+*D125
  70
      1
  10
@@ -51245,7 +51245,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D126
+*D125
   1
 
   0
@@ -51527,7 +51527,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D127
+*D126
  70
      1
  10
@@ -51537,7 +51537,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D127
+*D126
   1
 
   0
@@ -51819,7 +51819,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D128
+*D127
  70
      1
  10
@@ -51829,7 +51829,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D128
+*D127
   1
 
   0
@@ -52111,7 +52111,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D129
+*D128
  70
      1
  10
@@ -52121,7 +52121,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D129
+*D128
   1
 
   0
@@ -52403,7 +52403,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D130
+*D129
  70
      1
  10
@@ -52413,7 +52413,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D130
+*D129
   1
 
   0
@@ -52747,7 +52747,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D131
+*D130
  70
      1
  10
@@ -52757,7 +52757,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D131
+*D130
   1
 
   0
@@ -53039,7 +53039,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D132
+*D131
  70
      1
  10
@@ -53049,7 +53049,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D132
+*D131
   1
 
   0
@@ -53331,7 +53331,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D133
+*D132
  70
      1
  10
@@ -53341,7 +53341,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D133
+*D132
   1
 
   0
@@ -53623,7 +53623,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D135
+*D133
  70
      1
  10
@@ -53633,7 +53633,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D135
+*D133
   1
 
   0
@@ -53917,7 +53917,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D136
+*D134
  70
      1
  10
@@ -53927,7 +53927,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D136
+*D134
   1
 
   0
@@ -54203,7 +54203,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D137
+*D135
  70
      1
  10
@@ -54213,7 +54213,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D137
+*D135
   1
 
   0
@@ -54497,7 +54497,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D138
+*D136
  70
      1
  10
@@ -54507,7 +54507,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D138
+*D136
   1
 
   0
@@ -54945,7 +54945,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*T141
+*T139
  70
      1
  10
@@ -54955,7 +54955,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*T141
+*T139
   1
 
   0
@@ -56631,7 +56631,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D142
+*D140
  70
      1
  10
@@ -56641,7 +56641,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D142
+*D140
   1
 
   0
@@ -56915,7 +56915,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D143
+*D141
  70
      1
  10
@@ -56925,7 +56925,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D143
+*D141
   1
 
   0
@@ -57199,7 +57199,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D144
+*D142
  70
      1
  10
@@ -57209,7 +57209,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D144
+*D142
   1
 
   0
@@ -57483,7 +57483,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D145
+*D143
  70
      1
  10
@@ -57493,7 +57493,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D145
+*D143
   1
 
   0
@@ -57767,7 +57767,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D146
+*D144
  70
      1
  10
@@ -57777,7 +57777,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D146
+*D144
   1
 
   0
@@ -58103,7 +58103,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D147
+*D145
  70
      1
  10
@@ -58113,7 +58113,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D147
+*D145
   1
 
   0
@@ -58387,7 +58387,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D148
+*D146
  70
      1
  10
@@ -58397,7 +58397,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D148
+*D146
   1
 
   0
@@ -58671,7 +58671,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D149
+*D147
  70
      1
  10
@@ -58681,7 +58681,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D149
+*D147
   1
 
   0
@@ -58955,7 +58955,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D150
+*D148
  70
      1
  10
@@ -58965,7 +58965,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D150
+*D148
   1
 
   0
@@ -59239,7 +59239,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D151
+*D149
  70
      1
  10
@@ -59249,7 +59249,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D151
+*D149
   1
 
   0
@@ -59523,7 +59523,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D152
+*D150
  70
      1
  10
@@ -59533,7 +59533,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D152
+*D150
   1
 
   0
@@ -59807,7 +59807,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D153
+*D151
  70
      1
  10
@@ -59817,7 +59817,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D153
+*D151
   1
 
   0
@@ -60099,7 +60099,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D154
+*D152
  70
      1
  10
@@ -60109,7 +60109,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D154
+*D152
   1
 
   0
@@ -60391,7 +60391,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D155
+*D153
  70
      1
  10
@@ -60401,7 +60401,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D155
+*D153
   1
 
   0
@@ -60683,7 +60683,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D156
+*D154
  70
      1
  10
@@ -60693,7 +60693,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D156
+*D154
   1
 
   0
@@ -60975,7 +60975,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D157
+*D155
  70
      1
  10
@@ -60985,7 +60985,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D157
+*D155
   1
 
   0
@@ -61267,7 +61267,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D158
+*D156
  70
      1
  10
@@ -61277,7 +61277,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D158
+*D156
   1
 
   0
@@ -61559,7 +61559,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D159
+*D157
  70
      1
  10
@@ -61569,7 +61569,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D159
+*D157
   1
 
   0
@@ -61851,7 +61851,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D160
+*D158
  70
      1
  10
@@ -61861,7 +61861,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D160
+*D158
   1
 
   0
@@ -62143,7 +62143,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D161
+*D159
  70
      1
  10
@@ -62153,7 +62153,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D161
+*D159
   1
 
   0
@@ -62435,7 +62435,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D162
+*D160
  70
      1
  10
@@ -62445,7 +62445,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D162
+*D160
   1
 
   0
@@ -62727,7 +62727,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D163
+*D161
  70
      1
  10
@@ -62737,7 +62737,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D163
+*D161
   1
 
   0
@@ -63019,7 +63019,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D164
+*D162
  70
      1
  10
@@ -63029,7 +63029,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D164
+*D162
   1
 
   0
@@ -63311,7 +63311,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D165
+*D163
  70
      1
  10
@@ -63321,7 +63321,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D165
+*D163
   1
 
   0
@@ -63603,7 +63603,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D166
+*D164
  70
      1
  10
@@ -63613,7 +63613,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D166
+*D164
   1
 
   0
@@ -63895,7 +63895,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D167
+*D165
  70
      1
  10
@@ -63905,7 +63905,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D167
+*D165
   1
 
   0
@@ -64239,7 +64239,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D168
+*D166
  70
      1
  10
@@ -64249,7 +64249,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D168
+*D166
   1
 
   0
@@ -64531,7 +64531,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D169
+*D167
  70
      1
  10
@@ -64541,7 +64541,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D169
+*D167
   1
 
   0
@@ -64823,7 +64823,7 @@ PI_CUTOUT
 100
 AcDbBlockBegin
   2
-*D170
+*D168
  70
      1
  10
@@ -64833,7 +64833,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D170
+*D168
   1
 
   0
@@ -65115,7 +65115,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D171
+*D169
  70
      1
  10
@@ -65125,7 +65125,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D171
+*D169
   1
 
   0
@@ -65399,7 +65399,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D172
+*D170
  70
      1
  10
@@ -65409,7 +65409,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D172
+*D170
   1
 
   0
@@ -65691,7 +65691,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D173
+*D171
  70
      1
  10
@@ -65701,7 +65701,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D173
+*D171
   1
 
   0
@@ -65983,7 +65983,7 @@ PI_PCC
 100
 AcDbBlockBegin
   2
-*D174
+*D172
  70
      1
  10
@@ -65993,7 +65993,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D174
+*D172
   1
 
   0
@@ -66267,7 +66267,7 @@ COL
 100
 AcDbBlockBegin
   2
-*D175
+*D173
  70
      1
  10
@@ -66277,7 +66277,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D175
+*D173
   1
 
   0
@@ -66551,7 +66551,7 @@ COL
 100
 AcDbBlockBegin
   2
-*D176
+*D174
  70
      1
  10
@@ -66561,7 +66561,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D176
+*D174
   1
 
   0
@@ -66887,7 +66887,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*T177
+*T175
  70
      1
  10
@@ -66897,7 +66897,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*T177
+*T175
   1
 
   0
@@ -68573,7 +68573,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D179
+*D176
  70
      1
  10
@@ -68583,7 +68583,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D179
+*D176
   1
 
   0
@@ -68857,7 +68857,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D180
+*D177
  70
      1
  10
@@ -68867,7 +68867,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D180
+*D177
   1
 
   0
@@ -69149,7 +69149,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D181
+*D178
  70
      1
  10
@@ -69159,7 +69159,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D181
+*D178
   1
 
   0
@@ -69441,7 +69441,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D182
+*D179
  70
      1
  10
@@ -69451,7 +69451,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D182
+*D179
   1
 
   0
@@ -69725,7 +69725,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D183
+*D180
  70
      1
  10
@@ -69735,7 +69735,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D183
+*D180
   1
 
   0
@@ -70009,7 +70009,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D184
+*D181
  70
      1
  10
@@ -70019,7 +70019,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D184
+*D181
   1
 
   0
@@ -70293,7 +70293,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D185
+*D182
  70
      1
  10
@@ -70303,7 +70303,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D185
+*D182
   1
 
   0
@@ -70577,7 +70577,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D186
+*D183
  70
      1
  10
@@ -70587,7 +70587,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D186
+*D183
   1
 
   0
@@ -70861,7 +70861,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D187
+*D184
  70
      1
  10
@@ -70871,7 +70871,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D187
+*D184
   1
 
   0
@@ -71197,7 +71197,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D188
+*D185
  70
      1
  10
@@ -71207,7 +71207,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D188
+*D185
   1
 
   0
@@ -71481,7 +71481,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D189
+*D186
  70
      1
  10
@@ -71491,7 +71491,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D189
+*D186
   1
 
   0
@@ -71765,7 +71765,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D190
+*D187
  70
      1
  10
@@ -71775,7 +71775,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D190
+*D187
   1
 
   0
@@ -72049,7 +72049,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D191
+*D188
  70
      1
  10
@@ -72059,7 +72059,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D191
+*D188
   1
 
   0
@@ -72333,7 +72333,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D192
+*D189
  70
      1
  10
@@ -72343,7 +72343,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D192
+*D189
   1
 
   0
@@ -72617,7 +72617,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D193
+*D190
  70
      1
  10
@@ -72627,7 +72627,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D193
+*D190
   1
 
   0
@@ -72901,7 +72901,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D194
+*D191
  70
      1
  10
@@ -72911,7 +72911,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D194
+*D191
   1
 
   0
@@ -73193,7 +73193,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D195
+*D192
  70
      1
  10
@@ -73203,7 +73203,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D195
+*D192
   1
 
   0
@@ -73485,7 +73485,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D196
+*D193
  70
      1
  10
@@ -73495,7 +73495,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D196
+*D193
   1
 
   0
@@ -73777,7 +73777,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D197
+*D194
  70
      1
  10
@@ -73787,7 +73787,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D197
+*D194
   1
 
   0
@@ -74069,7 +74069,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D198
+*D195
  70
      1
  10
@@ -74079,7 +74079,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D198
+*D195
   1
 
   0
@@ -74361,7 +74361,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D199
+*D196
  70
      1
  10
@@ -74371,7 +74371,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D199
+*D196
   1
 
   0
@@ -74653,7 +74653,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D200
+*D197
  70
      1
  10
@@ -74663,7 +74663,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D200
+*D197
   1
 
   0
@@ -74945,7 +74945,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D201
+*D198
  70
      1
  10
@@ -74955,7 +74955,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D201
+*D198
   1
 
   0
@@ -75237,7 +75237,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D202
+*D199
  70
      1
  10
@@ -75247,7 +75247,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D202
+*D199
   1
 
   0
@@ -75529,7 +75529,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D203
+*D200
  70
      1
  10
@@ -75539,7 +75539,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D203
+*D200
   1
 
   0
@@ -75821,7 +75821,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D204
+*D201
  70
      1
  10
@@ -75831,7 +75831,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D204
+*D201
   1
 
   0
@@ -76113,7 +76113,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D205
+*D202
  70
      1
  10
@@ -76123,7 +76123,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D205
+*D202
   1
 
   0
@@ -76405,7 +76405,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D206
+*D203
  70
      1
  10
@@ -76415,7 +76415,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D206
+*D203
   1
 
   0
@@ -76697,7 +76697,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D207
+*D204
  70
      1
  10
@@ -76707,7 +76707,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D207
+*D204
   1
 
   0
@@ -76989,7 +76989,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D208
+*D205
  70
      1
  10
@@ -76999,7 +76999,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D208
+*D205
   1
 
   0
@@ -77333,7 +77333,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D209
+*D206
  70
      1
  10
@@ -77343,7 +77343,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D209
+*D206
   1
 
   0
@@ -77625,7 +77625,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D210
+*D207
  70
      1
  10
@@ -77635,7 +77635,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D210
+*D207
   1
 
   0
@@ -77917,7 +77917,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D211
+*D208
  70
      1
  10
@@ -77927,7 +77927,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D211
+*D208
   1
 
   0
@@ -78209,7 +78209,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D212
+*D209
  70
      1
  10
@@ -78219,7 +78219,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D212
+*D209
   1
 
   0
@@ -78493,7 +78493,7 @@ AcDbEntity
 100
 AcDbBlockBegin
   2
-*D213
+*D210
  70
      1
  10
@@ -78503,7 +78503,7 @@ AcDbBlockBegin
  30
 0.0
   3
-*D213
+*D210
   1
 
   0
@@ -79475,7 +79475,7 @@ AR-CONC
  49
 -118.8533693275013
  53
-7.499999999999929
+7.499999999999928
  43
 -2256126.247805307
  44
@@ -79513,7 +79513,7 @@ AR-CONC
  49
 0.0
  49
--44.8503280481137
+-44.85032804811369
  49
 0.0
  49
@@ -80705,11 +80705,11 @@ ZIGZAG
  20
 11770.86815741301
  10
-55229.53001481004
+55229.53001481003
  20
 11770.86815741302
  10
-55229.53001481004
+55229.53001481003
  20
 12170.86815741301
  10
@@ -81241,11 +81241,11 @@ ZIGZAG
  20
 12170.86815741301
  10
-55229.53001481004
+55229.53001481003
  20
 12170.86815741301
  10
-55229.53001481004
+55229.53001481003
  20
 13370.86815741302
  97
@@ -81911,7 +81911,7 @@ ZIGZAG
  20
 11770.86815741302
  10
-55229.53001481004
+55229.53001481003
  20
 11770.86815741301
  10
@@ -83223,7 +83223,7 @@ SOLID
  72
      1
  10
-55229.53001481004
+55229.53001481003
  20
 11770.86815741302
  11
@@ -83247,17 +83247,17 @@ SOLID
  20
 13370.86815741302
  11
-55229.53001481004
+55229.53001481003
  21
 13370.86815741302
  72
      1
  10
-55229.53001481004
+55229.53001481003
  20
 13370.86815741302
  11
-55229.53001481004
+55229.53001481003
  21
 11770.86815741302
  97
@@ -83673,7 +83673,7 @@ AcDbPolyline
  38
 -0.0000011297353307
  10
-55229.53001481004
+55229.53001481003
  20
 11770.86815741302
  10
@@ -83685,7 +83685,7 @@ AcDbPolyline
  20
 13370.86815741302
  10
-55229.53001481004
+55229.53001481003
  20
 13370.86815741302
   0
@@ -92721,7 +92721,7 @@ AcDbLine
  30
 -0.0000011297353307
  11
-55229.53001481004
+55229.53001481003
  21
 11770.86815741301
  31
@@ -92747,7 +92747,7 @@ AcDbLine
  30
 -0.0000011297353307
  11
-55229.53001481004
+55229.53001481003
  21
 12170.86815741301
  31
@@ -100533,7 +100533,7 @@ AcDbPolyline
  20
 25592.52826003585
  10
-65270.22867128638
+65270.22867128637
  20
 25592.52826003585
  10
@@ -100541,7 +100541,7 @@ AcDbPolyline
  20
 25867.53899544242
  10
-65270.22867128638
+65270.22867128637
  20
 26142.54973084901
  10
@@ -101511,7 +101511,7 @@ AR-CONC
  49
 -118.853369327501
  53
-7.499999999999929
+7.499999999999928
  43
 -2304641.654044457
  44
@@ -101549,7 +101549,7 @@ AR-CONC
  49
 0.0
  49
--44.8503280481137
+-44.85032804811369
  49
 0.0
  49
@@ -106099,7 +106099,7 @@ AcDbText
  10
 5274.009275324323
  20
-41760.47916023946
+41760.47916023945
  30
 0.0
  40
@@ -106395,7 +106395,7 @@ AcDbText
  10
 11712.71818267542
  20
-41761.77355507261
+41761.7735550726
  30
 0.0
  40
@@ -123043,9 +123043,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123059,9 +123059,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123075,9 +123075,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123091,9 +123091,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123107,9 +123107,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123123,9 +123123,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123139,9 +123139,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123155,9 +123155,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123171,9 +123171,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123187,9 +123187,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123203,9 +123203,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123219,9 +123219,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123235,9 +123235,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123251,9 +123251,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123267,9 +123267,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123283,9 +123283,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123299,9 +123299,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123315,9 +123315,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123331,9 +123331,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123347,9 +123347,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123363,9 +123363,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123379,9 +123379,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123395,9 +123395,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123411,9 +123411,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123427,9 +123427,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123443,9 +123443,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123459,9 +123459,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123475,9 +123475,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -123491,9 +123491,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139355,9 +139355,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139371,9 +139371,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139387,9 +139387,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139403,9 +139403,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139419,9 +139419,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139435,9 +139435,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139451,9 +139451,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139467,9 +139467,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139483,9 +139483,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139499,9 +139499,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139515,9 +139515,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139531,9 +139531,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139547,9 +139547,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139563,9 +139563,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139579,9 +139579,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139595,9 +139595,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139611,9 +139611,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139627,9 +139627,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139643,9 +139643,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139659,9 +139659,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139675,9 +139675,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139691,9 +139691,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139707,9 +139707,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139723,9 +139723,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139739,9 +139739,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139755,9 +139755,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139771,9 +139771,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139787,9 +139787,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -139803,9 +139803,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -144005,7 +144005,7 @@ AcDbDimension
 280
      0
   2
-*D179
+*D176
  10
 117031.8291349655
  20
@@ -146289,7 +146289,7 @@ AR-CONC
  45
 105.5581088476514
  46
--4.460002885329126
+-4.460002885329125
  79
      6
  49
@@ -149745,9 +149745,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149761,9 +149761,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149777,9 +149777,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149793,9 +149793,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149809,9 +149809,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149825,9 +149825,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149841,9 +149841,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149857,9 +149857,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149873,9 +149873,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149889,9 +149889,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149905,9 +149905,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149921,9 +149921,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149937,9 +149937,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149953,9 +149953,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149969,9 +149969,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -149985,9 +149985,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150001,9 +150001,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150017,9 +150017,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150033,9 +150033,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150049,9 +150049,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150065,9 +150065,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150081,9 +150081,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150097,9 +150097,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150113,9 +150113,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150129,9 +150129,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150145,9 +150145,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150161,9 +150161,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150177,9 +150177,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150193,9 +150193,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150361,9 +150361,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150377,9 +150377,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150393,9 +150393,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150409,9 +150409,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150425,9 +150425,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150441,9 +150441,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150457,9 +150457,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150473,9 +150473,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150489,9 +150489,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150505,9 +150505,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150521,9 +150521,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150537,9 +150537,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150553,9 +150553,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150569,9 +150569,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150585,9 +150585,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150601,9 +150601,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150617,9 +150617,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150633,9 +150633,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150649,9 +150649,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150665,9 +150665,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150681,9 +150681,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150697,9 +150697,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150713,9 +150713,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150729,9 +150729,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150745,9 +150745,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150761,9 +150761,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150777,9 +150777,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150793,9 +150793,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150809,9 +150809,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150977,9 +150977,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -150993,9 +150993,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151009,9 +151009,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151025,9 +151025,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151041,9 +151041,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151057,9 +151057,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151073,9 +151073,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151089,9 +151089,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151105,9 +151105,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151121,9 +151121,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151137,9 +151137,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151153,9 +151153,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151169,9 +151169,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151185,9 +151185,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151201,9 +151201,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151217,9 +151217,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151233,9 +151233,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151249,9 +151249,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151265,9 +151265,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151281,9 +151281,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151297,9 +151297,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151313,9 +151313,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151329,9 +151329,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151345,9 +151345,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151361,9 +151361,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151377,9 +151377,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151393,9 +151393,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151409,9 +151409,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151425,9 +151425,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151593,9 +151593,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151609,9 +151609,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151625,9 +151625,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151641,9 +151641,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151657,9 +151657,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151673,9 +151673,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151689,9 +151689,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151705,9 +151705,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151721,9 +151721,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151737,9 +151737,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151753,9 +151753,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151769,9 +151769,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151785,9 +151785,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151801,9 +151801,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151817,9 +151817,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151833,9 +151833,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151849,9 +151849,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151865,9 +151865,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151881,9 +151881,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151897,9 +151897,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151913,9 +151913,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151929,9 +151929,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151945,9 +151945,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151961,9 +151961,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151977,9 +151977,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -151993,9 +151993,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152009,9 +152009,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152025,9 +152025,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152041,9 +152041,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152167,9 +152167,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152183,9 +152183,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152199,9 +152199,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152215,9 +152215,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152231,9 +152231,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152247,9 +152247,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152263,9 +152263,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152279,9 +152279,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152295,9 +152295,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152311,9 +152311,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152327,9 +152327,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152343,9 +152343,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152359,9 +152359,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152375,9 +152375,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152391,9 +152391,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152407,9 +152407,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152423,9 +152423,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152439,9 +152439,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152455,9 +152455,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152471,9 +152471,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152487,9 +152487,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152503,9 +152503,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152519,9 +152519,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152535,9 +152535,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152551,9 +152551,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152567,9 +152567,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152583,9 +152583,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152599,9 +152599,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152615,9 +152615,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152741,9 +152741,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152757,9 +152757,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152773,9 +152773,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152789,9 +152789,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152805,9 +152805,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152821,9 +152821,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152837,9 +152837,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152853,9 +152853,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152869,9 +152869,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152885,9 +152885,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152901,9 +152901,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152917,9 +152917,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152933,9 +152933,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152949,9 +152949,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152965,9 +152965,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152981,9 +152981,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -152997,9 +152997,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153013,9 +153013,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153029,9 +153029,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153045,9 +153045,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153061,9 +153061,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153077,9 +153077,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153093,9 +153093,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153109,9 +153109,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153125,9 +153125,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153141,9 +153141,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153157,9 +153157,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153173,9 +153173,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153189,9 +153189,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153441,9 +153441,9 @@ ASPHALT
  44
 16678.23495857434
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153457,9 +153457,9 @@ ASPHALT
  44
 16345.28185125878
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153473,9 +153473,9 @@ ASPHALT
  44
 16132.15449339762
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153489,9 +153489,9 @@ ASPHALT
  44
 16369.67448962526
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153505,9 +153505,9 @@ ASPHALT
  44
 16458.74491247476
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153521,9 +153521,9 @@ ASPHALT
  44
 16608.24878206372
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153537,9 +153537,9 @@ ASPHALT
  44
 16774.72448719339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153553,9 +153553,9 @@ ASPHALT
  44
 16451.31859421598
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153569,9 +153569,9 @@ ASPHALT
  44
 16399.36279209749
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153585,9 +153585,9 @@ ASPHALT
  44
 16285.9052463144
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153601,9 +153601,9 @@ ASPHALT
  44
 16299.68916164278
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153617,9 +153617,9 @@ ASPHALT
  44
 16550.99349746293
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153633,9 +153633,9 @@ ASPHALT
  44
 16529.7836881399
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153649,9 +153649,9 @@ ASPHALT
  44
 16506.45467979364
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153665,9 +153665,9 @@ ASPHALT
  44
 16634.75934666128
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153681,9 +153681,9 @@ ASPHALT
  44
 16324.07586031236
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153697,9 +153697,9 @@ ASPHALT
  44
 16379.21661279469
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153713,9 +153713,9 @@ ASPHALT
  44
 16324.08180000933
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153729,9 +153729,9 @@ ASPHALT
  44
 16064.29430413532
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153745,9 +153745,9 @@ ASPHALT
  44
 16215.92416097259
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153761,9 +153761,9 @@ ASPHALT
  44
 16135.33689817702
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153777,9 +153777,9 @@ ASPHALT
  44
 16401.88716330632
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153793,9 +153793,9 @@ ASPHALT
  44
 16348.85415471732
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153809,9 +153809,9 @@ ASPHALT
  44
 16295.82114612832
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153825,9 +153825,9 @@ ASPHALT
  44
 16242.78813753935
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153841,9 +153841,9 @@ ASPHALT
  44
 16189.75512895032
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153857,9 +153857,9 @@ ASPHALT
  44
 16136.72212036136
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153873,9 +153873,9 @@ ASPHALT
  44
 16083.68911177239
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -153889,9 +153889,9 @@ ASPHALT
  44
 16030.65610318339
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154295,9 +154295,9 @@ ASPHALT
  44
 7549.30276948523
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154311,9 +154311,9 @@ ASPHALT
  44
 7216.349662169618
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154327,9 +154327,9 @@ ASPHALT
  44
 7003.222304308462
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154343,9 +154343,9 @@ ASPHALT
  44
 7240.742300536142
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154359,9 +154359,9 @@ ASPHALT
  44
 7329.812723385592
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154375,9 +154375,9 @@ ASPHALT
  44
 7479.316592974581
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154391,9 +154391,9 @@ ASPHALT
  44
 7645.792298104243
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154407,9 +154407,9 @@ ASPHALT
  44
 7322.386405126859
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154423,9 +154423,9 @@ ASPHALT
  44
 7270.430603008333
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154439,9 +154439,9 @@ ASPHALT
  44
 7156.973057225251
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154455,9 +154455,9 @@ ASPHALT
  44
 7170.75697255363
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154471,9 +154471,9 @@ ASPHALT
  44
 7422.06130837377
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154487,9 +154487,9 @@ ASPHALT
  44
 7400.851499050718
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154503,9 +154503,9 @@ ASPHALT
  44
 7377.522490704454
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154519,9 +154519,9 @@ ASPHALT
  44
 7505.827157572115
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154535,9 +154535,9 @@ ASPHALT
  44
 7195.143671223194
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154551,9 +154551,9 @@ ASPHALT
  44
 7250.284423705547
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154567,9 +154567,9 @@ ASPHALT
  44
 7195.149610920154
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154583,9 +154583,9 @@ ASPHALT
  44
 6935.362115046126
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154599,9 +154599,9 @@ ASPHALT
  44
 7086.991971883421
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154615,9 +154615,9 @@ ASPHALT
  44
 7006.404709087867
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154631,9 +154631,9 @@ ASPHALT
  44
 7272.954974217165
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154647,9 +154647,9 @@ ASPHALT
  44
 7219.921965628171
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154663,9 +154663,9 @@ ASPHALT
  44
 7166.888957039185
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154679,9 +154679,9 @@ ASPHALT
  44
 7113.85594845019
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154695,9 +154695,9 @@ ASPHALT
  44
 7060.822939861203
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154711,9 +154711,9 @@ ASPHALT
  44
 7007.789931272208
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154727,9 +154727,9 @@ ASPHALT
  44
 6954.756922683221
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -154743,9 +154743,9 @@ ASPHALT
  44
 6901.723914094225
  45
--424.2640687119283
+-424.2640687119282
  46
-424.2640687119283
+424.2640687119282
  79
      2
  49
@@ -163127,7 +163127,7 @@ AcDbDimension
 280
      0
   2
-*D212
+*D209
  10
 116881.8276170452
  20
@@ -163145,7 +163145,7 @@ AcDbDimension
  71
      5
  42
-839.9984820796962
+839.998482079696
  73
      0
  74
@@ -163597,7 +163597,7 @@ AcDbDimension
 280
      0
   2
-*D213
+*D210
  10
 116041.8291349655
  20
@@ -165987,9 +165987,9 @@ Origin
 100
 AcDbPoint
  10
-10972.93544903675
+13337.93544903667
  20
-12916.98364473968
+18311.9836447404
  30
 0.0
   0
@@ -166005,9 +166005,9 @@ Origin
 100
 AcDbPoint
  10
-61654.53001481004
+64019.53001480999
  20
-11770.86815741302
+17165.86815741373
  30
 -0.0000011297353307
   0
@@ -166023,11 +166023,11 @@ Origin
 100
 AcDbPoint
  10
-103381.8291349653
+105746.8299553305
  20
-15853.3361320711
+21248.33613207209
  30
-0.0
+-0.0000443555862816
   0
 LWPOLYLINE
   5
@@ -166569,7 +166569,7 @@ AcDbMText
  10
 34531.38094278692
  20
-8124.323054104102
+8124.323054104101
  30
 0.0
  40
@@ -166891,7 +166891,7 @@ AcDbLine
  10
 32057.78086021634
  20
-9353.008938370301
+9353.008938370299
  30
 0.0
  11
@@ -167113,7 +167113,7 @@ AcDbLine
  11
 35710.6750681657
  21
-6300.888579612343
+6300.888579612342
  31
 0.0
   0
@@ -167199,7 +167199,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 8432.195720503731
  30
@@ -167275,7 +167275,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 7962.3337786129
  30
@@ -167351,7 +167351,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 7470.859424906421
  30
@@ -167427,7 +167427,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 6979.385071199944
  30
@@ -167503,7 +167503,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 6487.910717493466
  30
@@ -167579,7 +167579,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 5996.436363786989
  30
@@ -167655,7 +167655,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 5504.962010080511
  30
@@ -167731,7 +167731,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 5013.487656374032
  30
@@ -167807,7 +167807,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 4522.013302667555
  30
@@ -167883,9 +167883,9 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
-4030.538948961076
+4030.538948961075
  30
 0.0
  40
@@ -167923,7 +167923,7 @@ AcDbMText
  10
 81881.12713695696
  20
-4030.538948961076
+4030.538948961075
  30
 0.0
  40
@@ -167959,7 +167959,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 3539.064595254598
  30
@@ -168035,7 +168035,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 3047.590241548121
  30
@@ -168111,7 +168111,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 2556.115887841643
  30
@@ -168187,7 +168187,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-80054.68003298226
+80054.68003298227
  20
 2064.641534135164
  30
@@ -168307,7 +168307,7 @@ AcDbLine
  11
 83060.42126233572
  21
-9405.263154714255
+9405.263154714258
  31
 0.0
   0
@@ -168331,7 +168331,7 @@ AcDbLine
  11
 83060.42126233572
  21
-8656.320485541321
+8656.32048554132
  31
 0.0
   0
@@ -168379,7 +168379,7 @@ AcDbLine
  11
 83060.42126233572
  21
-7716.596601759658
+7716.596601759659
  31
 0.0
   0
@@ -168421,13 +168421,13 @@ AcDbLine
  10
 79407.52705438637
  20
-6733.647894346706
+6733.647894346707
  30
 0.0
  11
 83060.42126233572
  21
-6733.647894346701
+6733.6478943467
  31
 0.0
   0
@@ -168523,7 +168523,7 @@ AcDbLine
  11
 83060.42126233572
  21
-4767.750479520789
+4767.750479520788
  31
 0.0
   0
@@ -168541,7 +168541,7 @@ AcDbLine
  10
 79407.52705438637
  20
-4276.276125814316
+4276.276125814315
  30
 0.0
  11
@@ -168565,7 +168565,7 @@ AcDbLine
  10
 79407.52705438637
  20
-3784.801772107838
+3784.801772107839
  30
 0.0
  11
@@ -168757,7 +168757,7 @@ AcDbLine
  10
 83060.42126233572
  20
-9405.263154714255
+9405.263154714258
  30
 0.0
  11
@@ -168819,7 +168819,7 @@ AcDbMText
  40
 187.5
  41
-5010.864596102085
+5010.864596102084
  46
 0.0
  71
@@ -168849,7 +168849,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 6759.90125748477
  30
@@ -168887,7 +168887,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 6759.90125748477
  30
@@ -168925,7 +168925,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 6293.79458455244
  30
@@ -168963,7 +168963,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 6293.79458455244
  30
@@ -169001,7 +169001,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 5809.830768762967
  30
@@ -169039,7 +169039,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 5809.830768762967
  30
@@ -169077,9 +169077,9 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
-5325.866952973494
+5325.866952973495
  30
 0.0
  40
@@ -169115,9 +169115,9 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
-5325.866952973494
+5325.866952973495
  30
 0.0
  40
@@ -169153,7 +169153,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 4841.90313718402
  30
@@ -169191,7 +169191,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 4841.90313718402
  30
@@ -169229,7 +169229,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 4357.939321394547
  30
@@ -169267,7 +169267,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 4357.939321394547
  30
@@ -169305,7 +169305,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 3873.975505605073
  30
@@ -169343,7 +169343,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 3873.975505605073
  30
@@ -169381,7 +169381,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 3390.0116898156
  30
@@ -169419,7 +169419,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 3390.0116898156
  30
@@ -169457,7 +169457,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 2906.047874026126
  30
@@ -169495,7 +169495,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 2906.047874026126
  30
@@ -169533,7 +169533,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 2422.084058236652
  30
@@ -169571,7 +169571,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 2422.084058236652
  30
@@ -169609,7 +169609,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 1938.120242447178
  30
@@ -169647,7 +169647,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 1938.120242447178
  30
@@ -169685,7 +169685,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-96266.67258803937
+96266.67258803935
  20
 1454.156426657705
  30
@@ -169723,7 +169723,7 @@ PI-SCHEDULE
 100
 AcDbMText
  10
-98871.229651128
+98871.22965112801
  20
 1454.156426657705
  30
@@ -169763,13 +169763,13 @@ AcDbMText
  10
 97647.26995652356
  20
-970.5497537253741
+970.5497537253739
  30
 0.0
  40
 187.5
  41
-5010.864596102085
+5010.864596102084
  46
 0.0
  71
@@ -169991,13 +169991,13 @@ AcDbLine
  10
 95042.71289343492
  20
-3631.993597710338
+3631.993597710339
  30
 0.0
  11
 100251.8270196122
  21
-3631.993597710338
+3631.993597710339
  31
 0.0
   0
@@ -170015,13 +170015,13 @@ AcDbLine
  10
 95042.71289343492
  20
-3148.029781920864
+3148.029781920865
  30
 0.0
  11
 100251.8270196122
  21
-3148.029781920864
+3148.029781920865
  31
 0.0
   0
@@ -170135,13 +170135,13 @@ AcDbLine
  10
 95042.71289343492
  20
-728.9249886877805
+728.9249886877804
  30
 0.0
  11
 100251.8270196122
  21
-728.9249886877805
+728.9249886877804
  31
 0.0
   0
@@ -170165,7 +170165,7 @@ AcDbLine
  11
 95042.71289343492
  21
-728.9249886877805
+728.9249886877804
  31
 0.0
   0
@@ -170213,7 +170213,7 @@ AcDbLine
  11
 100251.8270196122
  21
-728.9249886877805
+728.9249886877804
  31
 0.0
   0
@@ -170325,7 +170325,7 @@ EF
   3
 ACDB_RECOMPOSE_DATA
 350
-316E
+3178
   3
 AcDbVariableDictionary
 350
@@ -174611,7 +174611,7 @@ X-Ray
   0
 XRECORD
   5
-316E
+3178
 102
 {ACAD_REACTORS
 330
@@ -198337,7 +198337,7 @@ AcDbDictionary
   3
 ACAD_ROUNDTRIP_2008_TABLESTYLE_CELLSTYLEMAP
 360
-316D
+3177
   0
 XRECORD
   5
@@ -198757,7 +198757,7 @@ AcDbXrecord
   0
 CELLSTYLEMAP
   5
-316D
+3177
 102
 {ACAD_REACTORS
 330
