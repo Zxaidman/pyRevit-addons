@@ -35,7 +35,21 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.58.0"  # StaircasePlan-Test2 stair 1 came out 3100 wide with its centreline
+__version__ = "0.59.0"  # C17's slab corners came out SLOPED: the column is 400 wide on a
+#                         300 beam, so its face sits 50mm past the beam edge -- exactly the
+#                         50mm node-weld slop. Two tolerances collided there. _split_at_crossings
+#                         judged the beam tip's touch as "at the end" of the 400mm column face
+#                         (50/400 = the slop in parameter space) so no T was cut, and the weld
+#                         then pulled the column's corner onto the beam tip -- collapsing the
+#                         step into a diagonal. The INTERIOR test now uses a step tolerance
+#                         (slab_min_step_mm, 20mm) instead of the junction slop, and the weld
+#                         refuses to merge two PINNED junctions (a T plus a corner) further
+#                         apart than that -- drafting slop is a FREE TIP meeting a junction, and
+#                         still welds. All four corners round C17 now step; every fixture keeps
+#                         its face count and area bar the corner slivers that used to overlap
+#                         the columns, and test9's third storey recovers a 18.5 m2 bay.
+#
+# 0.58.0                  StaircasePlan-Test2 stair 1 came out 3100 wide with its centreline
 #                         300mm off. Its ten risers span x 11200..13700 (2500, the flight) but
 #                         the bottom LANDING EDGE is drawn 11200..14300, straight across the
 #                         600 well between the flights -- and the run's width was the UNION of

@@ -44,6 +44,7 @@ _HEAL_MM = 600.0         # extend a beam end up to this far to meet the junction
 _MIN_FACE_AREA_M2 = 1.0  # a bounded face smaller than this is a junction sliver
 _CHAIN_TOL_MM = 150.0    # loose slab-edge lines chain when ends are this close
 _EDGE_HEAL_MM = 350.0    # drawn member edges: close small junction gaps only
+_MIN_STEP_MM = 20.0      # a boundary jog smaller than this is drafting noise, not a step
 _MIN_PANEL_WIDTH_MM = 500.0   # a face slimmer than this (2A/P) is a member body, not a panel
 
 # "S1 150 THK" / "S7_150 THK." / "S12 125" / "150 THK" / "S3" (mark-only; thickness
@@ -64,6 +65,7 @@ def apply_tolerances(tolerances):
     so the offline tests and replays are unaffected.
     """
     global _SNAP_MM, _EDGE_HEAL_MM, _CHAIN_TOL_MM, _MIN_PANEL_WIDTH_MM
+    global _MIN_STEP_MM
     if not tolerances:
         return
     _SNAP_MM = float(tolerances.get("slab_snap_mm", _SNAP_MM))
@@ -71,6 +73,7 @@ def apply_tolerances(tolerances):
     _CHAIN_TOL_MM = float(tolerances.get("slab_chain_mm", _CHAIN_TOL_MM))
     _MIN_PANEL_WIDTH_MM = float(tolerances.get("slab_min_width_mm",
                                                _MIN_PANEL_WIDTH_MM))
+    _MIN_STEP_MM = float(tolerances.get("slab_min_step_mm", _MIN_STEP_MM))
 
 
 def _tessellate_arc(pts):
@@ -1024,6 +1027,58 @@ def _segments_cross(a1, b1, a2, b2):
     return eps < t < 1.0 - eps and eps < u < 1.0 - eps
 
 
+_JOINT_TOL_MM = 2.0      # endpoints this close are literally the same drawn point
+
+
+def _junction_weights(pts, ends, tol):
+    """(group_per_point, ends_per_group): how many segment ends meet where.
+
+    Points closer than `tol` are one drawn location; its weight is the number of
+    segment ends there. 1 is a FREE TIP (a clipped edge dangling in mid air), 2 a
+    plain corner, 3+ a T -- one line split by another, so the input geometry pins
+    that position exactly. The clustering pass uses this to tell drafting slop
+    (tip near a junction: weld) from real geometry (junction near a junction: a
+    step the boundary must keep).
+    """
+    parent = list(range(len(pts)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    cells = defaultdict(list)
+    for i, (x, y) in enumerate(pts):
+        cells[(int(math.floor(x / tol)), int(math.floor(y / tol)))].append(i)
+    tol2 = tol * tol
+    for (cx, cy), members in cells.items():
+        for dx in (0, 1):
+            for dy in (-1, 0, 1):
+                if dx == 0 and dy < 0:
+                    continue               # each unordered cell pair once
+                other = cells.get((cx + dx, cy + dy))
+                if not other:
+                    continue
+                for i in members:
+                    xi, yi = pts[i]
+                    for j in other:
+                        if i >= j and (dx, dy) == (0, 0):
+                            continue
+                        xj, yj = pts[j]
+                        if (xi - xj) ** 2 + (yi - yj) ** 2 <= tol2:
+                            ri, rj = find(i), find(j)
+                            if ri != rj:
+                                parent[rj] = ri
+    group = [0] * len(pts)
+    weight = defaultdict(int)
+    for i in range(len(pts)):
+        root = find(i)
+        group[i] = root
+        weight[root] += ends[i]
+    return group, weight
+
+
 def _cluster_nodes(points, snap_ft, prefer=None):
     """(key_fn, positions): endpoint identity by proximity clustering.
 
@@ -1037,10 +1092,16 @@ def _cluster_nodes(points, snap_ft, prefer=None):
     tip merging with a column ring vertex must land ON the beam edge -- the
     centroid of both tilted long straight boundaries by up to snap/2), else the
     centroid of all. key_fn maps a coordinate pair to its cluster id.
+
+    Two PINNED junctions never merge with each other (see _junction_weights): a
+    column 50 mm wider than its beam puts the beam-edge tip exactly that far from
+    the column ring corner, and welding them turns the step round the column into
+    a sloped trim. Slop is a free tip meeting a junction, which still welds.
     """
     pts = []
     seen = {}
     pref = []
+    ends = []
     for idx, p in enumerate(points):
         q = (p[0], p[1])
         flag = bool(prefer[idx]) if prefer is not None else False
@@ -1048,8 +1109,12 @@ def _cluster_nodes(points, snap_ft, prefer=None):
             seen[q] = len(pts)
             pts.append(q)
             pref.append(flag)
-        elif flag:
-            pref[seen[q]] = True
+            ends.append(1)
+        else:
+            ends[seen[q]] += 1
+            if flag:
+                pref[seen[q]] = True
+    group, weight = _junction_weights(pts, ends, config.mm_to_ft(_JOINT_TOL_MM))
     parent = list(range(len(pts)))
     bbox = [[x, y, x, y] for (x, y) in pts]     # per-root min/max extent
 
@@ -1064,6 +1129,7 @@ def _cluster_nodes(points, snap_ft, prefer=None):
     for i, (x, y) in enumerate(pts):
         cells[(int(math.floor(x / snap_ft)), int(math.floor(y / snap_ft)))].append(i)
     snap2 = snap_ft * snap_ft
+    step2 = config.mm_to_ft(_MIN_STEP_MM) ** 2
     for (cx, cy), members in cells.items():
         for dx in (0, 1):
             for dy in (-1, 0, 1):
@@ -1078,7 +1144,13 @@ def _cluster_nodes(points, snap_ft, prefer=None):
                         if i >= j and (dx, dy) == (0, 0):
                             continue
                         xj, yj = pts[j]
-                        if (xi - xj) ** 2 + (yi - yj) ** 2 <= snap2:
+                        gap2 = (xi - xj) ** 2 + (yi - yj) ** 2
+                        if gap2 <= snap2:
+                            gi, gj = group[i], group[j]
+                            if gi != gj and gap2 > step2:
+                                wi, wj = weight[gi], weight[gj]
+                                if min(wi, wj) >= 2 and max(wi, wj) >= 3:
+                                    continue     # two pinned junctions: a real step
                             ri, rj = find(i), find(j)
                             if ri == rj:
                                 continue
@@ -1197,6 +1269,7 @@ def _split_at_crossings(segs, flags=None):
     is (segments, flags).
     """
     tol_ft = config.mm_to_ft(_SNAP_MM)
+    step_ft = config.mm_to_ft(_MIN_STEP_MM)
     cell_ft = config.mm_to_ft(_GRAPH_CELL_MM)
     grid, boxes = _seg_grid(segs, cell_ft, pad_ft=tol_ft)
     cuts = [[] for _ in segs]
@@ -1221,9 +1294,16 @@ def _split_at_crossings(segs, flags=None):
                 ei = tol_ft / max(_dist(*segs[i]), 1e-9)   # param-space slop, per segment
                 ej = tol_ft / max(_dist(*segs[j]), 1e-9)
                 if -ei <= ti <= 1.0 + ei and -ej <= tj <= 1.0 + ej:
-                    if ei < ti < 1.0 - ei:
+                    # Whether the hit is INTERIOR is judged against the step
+                    # tolerance, not the junction slop: a 400 mm column face met
+                    # 50 mm from its corner (the column overhanging its beam) is
+                    # a real T, and the loose slop swallowed it -- leaving the
+                    # boundary to cut the corner off diagonally.
+                    ki = step_ft / max(_dist(*segs[i]), 1e-9)
+                    kj = step_ft / max(_dist(*segs[j]), 1e-9)
+                    if ki < ti < 1.0 - ki:
                         cuts[i].append(p)
-                    if ej < tj < 1.0 - ej:
+                    if kj < tj < 1.0 - kj:
                         cuts[j].append(p)
     out = []
     out_flags = []

@@ -64,6 +64,7 @@ DEFAULTS = {
     "slab_heal_mm": 350.0,        # close a junction gap up to this far
     "slab_chain_mm": 150.0,       # loose slab-edge lines chain within this
     "slab_min_width_mm": 500.0,   # a face slimmer than this (2A/P) is a member
+    "slab_min_step_mm": 20.0,     # a boundary jog below this is noise, not a step
 
     # --- staircase tolerances (exposed on the Tolerances tab) ---------------
     "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair

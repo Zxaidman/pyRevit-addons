@@ -426,6 +426,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="24"/>
                                 <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Node weld distance" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_slab_snap" Height="22" Margin="0,1,8,1"/>
@@ -435,6 +436,8 @@
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_slab_chain" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="Min bay width" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_slab_width" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Min corner step" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_slab_step" Height="22" Margin="0,1,8,1"/>
                         </Grid>
 
                         <TextBlock Text="Staircase tolerances (mm)" FontWeight="Bold" Margin="0,8,0,2"/>

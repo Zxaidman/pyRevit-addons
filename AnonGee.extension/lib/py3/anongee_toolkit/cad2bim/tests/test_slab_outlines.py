@@ -322,6 +322,60 @@ class PlacedMemberFaces(unittest.TestCase):
             self.assertAlmostEqual(r_mm, 400.0, delta=2.0)
 
 
+class ColumnWiderThanBeam(unittest.TestCase):
+    """A column overhanging its beam must give the slab a STEP, not a slope.
+
+    C17 of StaircasePlan-Test2: a 400 x 900 column on a 300-wide beam leaves the
+    column face 50 mm beyond the beam edge -- exactly the junction slop, so the
+    beam-edge tip used to weld onto the column ring corner and the boundary cut
+    the corner off diagonally. Both points are pinned junctions, so neither moves.
+    """
+
+    def _plan(self):
+        # one bay; the right-hand column (at mid height of the right beam) is
+        # 100 mm wider than the 300 mm beams that frame it
+        segs = [{"start": [0.0, 0.0, 0.0], "end": [6000 * _FT, 0.0, 0.0],
+                 "width_mm": 300.0},
+                {"start": [6000 * _FT, 0.0, 0.0],
+                 "end": [6000 * _FT, 6000 * _FT, 0.0], "width_mm": 300.0},
+                {"start": [6000 * _FT, 6000 * _FT, 0.0],
+                 "end": [0.0, 6000 * _FT, 0.0], "width_mm": 300.0},
+                {"start": [0.0, 6000 * _FT, 0.0], "end": [0.0, 0.0, 0.0],
+                 "width_mm": 300.0},
+                {"start": [0.0, 3000 * _FT, 0.0],
+                 "end": [6000 * _FT, 3000 * _FT, 0.0], "width_mm": 300.0}]
+        # x 5800..6200 (100 mm each side of the beam edges), y 2550..3450
+        rect = ("rect", 6000 * _FT, 3000 * _FT, 0.0, 1.0, 450 * _FT, 200 * _FT)
+        return segs, rect
+
+    def test_boundary_steps_round_the_wide_column(self):
+        segs, rect = self._plan()
+        loops = slab_outlines.slab_loops_from_placed_members(
+            [], segs, column_rects=[rect])
+        self.assertEqual(len(loops), 2)
+        corners = set()
+        for ring, _z, _arcs in loops:
+            for x, y in ring:
+                corners.add((round(x * _MM), round(y * _MM)))
+        # the beam edge stops at the column face...
+        self.assertIn((5850, 2550), corners)
+        self.assertIn((5850, 3450), corners)
+        # ...and the column's own corner is a vertex of its own, 50 mm along
+        self.assertIn((5800, 2550), corners)
+        self.assertIn((5800, 3450), corners)
+
+    def test_no_boundary_edge_runs_diagonally(self):
+        segs, rect = self._plan()
+        loops = slab_outlines.slab_loops_from_placed_members(
+            [], segs, column_rects=[rect])
+        for ring, _z, _arcs in loops:
+            for i, a in enumerate(ring):
+                b = ring[(i + 1) % len(ring)]
+                dx, dy = abs(b[0] - a[0]) * _MM, abs(b[1] - a[1]) * _MM
+                self.assertLess(min(dx, dy), 0.5,
+                                "sloped trim %s -> %s" % (a, b))
+
+
 class SlabLabels(unittest.TestCase):
     def _one_loop(self):
         ring = [(0.0, 0.0), (5000 * _FT, 0.0), (5000 * _FT, 5000 * _FT),

@@ -102,7 +102,7 @@ class ToleranceOverrides(unittest.TestCase):
         slab_outlines.apply_tolerances(
             {k: config.DEFAULTS[k] for k in
              ("slab_snap_mm", "slab_heal_mm", "slab_chain_mm",
-              "slab_min_width_mm")})
+              "slab_min_width_mm", "slab_min_step_mm")})
         stair_layout.apply_tolerances(
             {k: config.DEFAULTS[k] for k in
              ("stair_cluster_mm", "stair_tread_min_mm", "stair_tread_max_mm",
@@ -115,6 +115,7 @@ class ToleranceOverrides(unittest.TestCase):
         self.assertEqual(d["slab_chain_mm"], slab_outlines._CHAIN_TOL_MM)
         self.assertEqual(d["slab_min_width_mm"],
                          slab_outlines._MIN_PANEL_WIDTH_MM)
+        self.assertEqual(d["slab_min_step_mm"], slab_outlines._MIN_STEP_MM)
         self.assertEqual(d["stair_cluster_mm"], stair_layout._CLUSTER_GAP_MM)
         self.assertEqual(d["stair_tread_min_mm"], stair_layout._TREAD_MIN_MM)
         self.assertEqual(d["stair_tread_max_mm"], stair_layout._TREAD_MAX_MM)
@@ -125,11 +126,13 @@ class ToleranceOverrides(unittest.TestCase):
         slab_outlines.apply_tolerances({"slab_snap_mm": 75.0,
                                         "slab_heal_mm": 400.0,
                                         "slab_chain_mm": 200.0,
-                                        "slab_min_width_mm": 600.0})
+                                        "slab_min_width_mm": 600.0,
+                                        "slab_min_step_mm": 30.0})
         self.assertEqual(slab_outlines._SNAP_MM, 75.0)
         self.assertEqual(slab_outlines._EDGE_HEAL_MM, 400.0)
         self.assertEqual(slab_outlines._CHAIN_TOL_MM, 200.0)
         self.assertEqual(slab_outlines._MIN_PANEL_WIDTH_MM, 600.0)
+        self.assertEqual(slab_outlines._MIN_STEP_MM, 30.0)
         stair_layout.apply_tolerances({"stair_cluster_mm": 2500.0,
                                        "stair_tread_min_mm": 120.0,
                                        "stair_tread_max_mm": 600.0,

@@ -558,6 +558,7 @@ class CadToBimWindow(object):
         self.tb_slab_heal.Text = str(int(d["slab_heal_mm"]))
         self.tb_slab_chain.Text = str(int(d["slab_chain_mm"]))
         self.tb_slab_width.Text = str(int(d["slab_min_width_mm"]))
+        self.tb_slab_step.Text = str(int(d["slab_min_step_mm"]))
         self.tb_stair_cluster.Text = str(int(d["stair_cluster_mm"]))
         self.tb_tread_min.Text = str(int(d["stair_tread_min_mm"]))
         self.tb_tread_max.Text = str(int(d["stair_tread_max_mm"]))
@@ -598,6 +599,8 @@ class CadToBimWindow(object):
             "slab_chain_mm": self._read_float(self.tb_slab_chain, d["slab_chain_mm"]),
             "slab_min_width_mm": self._read_float(self.tb_slab_width,
                                                   d["slab_min_width_mm"]),
+            "slab_min_step_mm": self._read_float(self.tb_slab_step,
+                                                 d["slab_min_step_mm"]),
             "stair_cluster_mm": self._read_float(self.tb_stair_cluster,
                                                  d["stair_cluster_mm"]),
             "stair_tread_min_mm": self._read_float(self.tb_tread_min,
