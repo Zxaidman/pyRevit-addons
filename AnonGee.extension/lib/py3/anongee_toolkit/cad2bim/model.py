@@ -54,6 +54,7 @@ class TextRecord(object):
         self.point = point              # (x, y, z) in DXF coords
         self.rotation_deg = rotation_deg  # text angle; beam labels run ALONG their beam
         self.point_internal = None      # (x, y, z) in Revit internal feet
+        self.size_key = None            # "(C)" from a "B20(c)" keyed label
         self.mark = None                # parsed mark name, e.g. "C1"
         self.b_mm = None                # parsed width, mm
         self.h_mm = None                # parsed height/depth, mm

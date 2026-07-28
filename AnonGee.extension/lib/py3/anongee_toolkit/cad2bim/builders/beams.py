@@ -18,7 +18,7 @@ from Autodesk.Revit.DB import (FilteredElementCollector, BuiltInCategory,
 from Autodesk.Revit.DB.Structure import StructuralType, StructuralFramingUtils
 
 from ..unit_convert import mm_to_internal
-from ..compat import get_element_name
+from ..compat import get_element_name, set_element_mark
 
 
 def _disallow_joins(instance):
@@ -40,9 +40,7 @@ def _set_mark(instance, mark):
     if not mark:
         return
     try:
-        parameter = instance.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)
-        if parameter is not None and not parameter.IsReadOnly:
-            parameter.Set(str(mark))
+        set_element_mark(instance, mark)
     except Exception:
         pass   # naming is best-effort; never fail placement over a mark
 

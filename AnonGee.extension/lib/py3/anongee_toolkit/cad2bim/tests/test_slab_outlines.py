@@ -362,5 +362,48 @@ class SlabLabels(unittest.TestCase):
         self.assertEqual(slabs[0]["thickness_mm"], 125.0)
 
 
+class ChamferSquaring(unittest.TestCase):
+    """A short stub across a corner that lies on NO carrier is a false chamfer.
+
+    It shows up as a SLOPED trim where the slab should step around a column;
+    a real (drawn) chamfer has a carrier of its own and must survive.
+    """
+
+    def _corner_ring(self):
+        # a square whose top-right corner is cut by a 56mm diagonal stub
+        return [(0.0, 0.0), (3000.0 * _FT, 0.0),
+                (3000.0 * _FT, 2960.0 * _FT), (2960.0 * _FT, 3000.0 * _FT),
+                (0.0, 3000.0 * _FT)]
+
+    def _carriers(self):
+        # the four real edges: two horizontals and two verticals
+        return [((0.0, 0.0), (3000.0 * _FT, 0.0)),
+                ((3000.0 * _FT, 0.0), (3000.0 * _FT, 3000.0 * _FT)),
+                ((0.0, 3000.0 * _FT), (3000.0 * _FT, 3000.0 * _FT)),
+                ((0.0, 0.0), (0.0, 3000.0 * _FT))]
+
+    def test_false_chamfer_becomes_the_corner(self):
+        ring = slab_outlines._square_off_chamfers(self._corner_ring(),
+                                                  self._carriers())
+        corners = [(round(x * _MM), round(y * _MM)) for x, y in ring]
+        self.assertIn((3000, 3000), corners)          # squared off
+        self.assertEqual(len(ring), 4)
+        for point in corners:
+            self.assertNotIn(point, [(3000, 2960), (2960, 3000)])
+
+    def test_drawn_chamfer_survives(self):
+        # the same stub, but this time a carrier runs along it (a real chamfer)
+        carriers = self._carriers() + [((3000.0 * _FT, 2960.0 * _FT),
+                                        (2960.0 * _FT, 3000.0 * _FT))]
+        ring = slab_outlines._square_off_chamfers(self._corner_ring(), carriers)
+        self.assertEqual(len(ring), 5)
+
+    def test_long_edges_are_never_touched(self):
+        square = [(0.0, 0.0), (3000.0 * _FT, 0.0),
+                  (3000.0 * _FT, 3000.0 * _FT), (0.0, 3000.0 * _FT)]
+        self.assertEqual(
+            slab_outlines._square_off_chamfers(square, self._carriers()), square)
+
+
 if __name__ == "__main__":
     unittest.main()

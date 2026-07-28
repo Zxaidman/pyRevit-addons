@@ -689,12 +689,76 @@ def _faces_from_edge_graph(segs, src, arc_triples, z, circles, beam_segments,
                 carrier_idx = _carrier_index(carriers, snap_ft)
             ring = _snap_ring_to_carriers(ring, carriers, circles, snap_ft,
                                           index=carrier_idx)
+            ring = _square_off_chamfers(ring, carriers)
             if len(ring) < 3:
                 continue
         arcs = _ring_arcs(ring, arc_triples, arc_tol_ft)
         arcs += _circle_wrap_arcs(ring, circles, arc_tol_ft)
         out.append((ring, z, arcs))
     return out
+
+
+_CHAMFER_MAX_MM = 150.0     # a boundary stub shorter than this may be a false chamfer
+_CHAMFER_PARALLEL = 0.17    # ~10 degrees: "this stub lies along a real edge"
+
+
+def _square_off_chamfers(ring, carriers):
+    """Replace false CHAMFERS at a corner with the corner itself.
+
+    Where two boundary edges meet at a column, the face walk can leave a short
+    stub across the corner instead of a clean step, and the exactness pass keeps
+    it because each of its ends is legitimately on a carrier. The result is a
+    SLOPED trim where the slab should turn square.
+
+    A stub is false only when it lies along NO carrier -- a genuinely chamfered
+    column edge is drawn, so it has one. For a false stub the two neighbouring
+    edges are extended to their own crossing and the stub's two vertices are
+    replaced by that single point, which is exactly the corner they both came
+    from.
+    """
+    if not carriers or len(ring) < 4:
+        return ring
+    max_len = config.mm_to_ft(_CHAMFER_MAX_MM)
+    directions = []
+    for (ax, ay), (bx, by) in carriers:
+        length = _dist((ax, ay), (bx, by))
+        if length > 1e-9:
+            directions.append(((bx - ax) / length, (by - ay) / length,
+                               (ax, ay)))
+    out = list(ring)
+    n = len(out)
+    replaced = {}
+    for i in range(n):
+        a, b = out[i], out[(i + 1) % n]
+        length = _dist(a, b)
+        if length < 1e-9 or length > max_len:
+            continue
+        ux, uy = (b[0] - a[0]) / length, (b[1] - a[1]) / length
+        on_carrier = False
+        for dx, dy, origin in directions:
+            if abs(ux * dy - uy * dx) > _CHAMFER_PARALLEL:
+                continue
+            # same direction AND the stub sits on that carrier's line
+            if abs((a[0] - origin[0]) * dy - (a[1] - origin[1]) * dx) <= max_len / 3.0:
+                on_carrier = True
+                break
+        if on_carrier:
+            continue
+        prev_pt = out[(i - 1) % n]
+        next_pt = out[(i + 2) % n]
+        if _dist(prev_pt, a) < 2.0 * length or _dist(b, next_pt) < 2.0 * length:
+            continue                       # neighbours too short to trust
+        crossing = _line_x_line((prev_pt, a), (b, next_pt))
+        if crossing is None:
+            continue                       # near-parallel: not a corner
+        if _dist(crossing, a) > 4.0 * length or _dist(crossing, b) > 4.0 * length:
+            continue                       # the crossing is not this corner
+        replaced[i] = crossing
+        replaced[(i + 1) % n] = crossing
+    if not replaced:
+        return ring
+    squared = [replaced.get(i, point) for i, point in enumerate(out)]
+    return _dedup_ring(squared)
 
 
 def _carrier_index(carriers, snap_ft):

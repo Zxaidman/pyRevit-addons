@@ -35,7 +35,30 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.55.0"  # 0.54.0 feedback (test7 drawn-outline stair + test10 grids).
+__version__ = "0.56.0"  # (1) KEYED SIZE SCHEDULES (test9's "B20(c)"): a label may carry a
+#                         parenthesised KEY instead of a size, with a MARK/SIZE table
+#                         ("SCHEDULE OF BEAM SIZE": (a) = 200x600) holding the sections.
+#                         marks.size_key parses the key onto every text, the table reader
+#                         accepts "(a)" as a mark, and _label_size resolves inline size ->
+#                         schedule[mark] -> schedule[key], so columns, beams and slabs all
+#                         understand the convention. On test9: 140 of 174 beam labels now size
+#                         (0 before). Each storey also reads its OWN schedule first -- test9's
+#                         floors disagree about what (a) means -- with the whole file as the
+#                         fallback for a schedule that lives on one sheet.
+#                         (2) NAME PARAMETER: the CAD mark went into Mark, full stop. The
+#                         Structure tab now has an editable "Name parameter" combo (Mark,
+#                         Comments, Type Mark, Type Comments, or anything typed); compat
+#                         .set_element_mark writes there and falls back to Mark when a family
+#                         has no such parameter, so nothing is ever lost.
+#                         (3) SLOPED TRIM AT COLUMN CORNERS: the face walk can leave a short
+#                         stub across a corner and the exactness pass kept it (both ends sit on
+#                         real carriers), so the slab sloped where it should step.
+#                         _square_off_chamfers extends the two neighbouring edges to their own
+#                         crossing and replaces the stub with that corner -- but only when the
+#                         stub lies along NO carrier, so a genuinely chamfered column survives.
+#                         test7: 1 sloped corner -> 0, face counts unchanged (45 / 9).
+#
+# 0.55.0                  0.54.0 feedback (test7 drawn-outline stair + test10 grids).
 #                         (1) A stair built inside a DRAWN outline came out stretched: the two
 #                         flights were pushed to the bay's edges, so their width followed
 #                         whatever rectangle was drawn instead of the 1250 asked for, the half

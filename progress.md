@@ -7,6 +7,23 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.56.0 — keyed size schedules, name parameter, sloped corner trims
+- **Keyed schedules** (test9 "B20(c)"): `marks.size_key` parses the parenthesised key,
+  the table reader accepts "(a)" as a mark, and `_label_size` resolves inline →
+  schedule[mark] → schedule[key], so columns/beams/slabs all read the convention.
+  test9: 140/174 beam labels now size (0 before). Each storey reads its OWN schedule
+  first (test9's floors disagree on (a)); whole file remains the fallback.
+- **Name parameter**: editable combo on the Structure tab (Mark / Comments / Type Mark /
+  Type Comments / anything typed). `compat.set_element_mark` writes there, falling back
+  to Mark when a family lacks the parameter.
+- **Sloped trim at column corners**: the walk left a short stub across a corner and the
+  exactness pass kept it (both ends on real carriers). `_square_off_chamfers` replaces it
+  with the true corner — only when the stub lies on NO carrier, so drawn chamfers survive.
+  test7: 1 → 0 sloped corners, face counts unchanged.
+- Suite 18 files (26 slab, 19 schedule tests).
+- OPEN, awaiting fixtures: StaircasePlan-Test2 (6 stairs, orientation/top-landing) and the
+  0.55.0 JSONs — not in the repo yet.
+
 ## v0.55.0 — drawn-outline stair geometry + grids created once per project
 - **Stair in a drawn outline was stretched**: flights hugged the bay edges, so run width
   followed the drawn rectangle instead of the dialog's 1250, the half landing spanned the

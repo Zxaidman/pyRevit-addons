@@ -201,3 +201,51 @@ class MarkToken(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class KeyedBeamSchedule(unittest.TestCase):
+    """test9's convention: the label carries a KEY, the table holds the size.
+
+    A beam reads "B20(c)" on the plan and a "SCHEDULE OF BEAM SIZE" table maps
+    MARK (a), (b), (c)... to SIZE 200x600, 240x600, 400x600...
+    """
+
+    def _table(self):
+        rows = [("(a)", "200x600"), ("(b)", "240x600"), ("(c)", "400x600")]
+        cells = [_Cell("MARK", 0.0, 100.0), _Cell("SIZE", 60.0, 100.0)]
+        for index, (key, size) in enumerate(rows):
+            y = 100.0 - 10.0 * (index + 1)
+            cells.append(_Cell(key, 0.0, y))
+            cells.append(_Cell(size, 60.0, y))
+        return cells
+
+    def test_keys_become_schedule_marks(self):
+        schedule = marks.parse_schedule(self._table())
+        self.assertEqual(schedule.get("(A)"), (200.0, 600.0))
+        self.assertEqual(schedule.get("(B)"), (240.0, 600.0))
+        self.assertEqual(schedule.get("(C)"), (400.0, 600.0))
+
+    def test_label_key_is_parsed(self):
+        self.assertEqual(marks.size_key("B20(c)"), "(C)")
+        self.assertEqual(marks.size_key("B1 (a)"), "(A)")
+        self.assertEqual(marks.size_key("C1 400x400"), None)
+        self.assertEqual(marks.size_key("B7"), None)
+        # a bracketed NUMBER is a callout/quantity, never a size key
+        self.assertEqual(marks.size_key("B7 (2)"), None)
+        self.assertEqual(marks.size_key(None), None)
+
+    def test_mark_survives_the_key(self):
+        name, b_mm, h_mm = marks.parse_mark("B20(c)")
+        self.assertEqual(name, "B20")
+        self.assertIsNone(b_mm)
+        self.assertIsNone(h_mm)
+
+    def test_parse_texts_stamps_the_key(self):
+        cell = _Cell("B20(c)", 0.0, 0.0)
+        marks.parse_texts([cell])
+        self.assertEqual(cell.mark, "B20")
+        self.assertEqual(cell.size_key, "(C)")
+
+
+if __name__ == "__main__":
+    unittest.main()

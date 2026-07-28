@@ -978,11 +978,21 @@ def _is_clipped(rect, size):
 
 
 def _label_size(text, schedule):
-    """(small, big) mm for a label: inline size first, else schedule[mark], else None."""
+    """(small, big) mm for a label, or None.
+
+    Precedence: the inline size ("B1 300x600") first, then schedule[mark], then
+    the label's parenthesised SCHEDULE KEY -- "B20(c)" is sized by the (c) row
+    of a MARK/SIZE table. Every element type resolves through here, so columns,
+    beams and slabs all understand the keyed convention.
+    """
     if text.b_mm is not None and text.h_mm is not None:
         return (min(text.b_mm, text.h_mm), max(text.b_mm, text.h_mm))
     if text.mark and text.mark in schedule:
         b, h = schedule[text.mark]
+        return (min(b, h), max(b, h))
+    key = getattr(text, "size_key", None)
+    if key and key in schedule:
+        b, h = schedule[key]
         return (min(b, h), max(b, h))
     return None
 

@@ -372,6 +372,10 @@ class CadToBimWindow(object):
             (find("rb_shape_c"), stair_layout.SHAPE_C),
             (find("rb_shape_circular"), stair_layout.SHAPE_CIRCULAR),
         ]
+        self.cb_name_param = find("cb_name_param")
+        for label in ("Mark", "Comments", "Type Mark", "Type Comments"):
+            self.cb_name_param.Items.Add(label)
+        self.cb_name_param.Text = "Mark"
         self.chk_multistorey = find("chk_multistorey")
         self.cb_boundary_layer = find("cb_boundary_layer")
         self.cb_origin_layer = find("cb_origin_layer")
@@ -752,6 +756,7 @@ class CadToBimWindow(object):
             "beam_family_id": self._beam_ids.get(self.cb_beam_family.SelectedItem),
             "base_level_id": self._level_ids.get(self.cb_base_level.SelectedItem),
             "top_level_id": self._level_ids.get(self.cb_top_level.SelectedItem),
+            "name_parameter": (self.cb_name_param.Text or "Mark").strip(),
             "export": bool(self.chk_export.IsChecked),
             "limits": self._read_limits(),
             "tolerances": self._read_tolerances(),
@@ -801,6 +806,8 @@ class CadToBimWindow(object):
         combo(self.cb_stair_type, self._stair_ids, preset.get("stair_type_id"))
         combo(self.cb_base_level, self._level_ids, preset.get("base_level_id"))
         combo(self.cb_top_level, self._level_ids, preset.get("top_level_id"))
+        if preset.get("name_parameter"):
+            self.cb_name_param.Text = preset["name_parameter"]
         source = preset.get("stair_source")
         if source:
             self.cb_stair_source.SelectedIndex = {
@@ -1046,6 +1053,9 @@ def main():
     # module constants in the slab and stair geometry
     slab_outlines.apply_tolerances(tolerances)
     stair_layout.apply_tolerances(tolerances)
+    # every element writes its CAD mark into the parameter chosen on the
+    # Structure tab (Mark stays the fallback when a family lacks it)
+    compat.set_name_parameter(selections.get("name_parameter"))
 
     # Diagnostic only: how much Revit's import dropped/clipped vs the raw DXF.
     compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
@@ -1192,10 +1202,16 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
                     if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_TEXT]
     grid_texts = [t for t in dxf_texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_GRID_TEXT]
-    # A shared schedule can live on ONE sheet of a multi-storey drawing, so the
-    # schedule text is read from the WHOLE file, not just this storey's box.
-    schedule_texts = [t for t in (schedule_source or dxf_texts)
-                      if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
+    # THIS storey's own schedule first: a keyed table ("(a) = 200x600") is per
+    # sheet, and test9's floors disagree on what (a) means, so reading the whole
+    # file would size a beam off the wrong floor's table. A shared schedule that
+    # lives on ONE sheet still works -- the whole file is the fallback below.
+    own_schedule_texts = [t for t in dxf_texts
+                          if text_mapping.get(t.layer_key)
+                          == layers.CATEGORY_COLUMN_SCHEDULE]
+    schedule_texts = own_schedule_texts or [
+        t for t in (schedule_source or dxf_texts)
+        if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
     beam_texts = [t for t in dxf_texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
 
