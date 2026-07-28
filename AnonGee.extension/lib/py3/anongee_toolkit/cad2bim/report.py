@@ -750,6 +750,7 @@ def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
         for rect in near:
             used.add(id(rect))
         rect = _merge_to_label(near, size[0], size[1], text.mark)
+        _anchor_growth(rect, near, rects)
         if grid_snap_ft:                       # we moved/resized -> snap onto the grid
             rect["center"][0] = _snap(rect["center"][0], grid_x, grid_snap_ft)
             rect["center"][1] = _snap(rect["center"][1], grid_y, grid_snap_ft)
@@ -1043,6 +1044,65 @@ def _snap(value, positions, tol_ft):
         return value
     nearest = min(positions, key=lambda p: abs(p - value))
     return nearest if abs(nearest - value) <= tol_ft else value
+
+
+_ABUT_TOL_FT = 150.0 / _MM     # a neighbour this close to an end is touching it
+
+
+def _anchor_growth(rect, near, all_rects):
+    """Grow a resized column back over the piece that was CARVED off it.
+
+    A wall crossing another wall is decomposed into pieces, so the drawn piece
+    stops at the crossing member's face. Applying the schedule length about the
+    PIECE's centre then pushes the wall past its free end -- StaircasePlan-Test2's
+    SW10 grew 400mm longer and its centre rose 200mm, off the drawing.
+
+    When the new length exceeds what was drawn and exactly ONE end abuts another
+    rectangle, that end is where the carve happened: the FREE end is pinned and
+    the column grows inward, back over the piece it lost.
+    """
+    if not near:
+        return
+    along_y = (rect.get("long_axis_deg") or 0.0) > 45.0
+    axis = 1 if along_y else 0
+    cross = 0 if along_y else 1
+
+    def extent(r, index):
+        """(lo, hi) of a rect along x (index 0) or y (index 1).
+
+        width_mm/height_mm are the SHORT and LONG sides; long_axis_deg says
+        which way the long side points, so the axis extents follow from that.
+        """
+        long_mm = max(r["width_mm"], r["height_mm"])
+        short_mm = min(r["width_mm"], r["height_mm"])
+        long_is_y = (r.get("long_axis_deg") or 0.0) > 45.0
+        side = long_mm if (index == 1) == long_is_y else short_mm
+        half = (side / _MM) / 2.0
+        return (r["center"][index] - half, r["center"][index] + half)
+
+    lo = min(extent(r, axis)[0] for r in near)
+    hi = max(extent(r, axis)[1] for r in near)
+    new_half = (max(rect["width_mm"], rect["height_mm"]) / _MM) / 2.0
+    if 2.0 * new_half <= (hi - lo) + _ABUT_TOL_FT:
+        return                              # not growing: nothing to re-anchor
+
+    claimed = set(id(r) for r in near)
+    c_lo, c_hi = extent(rect, cross)
+    touches_lo = touches_hi = False
+    for other in all_rects:
+        if id(other) in claimed:
+            continue
+        o_lo, o_hi = extent(other, axis)
+        ox_lo, ox_hi = extent(other, cross)
+        if ox_hi < c_lo - _ABUT_TOL_FT or ox_lo > c_hi + _ABUT_TOL_FT:
+            continue                        # not alongside this column
+        if abs(o_hi - lo) <= _ABUT_TOL_FT or (o_lo <= lo <= o_hi):
+            touches_lo = True
+        if abs(o_lo - hi) <= _ABUT_TOL_FT or (o_lo <= hi <= o_hi):
+            touches_hi = True
+    if touches_lo == touches_hi:
+        return                              # both ends free (or both blocked)
+    rect["center"][axis] = (hi - new_half) if touches_lo else (lo + new_half)
 
 
 def _merge_to_label(rects, small_mm, big_mm, mark):

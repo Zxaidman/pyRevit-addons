@@ -222,5 +222,55 @@ class CoreWallLabels(unittest.TestCase):
         self.assertEqual(self._carved(sec), [])
 
 
+
+
+class GrowBackOverTheCarve(unittest.TestCase):
+    """StaircasePlan-Test2 SW10: a wall carved by a crossing wall must grow back
+    over the carve, not push past its free end.
+
+    The drawn wall spans y -300..7550 (7850 long). Decomposition gives SW10 only
+    the part above the crossing wall SW9 (y 100..7550, 7450 long), so applying
+    the schedule's 7850 about THAT centre moved the wall 200mm up and off the
+    drawing. The free end must be pinned instead.
+    """
+
+    def _rect(self, cx_mm, cy_mm, small_mm, big_mm, deg):
+        return {"center": [cx_mm * _FT, cy_mm * _FT, 0.0],
+                "width_mm": small_mm, "height_mm": big_mm,
+                "width_ft": small_mm * _FT, "height_ft": big_mm * _FT,
+                "long_axis_deg": deg}
+
+    def _run(self, carved):
+        sw9 = self._rect(14000.0, -100.0, 400.0, 5600.0, 0.0)
+        sections = {"entries": [{"layer": "S-COLS", "status": "rect",
+                                 "rectangles": [carved, sw9]}]}
+        texts = [_Lbl("SW10", None, None, 11000.0, 3825.0),
+                 _Lbl("SW9", None, None, 14000.0, -100.0)]
+        report.correct_columns_with_text(
+            sections, texts, 1300.0 * _FT,
+            schedule={"SW10": (400.0, 7850.0), "SW9": (400.0, 5600.0)})
+        for rect in sections["entries"][0]["rectangles"]:
+            if rect.get("mark") == "SW10":
+                return rect
+        return None
+
+    def test_free_end_is_pinned_when_growing(self):
+        carved = self._rect(11000.0, 3825.0, 400.0, 7450.0, 90.0)
+        grown = self._run(carved)
+        self.assertIsNotNone(grown)
+        centre_mm = grown["center"][1] * _MM
+        half = max(grown["width_mm"], grown["height_mm"]) / 2.0
+        self.assertAlmostEqual(centre_mm, 3625.0, places=3)
+        self.assertAlmostEqual(centre_mm - half, -300.0, places=3)  # drawn bottom
+        self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)  # drawn top
+
+    def test_uncarved_column_keeps_its_centre(self):
+        # already the scheduled length: nothing to grow, nothing to re-anchor
+        whole = self._rect(11000.0, 3625.0, 400.0, 7850.0, 90.0)
+        kept = self._run(whole)
+        self.assertIsNotNone(kept)
+        self.assertAlmostEqual(kept["center"][1] * _MM, 3625.0, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()

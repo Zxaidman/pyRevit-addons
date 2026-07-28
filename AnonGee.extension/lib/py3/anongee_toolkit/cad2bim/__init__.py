@@ -35,7 +35,19 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.57.0"  # StaircasePlan-Test2, from the fixture the user pushed mid-round.
+__version__ = "0.57.1"  # HOTFIX for the SW10/SW11 shift the user spotted after 0.57.0 -- a
+#                         REGRESSION from making that fixture's schedule readable. A wall
+#                         crossed by another wall is decomposed into pieces, so SW10's drawn
+#                         piece stops at SW9's face: y 100..7550, 7450 long, centred 3825. Once
+#                         the schedule could be read it supplied the true 7850, which was applied
+#                         about the PIECE's centre -- so the wall kept centre 3825 and grew 200mm
+#                         past its free end instead of growing back over the carve. _anchor_growth
+#                         now pins the FREE end when a resized column grows and exactly one end
+#                         abuts another rectangle: SW10 lands on y -300..7550, centre 3625, which
+#                         is exactly what is drawn. A column that is already its scheduled length
+#                         keeps its centre, so nothing else moves.
+#
+# 0.57.0                  StaircasePlan-Test2, from the fixture the user pushed mid-round.
 #                         (1) ITS SCHEDULE READ NOTHING: the table is a Revit export whose mark
 #                         column is headed "Comments", not "Mark", so no header was recognised
 #                         and no table was found. "comments"/"comment"/"name" now head a mark

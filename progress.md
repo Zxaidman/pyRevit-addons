@@ -7,6 +7,14 @@ for future field bugs: beams.raw_geometry in every JSON export + tests/replay_be
 (offline replay), the Test20 stress suite (tests/test_beam_stress.py, 14 tests), and a
 regression test left behind by every fix.
 
+## v0.57.1 — hotfix: SW10/SW11 moved 200mm (regression from the readable schedule)
+- A wall crossed by another is decomposed, so SW10's drawn piece stops at SW9's face
+  (y 100..7550, 7450 long, centre 3825). Once 0.57.0 made the schedule readable it gave
+  the true 7850 — applied about the PIECE's centre, so the wall grew 200mm past its free
+  end. `_anchor_growth` pins the FREE end when a resized column grows and exactly one end
+  abuts another rect: SW10 → y -300..7550, centre 3625, exactly as drawn. A column already
+  at its scheduled length keeps its centre.
+
 ## v0.57.0 — StaircasePlan-Test2: schedule header + lost risers
 - **Schedule read nothing**: Test2's table is a Revit export whose mark column is headed
   **"Comments"**, not "Mark", so no header matched and no table was found.
