@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hatch Slab.
+"""Hatch Slab (v2).
 
 AutoCAD-style hatch behaviour for Revit: click inside a closed region formed by
 structural framing and structural columns in a plan view, and a structural floor
@@ -8,18 +8,30 @@ elements.
 
 Click repeatedly to fill more regions. Press ESC to finish.
 
-Tested target: Revit 2022+ (uses Floor.Create). Engine: IronPython 2.7.
+v2 changes
+  - type names resolved properly (SYMBOL_NAME_PARAM / Element.Name.GetValue)
+  - list shows "Type Name  [id]"
+  - object snapping disabled while picking (snapping was dragging the click
+    onto a beam edge, which made point-in-region always fail)
+  - a sketch plane is set on the view if it has none (PickPoint needs one)
+  - no more blanket excepts: real exception type and message get printed
+  - DEBUG flag dumps graph statistics so failures are diagnosable
+
+Target: Revit 2022+ (uses Floor.Create). Engine: IronPython 2.7.
 """
 
 __title__ = 'Hatch\nSlab'
 __author__ = 'AnonGee'
 
 import math
+import time
+import traceback
 
 from Autodesk.Revit.DB import (
     BuiltInCategory,
     BuiltInParameter,
     CurveLoop,
+    Element,
     ExtrusionAnalyzer,
     FilteredElementCollector,
     Floor,
@@ -28,13 +40,15 @@ from Autodesk.Revit.DB import (
     Line,
     Options,
     Plane,
+    SketchPlane,
     Solid,
     Transaction,
     ViewDetailLevel,
     ViewPlan,
     XYZ,
 )
-from Autodesk.Revit.Exceptions import OperationCanceledException
+from Autodesk.Revit.UI.Selection import ObjectSnapTypes
+import Autodesk.Revit.Exceptions as RevitExceptions
 from System.Collections.Generic import List
 
 from pyrevit import forms, script
@@ -47,26 +61,60 @@ logger = script.get_logger()
 
 
 # ---------------------------------------------------------------------------
-# Tolerances (all internal Revit units = decimal feet)
+# Settings
 # ---------------------------------------------------------------------------
+
+DEBUG = True                                  # print graph statistics
 
 SHORT = doc.Application.ShortCurveTolerance   # ~0.00256 ft (~0.78 mm)
 SNAP = SHORT                                  # node merge distance
 GRID_CELL = 2.0                               # broad-phase bucket size, ft
-COLLINEAR_TOL = 1.0e-6                        # cross-product tol for simplify
+COLLINEAR_TOL = 1.0e-6
 MIN_FACE_AREA = 0.01                          # ft^2, ignore slivers
 
+# ObjectSnapTypes.None -- 'None' is a Python keyword, so fetch it by name.
+NO_SNAP = getattr(ObjectSnapTypes, 'None')
+
 
 # ---------------------------------------------------------------------------
-# Small helpers
+# Naming helpers -- the v1 bug lived here
 # ---------------------------------------------------------------------------
 
-def cat_id_value(element_id):
-    """ElementId.Value on 2024+, IntegerValue on older releases."""
+def element_id_value(element_id):
+    """ElementId.Value on Revit 2024+, IntegerValue on older releases."""
     try:
         return element_id.Value
     except AttributeError:
         return element_id.IntegerValue
+
+
+def element_name(element):
+    """Get an element's name despite IronPython's flaky .Name resolution."""
+    for bip in (BuiltInParameter.SYMBOL_NAME_PARAM,
+                BuiltInParameter.ALL_MODEL_TYPE_NAME):
+        try:
+            param = element.get_Parameter(bip)
+            if param is not None and param.HasValue:
+                value = param.AsString()
+                if value:
+                    return value
+        except Exception:
+            pass
+
+    try:
+        # Reflected property access -- bypasses the ambiguous binding.
+        value = Element.Name.GetValue(element)
+        if value:
+            return value
+    except Exception:
+        pass
+
+    try:
+        return element.Name
+    except Exception:
+        pass
+
+    return 'Unnamed type'
 
 
 def bic_value(bic):
@@ -77,11 +125,10 @@ def bic_value(bic):
 
 
 # ---------------------------------------------------------------------------
-# Step 1 -- pull plan footprints of beams and columns
+# Step 1 -- plan footprints of beams and columns
 # ---------------------------------------------------------------------------
 
 def iter_solids(geo_element):
-    """Yield every meaningful Solid inside a GeometryElement, recursively."""
     if geo_element is None:
         return
     for geo in geo_element:
@@ -97,22 +144,17 @@ def iter_solids(geo_element):
 
 
 def footprint_loops(element, opts, plane):
-    """Project an element's solids onto the plan plane and return CurveLoops.
-
-    ExtrusionAnalyzer gives the true projected outline, so rotated columns and
-    sloped/skewed beams come out correct -- much better than a bounding box.
-    """
     loops = []
     try:
         geo = element.get_Geometry(opts)
-    except Exception:
+    except Exception as err:
+        logger.debug('geometry failed on {0}: {1}'.format(element.Id, err))
         return loops
 
     for solid in iter_solids(geo):
         try:
             analyzer = ExtrusionAnalyzer.Create(solid, plane, XYZ.BasisZ)
-            base_face = analyzer.GetExtrusionBase()
-            for curve_loop in base_face.GetEdgesAsCurveLoops():
+            for curve_loop in analyzer.GetExtrusionBase().GetEdgesAsCurveLoops():
                 loops.append(curve_loop)
         except Exception as err:
             logger.debug('footprint failed on {0}: {1}'.format(element.Id, err))
@@ -121,12 +163,6 @@ def footprint_loops(element, opts, plane):
 
 
 def loops_to_segments(loops):
-    """Tessellate CurveLoops into flat 2D line segments.
-
-    Everything downstream works on straight segments only -- that keeps the
-    intersection maths and face traversal simple and robust. Curved beams come
-    out as fine polylines.
-    """
     segments = []
     for curve_loop in loops:
         for curve in curve_loop:
@@ -143,48 +179,48 @@ def loops_to_segments(loops):
 
 
 def gather_boundary_segments(view):
-    """Collect footprint segments for every beam and column visible in view."""
     opts = Options()
     opts.ComputeReferences = False
     opts.IncludeNonVisibleObjects = False
-    opts.DetailLevel = ViewDetailLevel.Fine   # coarse turns beams into sticks
+    opts.DetailLevel = ViewDetailLevel.Fine
 
     plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ.Zero)
 
-    categories = [
-        BuiltInCategory.OST_StructuralFraming,
-        BuiltInCategory.OST_StructuralColumns,
-    ]
-
     elements = []
-    for bic in categories:
-        collected = FilteredElementCollector(doc, view.Id) \
-            .OfCategory(bic) \
-            .WhereElementIsNotElementType() \
+    skipped = 0
+    for bic in (BuiltInCategory.OST_StructuralFraming,
+                BuiltInCategory.OST_StructuralColumns):
+        elements.extend(
+            FilteredElementCollector(doc, view.Id)
+            .OfCategory(bic)
+            .WhereElementIsNotElementType()
             .ToElements()
-        elements.extend(collected)
+        )
 
     segments = []
     if not elements:
-        return segments
+        return segments, 0, 0
 
-    with forms.ProgressBar(title='Reading beams and columns... {value}/{max_value}',
-                           cancellable=True) as pbar:
+    with forms.ProgressBar(
+            title='Reading beams and columns... {value}/{max_value}',
+            cancellable=True) as pbar:
         for idx, element in enumerate(elements):
             if pbar.cancelled:
                 break
             pbar.update_progress(idx + 1, len(elements))
-            segments.extend(loops_to_segments(footprint_loops(element, opts, plane)))
+            found = loops_to_segments(footprint_loops(element, opts, plane))
+            if not found:
+                skipped += 1
+            segments.extend(found)
 
-    return segments
+    return segments, len(elements), skipped
 
 
 # ---------------------------------------------------------------------------
-# Step 2 -- split every segment at its intersections with the others
+# Step 2 -- split segments at intersections
 # ---------------------------------------------------------------------------
 
 class SegmentGrid(object):
-    """Uniform grid so we don't test every segment against every other one."""
 
     def __init__(self, cell):
         self.cell = cell
@@ -192,11 +228,10 @@ class SegmentGrid(object):
 
     def _range(self, seg):
         (x1, y1), (x2, y2) = seg
-        i0 = int(math.floor(min(x1, x2) / self.cell))
-        i1 = int(math.floor(max(x1, x2) / self.cell))
-        j0 = int(math.floor(min(y1, y2) / self.cell))
-        j1 = int(math.floor(max(y1, y2) / self.cell))
-        return i0, i1, j0, j1
+        return (int(math.floor(min(x1, x2) / self.cell)),
+                int(math.floor(max(x1, x2) / self.cell)),
+                int(math.floor(min(y1, y2) / self.cell)),
+                int(math.floor(max(y1, y2) / self.cell)))
 
     def add(self, index, seg):
         i0, i1, j0, j1 = self._range(seg)
@@ -222,7 +257,6 @@ def _cross(u, v):
 
 
 def pair_cuts(seg_a, seg_b):
-    """Return (t_on_a, t_on_b) split params, or [] if they don't cross."""
     pa, qa = seg_a
     pb, qb = seg_b
     ra = _sub(qa, pa)
@@ -237,7 +271,6 @@ def pair_cuts(seg_a, seg_b):
             return [(t, u)]
         return []
 
-    # Parallel. If also collinear and overlapping, project b's ends onto a.
     len_a = math.hypot(ra[0], ra[1])
     if len_a < 1.0e-9:
         return []
@@ -247,20 +280,16 @@ def pair_cuts(seg_a, seg_b):
     cuts = []
     for point in (pb, qb):
         d = _sub(point, pa)
-        t = (d[0] * ra[0] + d[1] * ra[1]) / (len_a * len_a)
-        cuts.append((t, None))
-    for point in (pa, qa):
-        rb_len = math.hypot(rb[0], rb[1])
-        if rb_len < 1.0e-9:
-            continue
-        d = _sub(point, pb)
-        u = (d[0] * rb[0] + d[1] * rb[1]) / (rb_len * rb_len)
-        cuts.append((None, u))
+        cuts.append(((d[0] * ra[0] + d[1] * ra[1]) / (len_a * len_a), None))
+    rb_len = math.hypot(rb[0], rb[1])
+    if rb_len > 1.0e-9:
+        for point in (pa, qa):
+            d = _sub(point, pb)
+            cuts.append((None, (d[0] * rb[0] + d[1] * rb[1]) / (rb_len * rb_len)))
     return cuts
 
 
 def split_all(segments):
-    """Cut every segment wherever another segment touches or crosses it."""
     grid = SegmentGrid(GRID_CELL)
     for index, seg in enumerate(segments):
         grid.add(index, seg)
@@ -283,8 +312,7 @@ def split_all(segments):
         (x1, y1), (x2, y2) = seg
         params = sorted(set([0.0, 1.0] + cuts[i]))
         for k in range(len(params) - 1):
-            t0 = params[k]
-            t1 = params[k + 1]
+            t0, t1 = params[k], params[k + 1]
             if t1 - t0 < 1.0e-9:
                 continue
             a = (x1 + (x2 - x1) * t0, y1 + (y2 - y1) * t0)
@@ -295,11 +323,10 @@ def split_all(segments):
 
 
 # ---------------------------------------------------------------------------
-# Step 3 -- planar graph
+# Step 3 -- planar graph and faces
 # ---------------------------------------------------------------------------
 
 class NodeStore(object):
-    """Point set with tolerance-based merging."""
 
     def __init__(self, snap):
         self.snap = snap
@@ -339,7 +366,8 @@ def build_graph(pieces):
         adjacency.setdefault(na, set()).add(nb)
         adjacency.setdefault(nb, set()).add(na)
 
-    # Prune dead ends -- a dangling beam bounds no region.
+    raw_nodes = len(adjacency)
+
     changed = True
     while changed:
         changed = False
@@ -350,19 +378,17 @@ def build_graph(pieces):
                 del adjacency[node]
                 changed = True
 
-    return nodes.points, adjacency
+    return nodes.points, adjacency, raw_nodes
 
 
 def trace_faces(points, adjacency):
-    """Walk every minimal cycle of the planar graph."""
     ordered = {}
     position = {}
     for node, neighbours in adjacency.items():
         ring = []
         for other in neighbours:
-            angle = math.atan2(points[other][1] - points[node][1],
-                               points[other][0] - points[node][0])
-            ring.append((angle, other))
+            ring.append((math.atan2(points[other][1] - points[node][1],
+                                    points[other][0] - points[node][0]), other))
         ring.sort()
         ordered[node] = ring
         position[node] = dict((other, idx) for idx, (_, other) in enumerate(ring))
@@ -420,7 +446,6 @@ def point_in_cycle(points, cycle, x, y):
 
 
 def find_region(points, faces, x, y):
-    """Smallest face that contains the click. Excludes the unbounded face."""
     best = None
     best_area = None
     for cycle in faces:
@@ -435,12 +460,25 @@ def find_region(points, faces, x, y):
     return best, best_area
 
 
+def nearest_face_distance(points, faces, x, y):
+    """Diagnostic: how far is the click from the closest face centroid."""
+    best = None
+    for cycle in faces:
+        if abs(signed_area(points, cycle)) < MIN_FACE_AREA:
+            continue
+        cx = sum(points[n][0] for n in cycle) / float(len(cycle))
+        cy = sum(points[n][1] for n in cycle) / float(len(cycle))
+        d = math.hypot(cx - x, cy - y)
+        if best is None or d < best:
+            best = d
+    return best
+
+
 # ---------------------------------------------------------------------------
-# Step 4 -- turn the cycle into a CurveLoop
+# Step 4 -- cycle to CurveLoop
 # ---------------------------------------------------------------------------
 
 def simplify(points, cycle):
-    """Drop collinear intermediate vertices so the sketch stays clean."""
     ring = [points[n] for n in cycle]
     result = []
     count = len(ring)
@@ -472,13 +510,11 @@ def make_curve_loop(ring, elevation):
             continue
         loop.Append(Line.CreateBound(start, end))
         appended += 1
-    if appended < 3:
-        return None
-    return loop
+    return loop if appended >= 3 else None
 
 
 # ---------------------------------------------------------------------------
-# Step 5 -- slab type selection
+# Step 5 -- type selection
 # ---------------------------------------------------------------------------
 
 def collect_types(target_bic):
@@ -486,15 +522,11 @@ def collect_types(target_bic):
     result = {}
     for floor_type in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
         category = floor_type.Category
-        if category is None:
+        if category is None or element_id_value(category.Id) != wanted:
             continue
-        if cat_id_value(category.Id) != wanted:
-            continue
-        try:
-            name = floor_type.Name
-        except Exception:
-            name = 'Type {0}'.format(floor_type.Id)
-        result[name] = floor_type
+        label = '{0}  [{1}]'.format(element_name(floor_type),
+                                    element_id_value(floor_type.Id))
+        result[label] = floor_type
     return result
 
 
@@ -506,16 +538,13 @@ def choose_type():
     if not kind:
         return None, None
 
-    if kind == 'Structural Floor':
-        target = BuiltInCategory.OST_Floors
-    else:
-        target = BuiltInCategory.OST_StructuralFoundation
+    target = (BuiltInCategory.OST_Floors if kind == 'Structural Floor'
+              else BuiltInCategory.OST_StructuralFoundation)
 
     available = collect_types(target)
     if not available:
         forms.alert('No {0} types found in this project.'.format(kind.lower()),
                     exitscript=True)
-        return None, None
 
     picked = forms.SelectFromList.show(
         sorted(available.keys()),
@@ -526,6 +555,30 @@ def choose_type():
     if not picked:
         return None, None
     return available[picked], kind
+
+
+# ---------------------------------------------------------------------------
+# Sketch plane -- PickPoint needs one
+# ---------------------------------------------------------------------------
+
+def ensure_sketch_plane(view, elevation):
+    try:
+        if view.SketchPlane is not None:
+            return True
+    except Exception:
+        pass
+
+    transaction = Transaction(doc, 'Hatch Slab - set work plane')
+    transaction.Start()
+    try:
+        plane = Plane.CreateByNormalAndOrigin(XYZ.BasisZ, XYZ(0, 0, elevation))
+        view.SketchPlane = SketchPlane.Create(doc, plane)
+        transaction.Commit()
+        return True
+    except Exception as err:
+        transaction.RollBack()
+        output.print_md('- Could not set a work plane: `{0}`'.format(err))
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -547,35 +600,78 @@ def main():
     if floor_type is None:
         return
 
-    segments = gather_boundary_segments(view)
+    segments, element_count, skipped = gather_boundary_segments(view)
     if not segments:
         forms.alert('No structural framing or columns visible in this view.',
                     exitscript=True)
 
     pieces = split_all(segments)
-    points, adjacency = build_graph(pieces)
+    points, adjacency, raw_nodes = build_graph(pieces)
     if not adjacency:
-        forms.alert('No closed regions found. Check that the beams actually '
-                    'meet in plan.', exitscript=True)
+        forms.alert('No closed regions found -- every edge was a dead end. '
+                    'Check that the beams actually meet in plan.',
+                    exitscript=True)
 
     faces = trace_faces(points, adjacency)
+    usable = [f for f in faces if abs(signed_area(points, f)) >= MIN_FACE_AREA]
     elevation = level.Elevation
 
-    output.print_md('**Hatch Slab** -- click inside a region, ESC to finish.')
+    if DEBUG:
+        output.print_md('### Graph')
+        output.print_md(
+            '- elements read: **{0}** (no geometry: {1})\n'
+            '- raw segments: **{2}** -> after splitting: **{3}**\n'
+            '- graph nodes: **{4}** (before pruning dead ends: {5})\n'
+            '- faces traced: **{6}** (usable: **{7}**)'.format(
+                element_count, skipped, len(segments), len(pieces),
+                len(adjacency), raw_nodes, len(faces), len(usable)))
+
+    if not usable:
+        forms.alert('The graph built, but no enclosed regions came out of it. '
+                    'This usually means the beams do not overlap in plan.',
+                    exitscript=True)
+
+    ensure_sketch_plane(view, elevation)
+
+    output.print_md('### Picking')
+    output.print_md('Click inside a region. **ESC** to finish.')
 
     created = 0
+    spurious_retried = False
+
     while True:
+        started = time.time()
         try:
             pick = uidoc.Selection.PickPoint(
-                'Click inside a closed region (ESC to finish)')
-        except OperationCanceledException:
+                NO_SNAP, 'Click inside a closed region (ESC to finish)')
+        except RevitExceptions.OperationCanceledException:
+            # A pick that cancels instantly is usually the click that dismissed
+            # the previous dialog bleeding through, not a real ESC.
+            if (time.time() - started) < 0.25 and not spurious_retried:
+                spurious_retried = True
+                continue
             break
-        except Exception:
+        except Exception as err:
+            output.print_md(
+                '- **PickPoint failed:** `{0}: {1}`'.format(
+                    type(err).__name__, err))
+            output.print_md('```\n{0}\n```'.format(traceback.format_exc()))
             break
 
-        cycle, area = find_region(points, faces, pick.X, pick.Y)
+        spurious_retried = False
+
+        try:
+            cycle, area = find_region(points, usable, pick.X, pick.Y)
+        except Exception as err:
+            output.print_md('- Region search failed: `{0}`'.format(err))
+            continue
+
         if cycle is None:
-            output.print_md('- No closed region at that point.')
+            gap = nearest_face_distance(points, usable, pick.X, pick.Y)
+            output.print_md(
+                '- No region at ({0:.2f}, {1:.2f}). Nearest region centre is '
+                '{2:.2f} ft away.'.format(pick.X, pick.Y,
+                                          gap if gap is not None else -1))
             continue
 
         ring = simplify(points, cycle)
@@ -591,21 +687,20 @@ def main():
         transaction.Start()
         try:
             new_floor = Floor.Create(doc, profile, floor_type.Id, level.Id)
-
             structural = new_floor.get_Parameter(
                 BuiltInParameter.FLOOR_PARAM_IS_STRUCTURAL)
             if structural is not None and not structural.IsReadOnly:
                 structural.Set(1)
-
             transaction.Commit()
             created += 1
             output.print_md(
-                '- Created {0} `{1}` -- {2:.2f} sq ft '
-                '({3} boundary segments)'.format(
-                    kind.lower(), floor_type.Name, area, len(ring)))
+                '- Created {0} **{1}** -- {2:.2f} sq ft, '
+                '{3} boundary segments'.format(
+                    kind.lower(), element_name(floor_type), area, len(ring)))
         except Exception as err:
             transaction.RollBack()
-            output.print_md('- Failed: {0}'.format(err))
+            output.print_md('- **Create failed:** `{0}: {1}`'.format(
+                type(err).__name__, err))
 
     output.print_md('**Done.** {0} slab(s) created.'.format(created))
 

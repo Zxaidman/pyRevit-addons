@@ -375,7 +375,7 @@ class CadToBimWindow(object):
         self.cb_name_param = find("cb_name_param")
         for label in ("Mark", "Comments", "Type Mark", "Type Comments"):
             self.cb_name_param.Items.Add(label)
-        self.cb_name_param.Text = "Mark"
+        self.cb_name_param.Text = "Comments"
         self.chk_multistorey = find("chk_multistorey")
         self.cb_boundary_layer = find("cb_boundary_layer")
         self.cb_origin_layer = find("cb_origin_layer")
