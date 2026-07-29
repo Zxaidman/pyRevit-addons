@@ -44,9 +44,10 @@ clr.AddReference("System.Windows.Forms")
 from System.Windows.Markup import XamlReader
 from System.IO import FileStream, FileMode, FileAccess
 from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
-                            Thickness, GridLength, GridUnitType, VerticalAlignment)
+                            Thickness, GridLength, GridUnitType, VerticalAlignment,
+                            TextTrimming)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox)
+                                     ComboBox, TextBox)
 import System.Windows.Forms
 
 
@@ -258,6 +259,7 @@ class LinkOptionsDialog(object):
         self.cb_placement = find("cb_placement")
         self.chk_view_only = find("chk_view_only")
         find("tb_active_view").Text = active_view_name
+        find("link_version_text").Text = "v{0}".format(cad2bim.__version__)
         for label, _value in dxf_linker.UNIT_CHOICES:
             self.cb_unit.Items.Add(label)
         for label, _value in dxf_linker.PLACEMENT_CHOICES:
@@ -313,7 +315,7 @@ class CadToBimWindow(object):
                  column_symbols, level_options, beam_symbols, floor_type_options=None,
                  text_layer_rows=None, text_categories=None, default_text_mapping=None,
                  stair_type_options=None, level_elevations=None,
-                 stair_regions=None, preset=None):
+                 stair_regions=None, preset=None, storey_detection=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -381,14 +383,19 @@ class CadToBimWindow(object):
         self.cb_origin_layer = find("cb_origin_layer")
         self.tb_storey_height = find("tb_storey_height")
         self.multistorey_preview = find("multistorey_preview")
+        self.storey_rows = find("storey_rows")
         layer_names = [name for name, _count in layer_rows]
         for combo in (self.cb_boundary_layer, self.cb_origin_layer):
             combo.Items.Add("(none)")
             for name in layer_names:
                 combo.Items.Add(name)
             combo.SelectedIndex = 0
-        _select_containing(self.cb_boundary_layer, ["boundar", "bound", "extent"])
-        _select_containing(self.cb_origin_layer, ["origin", "basept", "datum"])
+        # Auto-detection reads the drawing itself, so the tab arrives already
+        # answered: the layers picked, the box ticked and one row per plan. A
+        # name guess is only the fallback when detection found nothing.
+        self.detection = storey_detection
+        self._storey_boxes = []
+        self._apply_detection()
         self.btn_draw_stairs = find("btn_draw_stairs")
         self.stair_outline_text = find("stair_outline_text")
         self.btn_draw_stairs.Click += self.on_draw_stairs
@@ -740,6 +747,7 @@ class CadToBimWindow(object):
                              else self.cb_origin_layer.SelectedItem),
             "storey_height_mm": self._read_float(
                 self.tb_storey_height, config.DEFAULTS["storey_height_mm"]),
+            "storey_settings": self._read_storey_settings(),
             "stair_params": {
                 "riser_count": self._read_int(self.tb_stair_count, 0),
                 "waist_mm": self._read_float(self.tb_stair_waist,
@@ -835,7 +843,92 @@ class CadToBimWindow(object):
                        else self.cb_origin_layer)
             if wanted:
                 control.SelectedItem = wanted
+        for row, saved in zip(self._storey_boxes,
+                              preset.get("storey_settings") or []):
+            _plan, height_box, repeat_box = row
+            height = saved.get("height_mm")
+            height_box.Text = "" if height is None else "{0:g}".format(height)
+            repeat_box.Text = str(int(saved.get("repeat") or 1))
         self._stair_sync()
+
+    def _apply_detection(self):
+        """Fill the Multi-storey tab from what auto-detection found in the DXF.
+
+        Detection decides the checkbox, the two layer combos and the storey
+        rows; the user can override every one of them afterwards. With no
+        detection (an older caller, or nothing found) the tab falls back to the
+        name guess it always used.
+        """
+        found = self.detection
+        if found is None or not getattr(found, "boundary_layer", None):
+            _select_containing(self.cb_boundary_layer,
+                               ["boundar", "bound", "extent"])
+            _select_containing(self.cb_origin_layer,
+                               ["origin", "basept", "datum"])
+            if found is not None:
+                self.multistorey_preview.Text = found.reason
+            return
+
+        for combo, layer in ((self.cb_boundary_layer, found.boundary_layer),
+                             (self.cb_origin_layer, found.origin_layer)):
+            if layer and combo.Items.Contains(layer):
+                combo.SelectedItem = layer
+        self.chk_multistorey.IsChecked = bool(found.multistorey)
+        lines = [found.reason] + list(found.notes or [])
+        self.multistorey_preview.Text = "\n".join(lines)
+        self._build_storey_rows(found.plans)
+
+    def _build_storey_rows(self, plans):
+        """One editable row per detected plan: label, height, repeat.
+
+        The rows are created here rather than declared in the XAML because how
+        many there are is only known once the drawing has been read; each row's
+        two boxes are kept in self._storey_boxes so _read_selections can read
+        them back in the same bottom-up order.
+        """
+        self.storey_rows.Children.Clear()
+        self._storey_boxes = []
+        for plan in plans or []:
+            row = WpfGrid()
+            row.Margin = Thickness(0, 1, 0, 1)
+            for width in (0.0, 80.0, 60.0):
+                column = ColumnDefinition()
+                column.Width = (GridLength(1, GridUnitType.Star) if not width
+                                else GridLength(width))
+                row.ColumnDefinitions.Add(column)
+            label = TextBlock()
+            label.Text = (plan.get("label")
+                          or "storey {0}".format(len(self._storey_boxes) + 1))
+            label.VerticalAlignment = VerticalAlignment.Center
+            label.TextTrimming = TextTrimming.CharacterEllipsis
+            WpfGrid.SetColumn(label, 0)
+            row.Children.Add(label)
+            height = TextBox()
+            height.Height = 22
+            height.Margin = Thickness(0, 1, 8, 1)
+            height.Text = ("" if plan.get("height_mm") is None
+                           else "{0:g}".format(plan["height_mm"]))
+            WpfGrid.SetColumn(height, 1)
+            row.Children.Add(height)
+            repeat = TextBox()
+            repeat.Height = 22
+            repeat.Margin = Thickness(0, 1, 0, 1)
+            repeat.Text = str(int(plan.get("repeat") or 1))
+            WpfGrid.SetColumn(repeat, 2)
+            row.Children.Add(repeat)
+            self.storey_rows.Children.Add(row)
+            self._storey_boxes.append((plan, height, repeat))
+
+    def _read_storey_settings(self):
+        """The per-storey rows as plain dicts, bottom-up (what the build wants)."""
+        settings = []
+        for plan, height_box, repeat_box in self._storey_boxes:
+            settings.append({
+                "label": plan.get("label"),
+                "order": plan.get("order"),
+                "height_mm": self._read_float(height_box, None),
+                "repeat": self._read_int(repeat_box, plan.get("repeat") or 1)})
+        return settings
 
     def _show_outline_count(self):
         count = len(self.stair_regions)
@@ -1007,6 +1100,15 @@ def main():
     text_layer_rows = [(name, text_layer_counts[name]) for name in text_names]
     default_text_mapping = layers.build_default_text_mapping(text_names)
 
+    # Is this ONE plan or a sheet of storeys? Read off the DXF (its bare origin
+    # POINTs do not always survive Revit's import) so the Multi-storey tab opens
+    # already answered instead of waiting for the user to guess two layer names.
+    storey_detection = floor_plans.autodetect_storeys(dxf_result.records,
+                                                      dxf_result.texts)
+    _say("Storeys: {0}".format(storey_detection.reason))
+    for note in storey_detection.notes:
+        _say("  storey: {0}".format(note))
+
     # The dialog can hand the view back so the user DRAWS the stair outlines:
     # it closes, the outlines are picked in the model, and it reopens with every
     # setting restored. Anything else falls straight through to the build.
@@ -1021,7 +1123,8 @@ def main():
                                 default_text_mapping,
                                 stair_type_options=stair_type_options,
                                 level_elevations=level_elevations,
-                                stair_regions=stair_regions, preset=preset)
+                                stair_regions=stair_regions, preset=preset,
+                                storey_detection=storey_detection)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed
@@ -1078,9 +1181,13 @@ def main():
         # split by them are the Revit ones the pipeline builds from
         regions, floor_notes = floor_plans.split_floors(
             revit_result.records, dxf_result.texts,
-            marker_records=dxf_result.records)
+            marker_records=dxf_result.records,
+            boundary_layer=selections.get("boundary_layer"),
+            origin_layer=selections.get("origin_layer"))
         for note in floor_notes:
             _say("  storey: {0}".format(note))
+        floor_plans.apply_storey_settings(regions,
+                                          selections.get("storey_settings"))
         if len(regions) > 1:
             _say("Multi-storey: {0} floor plan(s) found -- {1}".format(
                 len(regions),
@@ -1094,12 +1201,14 @@ def main():
                  "drawing as one storey.")
 
     if storeys:
-        level_pairs = _storey_level_pairs(doc, selections, len(storeys))
+        # A TYPICAL plan builds once per repeat, each on its own level pair, so
+        # the ladder is sized from the EXPANDED list, not the plan count.
+        built = floor_plans.expand_repeats(storeys)
+        level_pairs = _storey_level_pairs(doc, selections, built)
         storey_payloads = []
         all_outcomes = {}
-        for index, region in enumerate(storeys):
+        for index, (region, label) in enumerate(built):
             base_id, top_id = level_pairs[index]
-            label = region.label or "storey {0}".format(index + 1)
             _say("")
             _say("=== {0} ({1} records) ===".format(label, len(region.records)))
             storey_selections = dict(selections)
@@ -1133,14 +1242,22 @@ class _StoreyResult(object):
         self.records = records
 
 
-def _storey_level_pairs(doc, selections, count):
-    """[(base_level_id, top_level_id)] for `count` storeys, lowest first.
+def _storey_level_pairs(doc, selections, built):
+    """[(base_level_id, top_level_id)] for the storeys in `built`, lowest first.
 
-    The lowest storey sits on the chosen base level; each one above it moves up
-    one level in the model. When the model runs out of levels, new ones are
-    created at the Multi-storey tab's storey height.
+    `built` is [(region, label)] with typical plans already repeated. The lowest
+    storey sits on the chosen base level and each one above it moves up a level.
+    When the model runs out, new levels are created -- each at ITS OWN storey's
+    height (the Multi-storey tab's per-plan Height column), falling back to the
+    single storey height when a row was left blank.
     """
     from Autodesk.Revit.DB import Level, Transaction, FilteredElementCollector
+
+    count = len(built)
+    default_mm = (selections.get("storey_height_mm")
+                  or config.DEFAULTS["storey_height_mm"])
+    heights_mm = [(getattr(region, "storey_height_mm", None) or default_mm)
+                  for region, _label in built]
 
     existing = sorted(FilteredElementCollector(doc).OfClass(Level).ToElements(),
                       key=lambda lv: lv.Elevation)
@@ -1153,25 +1270,26 @@ def _storey_level_pairs(doc, selections, count):
     ladder = existing[start:]
     needed = count + 1
     if len(ladder) < needed:
-        step = config.mm_to_ft(selections.get("storey_height_mm")
-                               or config.DEFAULTS["storey_height_mm"])
         transaction = Transaction(doc, "CAD to BIM: storey levels")
         transaction.Start()
         try:
             txn_failures.attach_warning_swallower(transaction)
+            created = 0
             while len(ladder) < needed:
-                elevation = ladder[-1].Elevation + step
+                # the level being ADDED tops the storey whose height it takes
+                rise_mm = heights_mm[min(len(ladder) - 1, count - 1)]
+                elevation = ladder[-1].Elevation + config.mm_to_ft(rise_mm)
                 new_level = Level.Create(doc, elevation)
                 try:
                     new_level.Name = "CAD Level {0}".format(len(ladder) + 1)
                 except Exception:
                     pass          # a name clash keeps Revit's default name
                 ladder.append(new_level)
+                created += 1
             transaction.Commit()
-            _say("Multi-storey: created {0} level(s) at {1} mm spacing".format(
-                needed - len(existing[start:]),
-                int(selections.get("storey_height_mm")
-                    or config.DEFAULTS["storey_height_mm"])))
+            spacing = sorted(set(int(h) for h in heights_mm))
+            _say("Multi-storey: created {0} level(s) at {1} mm".format(
+                created, ", ".join(str(value) for value in spacing)))
         except Exception as level_error:
             if transaction.HasStarted() and not transaction.HasEnded():
                 transaction.RollBack()

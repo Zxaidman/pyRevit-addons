@@ -34,6 +34,10 @@ _MM = config.MM_PER_FT
 
 _MIN_REGION_M2 = 4.0        # smaller than this is a detail box, not a floor plan
 _ORIGIN_MAX_MM = 2000.0     # an origin marker is a POINT-like mark, not linework
+# Measured over the fixture DXFs: a real boundary layer covers 1.00 (Test9)
+# and 0.67 (Test10, whose third plan is not boxed); the best impostor -- a
+# layer of big members -- reaches only 0.28. Half sits well clear of both.
+_MIN_COVERAGE = 0.5         # boundary boxes must enclose most of the drawing
 
 # "GROUND FLOOR PLAN" / "FIRST FLOOR" / "LEVEL 2" / "2ND FLOOR" / "TERRACE PLAN"
 _NAMED_LEVELS = (
@@ -49,6 +53,24 @@ _LEVEL_NUMBER = re.compile(
     r"\b(?:level|floor|storey|story|flr|lvl)\s*[-_ ]?(\d+)\b|"
     r"\b(\d+)(?:st|nd|rd|th)\b", re.IGNORECASE)
 
+# "TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)" / "... X5" / "... (4 NOS)"
+_TYPICAL_RANGE = re.compile(
+    r"(\d+)\s*(?:st|nd|rd|th)?\s*(?:to|through|~|-{1,2})\s*(\d+)\s*(?:st|nd|rd|th)?",
+    re.IGNORECASE)
+_TYPICAL_COUNT = re.compile(
+    r"\bx\s*(\d+)\b|\b(\d+)\s*(?:nos?|times|floors?|storeys?|stories|levels?)\b",
+    re.IGNORECASE)
+
+# "Ground Floor @0.00+ Level" / "1st Floor @3.00+ Level" / "EL. +12.500"
+_ELEVATION = re.compile(
+    r"(?:@|\bel\.?\s*|\blvl\.?\s*)\s*([+-]?\d+(?:\.\d+)?)", re.IGNORECASE)
+_ELEV_MM_CUTOFF = 100.0     # above this the number is millimetres, not metres
+
+# Auto-detection: layer NAMES only break ties, the shape of what is drawn decides.
+_BOUNDARY_HINTS = ("boundar", "bound", "extent", "outline", "frame", "sheet")
+_ORIGIN_HINTS = ("origin", "basept", "base point", "base_pt", "datum",
+                 "refpt", "ref point", "insert")
+
 
 class FloorRegion(object):
     """One storey's drawing: its boundary box, origin, records and level order.
@@ -59,13 +81,17 @@ class FloorRegion(object):
     """
 
     def __init__(self, bounds, origin, label=None, order=0, records=None,
-                 texts=None):
+                 texts=None, repeat=1, storey_height_mm=None):
         self.bounds = bounds          # (x0, y0, x1, y1) in internal feet
         self.origin = origin          # (x, y) in internal feet, DRAWN position
         self.label = label
         self.order = order
         self.records = records or []
         self.texts = texts or []
+        self.repeat = repeat          # a TYPICAL plan stands for this many storeys
+        # this storey's own floor-to-floor height; None means the tab's default.
+        # NOT height_mm -- that property is the boundary BOX's height on the sheet.
+        self.storey_height_mm = storey_height_mm
 
     @property
     def width_mm(self):
@@ -106,6 +132,44 @@ def level_order_from_text(text):
     return None
 
 
+def typical_count_from_text(text):
+    """How many storeys one TYPICAL plan stands for, or None.
+
+    "TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)" -> 7, "TYPICAL FLOOR PLAN X5" -> 5,
+    "TYPICAL FLOOR (4 NOS)" -> 4. A plan that does not call itself typical
+    always stands for itself, so a bare range elsewhere never counts.
+    """
+    if not text or "typical" not in text.lower():
+        return None
+    match = _TYPICAL_RANGE.search(text)
+    if match:
+        low, high = int(match.group(1)), int(match.group(2))
+        if high >= low:
+            return high - low + 1
+    match = _TYPICAL_COUNT.search(text)
+    if match:
+        count = int(match.group(1) or match.group(2))
+        if count > 0:
+            return count
+    return None
+
+
+def elevation_from_text(text):
+    """The storey elevation a plan title states, in MILLIMETRES, or None.
+
+    "Ground Floor @0.00+ Level" -> 0, "1st Floor @3.00+ Level" -> 3000,
+    "EL. +12.500" -> 12500. Titles quote metres; a number big enough to be
+    nothing else (over 100) is taken as millimetres already.
+    """
+    if not text:
+        return None
+    match = _ELEVATION.search(text)
+    if not match:
+        return None
+    value = float(match.group(1))
+    return value if abs(value) >= _ELEV_MM_CUTOFF else value * 1000.0
+
+
 def _record_bounds(record):
     xs = [p[0] for p in record.points]
     ys = [p[1] for p in record.points]
@@ -118,7 +182,19 @@ def _record_point(record):
     return (x0 + x1) / 2.0, (y0 + y1) / 2.0
 
 
-def boundary_regions(records):
+def _on_layer(records, category, layer):
+    """The marker records: those on `layer` when given, else those categorised.
+
+    The dialog routes a picked layer to a category, but AUTO-DETECTION runs
+    before any mapping exists -- it has only the raw layer names, so every
+    marker reader takes the layer route too.
+    """
+    if layer:
+        return [r for r in records if getattr(r, "layer", None) == layer]
+    return [r for r in records if r.category == category]
+
+
+def boundary_regions(records, layer=None):
     """[(x0, y0, x1, y1)] -- one box per closed rectangle on the boundary layer.
 
     Boxes fully inside another box are dropped (a title block drawn inside the
@@ -127,9 +203,7 @@ def boundary_regions(records):
     """
     boxes = []
     min_ft2 = _MIN_REGION_M2 * (1000.0 / _MM) ** 2
-    for record in records:
-        if record.category != CATEGORY_FLOOR_BOUNDARY:
-            continue
+    for record in _on_layer(records, CATEGORY_FLOOR_BOUNDARY, layer):
         if len(record.points) < 3:
             continue
         x0, y0, x1, y1 = _record_bounds(record)
@@ -151,16 +225,14 @@ def boundary_regions(records):
     return merged
 
 
-def _boundary_lines_to_boxes(records):
+def _boundary_lines_to_boxes(records, layer=None):
     """Boxes recovered when the boundary rectangle is drawn as LOOSE lines.
 
     Four separate lines share corners; grouping by connectivity and taking each
     group's extents gives the same box a closed polyline would.
     """
     segments = []
-    for record in records:
-        if record.category != CATEGORY_FLOOR_BOUNDARY:
-            continue
+    for record in _on_layer(records, CATEGORY_FLOOR_BOUNDARY, layer):
         pts = record.points
         for i in range(len(pts) - 1):
             segments.append(((pts[i][0], pts[i][1]),
@@ -198,7 +270,7 @@ def _boundary_lines_to_boxes(records):
     return boxes
 
 
-def origin_points(records):
+def origin_points(records, layer=None):
     """[(x, y)] -- one point per marker on the origin layer.
 
     A marker is any small piece of linework (a point, a short cross, a small
@@ -207,9 +279,7 @@ def origin_points(records):
     """
     points = []
     max_ft = config.mm_to_ft(_ORIGIN_MAX_MM)
-    for record in records:
-        if record.category != CATEGORY_FLOOR_ORIGIN:
-            continue
+    for record in _on_layer(records, CATEGORY_FLOOR_ORIGIN, layer):
         x0, y0, x1, y1 = _record_bounds(record)
         if (x1 - x0) > max_ft or (y1 - y0) > max_ft:
             continue
@@ -244,7 +314,8 @@ def _shift_text(text, dx, dy):
     return clone
 
 
-def split_floors(records, texts=None, align=True, marker_records=None):
+def split_floors(records, texts=None, align=True, marker_records=None,
+                 boundary_layer=None, origin_layer=None):
     """Split one drawing into per-storey FloorRegions.
 
     `marker_records` supplies the boundary/origin geometry when it is not in
@@ -263,13 +334,13 @@ def split_floors(records, texts=None, align=True, marker_records=None):
     """
     notes = []
     markers = marker_records if marker_records is not None else records
-    boxes = boundary_regions(markers)
+    boxes = boundary_regions(markers, boundary_layer)
     if not boxes:
-        boxes = _boundary_lines_to_boxes(markers)
+        boxes = _boundary_lines_to_boxes(markers, boundary_layer)
     if not boxes:
         return [], ["no closed rectangle on the floor-boundary layer"]
 
-    origins = origin_points(markers)
+    origins = origin_points(markers, origin_layer)
     regions = []
     for box in boxes:
         inside = [p for p in origins
@@ -302,6 +373,7 @@ def split_floors(records, texts=None, align=True, marker_records=None):
                 best = (order, getattr(text, "text", "").strip())
         if best is not None:
             region.order, region.label = best
+            region.repeat = typical_count_from_text(best[1]) or 1
 
     unnamed = [r for r in regions if r.label is None]
     if unnamed:
@@ -346,3 +418,310 @@ def split_floors(records, texts=None, align=True, marker_records=None):
         notes.append("floor '{0}' has no geometry inside its boundary".format(
             region.label or "(unnamed)"))
     return [r for r in regions if r.records], notes
+
+
+class StoreyDetection(object):
+    """What auto-detection made of one drawing: is it a sheet of storeys?
+
+    `multistorey` is what the dialog's checkbox should be set to; `plans` is one
+    entry per detected floor plan, bottom-up, each a dict with `label`, `order`,
+    `repeat` and `height_mm` (None until the user types one). `reason` is the
+    one-line explanation the Multi-storey tab shows.
+    """
+
+    def __init__(self, multistorey=False, boundary_layer=None, origin_layer=None,
+                 plans=None, reason="", notes=None):
+        self.multistorey = multistorey
+        self.boundary_layer = boundary_layer
+        self.origin_layer = origin_layer
+        self.plans = plans or []
+        self.reason = reason
+        self.notes = notes or []
+
+    @property
+    def storey_count(self):
+        """Storeys BUILT: a typical plan counts once per repeat."""
+        return sum(max(1, p.get("repeat") or 1) for p in self.plans)
+
+    def __repr__(self):
+        return "<StoreyDetection {0} plan(s) -> {1} storey(s) {2}>".format(
+            len(self.plans), self.storey_count,
+            "on" if self.multistorey else "off")
+
+
+def _layer_of(record):
+    return getattr(record, "layer", None)
+
+
+def _hint_score(name, hints):
+    lowered = (name or "").lower()
+    return 1 if any(hint in lowered for hint in hints) else 0
+
+
+def _disjoint(boxes):
+    """True when no two boxes overlap -- floor plans never sit on top of each other."""
+    slack = config.mm_to_ft(1.0)
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            a, b = boxes[i], boxes[j]
+            if (a[0] < b[2] - slack and b[0] < a[2] - slack and
+                    a[1] < b[3] - slack and b[1] < a[3] - slack):
+                return False
+    return True
+
+
+def _coverage(records, boxes, layer):
+    """Fraction of the OTHER records that fall inside one of these boxes.
+
+    This is what separates a real boundary layer from a layer of big members: a
+    boundary box encloses a whole plan, so nearly everything drawn lands inside
+    one, while 24 shear-wall outlines enclose almost nothing (Test9 picked its
+    'PI_COLUMN & SHEAR WALL' layer as the boundary until this check went in).
+    """
+    others = [r for r in records if _layer_of(r) != layer and r.points]
+    if not others:
+        return 0.0
+    inside = 0
+    for record in others:
+        x, y = _record_point(record)
+        for box in boxes:
+            if box[0] <= x <= box[2] and box[1] <= y <= box[3]:
+                inside += 1
+                break
+    return float(inside) / len(others)
+
+
+def _origin_score(records):
+    """How much a layer looks like the ORIGIN convention: tiny lone marks."""
+    max_ft = config.mm_to_ft(_ORIGIN_MAX_MM)
+    marks = 0
+    for record in records:
+        x0, y0, x1, y1 = _record_bounds(record)
+        if (x1 - x0) <= max_ft and (y1 - y0) <= max_ft:
+            marks += 1
+    return marks
+
+
+def _boxes_on(records, layer):
+    boxes = boundary_regions(records, layer)
+    return boxes or _boundary_lines_to_boxes(records, layer)
+
+
+def autodetect_marker_layers(records):
+    """(boundary_layer, origin_layer) guessed from the drawing itself.
+
+    Layer names differ per office, so the guess is SHAPE-first and a name hint
+    only breaks ties -- that is what lets a drawing whose layers are called
+    anything at all still be detected.
+
+      * the BOUNDARY layer carries several big closed boxes and little else;
+      * the ORIGIN layer carries small lone marks, EXACTLY ONE INSIDE EACH BOX.
+        That last clause is what keeps a column layer out: its members are small
+        too, but there are dozens of them per plan.
+
+    Either may come back None.
+    """
+    by_layer = {}
+    for record in records or []:
+        name = _layer_of(record)
+        if name:
+            by_layer.setdefault(name, []).append(record)
+
+    boundary, best = None, 0.0
+    for name, group in by_layer.items():
+        boxes = _boxes_on(records, name)
+        if len(boxes) < 2:
+            continue                       # one box is a title block, not a sheet
+        if not _disjoint(boxes):
+            continue                       # overlapping boxes are not floor plans
+        covered = _coverage(records, boxes, name)
+        if covered < _MIN_COVERAGE:
+            continue                       # these boxes enclose almost nothing
+        score = covered + _hint_score(name, _BOUNDARY_HINTS) * 0.5
+        score -= 0.05 * max(0, len(group) - len(boxes))
+        if score > best:
+            boundary, best = name, score
+    if boundary is None:
+        return None, None
+
+    boxes = _boxes_on(records, boundary)
+    origin, best = None, 0.0
+    for name, group in by_layer.items():
+        if name == boundary:
+            continue
+        if _origin_score(group) < len(group):
+            continue                       # something big lives on this layer too
+        marks = origin_points(records, name)
+        if len(marks) != len(boxes):
+            continue                       # not one marker per plan
+        per_box = [sum(1 for m in marks
+                       if box[0] <= m[0] <= box[2] and box[1] <= m[1] <= box[3])
+                   for box in boxes]
+        if set(per_box) != set([1]):
+            continue                       # not exactly one INSIDE each plan
+        points = sum(1 for r in group if getattr(r, "kind", None) == "point")
+        score = (1.0 + _hint_score(name, _ORIGIN_HINTS)
+                 + float(points) / max(1, len(group)))
+        if score > best:
+            origin, best = name, score
+    return boundary, origin
+
+
+def autodetect_storeys(records, texts=None, boundary_layer=None,
+                       origin_layer=None):
+    """StoreyDetection: does this ONE drawing hold several floor plans?
+
+    Runs the same boundary/origin convention the split uses, but off raw LAYER
+    names so it can run before any mapping exists -- the dialog calls it while
+    it builds, ticks its multi-storey box from the answer and fills the per
+    storey rows. Explicit layers (the user picked some) are honoured; otherwise
+    they are guessed by autodetect_marker_layers.
+    """
+    notes = []
+    records = records or []
+    if not boundary_layer and not origin_layer:
+        boundary_layer, origin_layer = autodetect_marker_layers(records)
+    if not boundary_layer:
+        return StoreyDetection(
+            reason="no layer boxes each floor plan -- building as one storey")
+
+    boxes = boundary_regions(records, boundary_layer)
+    if not boxes:
+        boxes = _boundary_lines_to_boxes(records, boundary_layer)
+    if len(boxes) < 2:
+        return StoreyDetection(
+            boundary_layer=boundary_layer, origin_layer=origin_layer,
+            reason="layer '{0}' holds {1} floor box -- building as one "
+                   "storey".format(boundary_layer, len(boxes)))
+
+    origins = origin_points(records, origin_layer) if origin_layer else []
+    plans = []
+    for box in boxes:
+        label, order, repeat, elevation = None, None, 1, None
+        for text in (texts or []):
+            point = getattr(text, "point_internal", None)
+            if point is None:
+                continue
+            if not (box[0] <= point[0] <= box[2] and box[1] <= point[1] <= box[3]):
+                continue
+            value = getattr(text, "text", None)
+            found = level_order_from_text(value)
+            if found is None:
+                continue
+            if order is None or found < order:
+                label, order = (value or "").strip(), found
+                repeat = typical_count_from_text(value) or 1
+                elevation = elevation_from_text(value)
+        inside = [p for p in origins
+                  if box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]]
+        plans.append({"label": label, "order": order, "repeat": repeat,
+                      "height_mm": None, "bounds": box,
+                      "elevation_mm": elevation,
+                      "has_origin": bool(inside)})
+
+    # unnamed plans fall back to the sheet's reading order, exactly as the split
+    named = [p for p in plans if p["order"] is not None]
+    unnamed = [p for p in plans if p["order"] is None]
+    used = set(p["order"] for p in named)
+    next_order = 0
+    for plan in sorted(unnamed, key=lambda p: (-p["bounds"][3], p["bounds"][0])):
+        while next_order in used:
+            next_order += 1
+        plan["order"] = next_order
+        used.add(next_order)
+    plans.sort(key=lambda p: p["order"])
+
+    _heights_from_elevations(plans, notes)
+
+    covered = _coverage(records, boxes, boundary_layer)
+    if covered < 0.9:
+        notes.append("{0:.0f}% of the drawing lies outside the floor boxes and "
+                     "will not be built".format((1.0 - covered) * 100.0))
+    if not origin_layer:
+        notes.append("no origin layer found -- each plan will be anchored on "
+                     "its boundary centre")
+    else:
+        missing = [p for p in plans if not p["has_origin"]]
+        if missing:
+            notes.append("{0} of {1} floor boxes have no origin marker".format(
+                len(missing), len(plans)))
+    if not named:
+        notes.append("no plan titles found -- storeys ordered by sheet layout")
+    repeats = [p for p in plans if p["repeat"] > 1]
+    for plan in repeats:
+        notes.append("'{0}' is a typical plan -- building it {1} times".format(
+            plan["label"], plan["repeat"]))
+
+    detection = StoreyDetection(
+        multistorey=True, boundary_layer=boundary_layer,
+        origin_layer=origin_layer, plans=plans, notes=notes)
+    detection.reason = "{0} floor plan(s) on layer '{1}'{2} -- {3} storey(s)".format(
+        len(plans), boundary_layer,
+        ", origins on '{0}'".format(origin_layer) if origin_layer else "",
+        detection.storey_count)
+    return detection
+
+
+def _heights_from_elevations(plans, notes):
+    """Fill each plan's height from the NEXT plan's stated elevation.
+
+    Titles like "1st Floor @3.00+ Level" quote where the storey sits, so a
+    consecutive pair states the rise between them -- which is exactly the
+    per-storey height the Multi-storey tab wants, without the user typing it.
+    """
+    filled = 0
+    for index, plan in enumerate(plans[:-1]):
+        here = plan.get("elevation_mm")
+        above = plans[index + 1].get("elevation_mm")
+        if here is None or above is None:
+            continue
+        rise = above - here
+        if rise <= 0:
+            continue
+        # a typical plan stands for `repeat` storeys, so the stated rise to the
+        # next plan covers all of them
+        plan["height_mm"] = rise / max(1, int(plan.get("repeat") or 1))
+        filled += 1
+    if filled:
+        notes.append("{0} storey height(s) read from the plan titles".format(
+            filled))
+    return plans
+
+
+def apply_storey_settings(regions, settings):
+    """Copy the dialog's per-storey height/repeat onto the split regions.
+
+    `settings` is the detection's plan list after the user has edited it, in the
+    same bottom-up order. Rows are matched by LABEL when both sides have one
+    (the split and the detection can disagree on how many boxes carried
+    geometry), else positionally.
+    """
+    if not settings:
+        return regions
+    by_label = dict((s.get("label"), s) for s in settings if s.get("label"))
+    for index, region in enumerate(regions):
+        setting = by_label.get(region.label)
+        if setting is None and index < len(settings):
+            setting = settings[index]
+        if setting is None:
+            continue
+        height = setting.get("height_mm")
+        if height:
+            region.storey_height_mm = float(height)
+        repeat = setting.get("repeat")
+        if repeat:
+            region.repeat = max(1, int(repeat))
+    return regions
+
+
+def expand_repeats(regions):
+    """[(region, label)] with each TYPICAL plan repeated to its storey count."""
+    out = []
+    for region in regions:
+        count = max(1, int(region.repeat or 1))
+        for index in range(count):
+            label = region.label or "storey {0}".format(len(out) + 1)
+            if count > 1:
+                label = "{0} ({1}/{2})".format(label, index + 1, count)
+            out.append((region, label))
+    return out
