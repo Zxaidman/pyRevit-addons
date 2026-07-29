@@ -1,12 +1,21 @@
 # -*- coding: utf-8 -*-
-"""Hatch Slab 1.3.1
+"""Hatch Slab 1.4.0
 
 Click inside a closed region formed by structural framing and structural
 columns in a plan view; a structural floor or foundation slab is created with
 its boundary on the INNER FACES of those elements.
 
-Click repeatedly to fill more regions. ESC to finish.
-SHIFT-click the button to force a fresh scan, ignoring the session cache.
+Workflow
+  pick a type -> click regions -> ESC -> pick another type -> click more
+  ESC at the type dialog (so: ESC twice) closes the tool. So does "Finish".
+  SHIFT-click the button to force a fresh scan, ignoring the session cache.
+
+Diagnostics
+  EXPORT_JSON   dump a scoped JSON file when a click fails      (on)
+  EXPORT_ALWAYS also dump on every successful click             (off)
+  DUMP_GRAPH    write the whole graph to JSON after scanning     (off)
+  Files land in the system temp folder; every path is printed to the output
+  panel and the folder is reported at the end of the run.
 
 Changelog
   1.0.0  first working version
@@ -32,6 +41,13 @@ Changelog
            1.2.0 change capable of silently changing the output.
          - when enabled, the crop outline is padded by CROP_PADDING first
          - USE_CROP_FILTER and CROP_PADDING exposed as settings
+  1.4.0  - multi-round workflow: ESC ends the current round and returns to the
+           type dialog, so you can keep drawing with a different slab type.
+           ESC again (or Finish) closes the tool. The geometry scan happens
+           once and is shared by every round.
+         - EXPORT_ALWAYS and DUMP_GRAPH for on-demand JSON, since the failure
+           dumps never fire once everything works
+         - temp folder path reported at the end of the run
 
 Bisection order if regions are still missing:
   1. run as shipped (crop filter off, templates on)
@@ -44,7 +60,7 @@ Target: Revit 2022+.
 
 __title__ = 'Hatch\nSlab'
 __author__ = 'AnonGee'
-__version__ = '1.3.1'
+__version__ = '1.4.0'
 
 import json
 import math
@@ -98,7 +114,9 @@ FORCE_RESCAN = bool(globals().get('__shiftclick__', False))
 
 DEBUG = True
 USE_TEMPLATES = True        # set False to bypass the per-symbol cache entirely
-EXPORT_JSON = True          # dump a scoped diagnostic file on every click
+EXPORT_JSON = True          # dump a scoped diagnostic file when a click fails
+EXPORT_ALWAYS = False       # also dump on every SUCCESSFUL click
+DUMP_GRAPH = False          # write the whole graph to JSON right after scanning
 EXPORT_RADIUS = 40.0        # ft of context around the click to include
 REBUILD_ARCS = True
 
@@ -949,6 +967,56 @@ def export_dump(view, pick, points, faces, edge_source, reader_info,
         return None
 
 
+def dump_full_graph(view, points, faces, edge_source, reader_info):
+    """Write the entire graph -- every node, edge and region -- to JSON."""
+    try:
+        payload = {
+            'version': __version__,
+            'kind': 'full_graph',
+            'view': {
+                'name': element_name(view),
+                'id': element_id_value(view.Id),
+                'detail_level': str(view.DetailLevel),
+            },
+            'settings': {
+                'use_templates': USE_TEMPLATES,
+                'use_crop_filter': USE_CROP_FILTER,
+                'rebuild_arcs': REBUILD_ARCS,
+                'snap_ft': SNAP,
+                'min_face_area_sqft': MIN_FACE_AREA,
+            },
+            'reader': reader_info,
+            'curve_sources': SOURCES.dump(),
+            'nodes': [[round(x, 5), round(y, 5)] for x, y in points],
+            'edges': [[a, b, source]
+                      for (a, b), source in edge_source.items()],
+            'faces': [],
+        }
+
+        for cycle in faces:
+            xs = [points[n][0] for n in cycle]
+            ys = [points[n][1] for n in cycle]
+            payload['faces'].append({
+                'nodes': list(cycle),
+                'area_sqft': round(abs(signed_area(points, cycle)), 4),
+                'centroid': [round(sum(xs) / len(xs), 4),
+                             round(sum(ys) / len(ys), 4)],
+            })
+        payload['faces'].sort(key=lambda f: f['area_sqft'])
+
+        name = 'hatchslab_graph_{0}.json'.format(int(time.time()))
+        path = os.path.join(tempfile.gettempdir(), name)
+        handle = open(path, 'w')
+        try:
+            handle.write(json.dumps(payload, indent=1))
+        finally:
+            handle.close()
+        return path
+    except Exception as err:
+        logger.debug('graph dump failed: {0}'.format(err))
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Type selection
 # ---------------------------------------------------------------------------
@@ -968,10 +1036,10 @@ def collect_types(target_bic):
 
 def choose_type():
     kind = forms.CommandSwitchWindow.show(
-        ['Structural Floor', 'Foundation Slab'],
-        message='What should be created?',
+        ['Structural Floor', 'Foundation Slab', 'Finish'],
+        message='What should be created?  (ESC or Finish to close the tool)',
     )
-    if not kind:
+    if not kind or kind == 'Finish':
         return None, None
 
     target = (BuiltInCategory.OST_Floors if kind == 'Structural Floor'
@@ -1147,39 +1215,19 @@ def build_regions(view):
 # Main
 # ---------------------------------------------------------------------------
 
-def main():
-    view = doc.ActiveView
-
-    if not isinstance(view, ViewPlan):
-        forms.alert('Run this from a plan view (floor plan or structural plan).',
-                    exitscript=True)
-
-    level = view.GenLevel
-    if level is None:
-        forms.alert('This plan view has no associated level.', exitscript=True)
-
-    floor_type, kind = choose_type()
-    if floor_type is None:
-        return
-
-    points, usable, edge_source, reader_info = build_regions(view)
-    index = FaceIndex(points, usable)
+def draw_session(view, level, floor_type, kind, points, usable, index,
+                 edge_source, reader_info, dumps):
+    """One drawing round with a single slab type. ESC ends the round."""
     elevation = level.Elevation
-
-    ensure_sketch_plane(view, elevation)
-
-    output.print_md('### Picking')
-    output.print_md('Click inside a region. **ESC** to finish.')
-
     created = 0
-    dumps = []
     spurious_retried = False
 
     while True:
         started = time.time()
         try:
             pick = uidoc.Selection.PickPoint(
-                NO_SNAP, 'Click inside a closed region (ESC to finish)')
+                NO_SNAP,
+                'Click inside a region ({0}) - ESC to change type'.format(kind))
         except RevitExceptions.OperationCanceledException:
             if (time.time() - started) < 0.25 and not spurious_retried:
                 spurious_retried = True
@@ -1240,6 +1288,12 @@ def main():
                 '- Created **{0}** -- {1:.2f} sq ft, {2} curves '
                 '({3} arcs)'.format(element_name(floor_type), area,
                                     curve_count, arcs))
+            if EXPORT_ALWAYS:
+                path = export_dump(view, pick, points, usable, edge_source,
+                                   reader_info, cycle, 'slab created ok')
+                if path:
+                    dumps.append(path)
+                    output.print_md('  dump: `{0}`'.format(path))
         except Exception as err:
             transaction.RollBack()
             output.print_md('- **Create failed:** `{0}: {1}`'.format(
@@ -1252,10 +1306,57 @@ def main():
                     dumps.append(path)
                     output.print_md('  dump: `{0}`'.format(path))
 
-    output.print_md('**Done.** {0} slab(s) created.'.format(created))
+    return created
+
+
+def main():
+    view = doc.ActiveView
+
+    if not isinstance(view, ViewPlan):
+        forms.alert('Run this from a plan view (floor plan or structural plan).',
+                    exitscript=True)
+
+    level = view.GenLevel
+    if level is None:
+        forms.alert('This plan view has no associated level.', exitscript=True)
+
+    points, usable, edge_source, reader_info = build_regions(view)
+    index = FaceIndex(points, usable)
+
+    ensure_sketch_plane(view, level.Elevation)
+
+    dumps = []
+    if DUMP_GRAPH:
+        path = dump_full_graph(view, points, usable, edge_source, reader_info)
+        if path:
+            dumps.append(path)
+            output.print_md('Full graph written to `{0}`'.format(path))
+
+    total = 0
+    rounds = 0
+
+    while True:
+        floor_type, kind = choose_type()
+        if floor_type is None:
+            break
+
+        rounds += 1
+        output.print_md('### Round {0} - {1}'.format(
+            rounds, element_name(floor_type)))
+        output.print_md(
+            'Click inside regions. **ESC** to pick a different type, '
+            '**ESC again** to finish.')
+
+        made = draw_session(view, level, floor_type, kind, points, usable,
+                            index, edge_source, reader_info, dumps)
+        total += made
+        output.print_md('_{0} slab(s) this round._'.format(made))
+
+    output.print_md('**Done.** {0} slab(s) across {1} round(s).'.format(
+        total, rounds))
     if dumps:
-        output.print_md('{0} diagnostic dump(s) written to your temp folder.'
-                        .format(len(dumps)))
+        output.print_md('{0} JSON dump(s) in `{1}`'.format(
+            len(dumps), tempfile.gettempdir()))
 
 
 main()
