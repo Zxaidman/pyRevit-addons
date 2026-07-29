@@ -694,24 +694,30 @@ def apply_storey_settings(regions, settings):
     `settings` is the detection's plan list after the user has edited it, in the
     same bottom-up order. Rows are matched by LABEL when both sides have one
     (the split and the detection can disagree on how many boxes carried
-    geometry), else positionally.
+    geometry), else positionally. A row the user unticked is DROPPED, so the
+    returned list can be shorter than the one passed in.
     """
     if not settings:
         return regions
     by_label = dict((s.get("label"), s) for s in settings if s.get("label"))
+    kept = []
     for index, region in enumerate(regions):
         setting = by_label.get(region.label)
         if setting is None and index < len(settings):
             setting = settings[index]
         if setting is None:
+            kept.append(region)
             continue
+        if not setting.get("include", True):
+            continue                    # unticked on the Multi-storey tab
         height = setting.get("height_mm")
         if height:
             region.storey_height_mm = float(height)
         repeat = setting.get("repeat")
         if repeat:
             region.repeat = max(1, int(repeat))
-    return regions
+        kept.append(region)
+    return kept
 
 
 def expand_repeats(regions):

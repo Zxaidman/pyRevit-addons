@@ -81,5 +81,36 @@ class SlabToleranceRow(unittest.TestCase):
             self.assertIn(control, names)
 
 
+class NamingTabControls(unittest.TestCase):
+    """The Naming tab's boxes are bound through a format string, so the static
+    find() check cannot see them -- list them explicitly instead."""
+
+    _CONTROL = {"column_rect": "column", "column_round": "column_round",
+                "beam_sized": "beam", "beam_width": "beam_width",
+                "floor": "floor", "stair": "stair",
+                "stair_waist": "stair_waist"}
+
+    def test_one_box_and_one_preview_per_template(self):
+        names = _xaml_names(_XAML)
+        for control in self._CONTROL.values():
+            self.assertIn("tb_name_{0}".format(control), names)
+            self.assertIn("lbl_name_{0}".format(control), names)
+        self.assertIn("btn_name_defaults", names)
+        self.assertIn("naming_saved_text", names)
+
+    def test_every_template_key_has_a_dialog_row(self):
+        with open(os.path.join(os.path.dirname(_HERE), "naming.py"),
+                  "rb") as handle:
+            source = handle.read().decode("utf-8")
+        block = source.split("DEFAULTS = {", 1)[1].split("}", 1)[0]
+        keys = re.findall(r'"([a-z_]+)":', block)
+        self.assertTrue(keys)
+        names = _xaml_names(_XAML)
+        for key in keys:
+            self.assertIn(key, self._CONTROL,
+                          "no dialog row for template %r" % key)
+            self.assertIn("tb_name_{0}".format(self._CONTROL[key]), names)
+
+
 if __name__ == "__main__":
     unittest.main()

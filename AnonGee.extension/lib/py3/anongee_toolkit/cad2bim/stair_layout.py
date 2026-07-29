@@ -908,12 +908,43 @@ def _dogleg_run_dicts(runs, cluster, params):
             start_s, end_s = far_s, near_s      # climbs INTO the landing
         else:
             start_s, end_s = near_s, far_s      # climbs OUT of it
-        run_dicts.append({
+        run_dicts.append(_with_drawn_risers({
             "start": (px * start_s + dxn * off, py * start_s + dyn * off),
             "end": (px * end_s + dxn * off, py * end_s + dyn * off),
             "risers": len(run["positions"]),
-            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM}, run))
     return run_dicts, landing_mm
+
+
+def _with_drawn_risers(run_dict, run):
+    """Carry a FANNED run's drawn riser lines onto its run dict.
+
+    A winder's risers are not perpendicular to the walk line, so the builder
+    cannot rebuild them from start/end -- it sketches the run from these exact
+    lines instead. Ordered along the climb and oriented consistently (first
+    point on the same side of the walk line throughout) so the two boundary
+    chains come straight off them.
+    """
+    if not run.get("fanned") or not run.get("riser_lines"):
+        return run_dict
+    sx, sy = run_dict["start"]
+    ex, ey = run_dict["end"]
+    length = math.hypot(ex - sx, ey - sy)
+    if length <= 0:
+        return run_dict
+    ux, uy = (ex - sx) / length, (ey - sy) / length
+    ordered = []
+    for a, b in run["riser_lines"]:
+        # first point to the LEFT of the climb direction, always the same side
+        if (-(a[0] - sx) * uy + (a[1] - sy) * ux) < (-(b[0] - sx) * uy
+                                                     + (b[1] - sy) * ux):
+            a, b = b, a
+        mid = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+        ordered.append(((mid[0] - sx) * ux + (mid[1] - sy) * uy, a, b))
+    ordered.sort()
+    run_dict["riser_lines"] = [(a, b) for _t, a, b in ordered]
+    run_dict["fanned"] = True
+    return run_dict
 
 
 def _winding_run_dicts(runs, params):
@@ -943,11 +974,11 @@ def _winding_run_dicts(runs, params):
             start_s, end_s = s0, s1
         else:
             start_s, end_s = s1, s0
-        run_dicts.append({
+        run_dicts.append(_with_drawn_risers({
             "start": (apx * start_s + nx * off, apy * start_s + ny * off),
             "end": (apx * end_s + nx * off, apy * end_s + ny * off),
             "risers": len(run["positions"]),
-            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM}, run))
     width_mm = min(r["width_mm"] for r in run_dicts)
     landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
     return run_dicts, landing_mm
@@ -1071,6 +1102,41 @@ def _spiral_run(cluster):
             "start_angle": unwrapped[0], "included_angle": included,
             "clockwise": False, "risers": len(unwrapped),
             "tread_mm": tread_mm}
+
+
+_SPIRAL_LANDING_CHORDS = 8     # arc tessellation for the arrival landing
+
+
+def _spiral_top_landing(spiral, landing_mm):
+    """The arrival landing ring at the top of a spiral flight.
+
+    A spiral run ends on its last riser with nothing to step onto, so the stair
+    arrived at the storey with no landing. The ring is the annular sector that
+    continues the flight: same inner and outer radius, one landing depth of
+    turn past the last riser (a tread's worth when the dialog says nothing).
+    """
+    mid_r = spiral["radius"]
+    half_w = (spiral["width_mm"] / _MM) / 2.0
+    r_lo, r_hi = mid_r - half_w, mid_r + half_w
+    if r_lo <= 0 or mid_r <= 0:
+        return None
+    depth = config.mm_to_ft(landing_mm or spiral["tread_mm"])
+    sweep = depth / mid_r
+    if sweep <= 0:
+        return None
+    cx, cy = spiral["center"]
+    end = spiral["start_angle"] + spiral["included_angle"]
+    if spiral.get("clockwise"):
+        sweep = -sweep
+    steps = _SPIRAL_LANDING_CHORDS
+    ring = []
+    for i in range(steps + 1):              # along the OUTER edge
+        angle = end + sweep * (float(i) / steps)
+        ring.append((cx + r_hi * math.cos(angle), cy + r_hi * math.sin(angle)))
+    for i in range(steps, -1, -1):          # back along the INNER edge
+        angle = end + sweep * (float(i) / steps)
+        ring.append((cx + r_lo * math.cos(angle), cy + r_lo * math.sin(angle)))
+    return ring
 
 
 def _merge_close_angles(unwrapped):
@@ -1199,7 +1265,9 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
             risers_total = spiral["risers"]
             plans.append({
                 "mark": "ST-{0}".format(index), "z": z, "runs": [],
-                "spiral": spiral, "landing": None, "top_landing": None,
+                "spiral": spiral, "landing": None,
+                "top_landing": _spiral_top_landing(
+                    spiral, float(params.get("landing_mm") or 0.0)),
                 "risers_total": risers_total,
                 "riser_mm": (storey_mm / risers_total if storey_mm > 0
                              else 0.0),

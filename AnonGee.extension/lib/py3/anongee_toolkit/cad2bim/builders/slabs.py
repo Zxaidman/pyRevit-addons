@@ -15,6 +15,7 @@ from Autodesk.Revit.DB import (FilteredElementCollector, XYZ, Line, Arc, CurveLo
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
 from ..geom.shapes import circle_from_three_points
+from .. import naming
 
 
 def floor_types(doc):
@@ -333,7 +334,7 @@ def _resolve_type(doc, base_type, thickness_mm, cache):
     key = int(round(thickness_mm))
     if key in cache:
         return cache[key]
-    name = "{0} THK".format(key)
+    name = naming.floor_type_name(key)
     existing = _find_type(doc, base_type, name)
     if existing is not None:
         cache[key] = existing

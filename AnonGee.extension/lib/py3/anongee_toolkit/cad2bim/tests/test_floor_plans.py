@@ -368,6 +368,26 @@ class PerStoreySettings(unittest.TestCase):
                       {"label": None, "height_mm": 2800.0, "repeat": 1}])
         self.assertEqual([r.storey_height_mm for r in regions], [5000.0, 2800.0])
 
+    def test_an_unticked_plan_is_dropped(self):
+        regions = floor_plans.apply_storey_settings(
+            self._regions(),
+            [{"label": "GROUND", "include": False, "repeat": 1},
+             {"label": "TYPICAL", "include": True, "repeat": 2}])
+        self.assertEqual([r.label for r in regions], ["TYPICAL"])
+        self.assertEqual(regions[0].repeat, 2)
+
+    def test_include_defaults_to_true_when_a_row_omits_it(self):
+        regions = floor_plans.apply_storey_settings(
+            self._regions(), [{"label": "GROUND"}, {"label": "TYPICAL"}])
+        self.assertEqual(len(regions), 2)
+
+    def test_dropping_every_plan_leaves_nothing_to_build(self):
+        regions = floor_plans.apply_storey_settings(
+            self._regions(),
+            [{"label": "GROUND", "include": False},
+             {"label": "TYPICAL", "include": False}])
+        self.assertEqual(regions, [])
+
     def test_expand_repeats_names_each_copy(self):
         regions = self._regions()
         regions[1].repeat = 3

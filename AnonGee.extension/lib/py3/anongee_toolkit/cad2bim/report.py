@@ -1097,7 +1097,9 @@ def _anchor_growth(rect, near, all_rects):
 
     claimed = set(id(r) for r in near)
     c_lo, c_hi = extent(rect, cross)
+    thickness = c_hi - c_lo
     touches_lo = touches_hi = False
+    crosses_lo = crosses_hi = False
     for other in all_rects:
         if id(other) in claimed:
             continue
@@ -1105,10 +1107,21 @@ def _anchor_growth(rect, near, all_rects):
         ox_lo, ox_hi = extent(other, cross)
         if ox_hi < c_lo - _ABUT_TOL_FT or ox_lo > c_hi + _ABUT_TOL_FT:
             continue                        # not alongside this column
+        # A member that runs ACROSS this wall is what carved it; one that merely
+        # butts its end (a column stacked on top) did not. Test2's SW10 has SW9
+        # crossing below AND a 900x900 column above, so "exactly one end abuts"
+        # was never true and the wall kept its carved centre.
+        crossing = (ox_lo < c_lo - thickness or ox_hi > c_hi + thickness)
         if abs(o_hi - lo) <= _ABUT_TOL_FT or (o_lo <= lo <= o_hi):
             touches_lo = True
+            crosses_lo = crosses_lo or crossing
         if abs(o_lo - hi) <= _ABUT_TOL_FT or (o_lo <= hi <= o_hi):
             touches_hi = True
+            crosses_hi = crosses_hi or crossing
+    if crosses_lo != crosses_hi:
+        # grow back over the CROSSING member, pinning the other end
+        rect["center"][axis] = (hi - new_half) if crosses_lo else (lo + new_half)
+        return
     if touches_lo == touches_hi:
         return                              # both ends free (or both blocked)
     rect["center"][axis] = (hi - new_half) if touches_lo else (lo + new_half)

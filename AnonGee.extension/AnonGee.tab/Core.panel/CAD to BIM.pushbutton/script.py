@@ -47,7 +47,7 @@ from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
                             Thickness, GridLength, GridUnitType, VerticalAlignment,
                             TextTrimming)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox, TextBox)
+                                     ComboBox, TextBox, CheckBox)
 import System.Windows.Forms
 
 
@@ -86,8 +86,8 @@ def _bootstrap_lib_path():
 _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, config, floor_plans, report,
-                                     slab_outlines, stair_layout)
+from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
+                                     prefs, report, slab_outlines, stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -315,10 +315,14 @@ class CadToBimWindow(object):
                  column_symbols, level_options, beam_symbols, floor_type_options=None,
                  text_layer_rows=None, text_categories=None, default_text_mapping=None,
                  stair_type_options=None, level_elevations=None,
-                 stair_regions=None, preset=None, storey_detection=None):
+                 stair_regions=None, preset=None, storey_detection=None,
+                 saved_naming=None, saved_standards=None):
         self.result = None
         self._combos = []
         self._text_combos = []
+        saved_naming = saved_naming or naming.DEFAULTS
+        saved_standards = saved_standards or {}
+        self._saved_standards = saved_standards
         self.window = _load_window(_XAML)
         find = self.window.FindName
 
@@ -422,6 +426,27 @@ class CadToBimWindow(object):
         self.sl_colh_max = find("sl_colh_max")
         self.tb_std_columns = find("tb_std_columns")
         self.tb_std_beams = find("tb_std_beams")
+
+        # Naming tab: one template per auto-created type, remembered between
+        # Revit sessions (the dialog is rebuilt from scratch every run).
+        self.name_boxes = {}
+        self.name_labels = {}
+        for key, control in (("column_rect", "column"),
+                             ("column_round", "column_round"),
+                             ("beam_sized", "beam"),
+                             ("beam_width", "beam_width"),
+                             ("floor", "floor"),
+                             ("stair", "stair"),
+                             ("stair_waist", "stair_waist")):
+            box = find("tb_name_{0}".format(control))
+            box.Text = saved_naming.get(key, naming.DEFAULTS[key])
+            box.TextChanged += self.on_naming_changed
+            self.name_boxes[key] = box
+            self.name_labels[key] = find("lbl_name_{0}".format(control))
+        self.naming_saved_text = find("naming_saved_text")
+        self.btn_name_defaults = find("btn_name_defaults")
+        self.btn_name_defaults.Click += self.on_naming_defaults
+        self._show_naming_preview()
         self.tb_snap = find("tb_snap")
         self.tb_markrad = find("tb_markrad")
         self.tb_compare = find("tb_compare")
@@ -578,6 +603,11 @@ class CadToBimWindow(object):
         self.tb_stair_tread.Text = str(int(d["stair_tread_mm"]))
         self.tb_stair_width.Text = str(int(d["stair_run_width_mm"]))
         self.tb_stair_landing.Text = str(int(d["stair_landing_mm"]))
+        # standard sizes are an office convention, not a per-drawing number, so
+        # they come back from the last session like the naming templates do
+        saved = getattr(self, "_saved_standards", None) or {}
+        self.tb_std_columns.Text = saved.get("column", "")
+        self.tb_std_beams.Text = saved.get("beam_widths", "")
 
     def _read_int(self, textbox, fallback):
         try:
@@ -711,6 +741,7 @@ class CadToBimWindow(object):
         for layer, combo in self._text_combos:
             text_mapping[layer] = combo.SelectedItem or layers.CATEGORY_TEXT_IGNORE
         self.result = self._collect(mapping=mapping, text_mapping=text_mapping)
+        self._remember_conventions()
         self.window.Close()
 
     def _collect(self, mapping=None, text_mapping=None, action=None):
@@ -776,6 +807,9 @@ class CadToBimWindow(object):
                 "column": report.parse_standard_sizes(self.tb_std_columns.Text),
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
             },
+            "naming": self._read_naming(),
+            "standard_text": {"column": self.tb_std_columns.Text,
+                              "beam_widths": self.tb_std_beams.Text},
         }
 
     def _apply_preset(self, preset):
@@ -845,10 +879,16 @@ class CadToBimWindow(object):
                 control.SelectedItem = wanted
         for row, saved in zip(self._storey_boxes,
                               preset.get("storey_settings") or []):
-            _plan, height_box, repeat_box = row
+            _plan, height_box, repeat_box, include_box = row
             height = saved.get("height_mm")
             height_box.Text = "" if height is None else "{0:g}".format(height)
             repeat_box.Text = str(int(saved.get("repeat") or 1))
+            include_box.IsChecked = saved.get("include", True)
+        for key, box in self.name_boxes.items():
+            value = (preset.get("naming") or {}).get(key)
+            if value:
+                box.Text = value
+        self._show_naming_preview()
         self._stair_sync()
 
     def _apply_detection(self):
@@ -896,13 +936,17 @@ class CadToBimWindow(object):
                 column.Width = (GridLength(1, GridUnitType.Star) if not width
                                 else GridLength(width))
                 row.ColumnDefinitions.Add(column)
+            # the checkbox IS the label: untick a plan to leave that storey out
+            include = CheckBox()
+            include.IsChecked = True
+            include.VerticalAlignment = VerticalAlignment.Center
             label = TextBlock()
             label.Text = (plan.get("label")
                           or "storey {0}".format(len(self._storey_boxes) + 1))
-            label.VerticalAlignment = VerticalAlignment.Center
             label.TextTrimming = TextTrimming.CharacterEllipsis
-            WpfGrid.SetColumn(label, 0)
-            row.Children.Add(label)
+            include.Content = label
+            WpfGrid.SetColumn(include, 0)
+            row.Children.Add(include)
             height = TextBox()
             height.Height = 22
             height.Margin = Thickness(0, 1, 8, 1)
@@ -917,18 +961,65 @@ class CadToBimWindow(object):
             WpfGrid.SetColumn(repeat, 2)
             row.Children.Add(repeat)
             self.storey_rows.Children.Add(row)
-            self._storey_boxes.append((plan, height, repeat))
+            self._storey_boxes.append((plan, height, repeat, include))
 
     def _read_storey_settings(self):
         """The per-storey rows as plain dicts, bottom-up (what the build wants)."""
         settings = []
-        for plan, height_box, repeat_box in self._storey_boxes:
+        for plan, height_box, repeat_box, include_box in self._storey_boxes:
             settings.append({
                 "label": plan.get("label"),
                 "order": plan.get("order"),
+                "include": bool(include_box.IsChecked),
                 "height_mm": self._read_float(height_box, None),
                 "repeat": self._read_int(repeat_box, plan.get("repeat") or 1)})
         return settings
+
+    def _remember_conventions(self):
+        """Keep the office conventions for the NEXT Revit session.
+
+        Only the naming templates and the standard sizes: everything else on
+        the dialog is about this drawing and should start fresh each run.
+        """
+        naming.save(self._read_naming())
+        prefs.update({"standards": {"column": self.tb_std_columns.Text or "",
+                                    "beam_widths": self.tb_std_beams.Text or ""}})
+        failure = prefs.last_error()
+        self.naming_saved_text.Text = (
+            "could not save: {0}".format(failure)[:70] if failure
+            else "saved to {0}".format(prefs.path()))
+
+    _NAMING_SAMPLE = {"b": 400, "h": 600, "d": 600, "w": 300, "t": 200,
+                      "r": 150, "k": 200}
+
+    def _show_naming_preview(self):
+        """Show what each template would call a type, or why it cannot."""
+        for key, box in self.name_boxes.items():
+            text = (box.Text or "").strip()
+            problem = naming.validate(key, text) if text else "empty"
+            if problem:
+                self.name_labels[key].Text = problem[:44]
+                continue
+            sample = dict((field, self._NAMING_SAMPLE[field])
+                          for field in naming.FIELDS[key])
+            self.name_labels[key].Text = text.format(**sample)[:44]
+
+    def on_naming_changed(self, sender, args):
+        self._show_naming_preview()
+
+    def on_naming_defaults(self, sender, args):
+        for key, box in self.name_boxes.items():
+            box.Text = naming.DEFAULTS[key]
+        self._show_naming_preview()
+
+    def _read_naming(self):
+        """The Naming tab's templates; a broken one falls back to its default."""
+        out = {}
+        for key, box in self.name_boxes.items():
+            text = (box.Text or "").strip()
+            out[key] = (text if text and not naming.validate(key, text)
+                        else naming.DEFAULTS[key])
+        return out
 
     def _show_outline_count(self):
         count = len(self.stair_regions)
@@ -1105,6 +1196,10 @@ def main():
     # already answered instead of waiting for the user to guess two layer names.
     storey_detection = floor_plans.autodetect_storeys(dxf_result.records,
                                                       dxf_result.texts)
+    # Naming templates and standard sizes are office conventions, not per-drawing
+    # numbers, so they come back from the preferences file the last run wrote.
+    saved_naming = naming.load()
+    saved_standards = prefs.load().get("standards") or {}
     _say("Storeys: {0}".format(storey_detection.reason))
     for note in storey_detection.notes:
         _say("  storey: {0}".format(note))
@@ -1124,7 +1219,9 @@ def main():
                                 stair_type_options=stair_type_options,
                                 level_elevations=level_elevations,
                                 stair_regions=stair_regions, preset=preset,
-                                storey_detection=storey_detection)
+                                storey_detection=storey_detection,
+                                saved_naming=saved_naming,
+                                saved_standards=saved_standards)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed
@@ -1163,6 +1260,10 @@ def main():
     # every element writes its CAD mark into the parameter chosen on the
     # Structure tab (Mark stays the fallback when a family lacks it)
     compat.set_name_parameter(selections.get("name_parameter"))
+    # every auto-created family type is named from the Naming tab's templates
+    naming.apply(selections.get("naming"))
+    for problem in naming.problems():
+        _say("naming: {0}".format(problem))
 
     # Diagnostic only: how much Revit's import dropped/clipped vs the raw DXF.
     compare_tol_ft = config.mm_to_ft(tolerances.get("compare_tol_mm",
@@ -1186,8 +1287,8 @@ def main():
             origin_layer=selections.get("origin_layer"))
         for note in floor_notes:
             _say("  storey: {0}".format(note))
-        floor_plans.apply_storey_settings(regions,
-                                          selections.get("storey_settings"))
+        regions = floor_plans.apply_storey_settings(
+            regions, selections.get("storey_settings"))
         if len(regions) > 1:
             _say("Multi-storey: {0} floor plan(s) found -- {1}".format(
                 len(regions),

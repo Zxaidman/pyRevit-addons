@@ -277,6 +277,29 @@ class GrowBackOverTheCarve(unittest.TestCase):
             self.assertAlmostEqual(centre_mm - half, -300.0, places=3)
             self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)
 
+    def test_a_column_stacked_on_the_free_end_does_not_block_the_growth(self):
+        """The case that survived TWO fixes: BOTH ends abut something.
+
+        Test2's SW10 has SW9 crossing below it and a 900x900 column sitting on
+        its top end, so "exactly one end abuts" was never true and the wall kept
+        its carved centre. The end to pin is the one whose neighbour merely
+        BUTTS; the carve came from the member that runs ACROSS the wall.
+        """
+        rects = self._decomposed_u()
+        for x in (11000.0, 17000.0):        # the columns capping both walls
+            rects.append({"center": [x * _FT, 8000.0 * _FT, 0.0],
+                          "width_mm": 900.0, "height_mm": 900.0,
+                          "width_ft": 900.0 * _FT, "height_ft": 900.0 * _FT})
+        placed = self._run(rects)
+        for mark in ("SW10", "SW11"):
+            grown = placed.get(mark)
+            self.assertIsNotNone(grown, mark)
+            centre_mm = grown["center"][1] * _MM
+            half = max(grown["width_mm"], grown["height_mm"]) / 2.0
+            self.assertAlmostEqual(centre_mm, 3625.0, places=3)
+            self.assertAlmostEqual(centre_mm - half, -300.0, places=3)
+            self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)
+
     def test_uncarved_column_keeps_its_centre(self):
         # already the scheduled length: nothing to grow, nothing to re-anchor
         whole = {"center": [11000.0 * _FT, 3625.0 * _FT, 0.0],

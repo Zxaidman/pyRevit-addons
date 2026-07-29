@@ -27,6 +27,7 @@ from Autodesk.Revit.DB.Structure import StructuralType
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
 from .. import config
+from .. import naming
 
 _B_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _H_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
@@ -164,7 +165,7 @@ def _resolve_symbol(doc, base_symbol, b_mm, h_mm, cache):
     key = (b_mm, h_mm)
     if key in cache:
         return cache[key]
-    type_name = "{0} X {1}".format(b_mm, h_mm)
+    type_name = naming.column_type_name(b_mm, h_mm)
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[key] = existing
@@ -180,7 +181,7 @@ def _resolve_circular_symbol(doc, base_symbol, diameter_mm, cache):
     """Return a FamilySymbol of the given diameter, duplicating+caching as needed."""
     if diameter_mm in cache:
         return cache[diameter_mm]
-    type_name = "{0}D".format(diameter_mm)
+    type_name = naming.circular_column_type_name(diameter_mm)
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[diameter_mm] = existing

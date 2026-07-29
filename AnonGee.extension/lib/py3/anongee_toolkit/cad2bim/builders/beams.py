@@ -19,6 +19,7 @@ from Autodesk.Revit.DB.Structure import StructuralType, StructuralFramingUtils
 
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
+from .. import naming
 
 
 def _disallow_joins(instance):
@@ -162,8 +163,7 @@ def _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache):
     key = (width_mm, depth_mm)
     if key in cache:
         return cache[key]
-    type_name = ("{0} X {1}".format(width_mm, depth_mm) if depth_mm is not None
-                 else "{0}".format(width_mm))
+    type_name = naming.beam_type_name(width_mm, depth_mm)
     existing = _find_type_in_family(base_symbol.Family, type_name)
     if existing is not None:
         cache[key] = existing

@@ -35,7 +35,44 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.60.0"  # Arc stairs, angled risers, multi-storey auto-detection.
+__version__ = "0.61.0"  # Naming tab, per-element tolerances, sketched winders, SW10 again.
+#
+#                         NAMING. Every auto-created family type was named by a hard-coded
+#                         format at its Duplicate() call ("400 X 600", "200 THK"). The new
+#                         Naming tab owns those as templates -- one per type, with a live
+#                         preview and a validity check -- and naming.py renders them. A
+#                         malformed template falls back to its default and says so rather
+#                         than failing a build halfway through. Templates and the standard
+#                         beam/column sizes are office conventions, not per-drawing numbers,
+#                         so prefs.py keeps them in %APPDATA%/AnonGee/cad2bim.json and the
+#                         dialog opens with them already filled in, session after session.
+#
+#                         TOLERANCES are now grouped by the element each number affects --
+#                         General, Columns, Beams, Slabs, Staircase -- with each element's
+#                         standard sizes sitting with its own limits instead of in a separate
+#                         block at the top.
+#
+#                         MULTI-STOREY. Each detected plan has a checkbox: untick one and
+#                         that storey is left out of the model.
+#
+#                         STAIRS. The spiral now gets an arrival landing -- it ended on its
+#                         last riser with nothing to step onto. And a fanned flight is built
+#                         with CreateSketchedRun from the DRAWN riser lines (they are the
+#                         risers, the chains through their ends the boundaries, the chain
+#                         through their midpoints the path), so the angled treads come out as
+#                         drawn instead of being squared off by a straight run.
+#
+#                         SW10/SW11, third time. _anchor_growth needs exactly one end of a
+#                         carved wall to be free, and Test2's has SW9 crossing below AND a
+#                         900x900 column sitting on top -- so no end was ever pinned. The end
+#                         to pin is the one whose neighbour merely BUTTS; the carve came from
+#                         the member that runs ACROSS the wall (SW9 reaches 6000mm past it,
+#                         the column only 250mm). Verified by replaying the production chain
+#                         on the REVIT records in the pushed export, which is what the two
+#                         earlier fixes missed: the DXF path re-tiles the core instead and
+#                         was already right.
+#
+# 0.60.0                  Arc stairs, angled risers, multi-storey auto-detection.
 #
 #                         STAIRS. StaircasePlan-Test2 built 4 of its 6 stairs; the two that
 #                         failed are the ones drawn with ARCS and with ANGLED risers.
