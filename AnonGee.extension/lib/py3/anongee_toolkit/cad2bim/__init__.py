@@ -35,7 +35,16 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.59.0"  # C17's slab corners came out SLOPED: the column is 400 wide on a
+__version__ = "0.59.1"  # HOTFIX: the dialog crashed on open with
+#                         "'CadToBimWindow' object has no attribute 'tb_slab_step'" -- 0.59.0
+#                         added the Min corner step box to ui.xaml and read it in both
+#                         _init_tolerances and _read_tolerances, but never BOUND it with
+#                         find(). Bound now, plus test_dialog_wiring.py, which parses
+#                         script.py and both .xaml files statically and fails when a control
+#                         is bound-but-absent or used-but-unbound -- the class of slip that
+#                         only ever surfaces when the window opens inside Revit.
+#
+# 0.59.0                  C17's slab corners came out SLOPED: the column is 400 wide on a
 #                         300 beam, so its face sits 50mm past the beam edge -- exactly the
 #                         50mm node-weld slop. Two tolerances collided there. _split_at_crossings
 #                         judged the beam tip's touch as "at the end" of the 400mm column face

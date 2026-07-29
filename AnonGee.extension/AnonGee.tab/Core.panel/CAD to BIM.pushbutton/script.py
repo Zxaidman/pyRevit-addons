@@ -427,6 +427,7 @@ class CadToBimWindow(object):
         self.tb_slab_heal = find("tb_slab_heal")
         self.tb_slab_chain = find("tb_slab_chain")
         self.tb_slab_width = find("tb_slab_width")
+        self.tb_slab_step = find("tb_slab_step")
         self.tb_stair_cluster = find("tb_stair_cluster")
         self.tb_tread_min = find("tb_tread_min")
         self.tb_tread_max = find("tb_tread_max")
