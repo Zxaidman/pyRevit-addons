@@ -35,7 +35,45 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.59.1"  # HOTFIX: the dialog crashed on open with
+__version__ = "0.60.0"  # Arc stairs, angled risers, multi-storey auto-detection.
+#
+#                         STAIRS. StaircasePlan-Test2 built 4 of its 6 stairs; the two that
+#                         failed are the ones drawn with ARCS and with ANGLED risers.
+#                         (a) The spiral: _spiral_run DEMANDED every line in the cluster be
+#                         radial, so the stairwell walls drawn on the same layer killed it on
+#                         the first line. It now SELECTS the radial lines and asks instead
+#                         that they dominate the cluster and turn at an even pitch. Its 24
+#                         risers are each drawn twice, which halved the going, so equal
+#                         angles now merge; and the going is read across the MIDDLE when the
+#                         usual walk line (300mm off a 300mm inner radius) reads an
+#                         implausible 139mm for treads that are exactly 300 wide.
+#                         (b) The winders: a balanced winder keeps the going constant on the
+#                         walk line, so its risers ROTATE and their ends spread unevenly --
+#                         the parallel detector sees a different direction per riser and
+#                         finds nothing. _fan_runs recovers the flight from what is still
+#                         true: the riser MIDPOINTS lie one tread apart on a straight line
+#                         and the risers turn monotonically by a real angle. Test2 now plans
+#                         all six stairs with no notes; across all ten DXF fixtures nothing
+#                         else changed at all.
+#
+#                         MULTI-STOREY. The tab no longer waits to be told: autodetect_storeys
+#                         reads the drawing and answers it. Layers are found by SHAPE, not by
+#                         name -- the boundary layer is the one whose big disjoint boxes
+#                         ENCLOSE most of the drawing (measured 1.00 on Test9 and 0.67 on
+#                         Test10 against 0.28 for the best impostor, a layer of shear walls
+#                         that used to be read as 24 floor plans), and the origin layer the
+#                         one with exactly one small mark inside each box. The checkbox, both
+#                         combos and one row per plan are filled in from that, each row
+#                         carrying its OWN storey height and a repeat count auto-read from a
+#                         title like "TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)". Titles that
+#                         quote an elevation ("1st Floor @3.00+ Level") state the rise to the
+#                         plan above, so those heights fill themselves in; a typical plan
+#                         splits the rise it covers. New levels are created at each storey's
+#                         own height. Test10's four boxed plans come out named and ordered
+#                         Ground / 1st / (unnamed) / Terrace with the ground rise read as
+#                         3000mm; Test9's three come out Upper Basement / Ground / First.
+#
+# 0.59.1                  HOTFIX: the dialog crashed on open with
 #                         "'CadToBimWindow' object has no attribute 'tb_slab_step'" -- 0.59.0
 #                         added the Min corner step box to ui.xaml and read it in both
 #                         _init_tolerances and _read_tolerances, but never BOUND it with

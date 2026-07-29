@@ -324,6 +324,21 @@
                         <TextBlock Text="Storeys are ordered by the plan title inside each rectangle (GROUND FLOOR PLAN, LEVEL 2, TERRACE) and fall back to the sheet layout -- top row first, then left to right. The lowest storey builds onto the chosen base level and each one above it onto the next level up; levels are created at the storey height when the model runs out of them."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,6,0,0"/>
                         <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="10" Margin="20,6,0,0"/>
+
+                        <TextBlock Text="Detected storeys" FontWeight="Bold" Margin="20,10,0,2"/>
+                        <TextBlock Text="One row per floor plan found, bottom-up. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one TYPICAL plan builds -- auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,0,0,4"/>
+                        <Grid Margin="20,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="80"/>
+                                <ColumnDefinition Width="60"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Plan" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="1" Text="Height (mm)" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="2" Text="Repeat" FontSize="10" Foreground="Gray"/>
+                        </Grid>
+                        <StackPanel x:Name="storey_rows" Margin="20,0,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

@@ -18,10 +18,18 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-            <TextBlock Text="Active view: " FontWeight="SemiBold" VerticalAlignment="Bottom"/>
-            <TextBlock x:Name="tb_active_view" Text="-" FontWeight="Bold" VerticalAlignment="Bottom"/>
-        </StackPanel>
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <TextBlock Text="Active view: " FontWeight="SemiBold" VerticalAlignment="Bottom"/>
+                <TextBlock x:Name="tb_active_view" Text="-" FontWeight="Bold" VerticalAlignment="Bottom"/>
+            </StackPanel>
+            <TextBlock Grid.Column="1" x:Name="link_version_text" Text="v0.13"
+                       VerticalAlignment="Bottom"/>
+        </Grid>
 
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>

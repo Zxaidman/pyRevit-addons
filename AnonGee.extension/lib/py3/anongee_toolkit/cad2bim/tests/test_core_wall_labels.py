@@ -46,6 +46,7 @@ def _load_report():
 
 
 report = _load_report()
+shapes = sys.modules["_cwl.geom.shapes"]
 
 
 class _Lbl(object):
@@ -232,42 +233,58 @@ class GrowBackOverTheCarve(unittest.TestCase):
     the part above the crossing wall SW9 (y 100..7550, 7450 long), so applying
     the schedule's 7850 about THAT centre moved the wall 200mm up and off the
     drawing. The free end must be pinned instead.
+
+    The rectangles come from decompose_to_rectangles here, NOT hand-built: those
+    carry no long_axis_deg and store width/height as X and Y sizes, and reading
+    them under the oriented short/long convention is what let the bug survive an
+    earlier hand-built fixture.
     """
 
-    def _rect(self, cx_mm, cy_mm, small_mm, big_mm, deg):
-        return {"center": [cx_mm * _FT, cy_mm * _FT, 0.0],
-                "width_mm": small_mm, "height_mm": big_mm,
-                "width_ft": small_mm * _FT, "height_ft": big_mm * _FT,
-                "long_axis_deg": deg}
+    def _decomposed_u(self):
+        """The drawn SW9/SW10/SW11 channel, exactly as the export carries it."""
+        ring = [(x * _FT, y * _FT) for x, y in
+                [(17200, -300), (16800, -300), (11200, -300), (10800, -300),
+                 (10800, 7550), (11200, 7550), (11200, 100), (16800, 100),
+                 (16800, 7550), (17200, 7550)]]
+        return [r.to_dict() for r in shapes.decompose_to_rectangles(ring)]
 
-    def _run(self, carved):
-        sw9 = self._rect(14000.0, -100.0, 400.0, 5600.0, 0.0)
+    def _run(self, rects):
         sections = {"entries": [{"layer": "S-COLS", "status": "rect",
-                                 "rectangles": [carved, sw9]}]}
+                                 "rectangles": list(rects)}]}
         texts = [_Lbl("SW10", None, None, 11000.0, 3825.0),
+                 _Lbl("SW11", None, None, 17000.0, 3825.0),
                  _Lbl("SW9", None, None, 14000.0, -100.0)]
         report.correct_columns_with_text(
             sections, texts, 1300.0 * _FT,
-            schedule={"SW10": (400.0, 7850.0), "SW9": (400.0, 5600.0)})
-        for rect in sections["entries"][0]["rectangles"]:
-            if rect.get("mark") == "SW10":
-                return rect
-        return None
+            schedule={"SW10": (400.0, 7850.0), "SW11": (400.0, 7850.0),
+                      "SW9": (400.0, 5600.0)})
+        return {rect.get("mark"): rect
+                for rect in sections["entries"][0]["rectangles"]}
+
+    def test_the_drawn_channel_decomposes_into_three_legs(self):
+        spans = sorted((round(r["width_mm"]), round(r["height_mm"]))
+                       for r in self._decomposed_u())
+        self.assertEqual(spans, [(400, 7450), (400, 7450), (6400, 400)])
 
     def test_free_end_is_pinned_when_growing(self):
-        carved = self._rect(11000.0, 3825.0, 400.0, 7450.0, 90.0)
-        grown = self._run(carved)
-        self.assertIsNotNone(grown)
-        centre_mm = grown["center"][1] * _MM
-        half = max(grown["width_mm"], grown["height_mm"]) / 2.0
-        self.assertAlmostEqual(centre_mm, 3625.0, places=3)
-        self.assertAlmostEqual(centre_mm - half, -300.0, places=3)  # drawn bottom
-        self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)  # drawn top
+        placed = self._run(self._decomposed_u())
+        for mark in ("SW10", "SW11"):
+            grown = placed.get(mark)
+            self.assertIsNotNone(grown, mark)
+            centre_mm = grown["center"][1] * _MM
+            half = max(grown["width_mm"], grown["height_mm"]) / 2.0
+            self.assertAlmostEqual(centre_mm, 3625.0, places=3)
+            self.assertAlmostEqual(centre_mm - half, -300.0, places=3)
+            self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)
 
     def test_uncarved_column_keeps_its_centre(self):
         # already the scheduled length: nothing to grow, nothing to re-anchor
-        whole = self._rect(11000.0, 3625.0, 400.0, 7850.0, 90.0)
-        kept = self._run(whole)
+        whole = {"center": [11000.0 * _FT, 3625.0 * _FT, 0.0],
+                 "width_mm": 400.0, "height_mm": 7850.0,
+                 "width_ft": 400.0 * _FT, "height_ft": 7850.0 * _FT,
+                 "long_axis_deg": 90.0}
+        others = [r for r in self._decomposed_u() if r["width_mm"] > 1000.0]
+        kept = self._run([whole] + others).get("SW10")
         self.assertIsNotNone(kept)
         self.assertAlmostEqual(kept["center"][1] * _MM, 3625.0, places=3)
 

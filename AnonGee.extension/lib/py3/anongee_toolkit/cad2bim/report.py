@@ -1070,13 +1070,22 @@ def _anchor_growth(rect, near, all_rects):
     def extent(r, index):
         """(lo, hi) of a rect along x (index 0) or y (index 1).
 
-        width_mm/height_mm are the SHORT and LONG sides; long_axis_deg says
-        which way the long side points, so the axis extents follow from that.
+        TWO conventions live in `sections` and they disagree about what
+        width_mm/height_mm mean. A plain axis-aligned rectangle (what
+        decompose_to_rectangles returns for a rectilinear ring) stores them as
+        its X and Y sizes and carries NO long_axis_deg. An ORIENTED rect stores
+        them as SHORT and LONG, with long_axis_deg saying which way the long
+        side points. Reading the first as if it were the second is what left
+        SW10 200mm high: its 7450mm leg measured as the 400mm wall thickness,
+        so the growth looked symmetric and no end was pinned.
         """
-        long_mm = max(r["width_mm"], r["height_mm"])
-        short_mm = min(r["width_mm"], r["height_mm"])
-        long_is_y = (r.get("long_axis_deg") or 0.0) > 45.0
-        side = long_mm if (index == 1) == long_is_y else short_mm
+        deg = r.get("long_axis_deg")
+        if deg is None:
+            side = r["width_mm"] if index == 0 else r["height_mm"]
+        else:
+            long_mm = max(r["width_mm"], r["height_mm"])
+            short_mm = min(r["width_mm"], r["height_mm"])
+            side = long_mm if (index == 1) == (deg > 45.0) else short_mm
         half = (side / _MM) / 2.0
         return (r["center"][index] - half, r["center"][index] + half)
 

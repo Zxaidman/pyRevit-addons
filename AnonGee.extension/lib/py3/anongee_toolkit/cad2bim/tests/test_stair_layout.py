@@ -647,5 +647,143 @@ class FlightWidthFromTypicalRiser(unittest.TestCase):
         self.assertAlmostEqual(hi, 20.0)      # the pair two of the three share
 
 
+class WinderFlights(unittest.TestCase):
+    """Angled (fanned) risers -- StaircasePlan-Test2's winder stairs.
+
+    A balanced winder keeps the going constant on the WALK LINE, so its risers
+    rotate and their ends spread unevenly along the two sides. The parallel
+    detector sees a different direction per riser and finds nothing; what stays
+    true is that the MIDPOINTS are one tread apart on a straight line and the
+    risers TURN monotonically.
+    """
+
+    def _fan(self, count=8, tread=300.0, width=1500.0, turn_deg=30.0,
+             x0=0.0, y0=0.0):
+        """A fan walking along +x: midpoints one tread apart, risers rotating."""
+        recs = []
+        for i in range(count):
+            mx = x0 + i * tread
+            my = y0
+            ang = math.radians(90.0 + turn_deg * (float(i) / (count - 1) - 0.5))
+            dx = math.cos(ang) * width / 2.0
+            dy = math.sin(ang) * width / 2.0
+            recs.append(_Rec("line", [((mx - dx) * _FT, (my - dy) * _FT),
+                                      ((mx + dx) * _FT, (my + dy) * _FT)],
+                             layers.CATEGORY_STAIR))
+        return recs
+
+    def test_a_fan_becomes_a_run(self):
+        plans, notes = stair_layout.stair_plans_from_linework(
+            self._fan(), _PARAMS, 3000.0)
+        self.assertEqual(notes, [])
+        self.assertEqual(len(plans), 1)
+        run = plans[0]["runs"][0]
+        self.assertEqual(run["risers"], 8)
+        self.assertAlmostEqual(plans[0]["tread_mm"], 300.0, delta=5.0)
+        self.assertAlmostEqual(plans[0]["run_width_mm"], 1500.0, delta=40.0)
+
+    def test_the_run_sits_on_the_drawn_midpoints(self):
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            self._fan(x0=5000.0, y0=7000.0), _PARAMS, 3000.0)
+        run = plans[0]["runs"][0]
+        for point in (run["start"], run["end"]):
+            self.assertAlmostEqual(point[1] * _MM, 7000.0, delta=60.0)
+        self.assertGreater(abs(run["end"][0] - run["start"][0]) * _MM, 1800.0)
+
+    def test_parallel_risers_are_not_a_fan(self):
+        # zero turn: the ordinary detector's job, and _fan_runs must not add it
+        lines = [(a, b) for a, b in
+                 stair_layout._stair_lines(self._fan(turn_deg=0.0))[0]]
+        self.assertEqual(stair_layout._fan_runs(lines, []), [])
+
+    def test_risers_that_wobble_both_ways_are_not_a_fan(self):
+        recs = self._fan(turn_deg=30.0)
+        lines, _z = stair_layout._stair_lines(recs)
+        angles = [math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
+                  for a, b in lines]
+        self.assertIsNotNone(stair_layout._monotone_turn(angles))
+        angles[3], angles[4] = angles[4], angles[3]      # turn back on itself
+        self.assertIsNone(stair_layout._monotone_turn(angles))
+
+    def test_fan_and_straight_flight_both_survive(self):
+        recs = self._fan(count=6, x0=3000.0)
+        for i in range(5):                    # a straight flight leading in
+            x = i * 300.0
+            recs.append(_Rec("line", [(x * _FT, -750.0 * _FT),
+                                      (x * _FT, 750.0 * _FT)],
+                             layers.CATEGORY_STAIR))
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        self.assertGreaterEqual(len(plans[0]["runs"]), 2)
+        self.assertGreaterEqual(plans[0]["risers_total"], 11)
+
+
+class SpiralFromDrawnLinework(unittest.TestCase):
+    """Test2's arc stair: 24 risers drawn TWICE each, inner radius only 300."""
+
+    def _spiral(self, risers=24, r_in=300.0, r_out=2300.0, span_deg=304.8,
+                twice=True):
+        recs = []
+        ccx, ccy = 0.0, 0.0
+        for i in range(risers):
+            ang = math.radians(i * span_deg / (risers - 1))
+            pts = [((ccx + r_in * math.cos(ang)) * _FT,
+                    (ccy + r_in * math.sin(ang)) * _FT),
+                   ((ccx + r_out * math.cos(ang)) * _FT,
+                    (ccy + r_out * math.sin(ang)) * _FT)]
+            recs.append(_Rec("line", pts, layers.CATEGORY_STAIR))
+            if twice:
+                recs.append(_Rec("line", list(pts), layers.CATEGORY_STAIR))
+        return recs
+
+    def test_duplicated_risers_are_counted_once(self):
+        plans, notes = stair_layout.stair_plans_from_linework(
+            self._spiral(), _PARAMS, 3000.0)
+        self.assertEqual(notes, [])
+        self.assertEqual(len(plans), 1)
+        spiral = plans[0].get("spiral")
+        self.assertIsNotNone(spiral)
+        self.assertEqual(spiral["risers"], 24)
+
+    def test_tight_inner_radius_reads_its_going_across_the_middle(self):
+        # walk line 300mm off a 300 inner radius reads 139mm and would reject a
+        # stair whose treads are exactly 300 across the flight
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            self._spiral(), _PARAMS, 3000.0)
+        spiral = plans[0]["spiral"]
+        self.assertAlmostEqual(spiral["tread_mm"], 300.0, delta=15.0)
+        self.assertAlmostEqual(spiral["width_mm"], 2000.0, delta=20.0)
+
+    def test_stairwell_walls_on_the_layer_do_not_break_it(self):
+        recs = self._spiral()
+        for x in (-2600.0, 2600.0):           # two straight wall lines
+            recs.append(_Rec("line", [(x * _FT, -2600.0 * _FT),
+                                      (x * _FT, 2600.0 * _FT)],
+                             layers.CATEGORY_STAIR))
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        self.assertEqual(len(plans), 1)
+        self.assertIsNotNone(plans[0].get("spiral"))
+
+    def test_a_fan_in_a_corner_is_not_called_a_spiral(self):
+        # radial-ish but nowhere near dominant: must fall through to the fan pass
+        recs = []
+        for i in range(6):
+            ang = math.radians(90.0 + i * 6.0)
+            recs.append(_Rec("line", [((i * 300.0 - 750.0 * math.cos(ang)) * _FT,
+                                       (-750.0 * math.sin(ang)) * _FT),
+                                      ((i * 300.0 + 750.0 * math.cos(ang)) * _FT,
+                                       (750.0 * math.sin(ang)) * _FT)],
+                             layers.CATEGORY_STAIR))
+        for i in range(20):                   # plenty of non-radial linework
+            recs.append(_Rec("line", [(0.0, (i * 60.0) * _FT),
+                                      (200.0 * _FT, (i * 60.0) * _FT)],
+                             layers.CATEGORY_STAIR))
+        lines, _z = stair_layout._stair_lines(recs)
+        self.assertIsNone(stair_layout._spiral_run(lines))
+
+
+
 if __name__ == "__main__":
     unittest.main()
