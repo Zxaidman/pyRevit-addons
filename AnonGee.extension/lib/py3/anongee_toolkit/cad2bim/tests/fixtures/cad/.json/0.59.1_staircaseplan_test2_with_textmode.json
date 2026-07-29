@@ -1,6 +1,6 @@
 {
  "source": "StaircasePlan-Test2",
- "cad2bim_version": "0.58.0",
+ "cad2bim_version": "0.59.1",
  "units": "mm (sizes and positions; positions derived from internal feet)",
  "totals": {
   "dxf_curves": 679,
