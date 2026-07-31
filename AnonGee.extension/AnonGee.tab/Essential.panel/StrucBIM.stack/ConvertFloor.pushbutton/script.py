@@ -13,9 +13,9 @@ Engine : CPython 3 (pyRevit)
 Revit  : 2022+ (developed against 2025)
 """
 
-__title__ = "Convert Floor"
+__title__ = "Convert\nSlab"
 __author__ = "AnonGee"
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 __min_revit_ver__ = 2022
 __doc__ = ("Convert selected Structural Floors to Structural Foundation slabs "
            "and vice versa. Shows a pre-flight report and asks for confirmation "
@@ -47,6 +47,31 @@ except Exception:
     CpyProgressBar = None
     CpyCheckList = None
     cpy_pick_option = None
+
+# --- .NET type emission guard --------------------------------------------
+# pythonnet emits a real .NET type for every Python class that implements a
+# .NET interface. pyRevit re-runs this module on every click inside one Revit
+# session, so an unguarded module-level `class X(ISelectionFilter)` emits the
+# same type name twice and .NET throws "Duplicate type name within an
+# assembly." on the second run. netclass keeps a session-wide registry.
+try:
+    from netclass import define as define_net_class
+except Exception:
+    import types as _types
+
+    def define_net_class(key):
+        def decorator(factory):
+            holder = sys.modules.get("_netclass_registry_v1")
+            if holder is None or not hasattr(holder, "classes"):
+                holder = _types.ModuleType("_netclass_registry_v1")
+                holder.classes = {}
+                sys.modules["_netclass_registry_v1"] = holder
+            cls = holder.classes.get(key)
+            if cls is None:
+                cls = factory()
+                holder.classes[key] = cls
+            return cls
+        return decorator
 
 
 class _NullProgress(object):
@@ -99,11 +124,25 @@ def show_options(options, message):
             pass
     return forms.CommandSwitchWindow.show(options, message=message)
 
+
+def notify(message, title="Convert Slab"):
+    # forms.alert is TaskDialog-based and does work under CPython, but keeping
+    # a fallback means no dialog in this script can take the tool down.
+    try:
+        return forms.alert(message, title=title)
+    except Exception:
+        pass
+    try:
+        from cpyforms import alert as cpy_alert
+        return cpy_alert(message, title=title)
+    except Exception:
+        print("{0}: {1}".format(title, message))
+
 # ---------------------------------------------------------------------------
 # globals
 # ---------------------------------------------------------------------------
 
-TOOL_VERSION = "1.0.1"
+TOOL_VERSION = "1.0.2"
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -229,7 +268,7 @@ def load_config():
                 else:
                     cfg[k] = v
         except Exception:
-            forms.alert("{0} is not valid JSON - using defaults.".format(CFG_NAME),
+            notify("{0} is not valid JSON - using defaults.".format(CFG_NAME),
                         title="Convert Slab")
     else:
         try:
@@ -272,14 +311,17 @@ def target_bic(kind):
             else DB.BuiltInCategory.OST_Floors)
 
 
-class SlabSelFilter(UI.Selection.ISelectionFilter):
-    __namespace__ = "SlabConvert"
+@define_net_class("SlabConvert.SlabSelFilter")
+def SlabSelFilter():
+    class SlabSelFilter(UI.Selection.ISelectionFilter):
+        __namespace__ = "SlabConvert"
 
-    def AllowElement(self, e):
-        return slab_kind(e) is not None
+        def AllowElement(self, e):
+            return slab_kind(e) is not None
 
-    def AllowReference(self, ref, pt):
-        return False
+        def AllowReference(self, ref, pt):
+            return False
+    return SlabSelFilter
 
 
 def gather_selection():
@@ -956,14 +998,17 @@ def build_plan(el, cfg, created_cache):
 # ---------------------------------------------------------------------------
 
 
-class WarningSwallower(DB.IFailuresPreprocessor):
-    __namespace__ = "SlabConvert"
+@define_net_class("SlabConvert.WarningSwallower")
+def WarningSwallower():
+    class WarningSwallower(DB.IFailuresPreprocessor):
+        __namespace__ = "SlabConvert"
 
-    def PreprocessFailures(self, fa):
-        for f in fa.GetFailureMessages():
-            if f.GetSeverity() == DB.FailureSeverity.Warning:
-                fa.DeleteWarning(f)
-        return DB.FailureProcessingResult.Continue
+        def PreprocessFailures(self, fa):
+            for f in fa.GetFailureMessages():
+                if f.GetSeverity() == DB.FailureSeverity.Warning:
+                    fa.DeleteWarning(f)
+            return DB.FailureProcessingResult.Continue
+    return WarningSwallower
 
 
 def apply_failure_handler(t):
@@ -1149,14 +1194,14 @@ def convert_one(p, cfg, created_cache):
 
 def main():
     if doc is None or doc.IsFamilyDocument:
-        forms.alert("Run this in a project document.", title="Convert Slab")
+        notify("Run this in a project document.", title="Convert Slab")
         return
 
     cfg = load_config()
 
     elements = gather_selection()
     if not elements:
-        forms.alert("Nothing selected.", title="Convert Slab")
+        notify("Nothing selected.", title="Convert Slab")
         return
 
     slabs, rejected = [], 0
@@ -1167,7 +1212,7 @@ def main():
             rejected += 1
 
     if not slabs:
-        forms.alert("None of the {0} selected element(s) is a sketch-based "
+        notify("None of the {0} selected element(s) is a sketch-based "
                     "structural floor or foundation slab.\n\n"
                     "Isolated footings and wall foundations are family/host "
                     "based and are out of scope for this tool."
@@ -1199,7 +1244,7 @@ def main():
     todo = [p for p in picked if not p.blocked]
     blocked = [p for p in picked if p.blocked]
     if blocked:
-        forms.alert("{0} blocked element(s) were dropped from the run:\n\n{1}"
+        notify("{0} blocked element(s) were dropped from the run:\n\n{1}"
                     .format(len(blocked),
                             "\n".join(p.name for p in blocked[:10])),
                     title="Convert Slab")
@@ -1261,7 +1306,7 @@ def main():
                 tg.RollBack()
             except Exception:
                 pass
-            forms.alert("Run aborted and rolled back:\n\n{0}"
+            notify("Run aborted and rolled back:\n\n{0}"
                         .format(traceback.format_exc()), title="Convert Slab")
             return
 

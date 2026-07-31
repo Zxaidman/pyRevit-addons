@@ -29,15 +29,17 @@ The ProgressBar API is deliberately call-compatible with
 ``pyrevit.forms.ProgressBar`` so existing code needs only the import swapped.
 
 Author  : AnonGee
-Version : 1.0.0
+Version : 1.2.0
 Engines : CPython 3 (primary), IronPython 2.7 (works too)
 """
 
 import time
 
-__version__ = "1.0.0"
+__version__ = "1.2.0"
 
-__all__ = ["ProgressBar", "CheckList", "pick_option", "pump", "revit_handle"]
+__all__ = ["ProgressBar", "CheckList", "pick_option", "alert", "ask_yes_no",
+           "theme_brush",
+           "pump", "revit_handle"]
 
 # ---------------------------------------------------------------------------
 # CLR bootstrap
@@ -56,11 +58,14 @@ from System.Windows import (Window, Thickness, WindowStyle,          # noqa: E40
                             ResizeMode, SizeToContent,
                             WindowStartupLocation, HorizontalAlignment,
                             VerticalAlignment, TextWrapping,
-                            FontWeights, Visibility)
+                            FontWeights, Visibility, TextAlignment,
+                            SystemParameters,
+                            MessageBox, MessageBoxButton, MessageBoxImage,
+                            MessageBoxResult)
 from System.Windows.Controls import (StackPanel, TextBlock, Button,  # noqa: E402
                                      ProgressBar as WpfProgressBar,
                                      CheckBox, ScrollViewer, TextBox,
-                                     DockPanel, Dock, Orientation,
+                                     DockPanel, Dock, Orientation, Grid,
                                      ScrollBarVisibility)
 from System.Windows.Media import Brushes, FontFamily                 # noqa: E402
 from System.Windows.Threading import (Dispatcher, DispatcherFrame,   # noqa: E402
@@ -147,6 +152,35 @@ def _own(window):
     return False
 
 
+def theme_brush(resource_key, fallback):
+    """Resolve a WPF resource brush by key, falling back to a hex string.
+
+    pyRevit registers ``pyRevitDarkBrush`` / ``pyRevitAccentBrush`` in the
+    application resources, so inside pyRevit this picks up the real palette.
+    Outside it (bare add-in, no WPF Application) the fallback is used - a
+    neutral dark/amber pair chosen to look reasonable, not a claim about
+    pyRevit's exact values.
+    """
+    try:
+        from System.Windows import Application
+        app = Application.Current
+        if app is not None:
+            found = app.TryFindResource(resource_key)
+            if found is not None:
+                return found
+    except Exception:
+        pass
+    try:
+        from System.Windows.Media import BrushConverter
+        return BrushConverter().ConvertFromString(fallback)
+    except Exception:
+        return None
+
+
+DARK_FALLBACK = "#FF2C3E50"
+ACCENT_FALLBACK = "#FFF39C12"
+
+
 def _fmt_eta(sec):
     if sec is None or sec < 0:
         return "--"
@@ -185,12 +219,16 @@ class ProgressBar(object):
     def __init__(self, title="{value} of {max_value}", cancellable=False,
                  step=0, indeterminate=False, width=460, height=None,
                  topmost=True, min_refresh_ms=80, show_eta=True,
-                 parent_handle=None):
+                 parent_handle=None, style="pyrevit", bar_height=24,
+                 bar_top_margin=10):
         self.title_template = title or "{value} of {max_value}"
         self.cancellable = cancellable
         self.step = int(step or 0)
         self.indeterminate = indeterminate
-        self.width = width
+        self.style = (style or "pyrevit").lower()
+        self.width = 600 if (self.style == "pyrevit" and width == 460) else width
+        self.bar_height = bar_height
+        self.bar_top_margin = bar_top_margin
         self.topmost = topmost
         self.min_refresh_ms = min_refresh_ms
         self.show_eta = show_eta
@@ -250,6 +288,85 @@ class ProgressBar(object):
     # -- construction ------------------------------------------------------
 
     def _build(self):
+        if self.style == "pyrevit":
+            self._build_bar()
+        else:
+            self._build_dialog()
+
+    def _build_bar(self):
+        """Thin borderless strip near the top of the screen.
+
+        Mirrors pyRevit's own ProgressBar.xaml: WindowStyle=None, no taskbar
+        entry, ShowActivated=False so it never steals focus from Revit, and a
+        single Grid holding the bar with the text overlaid on top of it and
+        Cancel pinned left.
+        """
+        dark = theme_brush("pyRevitDarkBrush", DARK_FALLBACK)
+        accent = theme_brush("pyRevitAccentBrush", ACCENT_FALLBACK)
+
+        w = Window()
+        w.Title = "Progress"
+        w.Width = self.width
+        w.Height = self.bar_height
+        w.WindowStyle = getattr(WindowStyle, "None")
+        w.ResizeMode = ResizeMode.NoResize
+        w.ShowInTaskbar = False
+        w.ShowActivated = False
+        w.Topmost = bool(self.topmost)
+        w.WindowStartupLocation = WindowStartupLocation.Manual
+        if dark is not None:
+            w.Background = dark
+        w.Closing += self._on_closing
+
+        # SystemParameters.WorkArea is in device-independent units, unlike
+        # Screen.WorkingArea, so this stays correct on scaled displays.
+        try:
+            area = SystemParameters.WorkArea
+            w.Left = area.Left + (area.Width - self.width) / 2.0
+            w.Top = area.Top + self.bar_top_margin
+        except Exception:
+            w.WindowStartupLocation = WindowStartupLocation.CenterScreen
+
+        grid = Grid()
+        if dark is not None:
+            grid.Background = dark
+
+        self._bar = WpfProgressBar()
+        self._bar.Minimum = 0
+        self._bar.Maximum = 100
+        self._bar.Value = 0
+        self._bar.IsIndeterminate = bool(self.indeterminate)
+        self._bar.BorderThickness = Thickness(0)
+        self._bar.Background = Brushes.Transparent
+        if accent is not None:
+            self._bar.Foreground = accent
+        grid.Children.Add(self._bar)
+
+        self._title_block = TextBlock()
+        self._title_block.Text = self._render_title()
+        self._title_block.TextWrapping = TextWrapping.Wrap
+        self._title_block.TextAlignment = TextAlignment.Center
+        self._title_block.VerticalAlignment = VerticalAlignment.Center
+        self._title_block.Foreground = Brushes.White
+        grid.Children.Add(self._title_block)
+
+        self._status_block = None      # single line: text is composed together
+
+        if self.cancellable:
+            self._cancel_btn = Button()
+            self._cancel_btn.Content = "Cancel"
+            self._cancel_btn.Height = 18
+            self._cancel_btn.HorizontalAlignment = HorizontalAlignment.Left
+            self._cancel_btn.VerticalAlignment = VerticalAlignment.Center
+            self._cancel_btn.Margin = Thickness(12, 0, 0, 0)
+            self._cancel_btn.Padding = Thickness(10, 0, 10, 0)
+            self._cancel_btn.Click += self._on_cancel
+            grid.Children.Add(self._cancel_btn)
+
+        w.Content = grid
+        self._window = w
+
+    def _build_dialog(self):
         w = Window()
         w.Title = "Progress"
         w.Width = self.width
@@ -397,7 +514,6 @@ class ProgressBar(object):
             return
         self._last_refresh = now
         try:
-            self._title_block.Text = self._render_title()
             if not self.indeterminate:
                 self._bar.Value = self._percent()
             bits = ["{0}%".format(self._percent())]
@@ -407,9 +523,23 @@ class ProgressBar(object):
                     bits.append("~{0} left".format(_fmt_eta(eta)))
             if self._status:
                 bits.append(self._status)
-            self._status_block.Text = "   |   ".join(bits)
+            status_text = "   |   ".join(bits)
+
+            if self._status_block is None:
+                # strip style: one overlaid line, so merge the two
+                self._title_block.Text = "{0}   -   {1}".format(
+                    self._render_title(), status_text)
+            else:
+                self._title_block.Text = self._render_title()
+                self._status_block.Text = status_text
+
             self._window.UpdateLayout()
-            pump()
+            # Render priority sits ABOVE Input, so pumping at Render never
+            # dispatches the Cancel click and the button looks dead. A
+            # cancellable bar therefore has to pump at Background (below
+            # Input) and accept that host-app clicks go through too; a
+            # non-cancellable one stays at the safer Render default.
+            pump(DispatcherPriority.Background if self.cancellable else None)
         except Exception:
             pass
 
@@ -691,3 +821,28 @@ def pick_option(options, message="Pick one", title="Options", width=460):
         w.Show()
         pump(DispatcherPriority.Background)
     return state["choice"]
+
+
+# ---------------------------------------------------------------------------
+# message boxes  (stand-in for forms.alert)
+# ---------------------------------------------------------------------------
+
+
+def alert(message, title="Message", warning=False):
+    """Blocking OK box. WPF MessageBox, so no Revit dependency."""
+    icon = MessageBoxImage.Warning if warning else MessageBoxImage.Information
+    try:
+        MessageBox.Show(u"{0}".format(message), u"{0}".format(title),
+                        MessageBoxButton.OK, icon)
+    except Exception:
+        pass
+
+
+def ask_yes_no(message, title="Confirm"):
+    """Blocking Yes/No box. Returns True only on Yes."""
+    try:
+        r = MessageBox.Show(u"{0}".format(message), u"{0}".format(title),
+                            MessageBoxButton.YesNo, MessageBoxImage.Question)
+        return r == MessageBoxResult.Yes
+    except Exception:
+        return False

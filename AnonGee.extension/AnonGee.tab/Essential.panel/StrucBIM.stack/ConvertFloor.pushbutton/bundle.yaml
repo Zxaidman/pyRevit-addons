@@ -1,6 +1,6 @@
-title: "Convert Floor"
+title: "Convert\nSlab"
 author: AnonGee
-tooltip: |
+tooltip: >
   Convert Structural Floor <-> Structural Foundation (slab).
 
   Works on a pre-selection or lets you pick in plan, 3D, section or

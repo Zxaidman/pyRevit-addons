@@ -1,6 +1,6 @@
 {
   "_readme": [
-    "Config for Convert Slab v1.0.0.",
+    "Config for Convert Slab v1.0.1.",
     "Type resolution order: 1) exact name from the convention below,",
     "2) identical compound structure, 3) same total thickness within",
     "tolerance, 4) duplicate a seed type of the target category and copy",
