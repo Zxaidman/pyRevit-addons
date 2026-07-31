@@ -13,6 +13,8 @@ import math
 
 from Autodesk.Revit.DB import Line, Arc, XYZ, Grid, FilteredElementCollector
 
+from .. import naming
+
 _MIN_LENGTH_FT = 1.0e-3   # ignore degenerate/zero-length curves
 
 
@@ -197,7 +199,7 @@ def create_grids(doc, grid_records, namer):
             grid = Grid.Create(doc, curve)
             if fingerprint is not None:
                 placed.add(fingerprint)
-            name = namer.name_for(record)
+            name = naming.grid_name(namer.name_for(record))
             if name and name not in used_names:
                 try:
                     grid.Name = name

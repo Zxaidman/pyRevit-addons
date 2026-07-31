@@ -56,6 +56,9 @@ class DefaultNames(unittest.TestCase):
         self.assertEqual(naming.stair_type_name(150, 300, 1500, 200),
                          "cad2bim 150R x 300T x 1500W x 200wst")
         self.assertEqual(naming.stair_waist_type_name(200), "cad2bim waist 200")
+        self.assertEqual(naming.level_name(2, 3000, "First Floor"),
+                         "CAD Level 2")
+        self.assertEqual(naming.grid_name("A"), "A")
 
     def test_sizes_are_whole_millimetres(self):
         # a float size must never leak "400.0" into a type name
@@ -95,6 +98,24 @@ class CustomTemplates(unittest.TestCase):
         self.assertIsNotNone(naming.validate("column_rect", "C{b}-{depth}"))
         self.assertIsNotNone(naming.validate("floor", "   "))
         self.assertIsNotNone(naming.validate("no_such_key", "{b}"))
+
+    def test_levels_and_grids_take_a_convention_too(self):
+        naming.apply({"level": "{label} (L{n} @{e})", "grid": "G-{name}"})
+        self.assertEqual(naming.level_name(2, 3000, "First Floor"),
+                         "First Floor (L2 @3000)")
+        self.assertEqual(naming.grid_name("A"), "G-A")
+
+    def test_a_level_with_no_plan_title_still_names_cleanly(self):
+        naming.apply({"level": "L{n} {label}"})
+        self.assertEqual(naming.level_name(3, 6000, None), "L3")
+
+    def test_a_grid_the_convention_did_not_name_stays_unnamed(self):
+        # the builder skips an empty name and keeps Revit's own, so a grid the
+        # drawing never labelled must NOT come back as the literal template
+        self.assertEqual(naming.grid_name(None), "")
+        naming.apply({"grid": "G-{name}"})
+        self.assertEqual(naming.grid_name(""), "")
+        self.assertEqual(naming.grid_name("B2"), "G-B2")
 
     def test_a_template_may_ignore_the_sizes_entirely(self):
         naming.apply({"floor": "GENERIC SLAB"})

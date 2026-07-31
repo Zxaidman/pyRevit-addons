@@ -88,7 +88,8 @@ class NamingTabControls(unittest.TestCase):
     _CONTROL = {"column_rect": "column", "column_round": "column_round",
                 "beam_sized": "beam", "beam_width": "beam_width",
                 "floor": "floor", "stair": "stair",
-                "stair_waist": "stair_waist"}
+                "stair_waist": "stair_waist", "level": "level",
+                "grid": "grid"}
 
     def test_one_box_and_one_preview_per_template(self):
         names = _xaml_names(_XAML)

@@ -785,5 +785,124 @@ class SpiralFromDrawnLinework(unittest.TestCase):
 
 
 
+class LandingsMeetTheFlight(unittest.TestCase):
+    """A landing must share an edge with the flight it serves.
+
+    Revit's automatic landing squares itself to the run ends, which against a
+    FANNED flight's angled outermost riser leaves a wedge of daylight -- the
+    discontinuity reported on StaircasePlan-Test2's winder stairs.
+    """
+
+    def _fan(self, count=6, tread=300.0, width=1500.0, turn_deg=30.0):
+        recs = []
+        for i in range(count):
+            mx = i * tread
+            ang = math.radians(90.0 + turn_deg * (float(i) / (count - 1) - 0.5))
+            dx = math.cos(ang) * width / 2.0
+            dy = math.sin(ang) * width / 2.0
+            recs.append(_Rec("line", [((mx - dx) * _FT, (-dy) * _FT),
+                                      ((mx + dx) * _FT, dy * _FT)],
+                             layers.CATEGORY_STAIR))
+        return recs
+
+    def test_the_arrival_landing_starts_on_the_last_drawn_riser(self):
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            self._fan(), _PARAMS, 3000.0)
+        run = plans[0]["runs"][-1]
+        self.assertTrue(run.get("fanned"))
+        ring = plans[0]["top_landing"]
+        self.assertIsNotNone(ring)
+        riser = run["riser_lines"][-1]
+        # both ends of the drawn riser lie ON the landing's near edge
+        for point in riser:
+            self.assertTrue(
+                any(_near(point, corner, 1.0) for corner in ring)
+                or _on_segment(point, ring[0], ring[-1], 1.0),
+                "riser end %s is not on the landing edge %s" % (point, ring))
+
+    def test_a_square_flight_keeps_its_square_landing(self):
+        recs = [_Rec("line", [(0.0, (i * 300.0) * _FT),
+                              (1500.0 * _FT, (i * 300.0) * _FT)],
+                     layers.CATEGORY_STAIR) for i in range(8)]
+        plans, _notes = stair_layout.stair_plans_from_linework(
+            recs, _PARAMS, 3000.0)
+        ring = plans[0]["top_landing"]
+        self.assertEqual(len(ring), 4)
+        for i, point in enumerate(ring):
+            nxt = ring[(i + 1) % 4]
+            self.assertLess(min(abs(point[0] - nxt[0]), abs(point[1] - nxt[1])),
+                            1e-6)          # still axis-aligned
+
+
+class LandingsStepRoundColumns(unittest.TestCase):
+    """Stair 1's mid landing ran its corner through C38 and C40."""
+
+    def _plan_with_landing(self):
+        ring = [(0.0, 0.0), (5000 * _FT, 0.0),
+                (5000 * _FT, 3000 * _FT), (0.0, 3000 * _FT)]
+        return [{"mark": "ST-1", "landing": None, "top_landing": ring,
+                 "bridge_landings": {}}]
+
+    def _column(self, cx, cy, b, h):
+        return ("rect", cx * _FT, cy * _FT, 1.0, 0.0,
+                max(b, h) / 2.0 * _FT, min(b, h) / 2.0 * _FT)
+
+    def test_a_column_at_a_corner_becomes_a_step(self):
+        plans = stair_layout.notch_landings(
+            self._plan_with_landing(), [self._column(5000, 3000, 900, 900)])
+        ring = plans[0]["top_landing"]
+        corners = set((round(x * _MM), round(y * _MM)) for x, y in ring)
+        self.assertEqual(len(ring), 6)              # the L
+        self.assertIn((4550, 3000), corners)        # stepped in by half the column
+        self.assertIn((4550, 2550), corners)
+        self.assertIn((5000, 2550), corners)
+        self.assertNotIn((5000, 3000), corners)     # the overlapping corner is gone
+
+    def test_two_columns_give_two_steps(self):
+        plans = stair_layout.notch_landings(
+            self._plan_with_landing(),
+            [self._column(0, 3000, 900, 900), self._column(5000, 3000, 900, 900)])
+        ring = plans[0]["top_landing"]
+        self.assertEqual(len(ring), 8)
+        area = abs(stair_layout.slab_outlines._signed_area(ring)) * _MM * _MM
+        self.assertAlmostEqual(area / 1e6, 15.0 - 2 * (0.45 * 0.45), places=3)
+
+    def test_a_landing_clear_of_every_column_is_untouched(self):
+        before = self._plan_with_landing()[0]["top_landing"]
+        plans = stair_layout.notch_landings(
+            self._plan_with_landing(), [self._column(20000, 20000, 900, 900)])
+        self.assertEqual(plans[0]["top_landing"], before)
+
+    def test_a_cut_that_would_swallow_the_landing_is_refused(self):
+        plans = stair_layout.notch_landings(
+            self._plan_with_landing(), [self._column(2500, 1500, 6000, 6000)])
+        self.assertEqual(len(plans[0]["top_landing"]), 4)   # left as drawn
+
+    def test_a_column_in_the_middle_would_hole_the_landing_so_is_refused(self):
+        plans = stair_layout.notch_landings(
+            self._plan_with_landing(), [self._column(2500, 1500, 600, 600)])
+        self.assertEqual(len(plans[0]["top_landing"]), 4)
+
+    def test_bridge_landings_are_notched_too(self):
+        plans = self._plan_with_landing()
+        plans[0]["bridge_landings"] = {0: list(plans[0]["top_landing"])}
+        stair_layout.notch_landings(plans, [self._column(5000, 3000, 900, 900)])
+        self.assertEqual(len(plans[0]["bridge_landings"][0]), 6)
+
+
+def _near(a, b, tol_mm):
+    return math.hypot(a[0] - b[0], a[1] - b[1]) * _MM <= tol_mm
+
+
+def _on_segment(point, a, b, tol_mm):
+    length = math.hypot(b[0] - a[0], b[1] - a[1])
+    if length <= 0:
+        return False
+    off = abs((point[0] - a[0]) * (b[1] - a[1])
+              - (point[1] - a[1]) * (b[0] - a[0])) / length
+    return off * _MM <= tol_mm
+
+
+
 if __name__ == "__main__":
     unittest.main()

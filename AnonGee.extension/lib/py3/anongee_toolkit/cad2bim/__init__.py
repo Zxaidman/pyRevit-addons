@@ -35,7 +35,39 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.61.0"  # Naming tab, per-element tolerances, sketched winders, SW10 again.
+__version__ = "0.62.0"  # Level/grid naming, shipped standard sizes, landings that meet.
+#
+#                         CONVENTION: anything this tool invents -- a name, a tolerance, a
+#                         size -- belongs on the main dialog, never buried in code. Levels
+#                         and grids were the two that had been missed: a level was always
+#                         "CAD Level {n}" and a grid took its bubble text raw. Both are
+#                         templates now ({n} {e} {label} for a level, {name} for a grid, so
+#                         "1st Floor (L2 @3000)" or "G-A" are a typing job, not a code
+#                         change), and every remaining invented name is on the tab. A grid
+#                         the drawing never labelled still goes out unnamed rather than
+#                         becoming a bare prefix.
+#
+#                         STANDARD SIZES ship with the common RC set (10 column b x h, 7 beam
+#                         widths) instead of an empty box, so a drawing whose members are a
+#                         couple of millimetres off round onto the size they mean out of the
+#                         box. The Tolerances tab still remembers whatever is typed over them.
+#
+#                         LANDINGS now MEET the flight. An arrival landing was squared to the
+#                         run axis, which against a fanned flight's angled outermost riser
+#                         left a wedge of daylight -- the drawn riser is the landing's near
+#                         edge instead. Between two flights where either is fanned, a BRIDGE
+#                         landing is sketched through the four ends of the two drawn risers
+#                         it joins, so it shares an edge with each exactly, in place of
+#                         Revit's automatic landing (which is left to serve square flights,
+#                         where it is already right).
+#
+#                         And a landing no longer runs through a column: notch_landings cuts
+#                         the overlap out as a rectilinear STEP -- Test2 stair 1's mid landing
+#                         now steps 250mm round C38 and C40, exactly as drawn. A cut that
+#                         would hole the landing or take most of it away is refused, since
+#                         Revit's landing sketch takes one simple loop.
+#
+# 0.61.0                  Naming tab, per-element tolerances, sketched winders, SW10 again.
 #
 #                         NAMING. Every auto-created family type was named by a hard-coded
 #                         format at its Duplicate() call ("400 X 600", "200 THK"). The new

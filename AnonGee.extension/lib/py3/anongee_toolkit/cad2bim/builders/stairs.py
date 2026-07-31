@@ -243,8 +243,24 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             # a sketched run through the corner; otherwise Revit's automatic
             # landing fills it (dog-leg turn, winding-stair corners)
             mid_ring = plan.get("landing")
+            bridges = plan.get("bridge_landings") or {}
             for number, (first, second) in enumerate(zip(run_ids,
                                                          run_ids[1:])):
+                # a landing that BRIDGES two drawn risers exactly: an automatic
+                # landing squares itself to the run ends and leaves a wedge of
+                # daylight against a fanned flight's angled outermost riser
+                bridge = bridges.get(number)
+                if bridge is not None and not spiral:
+                    risers_below = sum(r.get("risers") or 0
+                                       for r in runs[:number + 1])
+                    if _create_sketched_landing(
+                            doc, stairs_id, bridge,
+                            storey_ft * float(risers_below) / risers_total,
+                            base_level.Elevation):
+                        continue
+                    result["skipped"].append(
+                        "{0}: bridge landing did not sketch -- using Revit's "
+                        "automatic landing".format(mark))
                 winder = winders.get(number) if not spiral else None
                 if winder is not None:
                     try:
