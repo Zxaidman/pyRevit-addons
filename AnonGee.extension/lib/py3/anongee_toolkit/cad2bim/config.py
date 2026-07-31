@@ -66,6 +66,13 @@ DEFAULTS = {
     "slab_min_width_mm": 500.0,   # a face slimmer than this (2A/P) is a member
     "slab_min_step_mm": 20.0,     # a boundary jog below this is noise, not a step
 
+    # --- standard sizes (Tolerances tab; a drawn size within snap_tol_mm of one
+    # of these is rounded onto it, so a 298 wide beam reads as the 300 it is).
+    # Shipped with the common RC sizes; the tab remembers whatever is typed.
+    "standard_columns": ("230x230, 230x300, 230x450, 300x300, 300x450, "
+                         "300x600, 400x400, 400x600, 450x600, 600x600"),
+    "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
+
     # --- staircase tolerances (exposed on the Tolerances tab) ---------------
     "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair
     "stair_tread_min_mm": 150.0,  # a drawn riser spacing below this is not a tread

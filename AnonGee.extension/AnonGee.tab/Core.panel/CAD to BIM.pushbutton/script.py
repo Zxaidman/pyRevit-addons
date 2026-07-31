@@ -437,7 +437,9 @@ class CadToBimWindow(object):
                              ("beam_width", "beam_width"),
                              ("floor", "floor"),
                              ("stair", "stair"),
-                             ("stair_waist", "stair_waist")):
+                             ("stair_waist", "stair_waist"),
+                             ("level", "level"),
+                             ("grid", "grid")):
             box = find("tb_name_{0}".format(control))
             box.Text = saved_naming.get(key, naming.DEFAULTS[key])
             box.TextChanged += self.on_naming_changed
@@ -606,8 +608,10 @@ class CadToBimWindow(object):
         # standard sizes are an office convention, not a per-drawing number, so
         # they come back from the last session like the naming templates do
         saved = getattr(self, "_saved_standards", None) or {}
-        self.tb_std_columns.Text = saved.get("column", "")
-        self.tb_std_beams.Text = saved.get("beam_widths", "")
+        self.tb_std_columns.Text = saved.get("column",
+                                             d["standard_columns"])
+        self.tb_std_beams.Text = saved.get("beam_widths",
+                                           d["standard_beam_widths"])
 
     def _read_int(self, textbox, fallback):
         try:
@@ -990,7 +994,8 @@ class CadToBimWindow(object):
             else "saved to {0}".format(prefs.path()))
 
     _NAMING_SAMPLE = {"b": 400, "h": 600, "d": 600, "w": 300, "t": 200,
-                      "r": 150, "k": 200}
+                      "r": 150, "k": 200, "n": 2, "e": 3000,
+                      "label": "First Floor", "name": "A"}
 
     def _show_naming_preview(self):
         """Show what each template would call a type, or why it cannot."""

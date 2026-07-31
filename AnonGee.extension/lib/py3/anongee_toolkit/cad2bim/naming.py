@@ -15,6 +15,8 @@ A template is a plain format string over the sizes that type carries:
     floor         {t}              200 thick slab        "{t} THK"
     stair         {r} {t} {w} {k}  riser/tread/width/waist
     stair_waist   {k}              the stair's waist type
+    level         {n} {e} {label}  a storey level this run creates
+    grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
 Sizes reach a template already rounded to whole millimetres, so "{b} X {h}"
 gives "400 X 600" and never "400.0 X 600.0". A template that references a field
@@ -34,6 +36,8 @@ DEFAULTS = {
     "floor": "{t} THK",
     "stair": "cad2bim {r}R x {t}T x {w}W x {k}wst",
     "stair_waist": "cad2bim waist {k}",
+    "level": "CAD Level {n}",
+    "grid": "{name}",
 }
 
 # what each template may refer to, for the dialog's help text and validation
@@ -45,6 +49,8 @@ FIELDS = {
     "floor": ("t",),
     "stair": ("r", "t", "w", "k"),
     "stair_waist": ("k",),
+    "level": ("n", "e", "label"),
+    "grid": ("name",),
 }
 
 _templates = dict(DEFAULTS)
@@ -74,11 +80,16 @@ def problems():
     return list(_problems)
 
 
+# fields that are TEXT, not a size, so validation feeds them something readable
+_TEXT_FIELDS = ("label", "name")
+
+
 def validate(key, template):
     """None when `template` is a usable name for `key`, else why it is not."""
     if key not in DEFAULTS:
         return "unknown name"
-    sample = dict((field, 100) for field in FIELDS[key])
+    sample = dict((field, field if field in _TEXT_FIELDS else 100)
+                  for field in FIELDS[key])
     try:
         text = template.format(**sample)
     except (KeyError, IndexError, ValueError) as error:
@@ -131,6 +142,30 @@ def stair_type_name(riser_mm, tread_mm, width_mm, waist_mm):
 
 def stair_waist_type_name(waist_mm):
     return _render("stair_waist", {"k": _mm(waist_mm)})
+
+
+def level_name(index, elevation_mm=0.0, label=None):
+    """The name for a level this run creates.
+
+    `index` counts from 1 over the levels ADDED, `elevation_mm` is where the
+    level sits, and `label` is the plan title that storey came from (empty when
+    the drawing did not name it).
+    """
+    return _render("level", {"n": int(index), "e": _mm(elevation_mm),
+                             "label": (label or "").strip()})
+
+
+def grid_name(name):
+    """The name for a grid line, around whatever the drawing/convention gave.
+
+    A grid the drawing never labelled comes in empty and goes out empty -- the
+    builder skips an empty name and keeps Revit's own, so a prefix template
+    must not turn an unnamed grid into a bare "G-".
+    """
+    base = (name or "").strip()
+    if not base:
+        return ""
+    return _render("grid", {"name": base})
 
 
 def load():

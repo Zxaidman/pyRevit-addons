@@ -519,7 +519,7 @@
                     <StackPanel Orientation="Vertical" Margin="6">
 
                         <TextBlock Text="Auto-created family type names" FontWeight="Bold" Margin="0,0,0,2"/>
-                        <TextBlock Text="When a size is not already in the model this tool duplicates the picked family and names the new type from these templates. Sizes are whole millimetres. These are remembered between Revit sessions, along with the standard sizes on the Tolerances tab."
+                        <TextBlock Text="When a size is not already in the model this tool duplicates the picked family and names the new type from these templates; levels this run creates and grids it names follow the same rule. Sizes are whole millimetres. Level takes {n} {e} {label} (index, elevation, plan title) and Grid takes {name} (the CAD bubble, or the A/B/1/2 convention). These are remembered between Revit sessions, along with the standard sizes on the Tolerances tab."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -529,6 +529,8 @@
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="26"/>
                                 <RowDefinition Height="26"/>
                                 <RowDefinition Height="26"/>
                                 <RowDefinition Height="26"/>
@@ -567,6 +569,14 @@
                             <TextBlock Grid.Row="7" Grid.Column="0" Text="Stair waist" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="7" Grid.Column="1" x:Name="tb_name_stair_waist" Height="22" Margin="0,2,8,2"/>
                             <TextBlock Grid.Row="7" Grid.Column="2" x:Name="lbl_name_stair_waist" FontSize="10" Foreground="Gray" VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Row="8" Grid.Column="0" Text="Level" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="8" Grid.Column="1" x:Name="tb_name_level" Height="22" Margin="0,2,8,2"/>
+                            <TextBlock Grid.Row="8" Grid.Column="2" x:Name="lbl_name_level" FontSize="10" Foreground="Gray" VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Row="9" Grid.Column="0" Text="Grid" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="9" Grid.Column="1" x:Name="tb_name_grid" Height="22" Margin="0,2,8,2"/>
+                            <TextBlock Grid.Row="9" Grid.Column="2" x:Name="lbl_name_grid" FontSize="10" Foreground="Gray" VerticalAlignment="Center"/>
                         </Grid>
 
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
