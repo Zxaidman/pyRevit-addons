@@ -1,4 +1,4 @@
-# Convert Slab — v1.0.0
+# Convert Slab — v1.0.1
 
 pyRevit pushbutton. Converts **Structural Floor ↔ Structural Foundation (slab)**
 on a pre-selection or an interactive pick, in plan, 3D, section or elevation.
@@ -9,10 +9,10 @@ Engine: **CPython 3** (`#! python3` shebang). Revit **2022+**, developed against
 
 ## Install
 
-Drop the whole `Convert Slab.pushbutton` folder into a panel of your extension:
-
 ```
 MyTools.extension/
+  lib/
+    cpyforms.py                  <- reusable, shared by all your CPython scripts
   MyTab.tab/
     Structure.panel/
       Convert Slab.pushbutton/
@@ -22,6 +22,48 @@ MyTools.extension/
 ```
 
 Then pyRevit → Reload.
+
+`lib/` is automatically on `sys.path` for every script in the extension, so any
+other `#! python3` button can just `from cpyforms import ProgressBar`. If you'd
+rather not touch `lib/`, dropping `cpyforms.py` next to `script.py` also works —
+the script appends its own folder to `sys.path`.
+
+### Why cpyforms exists
+
+`pyrevit.forms.ProgressBar`, `SelectFromList` and `CommandSwitchWindow` are built
+with `wpf.LoadComponent`, which is IronPython-only; under the CPython engine they
+raise `PyRevitCPythonNotSupported`. `cpyforms.py` builds the same three widgets in
+code instead of XAML, with a call-compatible API:
+
+```python
+from cpyforms import ProgressBar, CheckList, pick_option
+
+with ProgressBar(title='Working {value}/{max_value}  {percent}%',
+                 cancellable=True) as pb:
+    for i, item in enumerate(items):
+        if pb.cancelled:
+            break
+        pb.update_progress(i + 1, len(items))
+        pb.status = item.name          # optional second line
+
+# or just wrap the loop
+for item in ProgressBar.track(items, title='Working {value}/{max_value}'):
+    ...
+
+picked = CheckList.show(rows, title='Pick', name_attr='name',
+                        checked_predicate=lambda r: r.ok)
+answer = pick_option(['Run', 'Dry run'], message='Ready.')
+```
+
+Title placeholders: `{value}` `{max_value}` `{percent}` `{eta}`.
+
+One detail worth knowing: repainting a window from the Revit UI thread means
+pumping the WPF dispatcher, and pumping at Input priority inside an open
+transaction lets keystrokes reach Revit and can cause a reentrant API call.
+`cpyforms.pump()` therefore defaults to `DispatcherPriority.Render`, which
+flushes layout and render but stops short of the Input queue. `forms.alert` is
+left alone throughout — it wraps Revit's own `TaskDialog` and is already
+CPython-safe.
 
 ---
 
@@ -93,6 +135,17 @@ That's the regression check — it should read as zeros.
 ---
 
 ## Changelog
+
+### 1.0.1
+- Fix: `pyrevit.forms.ProgressBar` raised `PyRevitCPythonNotSupported` on the
+  CPython engine. All three IronPython-only dialogs now route through
+  `cpyforms` (new, `lib/cpyforms.py` v1.0.0), with the pyRevit versions kept as
+  a fallback and a silent no-op progress bar as a last resort — the button can't
+  die on a UI import again.
+- The progress window now opens before the `TransactionGroup` rather than inside
+  it, so the initial dispatcher pump happens with no transaction open.
+- Rollback guarded with `HasStarted()` / `HasEnded()` so a failure inside
+  `convert_one` can't raise a second time on the rollback itself.
 
 ### 1.0.0
 - Initial release: bidirectional conversion, pre-flight confirmation list,

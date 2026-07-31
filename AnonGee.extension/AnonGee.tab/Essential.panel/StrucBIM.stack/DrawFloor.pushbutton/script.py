@@ -58,9 +58,10 @@ Runs on pyRevit's IronPython 2.7 and CPython 3 engines (no 2/3-only syntax).
 Target: Revit 2022+.
 """
 
-__title__ = 'Hatch\nSlab'
+__title__ = 'Draw Floor'
 __author__ = 'AnonGee'
 __version__ = '1.4.0'
+__highlight__ = 'new'
 
 import json
 import math

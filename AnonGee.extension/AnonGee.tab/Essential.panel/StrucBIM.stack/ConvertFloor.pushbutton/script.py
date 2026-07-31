@@ -13,15 +13,16 @@ Engine : CPython 3 (pyRevit)
 Revit  : 2022+ (developed against 2025)
 """
 
-__title__ = "Convert\nSlab"
+__title__ = "Convert Floor"
 __author__ = "AnonGee"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __min_revit_ver__ = 2022
 __doc__ = ("Convert selected Structural Floors to Structural Foundation slabs "
            "and vice versa. Shows a pre-flight report and asks for confirmation "
            "before modifying anything.")
 
 import os
+import sys
 import json
 import traceback
 
@@ -29,11 +30,80 @@ from pyrevit import revit, DB, UI, forms, script
 
 from System.Collections.Generic import List
 
+# --- CPython-safe UI ------------------------------------------------------
+# pyrevit.forms.ProgressBar / SelectFromList / CommandSwitchWindow are built
+# with wpf.LoadComponent and raise PyRevitCPythonNotSupported on the CPython
+# engine. cpyforms builds the same widgets in code. Put cpyforms.py in the
+# extension's lib/ folder; the sys.path line below also picks it up if you
+# drop it next to this script.
+if os.path.dirname(__file__) not in sys.path:
+    sys.path.append(os.path.dirname(__file__))
+
+try:
+    from cpyforms import ProgressBar as CpyProgressBar
+    from cpyforms import CheckList as CpyCheckList
+    from cpyforms import pick_option as cpy_pick_option
+except Exception:
+    CpyProgressBar = None
+    CpyCheckList = None
+    cpy_pick_option = None
+
+
+class _NullProgress(object):
+    """Last resort: no window, no crash."""
+    cancelled = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+    def update_progress(self, *a, **k):
+        pass
+
+
+def progress(title, cancellable=False):
+    if CpyProgressBar is not None:
+        try:
+            return CpyProgressBar(title=title, cancellable=cancellable)
+        except Exception:
+            pass
+    try:
+        return forms.ProgressBar(title=title, cancellable=cancellable)
+    except Exception:
+        return _NullProgress()
+
+
+def show_checklist(items, title, button_name, checked_predicate=None,
+                   width=1150, height=650):
+    if CpyCheckList is not None:
+        try:
+            return CpyCheckList.show(items, title=title, name_attr="name",
+                                     button_name=button_name, width=width,
+                                     height=height,
+                                     checked_predicate=checked_predicate)
+        except Exception:
+            pass
+    return forms.SelectFromList.show(items, title=title, name_attr="name",
+                                     multiselect=True, button_name=button_name,
+                                     width=width, height=height)
+
+
+def show_options(options, message):
+    if cpy_pick_option is not None:
+        try:
+            return cpy_pick_option(options, message=message,
+                                   title="Convert Slab")
+        except Exception:
+            pass
+    return forms.CommandSwitchWindow.show(options, message=message)
+
 # ---------------------------------------------------------------------------
 # globals
 # ---------------------------------------------------------------------------
 
-TOOL_VERSION = "1.0.0"
+TOOL_VERSION = "1.0.1"
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -1106,7 +1176,7 @@ def main():
 
     created_cache = {}
     plans = []
-    with forms.ProgressBar(title="Analysing {value}/{max_value}") as pb:
+    with progress("Analysing {value}/{max_value}") as pb:
         for i, el in enumerate(slabs):
             try:
                 plans.append(build_plan(el, cfg, created_cache))
@@ -1120,9 +1190,8 @@ def main():
     if rejected:
         header += " ({0} non-slab selection(s) ignored)".format(rejected)
 
-    picked = forms.SelectFromList.show(
-        plans, title=header, name_attr="name", multiselect=True,
-        button_name="Continue", width=1100, height=620)
+    picked = show_checklist(plans, header, "Continue",
+                            checked_predicate=lambda p: not p.blocked)
 
     if not picked:
         return
@@ -1137,9 +1206,9 @@ def main():
     if not todo:
         return
 
-    mode = forms.CommandSwitchWindow.show(
+    mode = show_options(
         ["Convert {0} slab(s)".format(len(todo)), "Report only (no changes)"],
-        message="Ready.")
+        "Ready.")
     if not mode:
         return
     dry_run = mode.startswith("Report")
@@ -1156,14 +1225,17 @@ def main():
                                           "Planned", "Losses"])
         return
 
+    # Progress window opens BEFORE the transaction group: showing a window
+    # pumps the dispatcher at Background priority, which is best done with no
+    # Revit transaction open.
     tg = DB.TransactionGroup(doc, "Convert Slab v{0}".format(TOOL_VERSION))
-    tg.Start()
-    try:
-        with forms.ProgressBar(title="Converting {value}/{max_value}",
-                               cancellable=True) as pb:
+    with progress("Converting {value}/{max_value}", cancellable=True) as pb:
+        tg.Start()
+        try:
             for i, p in enumerate(todo):
                 if pb.cancelled:
                     break
+                pb.update_progress(i + 1, len(todo))
                 t = DB.Transaction(doc, "Convert {0}".format(eid_val(p.id)))
                 t.Start()
                 if cfg.get("swallow_warnings", True):
@@ -1177,18 +1249,21 @@ def main():
                         t.RollBack()
                     results.append((p, r))
                 except Exception:
-                    t.RollBack()
+                    if t.HasStarted() and not t.HasEnded():
+                        t.RollBack()
                     results.append((p, {"old": eid_val(p.id), "new": None,
                                         "status": "failed", "delta": "",
                                         "notes": [traceback.format_exc()
                                                   .strip().splitlines()[-1]]}))
-                pb.update_progress(i + 1, len(todo))
-        tg.Assimilate()
-    except Exception:
-        tg.RollBack()
-        forms.alert("Run aborted and rolled back:\n\n{0}"
-                    .format(traceback.format_exc()), title="Convert Slab")
-        return
+            tg.Assimilate()
+        except Exception:
+            try:
+                tg.RollBack()
+            except Exception:
+                pass
+            forms.alert("Run aborted and rolled back:\n\n{0}"
+                        .format(traceback.format_exc()), title="Convert Slab")
+            return
 
     ok = [r for _, r in results if r["status"] == "ok"]
     output.print_md("## Convert Slab v{0} - {1}/{2} converted"
