@@ -161,13 +161,13 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Footing family" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Foundation type" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" x:Name="cb_footing_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Projection (mm)" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_footing_projection" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="Thickness" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_footing_thickness" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="One footing per column, on the columns' BASE level, sized column + 2 x projection and turned to the column's long axis. Thickness 0 keeps the family type's own. In a multi-storey run only the LOWEST storey builds them."
+                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="One pad per column, sketched as a Structural Foundation floor (the same Floor.Create the slabs use) on the columns' BASE level at ZERO offset. Sized column + 2 x projection and turned to the column's long axis. Thickness 0 keeps the picked type's own. In a multi-storey run only the LOWEST storey builds them."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
 

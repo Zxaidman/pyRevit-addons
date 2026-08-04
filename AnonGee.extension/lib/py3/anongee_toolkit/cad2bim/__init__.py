@@ -35,7 +35,44 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.63.0"  # Progress bar, materials + view filters, footings, skip details.
+__version__ = "0.64.0"  # HOTFIX plus: footings as foundation SLABS, two bars, materials
+#                         on instances too.
+#
+#                         THE CRASH first, and it was mine: 0.63.0 put live ElementIds into
+#                         `outcomes` so the material pass could reach the created elements,
+#                         but outcomes are JSON-exported and an ElementId is not
+#                         serialisable. json.dump raised AFTER the model was built, losing
+#                         the report and reporting a crash for a run that had worked -- and
+#                         taking the view-filter pass, which runs later, down with it. The
+#                         ids now ride under a private key that _strip_ids() removes before
+#                         anything is written, and both exports carry a last-resort encoder
+#                         so a stray Revit object can never fail a finished run again.
+#
+#                         FOOTINGS are Floor.Create against a Structural Foundation floor
+#                         type -- the same call the slabs use -- instead of a foundation
+#                         FAMILY instance. That is what removes the -3000 offset: a family
+#                         hangs its own depth below the level it is hosted on, while a
+#                         sketched pad sits ON the level, and its height offset is explicitly
+#                         zeroed. The pad is still the column footprint grown by the
+#                         projection and turned to the column's long axis, and it is now an
+#                         editable sketch like everything else this tool places.
+#
+#                         TWO PROGRESS BARS. Linking and reading the CAD happens BEFORE the
+#                         dialog opens, so one bar sat at whatever percent the read reached
+#                         while the user filled the dialog in, then looked like it RESET when
+#                         the build started. The read bar now closes as the dialog opens and
+#                         a separate build bar opens when Run is pressed, each captioned and
+#                         each running 0-100 over its own phase.
+#
+#                         MATERIALS are written to the INSTANCE as well as the type. Where a
+#                         material lives is entirely up to how the family was built, and
+#                         setting only the type leaves an instance-parameter family
+#                         untouched -- which is what the user saw. Stairs get their own
+#                         route: a stair type spreads its materials over tread, riser,
+#                         landing and support parameters, none of which is the built-in
+#                         structural one, which is why stairs reported 0 set.
+#
+# 0.63.0                  Progress bar, materials + view filters, footings, skip details.
 #
 #                         PROGRESS BAR. The run reported itself only into the deferred
 #                         console, which a successful run never shows -- a big drawing looked

@@ -135,5 +135,37 @@ class MaterialAndFootingControls(unittest.TestCase):
             self.assertIn(control, names)
 
 
+class OutcomesReachTheExportClean(unittest.TestCase):
+    """The live ElementIds the material pass needs must not reach json.dump."""
+
+    def _script_namespace(self):
+        source = _script_source()
+        start = source.index('_IDS = "_element_ids"')
+        end = source.index("def _skip_details(")
+        namespace = {}
+        exec(compile(source[start:end], "<script>", "exec"), namespace)
+        return namespace
+
+    def test_strip_ids_removes_the_id_key_and_keeps_the_rest(self):
+        namespace = self._script_namespace()
+        outcomes = {"columns": {"rect": 3, namespace["_IDS"]: ["id1", "id2"]},
+                    "beams": {"created": 9},
+                    "materials": {"column": {"elements": 3}}}
+        clean = namespace["_strip_ids"](outcomes)
+        self.assertNotIn(namespace["_IDS"], clean["columns"])
+        self.assertEqual(clean["columns"]["rect"], 3)
+        self.assertEqual(clean["beams"]["created"], 9)
+        self.assertEqual(clean["materials"], {"column": {"elements": 3}})
+        # the original is untouched: the material pass still needs the ids
+        self.assertIn(namespace["_IDS"], outcomes["columns"])
+
+    def test_no_outcome_dict_exports_an_id_list_under_a_plain_key(self):
+        # reading a builder's own result["created_ids"] is fine; putting one
+        # into an outcome dict under a plain key is what broke the export
+        source = _script_source()
+        self.assertNotIn('"created_ids":', source,
+                         "an outcome dict exports an id list under a plain key")
+
+
 if __name__ == "__main__":
     unittest.main()

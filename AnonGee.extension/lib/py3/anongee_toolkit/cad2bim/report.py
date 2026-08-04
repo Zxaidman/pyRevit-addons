@@ -2767,6 +2767,21 @@ def build_export_payload(result, mapping, sections=None, beams=None,
     return payload
 
 
+def _jsonable(value):
+    """Last-resort encoder: a report is a diagnostic, never a reason to fail.
+
+    A live Revit object that leaks into the outcomes (an ElementId did once)
+    would otherwise raise out of json.dump AFTER the model was built, losing the
+    report and reporting a crash for a run that actually worked.
+    """
+    for attribute in ("IntegerValue", "Value"):
+        try:
+            return getattr(value, attribute)
+        except Exception:
+            continue
+    return str(value)
+
+
 def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
                 texts=None, comparison=None):
     """Write a COMPACT run report (mm). No raw per-curve point dump -- just the
@@ -2776,7 +2791,7 @@ def export_json(path, result, mapping, sections=None, beams=None, outcomes=None,
     payload = build_export_payload(result, mapping, sections, beams, outcomes,
                                    texts, comparison)
     with open(path, "w") as handle:
-        json.dump(payload, handle, indent=1)
+        json.dump(payload, handle, indent=1, default=_jsonable)
     return path
 
 
@@ -2806,5 +2821,5 @@ def export_storeys_json(path, storeys, source_name=None):
         "storeys": sections,
     }
     with open(path, "w") as handle:
-        json.dump(document, handle, indent=1)
+        json.dump(document, handle, indent=1, default=_jsonable)
     return path

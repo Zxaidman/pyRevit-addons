@@ -1,27 +1,32 @@
 # -*- coding: utf-8 -*-
-"""Place an isolated FOOTING under every column, on the column's base level.
+"""Place an isolated FOOTING pad under every column, on the columns' base level.
 
-One Structural Foundation instance per column footprint, at the column's centre
-and rotated to its long axis, sized from the column plus a projection all round
-(the dialog's "footing projection"): a 400 x 600 column with a 300 projection
-gets a 1000 x 1200 footing. A type is duplicated per distinct size and cached,
-exactly as the column and beam builders do, so a model with many column sizes
-gets one correctly-named footing type per size rather than a duplicate per
-instance.
+Built the same way slabs are: a `Floor.Create` from the pad's outline against a
+Structural Foundation floor type ("Foundation Slab"), NOT a family instance.
+That keeps footings in the same shape as everything else this tool places -- a
+sketched outline the user can edit -- and it sits ON the level with no offset,
+where a foundation FAMILY hangs its own depth below the level it is hosted on.
 
-Levels: footings go on the BASE level of the columns. In a multi-storey run only
-the lowest storey builds them -- a building has one set of foundations, not one
-per floor -- which the pushbutton decides, not this module.
+The pad is the column footprint grown by a projection all round, turned with the
+column: a 400 x 600 column with a 300 projection gets a 1000 x 1200 pad. A round
+column gets a square pad, which is what an isolated pad under a round column
+normally is. A type is duplicated per distinct THICKNESS and cached, exactly as
+the slab builder does.
+
+Levels: footings go on the BASE level of the columns, with a zero height offset.
+In a multi-storey run only the lowest storey builds them -- a building has one
+set of foundations, not one per floor -- which the pushbutton decides.
 
 This module performs Revit writes and must run inside a Transaction.
 """
 
 import math
 
-from Autodesk.Revit.DB import (BuiltInCategory, BuiltInParameter,
-                               ElementTransformUtils, FamilySymbol,
-                               FilteredElementCollector, Line, XYZ)
-from Autodesk.Revit.DB.Structure import StructuralType
+from System.Collections.Generic import List
+
+from Autodesk.Revit.DB import (BuiltInCategory, BuiltInParameter, CurveLoop,
+                               ElementId, FilteredElementCollector, Floor,
+                               FloorType, Line, XYZ)
 
 from ..compat import get_element_name, set_element_mark
 from .. import config
@@ -29,92 +34,159 @@ from .. import naming
 
 _MM = config.MM_PER_FT
 
-_LENGTH_PARAM_NAMES = ("Length", "L", "Width", "b", "B", "Foundation Length")
-_WIDTH_PARAM_NAMES = ("Width", "W", "w", "Depth", "Foundation Width")
-_THICK_PARAM_NAMES = ("Thickness", "Foundation Thickness", "t", "T", "Height")
-
 # A footprint whose smaller side exceeds this is a raft/region, not a column.
 _MAX_COLUMN_MIN_SIDE_MM = config.DEFAULTS["col_region_max_side_mm"]
 
 
-def foundation_symbols(doc):
-    """[(label, ElementId)] of loaded structural foundation types, sorted."""
-    symbols = (FilteredElementCollector(doc)
-               .OfCategory(BuiltInCategory.OST_StructuralFoundation)
-               .OfClass(FamilySymbol)
-               .ToElements())
-    rows = []
-    for symbol in symbols:
-        family_name = symbol.Family.Name if symbol.Family else "?"
-        rows.append(("{0} : {1}".format(family_name, get_element_name(symbol)),
-                     symbol.Id))
-    return sorted(rows, key=lambda pair: pair[0])
+def foundation_types(doc):
+    """[(label, ElementId)] of floor types in the Structural Foundation category.
+
+    Every floor type is offered when the model has no foundation type at all, so
+    a project that has not loaded one can still place pads (Revit will simply
+    file them under Floors) -- with the category noted in the label.
+    """
+    foundation = []
+    other = []
+    for floor_type in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
+        try:
+            name = get_element_name(floor_type)
+            category = floor_type.Category
+            is_foundation = (category is not None
+                             and category.Id.IntegerValue
+                             == int(BuiltInCategory.OST_StructuralFoundation))
+        except Exception:
+            continue
+        if is_foundation:
+            foundation.append((name, floor_type.Id))
+        else:
+            other.append(("{0}  (floor, not foundation)".format(name),
+                          floor_type.Id))
+    foundation.sort(key=lambda pair: pair[0])
+    other.sort(key=lambda pair: pair[0])
+    return foundation + other
 
 
-def _set_dimension(symbol, names, value_mm):
-    for name in names:
-        parameter = symbol.LookupParameter(name)
-        if parameter is not None and not parameter.IsReadOnly:
-            try:
-                if parameter.Set(value_mm / _MM):
-                    return True
-            except Exception:
-                continue
-    return False
+def _set_thickness(floor_type, thickness_mm):
+    """Set a floor type's total thickness through its compound structure."""
+    try:
+        structure = floor_type.GetCompoundStructure()
+        if structure is None:
+            return False
+        structure.SetLayerWidth(structure.GetFirstCoreLayerIndex(),
+                                thickness_mm / _MM)
+        floor_type.SetCompoundStructure(structure)
+        return True
+    except Exception:
+        return False
 
 
-def _find_type_in_family(family, type_name):
-    if family is None:
-        return None
-    document = family.Document
-    for symbol_id in family.GetFamilySymbolIds():
-        symbol = document.GetElement(symbol_id)
-        if symbol is not None and get_element_name(symbol) == type_name:
-            return symbol
-    return None
-
-
-def _resolve_symbol(base_symbol, length_mm, width_mm, thickness_mm, cache):
-    """A footing type of this size, duplicated off the base type and cached."""
-    key = (length_mm, width_mm, thickness_mm)
+def _resolve_type(doc, base_type, thickness_mm, cache):
+    """A foundation type of this thickness, duplicated off the base and cached."""
+    if not thickness_mm:
+        return base_type
+    key = int(round(thickness_mm))
     if key in cache:
         return cache[key]
-    type_name = naming.footing_type_name(width_mm, length_mm, thickness_mm)
-    existing = _find_type_in_family(base_symbol.Family, type_name)
-    if existing is not None:
-        cache[key] = existing
-        return existing
-    new_symbol = base_symbol.Duplicate(type_name)
-    _set_dimension(new_symbol, _LENGTH_PARAM_NAMES, max(length_mm, width_mm))
-    _set_dimension(new_symbol, _WIDTH_PARAM_NAMES, min(length_mm, width_mm))
-    if thickness_mm:
-        _set_dimension(new_symbol, _THICK_PARAM_NAMES, thickness_mm)
-    cache[key] = new_symbol
-    return new_symbol
+    name = naming.footing_type_name(0, 0, key)
+    for existing in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
+        try:
+            if get_element_name(existing) == name:
+                cache[key] = existing
+                return existing
+        except Exception:
+            continue
+    try:
+        new_type = base_type.Duplicate(name)
+    except Exception:
+        cache[key] = base_type
+        return base_type
+    _set_thickness(new_type, thickness_mm)
+    cache[key] = new_type
+    return new_type
 
 
-def place_footings(doc, sections, base_symbol_id, level_id, projection_mm=300.0,
+def pad_ring(rectangle, projection_ft):
+    """The four corners of the pad under one column rectangle, in feet.
+
+    The pad follows the column's own long axis, so a rotated column gets a
+    rotated pad rather than an axis-aligned box around it.
+    """
+    cx, cy = rectangle["center"][0], rectangle["center"][1]
+    width_mm = rectangle["width_mm"]
+    height_mm = rectangle["height_mm"]
+    long_axis_deg = rectangle.get("long_axis_deg")
+    if long_axis_deg is None:
+        long_axis_deg = 0.0 if width_mm >= height_mm else 90.0
+    half_long = (max(width_mm, height_mm) / _MM) / 2.0 + projection_ft
+    half_short = (min(width_mm, height_mm) / _MM) / 2.0 + projection_ft
+    angle = math.radians(long_axis_deg)
+    ux, uy = math.cos(angle), math.sin(angle)
+    nx, ny = -uy, ux
+    return [(cx + ux * half_long + nx * half_short,
+             cy + uy * half_long + ny * half_short),
+            (cx - ux * half_long + nx * half_short,
+             cy - uy * half_long + ny * half_short),
+            (cx - ux * half_long - nx * half_short,
+             cy - uy * half_long - ny * half_short),
+            (cx + ux * half_long - nx * half_short,
+             cy + uy * half_long - ny * half_short)]
+
+
+def circle_pad_ring(circle, projection_ft):
+    """A square pad around a round column."""
+    cx, cy = circle["center"][0], circle["center"][1]
+    half = (circle["diameter_mm"] / _MM) / 2.0 + projection_ft
+    return [(cx + half, cy + half), (cx - half, cy + half),
+            (cx - half, cy - half), (cx + half, cy - half)]
+
+
+def _curve_loop(ring):
+    loop = CurveLoop()
+    count = len(ring)
+    for index in range(count):
+        a = ring[index]
+        b = ring[(index + 1) % count]
+        loop.Append(Line.CreateBound(XYZ(a[0], a[1], 0.0),
+                                     XYZ(b[0], b[1], 0.0)))
+    return loop
+
+
+def _zero_offset(instance):
+    """Sit the pad ON the level: no height offset, however the type is set up."""
+    for builtin in (BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM,
+                    BuiltInParameter.STRUCTURAL_ELEVATION_AT_BOTTOM):
+        try:
+            parameter = instance.get_Parameter(builtin)
+        except Exception:
+            parameter = None
+        if parameter is not None and not parameter.IsReadOnly:
+            try:
+                parameter.Set(0.0)
+            except Exception:
+                pass
+
+
+def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
                    thickness_mm=0.0, region_max_side_mm=None):
-    """One footing per column rectangle, on `level_id`.
+    """One foundation pad per column footprint, on `level_id` at zero offset.
 
-    `projection_mm` is how far the footing reaches past the column on EVERY
-    side, so the footing is (column + 2 x projection). `thickness_mm` of 0 keeps
-    whatever the base type has. Circular columns get a square footing around
-    their diameter -- an isolated pad under a round column is normally square.
+    `projection_mm` is how far the pad reaches past the column on EVERY side, so
+    the pad is (column + 2 x projection). `thickness_mm` of 0 keeps the picked
+    type's own thickness.
 
     Returns {"created": [ids], "skipped": [reasons], "errors": [reasons]}.
     """
-    base_symbol = doc.GetElement(base_symbol_id)
+    base_type = doc.GetElement(base_type_id)
     level = doc.GetElement(level_id)
     result = {"created": [], "skipped": [], "errors": []}
-    if base_symbol is None or level is None:
-        raise ValueError("footing family or level could not be resolved")
+    if base_type is None or level is None:
+        raise ValueError("foundation type or level could not be resolved")
 
     region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
                   else region_max_side_mm)
-    elevation = level.Elevation
+    projection_ft = float(projection_mm or 0.0) / _MM
     cache = {}
-    grow = 2.0 * float(projection_mm or 0.0)
+    floor_type = _resolve_type(doc, base_type, thickness_mm, cache)
 
     for entry in sections.get("entries", []):
         for rectangle in entry.get("rectangles", []):
@@ -126,19 +198,11 @@ def place_footings(doc, sections, base_symbol_id, level_id, projection_mm=300.0,
                         "region {0}x{1} mm is not a column".format(width_mm,
                                                                   height_mm))
                     continue
-                small = int(round(min(width_mm, height_mm) + grow))
-                big = int(round(max(width_mm, height_mm) + grow))
-                symbol = _resolve_symbol(base_symbol, big, small,
-                                         thickness_mm, cache)
-                if not symbol.IsActive:
-                    symbol.Activate()
-                    doc.Regenerate()
-                cx, cy, _cz = rectangle["center"]
-                point = XYZ(cx, cy, elevation)
-                instance = doc.Create.NewFamilyInstance(
-                    point, symbol, level, StructuralType.Footing)
-                _match_column_rotation(doc, instance, rectangle, point,
-                                       width_mm, height_mm)
+                ring = pad_ring(rectangle, projection_ft)
+                loops = List[CurveLoop]()
+                loops.Add(_curve_loop(ring))
+                instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+                _zero_offset(instance)
                 mark = rectangle.get("mark")
                 if mark:
                     set_element_mark(instance, "F-{0}".format(mark))
@@ -148,16 +212,11 @@ def place_footings(doc, sections, base_symbol_id, level_id, projection_mm=300.0,
 
     for circle in sections.get("circles", []) or []:
         try:
-            diameter_mm = int(round(circle["diameter_mm"]))
-            side = int(round(diameter_mm + grow))
-            symbol = _resolve_symbol(base_symbol, side, side, thickness_mm,
-                                     cache)
-            if not symbol.IsActive:
-                symbol.Activate()
-                doc.Regenerate()
-            cx, cy, _cz = circle["center"]
-            instance = doc.Create.NewFamilyInstance(
-                XYZ(cx, cy, elevation), symbol, level, StructuralType.Footing)
+            ring = circle_pad_ring(circle, projection_ft)
+            loops = List[CurveLoop]()
+            loops.Add(_curve_loop(ring))
+            instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+            _zero_offset(instance)
             mark = circle.get("mark")
             if mark:
                 set_element_mark(instance, "F-{0}".format(mark))
@@ -165,29 +224,3 @@ def place_footings(doc, sections, base_symbol_id, level_id, projection_mm=300.0,
         except Exception as creation_error:
             result["errors"].append(str(creation_error))
     return result
-
-
-def _match_column_rotation(doc, instance, rectangle, point, width_mm, height_mm):
-    """Turn the footing so its long side follows the column's long side."""
-    long_axis_deg = rectangle.get("long_axis_deg")
-    if long_axis_deg is None:
-        long_axis_deg = 0.0 if width_mm >= height_mm else 90.0
-    rotation_deg = long_axis_deg
-    if abs(rotation_deg % 180.0) < 0.01:
-        return
-    axis = Line.CreateUnbound(point, XYZ.BasisZ)
-    ElementTransformUtils.RotateElement(doc, instance.Id, axis,
-                                        math.radians(rotation_deg))
-
-
-def set_top_of_footing(instance, offset_ft):
-    """Drop the footing so its TOP sits on the level (Revit hangs it below)."""
-    try:
-        parameter = instance.get_Parameter(
-            BuiltInParameter.INSTANCE_FREE_HOST_OFFSET_PARAM)
-        if parameter is not None and not parameter.IsReadOnly:
-            parameter.Set(offset_ft)
-            return True
-    except Exception:
-        pass
-    return False

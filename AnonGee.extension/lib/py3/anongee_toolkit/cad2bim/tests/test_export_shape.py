@@ -150,5 +150,33 @@ class ToleranceOverrides(unittest.TestCase):
                          config.DEFAULTS["stair_tread_max_mm"])
 
 
+class ExportSurvivesRevitObjects(unittest.TestCase):
+    """A report is a diagnostic; it must never fail a run that already built.
+
+    v0.63.0 put live ElementIds into the outcomes for the material pass and
+    json.dump raised on them AFTER the model was placed, losing the report and
+    reporting a crash for a run that had worked.
+    """
+
+    class _FakeId(object):
+        def __init__(self, value):
+            self.IntegerValue = value
+
+    def test_an_element_id_encodes_as_its_integer(self):
+        self.assertEqual(report._jsonable(self._FakeId(42)), 42)
+
+    def test_anything_else_encodes_as_its_text(self):
+        class Opaque(object):
+            def __str__(self):
+                return "<a revit thing>"
+        self.assertEqual(report._jsonable(Opaque()), "<a revit thing>")
+
+    def test_dump_does_not_raise_on_an_unexpected_object(self):
+        import json
+        payload = {"outcomes": {"columns": {"ids": [self._FakeId(7)]}}}
+        text = json.dumps(payload, default=report._jsonable)
+        self.assertIn("7", text)
+
+
 if __name__ == "__main__":
     unittest.main()
