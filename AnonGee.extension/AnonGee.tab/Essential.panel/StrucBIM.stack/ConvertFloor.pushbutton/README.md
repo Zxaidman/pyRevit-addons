@@ -1,4 +1,4 @@
-# Convert Slab — v1.0.2
+# Convert Slab — v1.3.0
 
 pyRevit pushbutton. Converts **Structural Floor ↔ Structural Foundation (slab)**
 on a pre-selection or an interactive pick, in plan, 3D, section or elevation.
@@ -10,10 +10,18 @@ Engine: **CPython 3** (`#! python3`). Revit **2022+**, developed against 2025.
 ## Install
 
 ```
-MyTools.extension/
+AnonGee.extension/
   lib/
-    cpyforms.py                  <- shared dialogs, any CPython script
-    netclass.py                  <- shared .NET type guard, any CPython script
+    path_resolver.py             <- yours; injects py3 or py2 by engine
+    py3/
+      anongee_toolkit/
+        ui/
+          progressbar.py         <- new
+          hostwnd.py             <- new
+          pump.py                <- new
+          theme.py               <- new
+          checklist.py           <- new
+          dialogs.py forms.py xaml.py __init__.py   <- yours, untouched
   MyTab.tab/
     Structure.panel/
       Convert Slab.pushbutton/
@@ -97,7 +105,34 @@ That's the regression check — it should read as zeros.
 
 ---
 
-## Changelog
+### 1.3.0
+- Message boxes now go through `anongee_toolkit.ui.forms.alert`. That takes
+  `(title, message)` — the reverse of `pyrevit.forms.alert` — so all call sites
+  go through a local `notify()` wrapper rather than calling it directly.
+- Added an explicit Yes/No gate (`forms.confirm`) naming every element whose
+  dependents will be destroyed, shown after the checklist and before the first
+  transaction opens.
+- The duplicate-.NET-type guard is inlined here instead of living in
+  `anongee_toolkit.revit`, which is left untouched.
+- All Revit-API helpers stay local to this button by design.
+- Requires the ui modules at 1.5.0.
+
+### 1.2.0
+- Imports repointed at the real package layout: `anongee_toolkit.ui` (not `ui1`).
+- Imports target submodules directly rather than package `__init__`, so the
+  button runs before you have edited `ui/__init__.py`.
+
+### 1.1.1
+- Imports now go through the extension's `path_resolver` instead of walking up
+  the folder tree to find `lib/py3`.
+- Requires `anongee_toolkit >= 1.3.1`.
+
+### 1.1.0
+- Moved the shared modules into `lib/py3/anongee_toolkit/ui1/`; imports now come
+  from `anongee_toolkit.ui1`, with the old flat imports kept as a fallback.
+- Progress titles reworded to read like pyRevit's native bar
+  (`Converting slabs... 41/117`).
+- Requires `anongee_toolkit >= 1.3.0`.
 
 ### 1.0.2
 - Fixed: `Duplicate type name within an assembly.` on the second run in a Revit

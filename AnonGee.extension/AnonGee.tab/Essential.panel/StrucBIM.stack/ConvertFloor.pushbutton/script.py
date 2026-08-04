@@ -13,9 +13,9 @@ Engine : CPython 3 (pyRevit)
 Revit  : 2022+ (developed against 2025)
 """
 
-__title__ = "Convert\nSlab"
+__title__ = "Convert Slab"
 __author__ = "AnonGee"
-__version__ = "1.0.2"
+__version__ = "1.3.0"
 __min_revit_ver__ = 2022
 __doc__ = ("Convert selected Structural Floors to Structural Foundation slabs "
            "and vice versa. Shows a pre-flight report and asks for confirmation "
@@ -24,54 +24,73 @@ __doc__ = ("Convert selected Structural Floors to Structural Foundation slabs "
 import os
 import sys
 import json
+import types
 import traceback
 
 from pyrevit import revit, DB, UI, forms, script
 
 from System.Collections.Generic import List
 
-# --- CPython-safe UI ------------------------------------------------------
-# pyrevit.forms.ProgressBar / SelectFromList / CommandSwitchWindow are built
-# with wpf.LoadComponent and raise PyRevitCPythonNotSupported on the CPython
-# engine. cpyforms builds the same widgets in code. Put cpyforms.py in the
-# extension's lib/ folder; the sys.path line below also picks it up if you
-# drop it next to this script.
-if os.path.dirname(__file__) not in sys.path:
-    sys.path.append(os.path.dirname(__file__))
-
+# --- shared toolkit -------------------------------------------------------
+# pyRevit puts <extension>/lib on sys.path but nothing below it. path_resolver
+# (in that lib folder) injects lib/py3 or lib/py2 depending on the running
+# engine, which is what makes `anongee_toolkit` importable here.
 try:
-    from cpyforms import ProgressBar as CpyProgressBar
-    from cpyforms import CheckList as CpyCheckList
-    from cpyforms import pick_option as cpy_pick_option
+    import path_resolver
+    path_resolver.update_paths()
+except Exception:
+    pass
+
+# Submodules are imported directly rather than through anongee_toolkit.ui, so
+# this button runs whether or not ui/__init__.py has been extended yet.
+try:
+    from anongee_toolkit.ui.progressbar import ProgressBar as CpyProgressBar
 except Exception:
     CpyProgressBar = None
+
+try:
+    from anongee_toolkit.ui.checklist import CheckList as CpyCheckList
+    from anongee_toolkit.ui.checklist import pick_option as cpy_pick_option
+except Exception:
     CpyCheckList = None
     cpy_pick_option = None
 
-# --- .NET type emission guard --------------------------------------------
-# pythonnet emits a real .NET type for every Python class that implements a
-# .NET interface. pyRevit re-runs this module on every click inside one Revit
-# session, so an unguarded module-level `class X(ISelectionFilter)` emits the
-# same type name twice and .NET throws "Duplicate type name within an
-# assembly." on the second run. netclass keeps a session-wide registry.
+# forms.alert / forms.confirm take (title, message) - the OPPOSITE order to
+# pyrevit.forms.alert(message, title=...). Wrapped below so the call sites in
+# this script cannot get it backwards.
 try:
-    from netclass import define as define_net_class
+    from anongee_toolkit.ui.forms import alert as tk_alert
+    from anongee_toolkit.ui.forms import confirm as tk_confirm
 except Exception:
-    import types as _types
+    tk_alert = None
+    tk_confirm = None
 
-    def define_net_class(key):
-        def decorator(factory):
-            holder = sys.modules.get("_netclass_registry_v1")
-            if holder is None or not hasattr(holder, "classes"):
-                holder = _types.ModuleType("_netclass_registry_v1")
-                holder.classes = {}
-                sys.modules["_netclass_registry_v1"] = holder
-            cls = holder.classes.get(key)
-            if cls is None:
-                cls = factory()
-                holder.classes[key] = cls
-            return cls
-        return decorator
+
+def define_net_class(key):
+    """Emit a .NET-derived Python class once per Revit session.
+
+    pythonnet emits a real .NET type for any Python class implementing a .NET
+    interface, and pyRevit re-executes this module on every click. Defining
+    such a class at module level therefore throws "Duplicate type name within
+    an assembly." from the second run onward. The registry is keyed in
+    sys.modules so it survives module re-execution.
+
+    Kept local to this button rather than in anongee_toolkit.revit, but it is
+    engine-level rather than slab-specific - worth promoting to utils/ if
+    another CPython button needs it.
+    """
+    def decorator(factory):
+        holder = sys.modules.get("_netclass_registry_v1")
+        if holder is None or not hasattr(holder, "classes"):
+            holder = types.ModuleType("_netclass_registry_v1")
+            holder.classes = {}
+            sys.modules["_netclass_registry_v1"] = holder
+        cls = holder.classes.get(key)
+        if cls is None:
+            cls = factory()
+            holder.classes[key] = cls
+        return cls
+    return decorator
 
 
 class _NullProgress(object):
@@ -126,23 +145,23 @@ def show_options(options, message):
 
 
 def notify(message, title="Convert Slab"):
-    # forms.alert is TaskDialog-based and does work under CPython, but keeping
-    # a fallback means no dialog in this script can take the tool down.
+    """Message box. Argument order is normalised here - see the import note."""
+    if tk_alert is not None:
+        try:
+            return tk_alert(title, message)
+        except Exception:
+            pass
     try:
         return forms.alert(message, title=title)
     except Exception:
-        pass
-    try:
-        from cpyforms import alert as cpy_alert
-        return cpy_alert(message, title=title)
-    except Exception:
         print("{0}: {1}".format(title, message))
+
 
 # ---------------------------------------------------------------------------
 # globals
 # ---------------------------------------------------------------------------
 
-TOOL_VERSION = "1.0.2"
+TOOL_VERSION = "1.3.0"
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -1221,7 +1240,7 @@ def main():
 
     created_cache = {}
     plans = []
-    with progress("Analysing {value}/{max_value}") as pb:
+    with progress("Analysing slabs... {value}/{max_value}") as pb:
         for i, el in enumerate(slabs):
             try:
                 plans.append(build_plan(el, cfg, created_cache))
@@ -1258,6 +1277,25 @@ def main():
         return
     dry_run = mode.startswith("Report")
 
+    # Last gate before anything irreversible. Recreating an element gives it a
+    # new ElementId, so tags, dimensions and hosted instances bound to the old
+    # one die with it. Name that cost explicitly rather than burying it in the
+    # checklist rows.
+    if not dry_run:
+        lossy = [p for p in todo if p.warnings]
+        if lossy and tk_confirm is not None:
+            summary = "\n".join(
+                "  {0}: {1}".format(eid_val(p.id), "; ".join(p.warnings))
+                for p in lossy[:12])
+            more = ("\n  ... and {0} more".format(len(lossy) - 12)
+                    if len(lossy) > 12 else "")
+            if not tk_confirm(
+                    "Convert Slab - confirm losses",
+                    "{0} of {1} element(s) will lose dependents that cannot be "
+                    "recreated:\n\n{2}{3}\n\nProceed?".format(
+                        len(lossy), len(todo), summary, more)):
+                return
+
     results = []
     new_ids = []
 
@@ -1274,7 +1312,8 @@ def main():
     # pumps the dispatcher at Background priority, which is best done with no
     # Revit transaction open.
     tg = DB.TransactionGroup(doc, "Convert Slab v{0}".format(TOOL_VERSION))
-    with progress("Converting {value}/{max_value}", cancellable=True) as pb:
+    with progress("Converting slabs... {value}/{max_value}",
+                  cancellable=True) as pb:
         tg.Start()
         try:
             for i, p in enumerate(todo):

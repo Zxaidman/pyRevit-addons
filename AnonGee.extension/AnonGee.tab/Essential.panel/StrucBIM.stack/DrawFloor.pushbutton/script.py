@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Hatch Slab 1.4.0
+"""Hatch Slab 1.4.1
 
 Click inside a closed region formed by structural framing and structural
 columns in a plan view; a structural floor or foundation slab is created with
@@ -48,6 +48,18 @@ Changelog
          - EXPORT_ALWAYS and DUMP_GRAPH for on-demand JSON, since the failure
            dumps never fire once everything works
          - temp folder path reported at the end of the run
+  1.4.1  - FIX: JSON export crashed with "<n>L is not JSON serializable".
+           Revit 2024+ returns System.Int64 from ElementId.Value, which
+           IronPython surfaces as a long its json module rejects. IDs are now
+           coerced to int at source, and every payload passes through
+           jsonable() so no .NET numeric can break a dump again.
+         - FIX: SHIFT-click never forced a rescan. pyRevit puts __shiftclick__
+           in BUILTINS, so globals().get() never found it. Now read via
+           EXEC_PARAMS.config_mode with a bare-name fallback.
+         - "Rescan geometry" added to the type dialog -- a discoverable
+           alternative to the modifier key, usable mid-session
+         - dump failures now print the real exception instead of going to the
+           debug log only
 
 Bisection order if regions are still missing:
   1. run as shipped (crop filter off, templates on)
@@ -60,8 +72,7 @@ Target: Revit 2022+.
 
 __title__ = 'Draw Floor'
 __author__ = 'AnonGee'
-__version__ = '1.4.0'
-__highlight__ = 'new'
+__version__ = '1.4.1'
 
 import json
 import math
@@ -106,7 +117,27 @@ uidoc = __revit__.ActiveUIDocument                 # noqa: F821
 output = script.get_output()
 logger = script.get_logger()
 
-FORCE_RESCAN = bool(globals().get('__shiftclick__', False))
+def _shift_held():
+    """Detect SHIFT-click.
+
+    pyRevit injects __shiftclick__ into BUILTINS, not into the script's module
+    globals -- so globals().get('__shiftclick__') never sees it (the 1.4.0
+    bug). EXEC_PARAMS.config_mode is the supported accessor; the bare-name
+    lookup below is the legacy fallback and resolves through builtins.
+    """
+    try:
+        from pyrevit import EXEC_PARAMS
+        if bool(EXEC_PARAMS.config_mode):
+            return True
+    except Exception:
+        pass
+    try:
+        return bool(__shiftclick__)      # noqa: F821 -- lives in builtins
+    except Exception:
+        return False
+
+
+FORCE_RESCAN = _shift_held()
 
 
 # ---------------------------------------------------------------------------
@@ -145,10 +176,16 @@ LINE_SOURCE = 0             # source index 0 always means "straight"
 # ---------------------------------------------------------------------------
 
 def element_id_value(element_id):
+    """Always a plain Python int.
+
+    Revit 2024+ returns System.Int64 from .Value, which IronPython surfaces as
+    a long that its json module refuses to serialize. int() normalises it for
+    both engines.
+    """
     try:
-        return element_id.Value
+        return int(element_id.Value)
     except AttributeError:
-        return element_id.IntegerValue
+        return int(element_id.IntegerValue)
 
 
 def element_name(element):
@@ -897,6 +934,56 @@ def build_loop(points, cycle, edge_source, elevation):
 # Diagnostic export
 # ---------------------------------------------------------------------------
 
+def jsonable(value):
+    """Coerce a payload into something json.dumps accepts on both engines.
+
+    .NET numerics (Int64, Double) and IronPython longs reach the payload from
+    the Revit API and are not serializable by IronPython's json module. Rather
+    than chase each field, everything is normalised on the way out.
+    """
+    if value is None or isinstance(value, bool):
+        return value
+    if isinstance(value, float):
+        return value
+    try:
+        if isinstance(value, str):
+            return value
+    except Exception:
+        pass
+    # int covers long on CPython 3; the explicit branch below catches
+    # IronPython longs and .NET integers.
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, dict):
+        out = {}
+        for key, item in value.items():
+            if not isinstance(key, str):
+                key = str(key)
+            out[key] = jsonable(item)
+        return out
+    if isinstance(value, (list, tuple, set)):
+        return [jsonable(item) for item in value]
+
+    for caster in (int, float):
+        try:
+            return caster(value)
+        except Exception:
+            continue
+    return str(value)
+
+
+def write_json(payload, prefix):
+    """Serialise to the temp folder. Returns the path, or None on failure."""
+    path = os.path.join(tempfile.gettempdir(),
+                        '{0}_{1}.json'.format(prefix, int(time.time())))
+    handle = open(path, 'w')
+    try:
+        handle.write(json.dumps(jsonable(payload), indent=1))
+    finally:
+        handle.close()
+    return path
+
+
 def export_dump(view, pick, points, faces, edge_source, reader_info,
                 chosen, note):
     """Write everything within EXPORT_RADIUS of the click to a JSON file."""
@@ -955,16 +1042,11 @@ def export_dump(view, pick, points, faces, edge_source, reader_info,
             'chosen_face_nodes': list(chosen) if chosen else None,
         }
 
-        name = 'hatchslab_{0}.json'.format(int(time.time()))
-        path = os.path.join(tempfile.gettempdir(), name)
-        handle = open(path, 'w')
-        try:
-            handle.write(json.dumps(payload, indent=1))
-        finally:
-            handle.close()
-        return path
+        return write_json(payload, 'hatchslab')
     except Exception as err:
-        logger.debug('export failed: {0}'.format(err))
+        output.print_md('  _dump failed: `{0}: {1}`_'.format(
+            type(err).__name__, err))
+        logger.debug(traceback.format_exc())
         return None
 
 
@@ -1005,16 +1087,12 @@ def dump_full_graph(view, points, faces, edge_source, reader_info):
             })
         payload['faces'].sort(key=lambda f: f['area_sqft'])
 
-        name = 'hatchslab_graph_{0}.json'.format(int(time.time()))
-        path = os.path.join(tempfile.gettempdir(), name)
-        handle = open(path, 'w')
-        try:
-            handle.write(json.dumps(payload, indent=1))
-        finally:
-            handle.close()
-        return path
+        name = 'hatchslab_graph'
+        return write_json(payload, name)
     except Exception as err:
-        logger.debug('graph dump failed: {0}'.format(err))
+        output.print_md('_graph dump failed: `{0}: {1}`_'.format(
+            type(err).__name__, err))
+        logger.debug(traceback.format_exc())
         return None
 
 
@@ -1035,11 +1113,17 @@ def collect_types(target_bic):
     return result
 
 
+RESCAN = 'Rescan geometry'
+
+
 def choose_type():
+    """Returns (floor_type, kind). kind == RESCAN asks for a fresh scan."""
     kind = forms.CommandSwitchWindow.show(
-        ['Structural Floor', 'Foundation Slab', 'Finish'],
+        ['Structural Floor', 'Foundation Slab', RESCAN, 'Finish'],
         message='What should be created?  (ESC or Finish to close the tool)',
     )
+    if kind == RESCAN:
+        return None, RESCAN
     if not kind or kind == 'Finish':
         return None, None
 
@@ -1100,8 +1184,8 @@ def signature(view, elements, detail):
             hash(tuple(ids)))
 
 
-def load_cached(sig):
-    if FORCE_RESCAN:
+def load_cached(sig, force=False):
+    if FORCE_RESCAN or force:
         return None
     try:
         cached = script.get_envvar(CACHE_KEY)
@@ -1131,7 +1215,7 @@ def store_cached(sig, points, faces, edge_source, sources, reader_info):
 # Build
 # ---------------------------------------------------------------------------
 
-def build_regions(view):
+def build_regions(view, force=False):
     detail = read_detail_level(view)
     elements = collect_elements(view)
     if not elements:
@@ -1139,15 +1223,18 @@ def build_regions(view):
                     exitscript=True)
 
     sig = signature(view, elements, detail)
-    cached = load_cached(sig)
+    cached = load_cached(sig, force=force)
     if cached is not None:
         SOURCES.entries = [tuple(e) for e in cached['sources']]
         age = time.time() - cached.get('stamp', 0)
         output.print_md(
-            '_Reusing the scan from {0:.0f}s ago '
-            '(SHIFT-click to force a rescan)._'.format(age))
+            '_Reusing the scan from {0:.0f}s ago. Pick **{1}** in the dialog '
+            '(or SHIFT-click the button) to rescan._'.format(age, RESCAN))
         return (cached['points'], cached['faces'], cached['edge_source'],
                 cached['reader'])
+
+    if force or FORCE_RESCAN:
+        output.print_md('_Rescanning geometry..._')
 
     clock = time.time()
     segments, reader = gather_boundary_segments(elements, detail)
@@ -1338,6 +1425,13 @@ def main():
 
     while True:
         floor_type, kind = choose_type()
+
+        if kind == RESCAN:
+            points, usable, edge_source, reader_info = build_regions(
+                view, force=True)
+            index = FaceIndex(points, usable)
+            continue
+
         if floor_type is None:
             break
 
