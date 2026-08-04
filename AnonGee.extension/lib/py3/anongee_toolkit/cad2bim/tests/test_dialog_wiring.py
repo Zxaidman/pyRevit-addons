@@ -89,7 +89,7 @@ class NamingTabControls(unittest.TestCase):
                 "beam_sized": "beam", "beam_width": "beam_width",
                 "floor": "floor", "stair": "stair",
                 "stair_waist": "stair_waist", "level": "level",
-                "grid": "grid"}
+                "grid": "grid", "footing": "footing"}
 
     def test_one_box_and_one_preview_per_template(self):
         names = _xaml_names(_XAML)
@@ -111,6 +111,28 @@ class NamingTabControls(unittest.TestCase):
             self.assertIn(key, self._CONTROL,
                           "no dialog row for template %r" % key)
             self.assertIn("tb_name_{0}".format(self._CONTROL[key]), names)
+
+
+class MaterialAndFootingControls(unittest.TestCase):
+    """Material combos are bound through a format string over materials.KINDS."""
+
+    def test_one_material_combo_per_kind(self):
+        with open(os.path.join(os.path.dirname(_HERE), "builders",
+                               "materials.py"), "rb") as handle:
+            source = handle.read().decode("utf-8")
+        block = source.split("KINDS = (", 1)[1].split(")", 1)[0]
+        kinds = re.findall(r'"([a-z_]+)"', block)
+        self.assertTrue(kinds)
+        names = _xaml_names(_XAML)
+        for kind in kinds:
+            self.assertIn("cb_mat_{0}".format(kind), names)
+
+    def test_the_footing_row_is_on_the_structure_tab(self):
+        names = _xaml_names(_XAML)
+        for control in ("chk_footings", "cb_footing_family",
+                        "tb_footing_projection", "tb_footing_thickness",
+                        "chk_view_filters"):
+            self.assertIn(control, names)
 
 
 if __name__ == "__main__":

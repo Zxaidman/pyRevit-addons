@@ -35,7 +35,42 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.62.0"  # Level/grid naming, shipped standard sizes, landings that meet.
+__version__ = "0.63.0"  # Progress bar, materials + view filters, footings, skip details.
+#
+#                         PROGRESS BAR. The run reported itself only into the deferred
+#                         console, which a successful run never shows -- a big drawing looked
+#                         like Revit had hung. The toolkit's CPython-safe ProgressBar (the one
+#                         ConvertFloor uses; pyrevit.forms.ProgressBar is IronPython-only) now
+#                         strips across the top of the Revit window with the stage, count and
+#                         ETA, and comes down in a finally so it can never be left behind.
+#                         Imported defensively: an older ui/ folder, or no host window, falls
+#                         back to a no-op and the run continues.
+#
+#                         MATERIALS. One picker per element kind on the Structure tab, written
+#                         onto the TYPES this run creates -- that is where Revit keeps a
+#                         structural member's material, and every element of one size already
+#                         shares a duplicated type. A floor is the exception: its material
+#                         lives in the compound structure, so it goes on the structural layer.
+#                         A family that exposes no material parameter is counted, not fatal.
+#
+#                         VIEW FILTERS. One reusable ParameterFilterElement per category,
+#                         colour-coded (columns blue, beams red, slabs green, stairs purple,
+#                         footings amber, grids grey), added to every OPEN view. Made once and
+#                         found by name afterwards, so repeated runs do not litter the project.
+#                         Template-driven views are skipped -- the template owns their filters.
+#
+#                         FOOTINGS. A Structural Foundation under each column on the columns'
+#                         BASE level, sized column + 2 x projection and turned to the column's
+#                         long axis, one type per distinct size. Round columns get a square
+#                         pad. In a multi-storey run only the LOWEST storey lays them: a
+#                         building has one set of foundations, not one per floor.
+#
+#                         SKIP DETAILS reach the export for every element kind, GROUPED by
+#                         reason with a count and one example (digits masked when grouping, so
+#                         900 "C##: no symbol" skips are one line, not eight truncated ones).
+#                         Test2 reported 9 skipped stairs with no way to see why.
+#
+# 0.62.0                  Level/grid naming, shipped standard sizes, landings that meet.
 #
 #                         CONVENTION: anything this tool invents -- a name, a tolerance, a
 #                         size -- belongs on the main dialog, never buried in code. Levels

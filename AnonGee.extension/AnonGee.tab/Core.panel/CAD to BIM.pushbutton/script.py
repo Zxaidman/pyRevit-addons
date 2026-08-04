@@ -91,8 +91,9 @@ from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
-from anongee_toolkit.cad2bim.builders import (columns, beams, grids, slabs,
-                                              stairs, txn_failures)
+from anongee_toolkit.cad2bim.builders import (columns, beams, footings, grids,
+                                              materials, slabs, stairs,
+                                              txn_failures, view_filters)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
@@ -155,8 +156,97 @@ def _say(msg=""):
     _OUT.say(msg)
 
 
+# The toolkit's CPython-safe bar (pyrevit.forms.ProgressBar is IronPython-only).
+# Imported defensively so the button still runs on an extension where ui/ is
+# older than this file, exactly as ConvertFloor does it.
+try:
+    from anongee_toolkit.ui.progressbar import ProgressBar as _CpyProgressBar
+except Exception:
+    _CpyProgressBar = None
+
+
+class _NullProgress(object):
+    """Last resort: no window, no crash."""
+    cancelled = False
+    title = ""
+    status = ""
+
+    def show(self):
+        return self
+
+    def close(self):
+        pass
+
+    def update_progress(self, *args, **kwargs):
+        pass
+
+
+_BAR = _NullProgress()
+
+
+def _open_progress():
+    """Open the strip across the top of the Revit window for this run."""
+    global _BAR
+    if _CpyProgressBar is None:
+        _BAR = _NullProgress()
+        return _BAR
+    try:
+        _BAR = _CpyProgressBar(title="cad2bim: {value}/{max_value}",
+                               cancellable=False, show_eta=True)
+        _BAR.show()
+    except Exception:
+        _BAR = _NullProgress()      # no host window / no WPF: run headless
+    return _BAR
+
+
+def _close_progress():
+    global _BAR
+    try:
+        _BAR.close()
+    except Exception:
+        pass
+    _BAR = _NullProgress()
+
+
+_SKIP_DETAIL_KINDS = 12       # distinct reasons kept; the rest are counted
+
+
+def _skip_details(messages):
+    """Skip reasons for the export, GROUPED so a thousand identical ones fit.
+
+    A run that skips 900 members skips them for a handful of reasons; listing
+    the first eight verbatim hides the rest, so each distinct reason is kept
+    once with its count and one example. Numbers and marks are masked out when
+    grouping, so "C12: no symbol" and "C13: no symbol" are one reason.
+    """
+    groups = {}
+    order = []
+    for message in messages or []:
+        text = str(message)
+        key = re.sub(r"\d+(?:\.\d+)?", "#", text)
+        if key not in groups:
+            groups[key] = {"reason": text[:220], "count": 0}
+            order.append(key)
+        groups[key]["count"] += 1
+    out = [groups[key] for key in order[:_SKIP_DETAIL_KINDS]]
+    hidden = sum(groups[key]["count"] for key in order[_SKIP_DETAIL_KINDS:])
+    if hidden:
+        out.append({"reason": "(and other reasons)", "count": hidden})
+    return out
+
+
 def _progress(done, total, label):
-    """Print a 10-cell progress bar line: ``[####------]  40%  beams``."""
+    """Move the bar and log the same step to the deferred console.
+
+    The console line survives into the log a failed run prints; the bar is what
+    the user watches while a big drawing is being read.
+    """
+    try:
+        _BAR.title = "cad2bim: {0}  ({{value}}/{{max_value}}, {{eta}} left)".format(
+            label)
+        _BAR.update_progress(done, total)
+    except Exception:
+        pass
     frac = (float(done) / total) if total else 1.0
     fill = int(round(frac * 10))
     _say("[{0}{1}] {2:3d}%  {3}".format("#" * fill, "-" * (10 - fill),
@@ -316,7 +406,8 @@ class CadToBimWindow(object):
                  text_layer_rows=None, text_categories=None, default_text_mapping=None,
                  stair_type_options=None, level_elevations=None,
                  stair_regions=None, preset=None, storey_detection=None,
-                 saved_naming=None, saved_standards=None):
+                 saved_naming=None, saved_standards=None,
+                 footing_type_options=None, material_options=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -382,6 +473,34 @@ class CadToBimWindow(object):
         for label in ("Mark", "Comments", "Type Mark", "Type Comments"):
             self.cb_name_param.Items.Add(label)
         self.cb_name_param.Text = "Comments"
+        self.chk_footings = find("chk_footings")
+        self.cb_footing_family = find("cb_footing_family")
+        self.tb_footing_projection = find("tb_footing_projection")
+        self.tb_footing_thickness = find("tb_footing_thickness")
+        self._footing_ids = {}
+        for label, symbol_id in (footing_type_options or []):
+            self.cb_footing_family.Items.Add(label)
+            self._footing_ids[label] = symbol_id
+        if self._footing_ids:
+            self.cb_footing_family.SelectedIndex = 0
+        else:
+            self.chk_footings.IsChecked = False
+            self.chk_footings.IsEnabled = False
+            self.chk_footings.Content = ("Create footings (load a structural "
+                                         "foundation family first)")
+        # Materials: one picker per element kind, "(unchanged)" leaving the
+        # family's own material alone
+        self.material_combos = {}
+        self._material_ids = {"": None}
+        for kind in materials.KINDS:
+            combo = find("cb_mat_{0}".format(kind))
+            combo.Items.Add("(unchanged)")
+            for label, material_id in (material_options or []):
+                combo.Items.Add(label)
+                self._material_ids[label] = material_id
+            combo.SelectedIndex = 0
+            self.material_combos[kind] = combo
+        self.chk_view_filters = find("chk_view_filters")
         self.chk_multistorey = find("chk_multistorey")
         self.cb_boundary_layer = find("cb_boundary_layer")
         self.cb_origin_layer = find("cb_origin_layer")
@@ -612,6 +731,8 @@ class CadToBimWindow(object):
                                              d["standard_columns"])
         self.tb_std_beams.Text = saved.get("beam_widths",
                                            d["standard_beam_widths"])
+        self.tb_footing_projection.Text = str(int(d["footing_projection_mm"]))
+        self.tb_footing_thickness.Text = str(int(d["footing_thickness_mm"]))
 
     def _read_int(self, textbox, fallback):
         try:
@@ -811,6 +932,19 @@ class CadToBimWindow(object):
                 "column": report.parse_standard_sizes(self.tb_std_columns.Text),
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
             },
+            "create_footings": bool(self.chk_footings.IsChecked),
+            "footing_symbol_id": self._footing_ids.get(
+                self.cb_footing_family.SelectedItem),
+            "footing_projection_mm": self._read_float(
+                self.tb_footing_projection,
+                config.DEFAULTS["footing_projection_mm"]),
+            "footing_thickness_mm": self._read_float(
+                self.tb_footing_thickness,
+                config.DEFAULTS["footing_thickness_mm"]),
+            "materials": dict(
+                (kind, self._material_ids.get(combo.SelectedItem))
+                for kind, combo in self.material_combos.items()),
+            "view_filters": bool(self.chk_view_filters.IsChecked),
             "naming": self._read_naming(),
             "standard_text": {"column": self.tb_std_columns.Text,
                               "beam_widths": self.tb_std_beams.Text},
@@ -845,6 +979,8 @@ class CadToBimWindow(object):
                          ("create_slabs", self.chk_slabs),
                          ("create_stairs", self.chk_stairs),
                          ("export", self.chk_export),
+                         ("create_footings", self.chk_footings),
+                         ("view_filters", self.chk_view_filters),
                          ("multistorey", self.chk_multistorey)):
             if key in preset and box.IsEnabled:
                 box.IsChecked = bool(preset[key])
@@ -1104,6 +1240,7 @@ def main():
     if not options.result:
         return
     path = options.result["path"]
+    _open_progress()
     _progress(1, 9, "link DXF")
     try:
         instance = dxf_linker.link_dxf(doc, path, options.result["unit"],
@@ -1185,6 +1322,8 @@ def main():
     beam_symbols = beams.structural_framing_symbols(doc)
     floor_type_options = slabs.floor_types(doc)
     stair_type_options = stairs.stairs_types(doc)
+    footing_type_options = footings.foundation_symbols(doc)
+    material_options = materials.materials(doc)
     level_elevations = {label: doc.GetElement(level_id).Elevation
                         for label, level_id in level_options}
 
@@ -1226,7 +1365,9 @@ def main():
                                 stair_regions=stair_regions, preset=preset,
                                 storey_detection=storey_detection,
                                 saved_naming=saved_naming,
-                                saved_standards=saved_standards)
+                                saved_standards=saved_standards,
+                                footing_type_options=footing_type_options,
+                                material_options=material_options)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed
@@ -1320,6 +1461,9 @@ def main():
             storey_selections = dict(selections)
             storey_selections["base_level_id"] = base_id
             storey_selections["top_level_id"] = top_id
+            # a building has ONE set of foundations: only the lowest storey
+            # lays them, on its own base level
+            storey_selections["build_footings"] = (index == 0)
             storey_result = _StoreyResult(revit_result, region.records)
             outcomes = _build_one_storey(
                 doc, storey_result, region.texts, storey_selections,
@@ -1330,6 +1474,7 @@ def main():
         if storey_payloads:
             _export_storeys(storey_payloads, revit_result.source_name,
                             _export_name(path, selections))
+        _colour_open_views(doc, uidoc, selections)
         _OUT.finish(all_outcomes)
         return
 
@@ -1337,6 +1482,7 @@ def main():
                                  schedule_source=dxf_result.texts, path=path,
                                  comparison=comparison,
                                  transform_method=transform_method)
+    _colour_open_views(doc, uidoc, selections)
     _OUT.finish(outcomes)
 
 
@@ -1552,31 +1698,41 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
         _say(line)
 
     outcomes = {}
-    _progress(5, 9, "create grids")
+    _progress(5, 11, "create grids")
     if selections["create_grids"]:
         outcomes["grids"] = _create_grids(doc, revit_result.records, grid_texts)
-    _progress(6, 9, "create columns")
+    _progress(6, 11, "create columns")
     if selections["create_columns"]:
         outcomes["columns"] = _create_columns(doc, sections, selections)
-    _progress(7, 9, "create beams")
+    _progress(7, 11, "create beams")
     if selections["create_beams"]:
         outcomes["beams"] = _create_beams(doc, beam_segments, selections)
     # SLABS: outlines from the slab-edge (A-FLOR) rings, falling back to the
     # PLACED beams + column footprints when the DWG has no slab layer;
     # thickness/mark from "S1 150 THK" / "150 THK." notes anywhere in the text.
-    _progress(8, 9, "create slabs")
+    _progress(8, 11, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
                                           dxf_texts, selections, schedule,
                                           column_rects=column_footprints)
     # STAIRS (option 1, parametric): a STAIRCASE / ST-n text marks the bay; a
     # generic dog-leg from the Staircase tab numbers is laid out inside it.
-    _progress(9, 9, "create stairs")
+    _progress(9, 11, "create stairs")
     if selections.get("create_stairs"):
         outcomes["stairs"] = _create_stairs(doc, revit_result.records,
                                             slab_beam_segments, dxf_texts,
                                             selections,
                                             column_rects=column_footprints)
+    # FOOTINGS: one per column, on the columns' BASE level. In a multi-storey
+    # run only the lowest storey builds them -- a building has one set of
+    # foundations, not one per floor.
+    _progress(10, 11, "create footings")
+    if selections.get("create_footings") and selections.get("build_footings", True):
+        outcomes["footings"] = _create_footings(doc, sections, selections)
+    _progress(11, 11, "material + view filters")
+    applied = _apply_materials(doc, outcomes, selections)
+    if applied:
+        outcomes["materials"] = applied
     if selections["export"]:
         if collect is not None:
             collect.append((storey_label or "storey",
@@ -1634,7 +1790,9 @@ def _create_grids(doc, records, grid_texts=None):
     for message in result["errors"]:
         _say("  grid: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
-            "errors": len(result["errors"])}
+            "errors": len(result["errors"]),
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": _skip_details(result["skipped"])}
 
 
 def _create_columns(doc, sections, selections):
@@ -1687,8 +1845,13 @@ def _create_columns(doc, sections, selections):
     for message in result["errors"] + circular["errors"] + result["skipped"]:
         _say("  column: {0}".format(message))
     return {"rect": len(result["created"]), "circular": len(circular["created"]),
+            "created_ids": result["created"] + circular["created"],
             "skipped": len(result["skipped"]),
-            "errors": len(result["errors"]) + len(circular["errors"])}
+            "errors": len(result["errors"]) + len(circular["errors"]),
+            "error_details": [str(e)[:220] for e
+                              in (result["errors"] + circular["errors"])[:8]],
+            "skip_details": _skip_details(result["skipped"]
+                                          + circular.get("skipped", []))}
 
 
 def _create_beams(doc, beam_segments, selections):
@@ -1736,7 +1899,119 @@ def _create_beams(doc, beam_segments, selections):
     for message in result["errors"] + result["skipped"]:
         _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
-            "errors": len(result["errors"])}
+            "errors": len(result["errors"]),
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": _skip_details(result["skipped"])}
+
+
+def _create_footings(doc, sections, selections):
+    """Isolated foundations under the columns, on their BASE level."""
+    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    symbol_id = selections.get("footing_symbol_id")
+    level_id = selections.get("base_level_id")
+    if symbol_id is None or level_id is None:
+        _say("Footings -- no foundation family or base level chosen.")
+        return {"created": 0, "skipped": 0, "errors": 0}
+
+    group = TransactionGroup(doc, "CAD to BIM: Footings")
+    transaction = Transaction(doc, "Create footings")
+    group.Start()
+    transaction.Start()
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        result = footings.place_footings(
+            doc, sections, symbol_id, level_id,
+            projection_mm=selections.get("footing_projection_mm") or 0.0,
+            thickness_mm=selections.get("footing_thickness_mm") or 0.0,
+            region_max_side_mm=(selections.get("limits") or {}).get(
+                "col_region_max_side_mm"))
+        transaction.Commit()
+        group.Assimilate()
+    except Exception as creation_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        if group.HasStarted() and not group.HasEnded():
+            group.RollBack()
+        _error("Footing creation failed", "Footing creation failed.",
+               str(creation_error))
+        return {"created": 0, "skipped": 0, "errors": 1}
+
+    _say("Footings -- created: {0}, skipped: {1}, errors: {2}".format(
+        len(result["created"]), len(result["skipped"]), len(result["errors"])))
+    for message in result["errors"] + result["skipped"]:
+        _say("  footing: {0}".format(message))
+    return {"created": len(result["created"]),
+            "skipped": len(result["skipped"]),
+            "errors": len(result["errors"]),
+            "created_ids": result["created"],
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": _skip_details(result["skipped"])}
+
+
+def _colour_open_views(doc, uidoc, selections):
+    """Add the colour-coded cad2bim filters to every view the user has open."""
+    if not selections.get("view_filters"):
+        return
+    from Autodesk.Revit.DB import Transaction
+    views = view_filters.open_views(uidoc)
+    if not views:
+        _say("view filters: no open view to colour.")
+        return
+    transaction = Transaction(doc, "CAD to BIM: View filters")
+    transaction.Start()
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        result = view_filters.apply(doc, views)
+        transaction.Commit()
+    except Exception as filter_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        _say("view filters: not applied ({0})".format(str(filter_error)[:160]))
+        return
+    _say("view filters: {0} filter(s) on {1} open view(s)".format(
+        result["filters"], result["views"]))
+    for message in result["skipped"][:8]:
+        _say("  filter: {0}".format(message))
+
+
+def _apply_materials(doc, outcomes, selections):
+    """Write the chosen material onto every type this storey created.
+
+    Types, not instances: that is where Revit keeps a structural member's
+    material, and every element of one size already shares a duplicated type.
+    """
+    wanted = dict((kind, material_id) for kind, material_id
+                  in (selections.get("materials") or {}).items() if material_id)
+    if not wanted:
+        return None
+    from Autodesk.Revit.DB import Transaction
+    source = {"column": ("columns", "created_ids"),
+              "beam": ("beams", "created_ids"),
+              "slab": ("slabs", "created_ids"),
+              "stair": ("stairs", "created_ids"),
+              "footing": ("footings", "created_ids")}
+    transaction = Transaction(doc, "CAD to BIM: Materials")
+    transaction.Start()
+    summary = {}
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        for kind, material_id in wanted.items():
+            key, field = source.get(kind, (None, None))
+            ids = (outcomes.get(key) or {}).get(field) if key else None
+            element_types = materials.types_of(doc, ids)
+            applied, skipped = materials.apply(doc, element_types, material_id,
+                                               kind)
+            summary[kind] = {"types": applied, "skipped": skipped}
+            if applied or skipped:
+                _say("material: {0} -- {1} type(s) set, {2} could not take "
+                     "one".format(kind, applied, skipped))
+        transaction.Commit()
+    except Exception as material_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        _say("material: not applied ({0})".format(str(material_error)[:160]))
+        return None
+    return summary
 
 
 def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
@@ -1813,8 +2088,9 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
         _say("  slab: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]), "source": source, "loops": len(slab_defs),
+            "created_ids": result["created"],
             "error_details": [str(e)[:220] for e in result["errors"][:8]],
-            "skip_details": [str(e)[:120] for e in result["skipped"][:8]]}
+            "skip_details": _skip_details(result["skipped"])}
 
 
 class _CurveElementFilter(object):
@@ -2024,8 +2300,10 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
         _say("  stair: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]), "planned": len(plans),
+            "created_ids": result.get("created_ids") or [],
             "notes": notes[:8],
-            "error_details": [str(e)[:220] for e in result["errors"][:8]]}
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": _skip_details(result["skipped"])}
 
 
 def _export_name(cad_path, selections, storey_label=None):
@@ -2087,3 +2365,6 @@ if __name__ == "__main__":
                "An unexpected error occurred. The CPython3 engine is still running "
                "-- you do not need to restart Revit.", traceback.format_exc())
         _OUT.finish()
+    finally:
+        # the bar must come down whatever happened, or it sits over Revit
+        _close_progress()

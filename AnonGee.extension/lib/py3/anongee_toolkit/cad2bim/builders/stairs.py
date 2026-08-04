@@ -315,6 +315,9 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             result["errors"].append("{0}: {1}".format(mark,
                                                       str(stair_error)[:220]))
     _delete_auto_railings(doc, created_stairs_ids, result)
+    # the Stairs elements themselves, so the caller can reach their types (the
+    # material pass writes onto types, not instances)
+    result["created_ids"] = list(created_stairs_ids)
     return result
 
 

@@ -73,6 +73,10 @@ DEFAULTS = {
                          "300x600, 400x400, 400x600, 450x600, 600x600"),
     "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
 
+    # --- footings (Structure tab) -------------------------------------------
+    "footing_projection_mm": 300.0,   # how far a footing reaches past its column
+    "footing_thickness_mm": 0.0,      # 0 keeps the family type's own thickness
+
     # --- staircase tolerances (exposed on the Tolerances tab) ---------------
     "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair
     "stair_tread_min_mm": 150.0,  # a drawn riser spacing below this is not a tread

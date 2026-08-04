@@ -15,6 +15,7 @@ A template is a plain format string over the sizes that type carries:
     floor         {t}              200 thick slab        "{t} THK"
     stair         {r} {t} {w} {k}  riser/tread/width/waist
     stair_waist   {k}              the stair's waist type
+    footing       {w} {l} {t}      1000 x 1200 x 300 isolated footing
     level         {n} {e} {label}  a storey level this run creates
     grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
@@ -36,6 +37,7 @@ DEFAULTS = {
     "floor": "{t} THK",
     "stair": "cad2bim {r}R x {t}T x {w}W x {k}wst",
     "stair_waist": "cad2bim waist {k}",
+    "footing": "F {w} X {l} X {t}",
     "level": "CAD Level {n}",
     "grid": "{name}",
 }
@@ -49,6 +51,7 @@ FIELDS = {
     "floor": ("t",),
     "stair": ("r", "t", "w", "k"),
     "stair_waist": ("k",),
+    "footing": ("w", "l", "t"),
     "level": ("n", "e", "label"),
     "grid": ("name",),
 }
@@ -142,6 +145,12 @@ def stair_type_name(riser_mm, tread_mm, width_mm, waist_mm):
 
 def stair_waist_type_name(waist_mm):
     return _render("stair_waist", {"k": _mm(waist_mm)})
+
+
+def footing_type_name(width_mm, length_mm, thickness_mm=0.0):
+    """The name for an isolated footing type (short x long x thickness)."""
+    return _render("footing", {"w": _mm(width_mm), "l": _mm(length_mm),
+                               "t": _mm(thickness_mm)})
 
 
 def level_name(index, elevation_mm=0.0, label=None):
