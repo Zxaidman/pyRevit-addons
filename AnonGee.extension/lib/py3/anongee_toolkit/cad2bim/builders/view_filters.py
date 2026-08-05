@@ -28,21 +28,22 @@ from System.Collections.Generic import List
 
 from ..compat import get_element_name
 
-# kind -> (filter name, category, RGB). The colours are picked to stay legible
-# on a white sheet and to be distinguishable from each other in greyscale too.
+# kind -> (filter name, category, RGB). LIGHT tints: the fill is what identifies
+# an element, and a saturated fill over a whole floor plate is unreadable. Each
+# stays distinguishable from the others in greyscale too.
 KINDS = (
     ("column", "cad2bim columns", BuiltInCategory.OST_StructuralColumns,
-     (0, 102, 204)),
+     (170, 200, 240)),
     ("beam", "cad2bim beams", BuiltInCategory.OST_StructuralFraming,
-     (204, 51, 0)),
+     (245, 190, 175)),
     ("slab", "cad2bim slabs", BuiltInCategory.OST_Floors,
-     (0, 153, 102)),
+     (185, 225, 200)),
     ("stair", "cad2bim stairs", BuiltInCategory.OST_Stairs,
-     (153, 51, 204)),
+     (215, 190, 235)),
     ("footing", "cad2bim footings", BuiltInCategory.OST_StructuralFoundation,
-     (204, 153, 0)),
+     (240, 220, 165)),
     ("grid", "cad2bim grids", BuiltInCategory.OST_Grids,
-     (128, 128, 128)),
+     (205, 205, 205)),
 )
 
 _LINE_WEIGHT = 5          # thick enough to read without hiding the geometry
@@ -70,26 +71,35 @@ def _solid_fill(doc):
         return None
 
 
-def _overrides(doc, rgb):
+def _overrides(doc, rgb, transparency=0, colour_lines=False):
+    """The graphic override for one kind.
+
+    `colour_lines` is off by default: colouring the LINES as well as the
+    patterns rewrites the drawing's linework, and what the user wants is the
+    fill. `transparency` is 0-100, 0 (solid) by default.
+    """
     settings = OverrideGraphicSettings()
     colour = Color(rgb[0], rgb[1], rgb[2])
-    try:
-        settings.SetProjectionLineColor(colour)
-        settings.SetCutLineColor(colour)
-        settings.SetProjectionLineWeight(_LINE_WEIGHT)
-    except Exception:
-        pass
+    if colour_lines:
+        try:
+            settings.SetProjectionLineColor(colour)
+            settings.SetCutLineColor(colour)
+            settings.SetProjectionLineWeight(_LINE_WEIGHT)
+        except Exception:
+            pass
     pattern = _solid_fill(doc)
     if pattern is not None:
         try:
             settings.SetSurfaceForegroundPatternId(pattern.Id)
             settings.SetSurfaceForegroundPatternColor(colour)
+            settings.SetSurfaceForegroundPatternVisible(True)
             settings.SetCutForegroundPatternId(pattern.Id)
             settings.SetCutForegroundPatternColor(colour)
+            settings.SetCutForegroundPatternVisible(True)
         except Exception:
             pass
     try:
-        settings.SetSurfaceTransparency(50)
+        settings.SetSurfaceTransparency(max(0, min(100, int(transparency))))
     except Exception:
         pass
     return settings
@@ -121,7 +131,7 @@ def open_views(uidoc):
     return views
 
 
-def apply(doc, views, kinds=None):
+def apply(doc, views, kinds=None, transparency=0, colour_lines=False):
     """Add the cad2bim filters to `views`, each colour-coded.
 
     Returns {"filters": n_created_or_reused, "views": n_views_coloured,
@@ -137,7 +147,9 @@ def apply(doc, views, kinds=None):
         if element_filter is None:
             result["skipped"].append("{0}: filter could not be created".format(name))
             continue
-        prepared.append((element_filter, _overrides(doc, rgb), name))
+        prepared.append((element_filter,
+                         _overrides(doc, rgb, transparency, colour_lines),
+                         name))
         result["filters"] += 1
     if not prepared:
         return result

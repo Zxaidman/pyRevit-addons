@@ -16,7 +16,7 @@ import xml.etree.ElementTree as ET
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _BUTTON = os.path.normpath(os.path.join(
     _HERE, "..", "..", "..", "..", "..",
-    "AnonGee.tab", "Core.panel", "CAD to BIM.pushbutton"))
+    "AnonGee.tab", "Core.panel", "cad2bim.pushbutton"))
 _SCRIPT = os.path.join(_BUTTON, "script.py")
 _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")

@@ -15,7 +15,7 @@ A template is a plain format string over the sizes that type carries:
     floor         {t}              200 thick slab        "{t} THK"
     stair         {r} {t} {w} {k}  riser/tread/width/waist
     stair_waist   {k}              the stair's waist type
-    footing       {w} {l} {t}      1000 x 1200 x 300 isolated footing
+    footing       {t}              600 thick foundation pad
     level         {n} {e} {label}  a storey level this run creates
     grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
@@ -37,7 +37,7 @@ DEFAULTS = {
     "floor": "{t} THK",
     "stair": "cad2bim {r}R x {t}T x {w}W x {k}wst",
     "stair_waist": "cad2bim waist {k}",
-    "footing": "F {w} X {l} X {t}",
+    "footing": "PAD {t} THK",
     "level": "CAD Level {n}",
     "grid": "{name}",
 }
@@ -51,7 +51,7 @@ FIELDS = {
     "floor": ("t",),
     "stair": ("r", "t", "w", "k"),
     "stair_waist": ("k",),
-    "footing": ("w", "l", "t"),
+    "footing": ("t",),
     "level": ("n", "e", "label"),
     "grid": ("name",),
 }
@@ -147,10 +147,15 @@ def stair_waist_type_name(waist_mm):
     return _render("stair_waist", {"k": _mm(waist_mm)})
 
 
-def footing_type_name(width_mm, length_mm, thickness_mm=0.0):
-    """The name for an isolated footing type (short x long x thickness)."""
-    return _render("footing", {"w": _mm(width_mm), "l": _mm(length_mm),
-                               "t": _mm(thickness_mm)})
+def footing_type_name(thickness_mm):
+    """The name for a foundation pad type.
+
+    A pad is a floor, so its TYPE only carries a thickness -- the outline is
+    per-pad sketch geometry, not part of the type. Naming a type after a plan
+    size would invent one type per column, which is what "F 0 X 0 X 300" was
+    telling us.
+    """
+    return _render("footing", {"t": _mm(thickness_mm)})
 
 
 def level_name(index, elevation_mm=0.0, label=None):

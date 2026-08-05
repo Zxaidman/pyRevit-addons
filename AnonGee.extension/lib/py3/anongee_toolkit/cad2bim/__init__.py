@@ -35,7 +35,42 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.64.0"  # HOTFIX plus: footings as foundation SLABS, two bars, materials
+__version__ = "0.65.0"  # Test12 prep: combined footings, Materials & Graphics tab, light
+#                         filters, and the note that was naming four storeys "GROUND".
+#
+#                         TEST12. Four of its five storeys came out named "GROUND" from a
+#                         general NOTE -- "2) THE BEAM & COLUMN SIZES MAY VARY AT GROUND &
+#                         PODIUM LEVEL." mentions a storey, so every boxed plan that could
+#                         see it took order 0. A note is numbered, or a whole sentence; a
+#                         plan caption is neither, and is never that long. Test12's storeys
+#                         now fall back to sheet order (correct -- it has no captions), while
+#                         Test9 and Test10 keep every real title they had.
+#
+#                         COMBINED FOOTINGS. Pads that OVERLAP fuse into one footing instead
+#                         of stacking two floors on each other: merging is transitive, so
+#                         three columns in a row give one pad, and it repeats because a
+#                         merged pad is bigger than its parents and can reach one neither
+#                         touched. A group sharing an orientation keeps it. Depth follows
+#                         plan AREA around the dialog's figure (the depth at one square
+#                         metre), clamped to half and twice it and rounded to a buildable
+#                         50mm. Footings are ON by default at 300mm minimum projection and
+#                         600mm depth. The pad type is named by THICKNESS alone now that it
+#                         is a floor type -- naming it after a plan size gave "F 0 X 0 X 300"
+#                         and would have invented one type per column.
+#
+#                         MATERIALS & GRAPHICS is its own tab (anything graphical lands there
+#                         from now on), and every writable material parameter is set rather
+#                         than just the first -- a family can expose both the built-in
+#                         structural material and its own shared one, and setting only the
+#                         first leaves the visible one untouched. The pass now says when a
+#                         kind had nothing built rather than reporting a silent no-op.
+#
+#                         VIEW FILTERS use light tints, since the fill is what identifies an
+#                         element and a saturated fill over a floor plate is unreadable.
+#                         Transparency is on the tab (0 = solid) and colouring the LINES is
+#                         now opt-in -- the patterns alone are what was wanted.
+#
+# 0.64.0                  HOTFIX plus: footings as foundation SLABS, two bars, materials
 #                         on instances too.
 #
 #                         THE CRASH first, and it was mine: 0.63.0 put live ElementIds into

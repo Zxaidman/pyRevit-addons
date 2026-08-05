@@ -190,7 +190,7 @@ _BAR = _NullProgress()
 # Each phase gets its own: the read bar closes when the dialog opens, the build
 # bar opens when Run is pressed.
 _READ_STEPS = 2
-_BUILD_STEPS = 8
+_BUILD_STEPS = 9
 
 
 def _open_progress(phase):
@@ -530,6 +530,8 @@ class CadToBimWindow(object):
             combo.SelectedIndex = 0
             self.material_combos[kind] = combo
         self.chk_view_filters = find("chk_view_filters")
+        self.tb_filter_transparency = find("tb_filter_transparency")
+        self.chk_filter_lines = find("chk_filter_lines")
         self.chk_multistorey = find("chk_multistorey")
         self.cb_boundary_layer = find("cb_boundary_layer")
         self.cb_origin_layer = find("cb_origin_layer")
@@ -762,6 +764,7 @@ class CadToBimWindow(object):
                                            d["standard_beam_widths"])
         self.tb_footing_projection.Text = str(int(d["footing_projection_mm"]))
         self.tb_footing_thickness.Text = str(int(d["footing_thickness_mm"]))
+        self.tb_filter_transparency.Text = str(int(d["filter_transparency"]))
 
     def _read_int(self, textbox, fallback):
         try:
@@ -974,6 +977,10 @@ class CadToBimWindow(object):
                 (kind, self._material_ids.get(combo.SelectedItem))
                 for kind, combo in self.material_combos.items()),
             "view_filters": bool(self.chk_view_filters.IsChecked),
+            "filter_transparency": self._read_int(
+                self.tb_filter_transparency,
+                config.DEFAULTS["filter_transparency"]),
+            "filter_colour_lines": bool(self.chk_filter_lines.IsChecked),
             "naming": self._read_naming(),
             "standard_text": {"column": self.tb_std_columns.Text,
                               "beam_widths": self.tb_std_beams.Text},
@@ -1010,6 +1017,7 @@ class CadToBimWindow(object):
                          ("export", self.chk_export),
                          ("create_footings", self.chk_footings),
                          ("view_filters", self.chk_view_filters),
+                         ("filter_colour_lines", self.chk_filter_lines),
                          ("multistorey", self.chk_multistorey)):
             if key in preset and box.IsEnabled:
                 box.IsChecked = bool(preset[key])
@@ -1993,7 +2001,10 @@ def _colour_open_views(doc, uidoc, selections):
     transaction.Start()
     try:
         txn_failures.attach_warning_swallower(transaction)
-        result = view_filters.apply(doc, views)
+        result = view_filters.apply(
+            doc, views,
+            transparency=selections.get("filter_transparency") or 0,
+            colour_lines=bool(selections.get("filter_colour_lines")))
         transaction.Commit()
     except Exception as filter_error:
         if transaction.HasStarted() and not transaction.HasEnded():
@@ -2028,11 +2039,17 @@ def _apply_materials(doc, outcomes, selections):
             key = source.get(kind)
             ids = (outcomes.get(key) or {}).get(_IDS) if key else None
             elements = materials.elements_of(doc, ids)
+            if not elements:
+                # says WHY nothing happened: nothing built, or the ids were
+                # lost -- both looked identical as a silent no-op before
+                summary[kind] = {"elements": 0, "skipped": 0, "none_built": True}
+                _say("material: {0} -- nothing of this kind was built in this "
+                     "run".format(kind))
+                continue
             applied, skipped = materials.apply(doc, elements, material_id, kind)
             summary[kind] = {"elements": applied, "skipped": skipped}
-            if applied or skipped:
-                _say("material: {0} -- {1} element(s) set, {2} could not take "
-                     "one".format(kind, applied, skipped))
+            _say("material: {0} -- {1} of {2} element(s) set".format(
+                kind, applied, len(elements)))
         transaction.Commit()
     except Exception as material_error:
         if transaction.HasStarted() and not transaction.HasEnded():

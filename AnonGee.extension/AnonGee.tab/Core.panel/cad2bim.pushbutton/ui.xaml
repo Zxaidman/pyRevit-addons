@@ -148,7 +148,7 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_footings" Content="Create footings (isolated foundation under each column)" IsChecked="False" Margin="0,6,0,0"/>
+                        <CheckBox x:Name="chk_footings" Content="Create footings (foundation pad under each column)" IsChecked="True" Margin="0,6,0,0"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -163,45 +163,13 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Foundation type" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" x:Name="cb_footing_family" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Projection (mm)" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Min projection" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_footing_projection" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Thickness" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Depth @1m2" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_footing_thickness" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="One pad per column, sketched as a Structural Foundation floor (the same Floor.Create the slabs use) on the columns' BASE level at ZERO offset. Sized column + 2 x projection and turned to the column's long axis. Thickness 0 keeps the picked type's own. In a multi-storey run only the LOWEST storey builds them."
+                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="One pad per column, sketched as a Structural Foundation floor (the same Floor.Create the slabs use) on the columns' BASE level at ZERO offset. Sized column + 2 x min projection and turned to the column's long axis. Pads that OVERLAP fuse into one combined footing. Depth is the figure above at one square metre and scales with the pad's area (50mm steps, half to twice). In a multi-storey run only the LOWEST storey builds them."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-
-                        <Separator Margin="0,10,0,6"/>
-                        <TextBlock Text="Materials" FontWeight="Bold" Margin="0,0,0,2"/>
-                        <TextBlock Text="Written onto each type this run creates or duplicates. A floor takes it on its structural layer; everything else on its structural material parameter. Leave a row as (unchanged) to keep whatever the family already has."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="92"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Columns" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_mat_column" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Beams" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="3" x:Name="cb_mat_beam" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Slabs" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_mat_slab" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Stairs" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="1" Grid.Column="3" x:Name="cb_mat_stair" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Footings" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_mat_footing" Height="22" Margin="0,1,8,1"/>
-                        </Grid>
-
-                        <CheckBox x:Name="chk_view_filters" Content="Colour what was built in every open view (one filter per element kind)" IsChecked="True" Margin="0,6,0,0"/>
-                        <TextBlock Text="Adds a reusable cad2bim view filter per category -- columns blue, beams red, slabs green, stairs purple, footings amber, grids grey -- to each view you have open. Views driven by a template are left alone; the template owns their filters."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
 
                         <Separator Margin="0,10,0,6"/>
                         <Grid Margin="0,0,0,4">
@@ -569,6 +537,64 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="Materials &amp; Graphics">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+
+                        <TextBlock Text="Materials" FontWeight="Bold" Margin="0,0,0,2"/>
+                        <TextBlock Text="Written onto both the TYPE and the INSTANCE of everything this run creates -- a family may expose its material on either. A floor (and a foundation pad) takes it on its structural layer; a stair on its tread/riser/landing/support parameters. Leave a row as (unchanged) to keep whatever the family already has."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Columns" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_mat_column" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Beams" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="3" x:Name="cb_mat_beam" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Slabs" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_mat_slab" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Stairs" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="3" x:Name="cb_mat_stair" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Footings" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_mat_footing" Height="22" Margin="0,1,8,1"/>
+                        </Grid>
+
+                        <Separator Margin="0,10,0,6"/>
+                        <TextBlock Text="View filters" FontWeight="Bold" Margin="0,0,0,2"/>
+                        <CheckBox x:Name="chk_view_filters" Content="Colour what was built in every open view (one filter per element kind)" IsChecked="True"/>
+                        <TextBlock Text="Adds a reusable cad2bim view filter per category, in light tints -- columns blue, beams terracotta, slabs green, stairs violet, footings sand, grids grey -- to each view you have open. Views driven by a template are left alone; the template owns their filters."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,4"/>
+                        <Grid Margin="20,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="26"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Surface transparency" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_filter_transparency" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="0 = solid fill, 100 = invisible" VerticalAlignment="Center" FontSize="10" Foreground="Gray"/>
+                            <CheckBox  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" x:Name="chk_filter_lines"
+                                       Content="Colour the LINES too (otherwise only the patterns are coloured)"
+                                       Margin="0,4,0,0"/>
+                        </Grid>
+
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Naming">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -634,7 +660,7 @@
                             <TextBox   Grid.Row="9" Grid.Column="1" x:Name="tb_name_grid" Height="22" Margin="0,2,8,2"/>
                             <TextBlock Grid.Row="9" Grid.Column="2" x:Name="lbl_name_grid" FontSize="10" Foreground="Gray" VerticalAlignment="Center"/>
 
-                            <TextBlock Grid.Row="10" Grid.Column="0" Text="Footing (w x l x t)" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Row="10" Grid.Column="0" Text="Foundation pad (t)" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="10" Grid.Column="1" x:Name="tb_name_footing" Height="22" Margin="0,2,8,2"/>
                             <TextBlock Grid.Row="10" Grid.Column="2" x:Name="lbl_name_footing" FontSize="10" Foreground="Gray" VerticalAlignment="Center"/>
                         </Grid>

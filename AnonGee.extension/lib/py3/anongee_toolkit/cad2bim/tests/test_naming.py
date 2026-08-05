@@ -59,8 +59,7 @@ class DefaultNames(unittest.TestCase):
         self.assertEqual(naming.level_name(2, 3000, "First Floor"),
                          "CAD Level 2")
         self.assertEqual(naming.grid_name("A"), "A")
-        self.assertEqual(naming.footing_type_name(1000, 1200, 300),
-                         "F 1000 X 1200 X 300")
+        self.assertEqual(naming.footing_type_name(600), "PAD 600 THK")
 
     def test_sizes_are_whole_millimetres(self):
         # a float size must never leak "400.0" into a type name
@@ -120,9 +119,10 @@ class CustomTemplates(unittest.TestCase):
         self.assertEqual(naming.grid_name("B2"), "G-B2")
 
     def test_footings_take_a_convention_too(self):
-        naming.apply({"footing": "PC-{w}x{l}"})
-        self.assertEqual(naming.footing_type_name(1000, 1200, 300),
-                         "PC-1000x1200")
+        # a pad is a FLOOR, so its type carries only a thickness -- naming it
+        # after a plan size would invent one type per column
+        naming.apply({"footing": "PCC-{t}"})
+        self.assertEqual(naming.footing_type_name(600), "PCC-600")
 
     def test_a_template_may_ignore_the_sizes_entirely(self):
         naming.apply({"floor": "GENERIC SLAB"})

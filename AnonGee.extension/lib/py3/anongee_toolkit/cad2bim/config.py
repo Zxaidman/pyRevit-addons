@@ -74,8 +74,11 @@ DEFAULTS = {
     "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
 
     # --- footings (Structure tab) -------------------------------------------
-    "footing_projection_mm": 300.0,   # how far a footing reaches past its column
-    "footing_thickness_mm": 0.0,      # 0 keeps the family type's own thickness
+    "footing_projection_mm": 300.0,   # MINIMUM reach past the column, every side
+    "footing_thickness_mm": 600.0,    # depth at 1 m2; a pad scales from its area
+
+    # --- view filters (Materials & Graphics tab) ----------------------------
+    "filter_transparency": 0,     # 0 = solid fill; the fill is what identifies
 
     # --- staircase tolerances (exposed on the Tolerances tab) ---------------
     "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair

@@ -30,6 +30,7 @@ from Autodesk.Revit.DB import (BuiltInCategory, BuiltInParameter, CurveLoop,
 
 from ..compat import get_element_name, set_element_mark
 from .. import config
+from .. import footing_plan
 from .. import naming
 
 _MM = config.MM_PER_FT
@@ -87,7 +88,7 @@ def _resolve_type(doc, base_type, thickness_mm, cache):
     key = int(round(thickness_mm))
     if key in cache:
         return cache[key]
-    name = naming.footing_type_name(0, 0, key)
+    name = naming.footing_type_name(key)
     for existing in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
         try:
             if get_element_name(existing) == name:
@@ -103,41 +104,6 @@ def _resolve_type(doc, base_type, thickness_mm, cache):
     _set_thickness(new_type, thickness_mm)
     cache[key] = new_type
     return new_type
-
-
-def pad_ring(rectangle, projection_ft):
-    """The four corners of the pad under one column rectangle, in feet.
-
-    The pad follows the column's own long axis, so a rotated column gets a
-    rotated pad rather than an axis-aligned box around it.
-    """
-    cx, cy = rectangle["center"][0], rectangle["center"][1]
-    width_mm = rectangle["width_mm"]
-    height_mm = rectangle["height_mm"]
-    long_axis_deg = rectangle.get("long_axis_deg")
-    if long_axis_deg is None:
-        long_axis_deg = 0.0 if width_mm >= height_mm else 90.0
-    half_long = (max(width_mm, height_mm) / _MM) / 2.0 + projection_ft
-    half_short = (min(width_mm, height_mm) / _MM) / 2.0 + projection_ft
-    angle = math.radians(long_axis_deg)
-    ux, uy = math.cos(angle), math.sin(angle)
-    nx, ny = -uy, ux
-    return [(cx + ux * half_long + nx * half_short,
-             cy + uy * half_long + ny * half_short),
-            (cx - ux * half_long + nx * half_short,
-             cy - uy * half_long + ny * half_short),
-            (cx - ux * half_long - nx * half_short,
-             cy - uy * half_long - ny * half_short),
-            (cx + ux * half_long - nx * half_short,
-             cy + uy * half_long - ny * half_short)]
-
-
-def circle_pad_ring(circle, projection_ft):
-    """A square pad around a round column."""
-    cx, cy = circle["center"][0], circle["center"][1]
-    half = (circle["diameter_mm"] / _MM) / 2.0 + projection_ft
-    return [(cx + half, cy + half), (cx - half, cy + half),
-            (cx - half, cy - half), (cx + half, cy - half)]
 
 
 def _curve_loop(ring):
@@ -167,59 +133,38 @@ def _zero_offset(instance):
 
 
 def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
-                   thickness_mm=0.0, region_max_side_mm=None):
-    """One foundation pad per column footprint, on `level_id` at zero offset.
+                   thickness_mm=600.0, region_max_side_mm=None):
+    """One foundation pad per column GROUP, on `level_id` at zero offset.
 
-    `projection_mm` is how far the pad reaches past the column on EVERY side, so
-    the pad is (column + 2 x projection). `thickness_mm` of 0 keeps the picked
-    type's own thickness.
+    The layout comes from footing_plan: pads are the column footprints grown by
+    `projection_mm` on every side, OVERLAPPING pads are fused into one combined
+    footing, and each pad's thickness follows its plan area around
+    `thickness_mm` (the depth at one square metre).
 
     Returns {"created": [ids], "skipped": [reasons], "errors": [reasons]}.
     """
     base_type = doc.GetElement(base_type_id)
     level = doc.GetElement(level_id)
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "merged": 0}
     if base_type is None or level is None:
         raise ValueError("foundation type or level could not be resolved")
 
     region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
                   else region_max_side_mm)
-    projection_ft = float(projection_mm or 0.0) / _MM
+    plans = footing_plan.plan_pads(sections, projection_mm, thickness_mm,
+                                   region_max)
+    singles = len(footing_plan.pads_for(sections, projection_mm, region_max))
+    result["merged"] = max(0, singles - len(plans))
     cache = {}
-    floor_type = _resolve_type(doc, base_type, thickness_mm, cache)
-
-    for entry in sections.get("entries", []):
-        for rectangle in entry.get("rectangles", []):
-            try:
-                width_mm = int(round(rectangle["width_mm"]))
-                height_mm = int(round(rectangle["height_mm"]))
-                if min(width_mm, height_mm) > region_max:
-                    result["skipped"].append(
-                        "region {0}x{1} mm is not a column".format(width_mm,
-                                                                  height_mm))
-                    continue
-                ring = pad_ring(rectangle, projection_ft)
-                loops = List[CurveLoop]()
-                loops.Add(_curve_loop(ring))
-                instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
-                _zero_offset(instance)
-                mark = rectangle.get("mark")
-                if mark:
-                    set_element_mark(instance, "F-{0}".format(mark))
-                result["created"].append(instance.Id)
-            except Exception as creation_error:
-                result["errors"].append(str(creation_error))
-
-    for circle in sections.get("circles", []) or []:
+    for ring, pad_thickness, mark in plans:
         try:
-            ring = circle_pad_ring(circle, projection_ft)
+            floor_type = _resolve_type(doc, base_type, pad_thickness, cache)
             loops = List[CurveLoop]()
             loops.Add(_curve_loop(ring))
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
             _zero_offset(instance)
-            mark = circle.get("mark")
             if mark:
-                set_element_mark(instance, "F-{0}".format(mark))
+                set_element_mark(instance, mark)
             result["created"].append(instance.Id)
         except Exception as creation_error:
             result["errors"].append(str(creation_error))

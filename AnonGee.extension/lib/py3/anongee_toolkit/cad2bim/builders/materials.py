@@ -44,6 +44,25 @@ _STAIR_PARAM_NAMES = ("Monolithic Material", "Tread Material", "Riser Material",
                       "Landing Material", "Support Material",
                       "Structural Material", "Material")
 
+# Built-in material parameters worth trying beyond STRUCTURAL_MATERIAL_PARAM.
+# A beam or column family that hides its material behind the "Material for Model
+# Behaviour" / category material takes one of these instead.
+_BUILTIN_NAMES = ("STRUCTURAL_MATERIAL_PARAM",
+                  "MATERIAL_ID_PARAM",
+                  "STAIRS_TRISER_MATERIAL",
+                  "STAIRS_LANDING_MATERIAL",
+                  "STAIRS_MONOLITHIC_MATERIAL")
+
+
+def _builtin_parameters():
+    """The built-in material parameters this host actually defines."""
+    out = []
+    for name in _BUILTIN_NAMES:
+        value = getattr(BuiltInParameter, name, None)
+        if value is not None:
+            out.append(value)
+    return out
+
 
 def materials(doc):
     """[(name, ElementId)] of every material in the model, sorted by name."""
@@ -56,31 +75,43 @@ def materials(doc):
     return sorted(rows, key=lambda pair: pair[0].lower())
 
 
+def _material_parameters(element):
+    """Every writable material parameter `element` exposes, built-ins first."""
+    found = []
+    for builtin in _builtin_parameters():
+        try:
+            parameter = element.get_Parameter(builtin)
+        except Exception:
+            parameter = None
+        if parameter is not None and not parameter.IsReadOnly:
+            found.append(parameter)
+    for name in _LOOKUP_NAMES:
+        try:
+            candidate = element.LookupParameter(name)
+        except Exception:
+            candidate = None
+        if candidate is not None and not candidate.IsReadOnly:
+            found.append(candidate)
+    return found
+
+
 def _set_material_parameter(element, material_id):
-    """True when `element` took the material through a parameter it exposes."""
+    """True when `element` took the material through ANY parameter it exposes.
+
+    Every writable material parameter is tried, not just the first: a beam
+    family can expose both the built-in structural material and its own shared
+    one, and setting only the first leaves the visible one untouched.
+    """
     if element is None or material_id is None:
         return False
-    parameter = None
-    try:
-        parameter = element.get_Parameter(
-            BuiltInParameter.STRUCTURAL_MATERIAL_PARAM)
-    except Exception:
-        parameter = None
-    if parameter is None or parameter.IsReadOnly:
-        for name in _LOOKUP_NAMES:
-            try:
-                candidate = element.LookupParameter(name)
-            except Exception:
-                candidate = None
-            if candidate is not None and not candidate.IsReadOnly:
-                parameter = candidate
-                break
-    if parameter is None or parameter.IsReadOnly:
-        return False
-    try:
-        return bool(parameter.Set(material_id))
-    except Exception:
-        return False
+    done = False
+    for parameter in _material_parameters(element):
+        try:
+            if parameter.Set(material_id):
+                done = True
+        except Exception:
+            continue
+    return done
 
 
 def _set_floor_material(floor_type, material_id):
@@ -153,6 +184,8 @@ def apply(doc, elements, material_id, kind):
     applied = 0
     skipped = 0
     seen_types = set()
+    if not elements:
+        return 0, 0
     for element in elements or []:
         if element is None:
             continue

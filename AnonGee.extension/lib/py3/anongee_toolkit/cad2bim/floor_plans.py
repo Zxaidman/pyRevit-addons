@@ -111,13 +111,36 @@ class FloorRegion(object):
             len(self.records))
 
 
+# A general NOTE mentions storeys without being a plan title: Test12's
+# "2) THE BEAM & COLUMN SIZES MAY VARY AT GROUND & PODIUM LEVEL." named four of
+# its five storeys "GROUND". A note is numbered, or a sentence; a plan title is
+# neither, and is never this long.
+_NOTE_MARKER = re.compile(r"^\s*[\(\[]?\s*(?:\d{1,2}|[a-z])\s*[).\]]\s+", re.IGNORECASE)
+_TITLE_MAX_CHARS = 80
+
+
+def looks_like_a_plan_title(text):
+    """False for text that mentions a storey but is prose, not a title."""
+    if not text:
+        return False
+    first = text.strip().splitlines()[0].strip() if text.strip() else ""
+    if len(text.strip()) > _TITLE_MAX_CHARS:
+        return False
+    if _NOTE_MARKER.match(first):
+        return False               # "2) ..." / "(a) ..." is a numbered note
+    if first.endswith(".") and len(re.findall(r"[A-Za-z]+", first)) >= 6:
+        return False               # a full sentence, not a caption
+    return True
+
+
 def level_order_from_text(text):
     """A sort key for a plan title, or None when the text names no storey.
 
     "GROUND FLOOR PLAN" -> 0, "FIRST FLOOR" -> 1, "LEVEL 3" -> 3,
-    "2ND FLOOR PLAN" -> 2, "TERRACE" -> 999, "BASEMENT" -> -1.
+    "2ND FLOOR PLAN" -> 2, "TERRACE" -> 999, "BASEMENT" -> -1. Text that reads
+    as a general note rather than a caption never names a storey.
     """
-    if not text:
+    if not text or not looks_like_a_plan_title(text):
         return None
     lowered = text.lower()
     match = _LEVEL_NUMBER.search(lowered)

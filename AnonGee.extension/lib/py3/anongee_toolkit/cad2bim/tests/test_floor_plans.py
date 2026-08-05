@@ -541,5 +541,44 @@ class StoreyHeightsFromTitles(unittest.TestCase):
 
 
 
+class NotesAreNotPlanTitles(unittest.TestCase):
+    """Test12 named four of its five storeys from a general note.
+
+    "2) THE BEAM & COLUMN SIZES MAY VARY AT GROUND & PODIUM LEVEL." mentions
+    GROUND, so every boxed plan that could see it came out order 0 called
+    "GROUND". A note is numbered, or a whole sentence; a plan caption is
+    neither, and is never that long.
+    """
+
+    NOTE = "2) THE BEAM & COLUMN SIZES MAY VARY AT GROUND & PODIUM LEVEL."
+
+    def test_a_numbered_note_names_no_storey(self):
+        self.assertIsNone(floor_plans.level_order_from_text(self.NOTE))
+        self.assertFalse(floor_plans.looks_like_a_plan_title(self.NOTE))
+
+    def test_other_note_shapes_are_refused_too(self):
+        for note in ("(a) REFER TO THE GROUND FLOOR PLAN FOR DETAILS",
+                     "1. ALL LEVELS ARE IN METRES ABOVE DATUM.",
+                     "THE TERRACE SLAB SHALL BE CAST IN ONE POUR AFTER CURING."):
+            self.assertIsNone(floor_plans.level_order_from_text(note), note)
+
+    def test_real_captions_still_name_their_storey(self):
+        for caption, order in (
+                ("GROUND FLOOR PLAN", 0),
+                ("FIRST FLOOR", 1),
+                ("2ND FLOOR PLAN", 2),
+                ("TERRACE PLAN", 999),
+                ("Basement Plan", -1),
+                ("Ground Floor @0.00+ Level", 0),
+                ("UPPER BASEMENT FRAMING PLAN\n(SCALE 1:75)", -1),
+                ("TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)", 2)):
+            self.assertEqual(floor_plans.level_order_from_text(caption), order,
+                             caption)
+
+    def test_a_caption_ending_in_a_full_stop_is_still_a_caption(self):
+        # short enough to be a caption: only a long sentence is a note
+        self.assertEqual(floor_plans.level_order_from_text("GROUND FLOOR."), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
