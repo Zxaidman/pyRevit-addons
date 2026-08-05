@@ -22,8 +22,9 @@ therefore be off by the ratio between the two monitors' scaling; calling
 :func:`place_over_host` a second time after the move corrects it.
 """
 
-__version__ = "1.5.0"
-__all__ = ["revit_handle", "host_rect_px", "device_to_diu", "place_over_host"]
+__version__ = "1.6.0"
+__all__ = ["revit_handle", "host_rect_px", "device_to_diu",
+           "place_over_host", "caption_height"]
 
 try:
     import clr
@@ -149,6 +150,31 @@ def host_rect_px(handle=None, clamp=True):
     if rect[2] - rect[0] <= 0 or rect[3] - rect[1] <= 0:
         return None
     return rect
+
+
+def caption_height(fallback=26.0):
+    """Height of the host title bar, in WPF units.
+
+    Why this exists: WPF sizes windows in device-independent units, so a bar
+    declared 26 units tall is 26 physical pixels at 100% scaling and 39 at
+    150%. The bar therefore scales correctly across DPI settings on its own -
+    a fixed number is NOT a DPI bug.
+
+    What a fixed number does miss is the title bar it is meant to cover, whose
+    height depends on the Windows version and the user's text-size setting,
+    not on DPI. SystemParameters reports both pieces in WPF units, so this
+    derives the value instead of assuming it. Clamped, because an unusual
+    text-size setting can return something too small to fit the label.
+    """
+    try:
+        from System.Windows import SystemParameters
+        h = float(SystemParameters.WindowCaptionHeight)
+        b = float(SystemParameters.ResizeFrameHorizontalBorderHeight)
+        if h > 0:
+            return max(22.0, min(48.0, h + b))
+    except Exception:
+        pass
+    return fallback
 
 
 def device_to_diu(window):

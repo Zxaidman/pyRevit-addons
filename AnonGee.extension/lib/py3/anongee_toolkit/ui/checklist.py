@@ -14,7 +14,7 @@ already cover those. Note that they take ``(title, message)``, the opposite
 order to pyrevit's ``forms.alert``.
 """
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __all__ = ["CheckList", "pick_option"]
 
 try:

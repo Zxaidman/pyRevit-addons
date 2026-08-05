@@ -1,4 +1,4 @@
-# Convert Slab — v1.3.0
+# Convert Slab — v1.4.1
 
 pyRevit pushbutton. Converts **Structural Floor ↔ Structural Foundation (slab)**
 on a pre-selection or an interactive pick, in plan, 3D, section or elevation.
@@ -77,7 +77,8 @@ analytical associations · the ElementId itself.
 
 ## Blocked (never attempted)
 
-- Element inside a model group or assembly
+- Element inside a multi-instance or nested model group (see Model groups)
+- Element inside an assembly
 - Element in a design option that isn't the active one — activate it and rerun
 - No editable sketch, or a non-horizontal sketch
 - Target category has zero types to seed from (create one Foundation Slab type first)
@@ -86,16 +87,40 @@ analytical associations · the ElementId itself.
 
 ## Type resolution
 
-Configured in `slab_convert_config.json` (auto-created next to the script if missing):
+`type_name_mode: "same"` (default) — the target type carries the **source type
+name verbatim**. If a type of that name already exists in the target category it
+is reused; otherwise it is created by duplicating a seed type of that category
+and applying the source's compound structure (same thickness, same materials).
 
-1. Exact name match against the naming convention (`FLR_Slab 200` → `FND_Slab 200`)
-2. Identical compound structure (layer widths, materials, functions)
-3. Same total thickness within `thickness_tolerance_mm`
-4. Otherwise duplicate a seed type of the target category and apply the source's
-   compound structure — same thickness and materials, named by the convention
+There is deliberately no thickness or structure fallback in this mode: silently
+matching an existing type under a *different* name is exactly what 1:1 naming
+exists to prevent.
 
-Set `require_identical_layers: true` to forbid step 3, or `create_missing_types: false`
-to block instead of creating.
+Floors and Foundation Slabs are separate system families, so both can hold a
+type of the same name without collision — uniqueness is checked **within the
+target category only**.
+
+`type_name_mode: "convention"` restores the older behaviour: prefix/suffix
+rewriting, then identical-compound-structure, then thickness within
+`thickness_tolerance_mm`, then create.
+
+## Model groups
+
+There is no API to edit a group definition in place, so the only route is
+ungroup → convert → regroup. The run becomes three phases inside one
+`TransactionGroup`: ungroup every affected group, convert, then rebuild each
+group from its recorded members with converted ids substituted in. Phase three
+runs even if the conversion was cancelled or elements failed — leaving the model
+ungrouped would be worse than a partial conversion.
+
+| Group | Behaviour |
+|---|---|
+| **One placed instance** | Clean round-trip. Members, name and pin state restored; the orphaned GroupType is removed so the original name can be reclaimed. |
+| **Several instances** | **Blocked by default.** Ungrouping one instance leaves the others full of floors, and regrouping makes a *new* type — the group type splits. Set `groups.multi_instance: "split"` to accept that; each affected element is flagged in the pre-flight list. |
+| **Nested** | Blocked. Ungroup manually first. |
+
+Attached detail groups do not survive ungrouping and are reported per group.
+Set `groups.enabled: false` to go back to skipping grouped elements entirely.
 
 ## Verification
 
@@ -104,6 +129,21 @@ Anything over 0.1 % area or 0.1 mm in Z is flagged `GEOMETRY DELTA — verify ma
 That's the regression check — it should read as zeros.
 
 ---
+
+### 1.4.1
+- Dropped the `lib/cpyforms.py` and `lib/netclass.py` fallback imports; the
+  toolkit package is the only source now.
+- Toolkit import failures are recorded and reported at the top of the run
+  output instead of silently degrading to no progress bar.
+
+### 1.4.0
+- Type naming is now 1:1 with the source type name (`type_name_mode: "same"`).
+- Fixed: the new-type uniqueness check scanned every `FloorType` in the model
+  rather than the target category, so 1:1 naming would have produced
+  `FLR_200 THK RCC SLAB 2` — the source floor type already held the name.
+- Model group support via ungroup → convert → regroup, single-instance groups
+  round-tripping cleanly and multi-instance blocked by default.
+- Requires the ui modules at 1.6.0.
 
 ### 1.3.0
 - Message boxes now go through `anongee_toolkit.ui.forms.alert`. That takes

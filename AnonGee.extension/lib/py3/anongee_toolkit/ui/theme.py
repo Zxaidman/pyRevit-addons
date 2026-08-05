@@ -13,7 +13,7 @@ against. So only the *styles* are parsed here, and the controls that use them
 are built in code with their events wired up normally.
 """
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __all__ = ["brush", "color", "DARK_FALLBACK", "ACCENT_FALLBACK",
            "ACCENT_COLOR_FALLBACK", "bar_resources"]
 

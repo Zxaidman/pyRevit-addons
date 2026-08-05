@@ -20,7 +20,7 @@ Two styles:
 
 import time
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __all__ = ["ProgressBar"]
 
 from System.Windows import (Window, Thickness, WindowStyle, ResizeMode,
@@ -76,13 +76,19 @@ class ProgressBar(object):
                  topmost=True, min_refresh_ms=80, show_eta=False,
                  parent_handle=None, style="pyrevit", bar_height=26,
                  top_offset=0, follow_host=True):
+        # bar_height="auto" derives the host title-bar height instead of
+        # assuming one. A plain number is already DPI-correct (WPF units), so
+        # "auto" only matters for unusual Windows text-size settings.
         self.title_template = title or "{value}/{max_value}"
         self.cancellable = cancellable
         self.step = int(step or 0)
         self.indeterminate = indeterminate
         self.style = (style or "pyrevit").lower()
         self.width = width or (600 if self.style == "pyrevit" else 460)
-        self.bar_height = height or bar_height
+        if bar_height == "auto" or height == "auto":
+            self.bar_height = hostwnd.caption_height()
+        else:
+            self.bar_height = height or bar_height
         self.top_offset = top_offset
         self.follow_host = follow_host
         self.topmost = topmost

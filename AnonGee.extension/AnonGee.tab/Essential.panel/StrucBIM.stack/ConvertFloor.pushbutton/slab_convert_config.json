@@ -1,28 +1,38 @@
 {
   "_readme": [
-    "Config for Convert Slab v1.0.1.",
-    "Type resolution order: 1) exact name from the convention below,",
-    "2) identical compound structure, 3) same total thickness within",
-    "tolerance, 4) duplicate a seed type of the target category and copy",
-    "the source's compound structure (same thickness + materials)."
+    "Config for Convert Slab v1.4.0.",
+    "type_name_mode 'same' names the target type exactly like the source and",
+    "reuses an existing type of that name; 'convention' applies the prefix/",
+    "suffix rules and the structure/thickness fallbacks below."
   ],
-
+  "type_name_mode": "same",
+  "groups": {
+    "enabled": true,
+    "multi_instance": "block"
+  },
   "thickness_tolerance_mm": 0.5,
   "require_identical_layers": false,
-  "prefer_name_match": true,
   "create_missing_types": true,
   "swallow_warnings": true,
   "select_results_after_run": true,
-
   "floor_to_foundation": {
-    "strip_prefixes": ["FLR_", "FLR-", "FLOOR_", "SLAB_"],
+    "strip_prefixes": [
+      "FLR_",
+      "FLR-",
+      "FLOOR_",
+      "SLAB_"
+    ],
     "strip_suffixes": [],
     "prefix": "FND_",
     "suffix": ""
   },
-
   "foundation_to_floor": {
-    "strip_prefixes": ["FND_", "FND-", "FOUNDATION_", "FOOTING_"],
+    "strip_prefixes": [
+      "FND_",
+      "FND-",
+      "FOUNDATION_",
+      "FOOTING_"
+    ],
     "strip_suffixes": [],
     "prefix": "FLR_",
     "suffix": ""

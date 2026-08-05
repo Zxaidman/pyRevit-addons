@@ -13,9 +13,9 @@ Engine : CPython 3 (pyRevit)
 Revit  : 2022+ (developed against 2025)
 """
 
-__title__ = "Convert Slab"
+__title__ = "Convert\nSlab"
 __author__ = "AnonGee"
-__version__ = "1.3.0"
+__version__ = "1.4.1"
 __min_revit_ver__ = 2022
 __doc__ = ("Convert selected Structural Floors to Structural Foundation slabs "
            "and vice versa. Shows a pre-flight report and asks for confirmation "
@@ -43,17 +43,25 @@ except Exception:
 
 # Submodules are imported directly rather than through anongee_toolkit.ui, so
 # this button runs whether or not ui/__init__.py has been extended yet.
+# Import failures are recorded rather than swallowed. The script degrades
+# gracefully when the toolkit is missing (no progress bar, pyRevit dialogs),
+# but a silent degrade is indistinguishable from "the progress bar broke", so
+# the reason is surfaced in the run output instead of vanishing.
+TOOLKIT_ERRORS = []
+
 try:
     from anongee_toolkit.ui.progressbar import ProgressBar as CpyProgressBar
-except Exception:
+except Exception as _ex:
     CpyProgressBar = None
+    TOOLKIT_ERRORS.append("ui.progressbar: {0}".format(_ex))
 
 try:
     from anongee_toolkit.ui.checklist import CheckList as CpyCheckList
     from anongee_toolkit.ui.checklist import pick_option as cpy_pick_option
-except Exception:
+except Exception as _ex:
     CpyCheckList = None
     cpy_pick_option = None
+    TOOLKIT_ERRORS.append("ui.checklist: {0}".format(_ex))
 
 # forms.alert / forms.confirm take (title, message) - the OPPOSITE order to
 # pyrevit.forms.alert(message, title=...). Wrapped below so the call sites in
@@ -61,9 +69,10 @@ except Exception:
 try:
     from anongee_toolkit.ui.forms import alert as tk_alert
     from anongee_toolkit.ui.forms import confirm as tk_confirm
-except Exception:
+except Exception as _ex:
     tk_alert = None
     tk_confirm = None
+    TOOLKIT_ERRORS.append("ui.forms: {0}".format(_ex))
 
 
 def define_net_class(key):
@@ -161,7 +170,7 @@ def notify(message, title="Convert Slab"):
 # globals
 # ---------------------------------------------------------------------------
 
-TOOL_VERSION = "1.3.0"
+TOOL_VERSION = "1.4.1"
 
 doc = revit.doc
 uidoc = revit.uidoc
@@ -182,6 +191,11 @@ DEFAULT_CFG = {
         "tolerance, 4) duplicate a seed type of the target category and copy",
         "the source's compound structure (same thickness + materials)."
     ],
+    "type_name_mode": "same",
+    "groups": {
+        "enabled": True,
+        "multi_instance": "block"
+    },
     "thickness_tolerance_mm": 0.5,
     "require_identical_layers": False,
     "prefer_name_match": True,
@@ -703,18 +717,40 @@ def cs_signature(ftype):
 
 
 def resolve_type(src_type, kind, cfg, created_cache):
-    """-> (FloorType or None, note, is_new)"""
+    """-> (FloorType or None, note, is_new)
+
+    Default mode is "same": the target type carries the source type's name
+    verbatim. Floors and foundation slabs are different system families, so
+    the same type name can exist in both without colliding.
+    """
     cat_id = target_cat_id(kind)
     cands = collect_types(cat_id)
-    want_name = conventional_name(el_name(src_type), kind, cfg)
+    src_name = el_name(src_type)
+    mode = str(cfg.get("type_name_mode", "same")).lower()
+
+    if mode == "same":
+        want_name = src_name
+    else:
+        want_name = conventional_name(src_name, kind, cfg)
 
     if want_name in created_cache:
         return created_cache[want_name], "reused new type", False
 
-    if cfg.get("prefer_name_match", True):
-        for t in cands:
-            if el_name(t).strip().lower() == want_name.strip().lower():
-                return t, "name match", False
+    for t in cands:
+        if el_name(t).strip().lower() == want_name.strip().lower():
+            return t, "name match", False
+
+    if mode == "same":
+        # Deliberately no structure/thickness fallback here: matching an
+        # existing type under a DIFFERENT name is exactly what 1:1 naming is
+        # meant to avoid. Create instead.
+        if not cfg.get("create_missing_types", True):
+            return None, "no type named '{0}' and creation disabled".format(
+                want_name), False
+        if not cands:
+            return None, ("no type exists in the target category - create one "
+                          "Foundation Slab / Floor type first"), False
+        return ("CREATE", want_name, True)
 
     src_sig = cs_signature(src_type)
     if src_sig is not None:
@@ -757,16 +793,29 @@ TYPE_PARAMS_TO_COPY = [
 
 
 def create_target_type(src_type, kind, new_name):
+    """Duplicate a seed type of the target category and restyle it.
+
+    Uniqueness is checked against the TARGET CATEGORY only. Revit scopes type
+    names per system family, so a Floor type and a Foundation Slab type may
+    share a name - checking against every FloorType in the model would rename
+    the new foundation type just because the source floor type already holds
+    that name, which is the opposite of 1:1 naming.
+    """
     cands = collect_types(target_cat_id(kind))
     seed = cands[0]
     name = new_name
-    existing = set(el_name(t).lower()
-                   for t in DB.FilteredElementCollector(doc).OfClass(DB.FloorType))
+    existing = set(el_name(t).strip().lower() for t in cands)
     n = 2
-    while name.lower() in existing:
+    while name.strip().lower() in existing:
         name = "{0} {1}".format(new_name, n)
         n += 1
-    new_type = seed.Duplicate(name)
+
+    try:
+        new_type = seed.Duplicate(name)
+    except Exception:
+        # Revit rejected the name anyway - fall back rather than lose the run.
+        name = "{0} (converted)".format(new_name)
+        new_type = seed.Duplicate(name)
     try:
         cs = src_type.GetCompoundStructure()
         if cs is not None:
@@ -902,6 +951,160 @@ def measured(el):
 
 
 # ---------------------------------------------------------------------------
+# model groups
+# ---------------------------------------------------------------------------
+#
+# There is no API to edit a group's definition in place - no equivalent of the
+# "Edit Group" ribbon mode. The only route is UngroupMembers() -> modify ->
+# NewGroup(). That has a consequence worth understanding before enabling it:
+#
+# A GroupType with ONE placed instance round-trips cleanly. Ungroup it, convert
+# the slabs, regroup the same members, delete the now-unused old GroupType and
+# take its name back. Net effect: same group, same name, converted members.
+#
+# A GroupType with SEVERAL instances does not. Ungrouping one instance leaves
+# the others untouched and still full of floors, and regrouping produces a NEW
+# type rather than editing the shared one. The group type splits. That is not
+# a bug this script can engineer around - it is the shape of the API - so
+# multi-instance groups are blocked by default and require an explicit opt-in.
+
+
+class GroupRecord(object):
+    """Everything needed to put a group back together after conversion."""
+
+    def __init__(self, group):
+        self.id = group.Id
+        self.name = el_name(group)
+        gtype = group.GroupType
+        self.gtype_id = gtype.Id if gtype is not None else INVALID
+        self.type_name = el_name(gtype) if gtype is not None else "?"
+        self.instance_count = group_instance_count(gtype)
+        self.pinned = bool(group.Pinned)
+        self.attached_count = attached_detail_count(group)
+        self.member_ids = []
+        self.regrouped_id = None
+        self.notes = []
+
+
+def group_instance_count(gtype):
+    if gtype is None:
+        return 0
+    try:
+        return len(list(gtype.Groups))
+    except Exception:
+        pass
+    try:
+        n = 0
+        for g in DB.FilteredElementCollector(doc).OfClass(DB.Group):
+            gt = g.GroupType
+            if gt is not None and eid_val(gt.Id) == eid_val(gtype.Id):
+                n += 1
+        return n
+    except Exception:
+        return 0
+
+
+def attached_detail_count(group):
+    try:
+        return len(list(group.GetAvailableAttachedDetailGroupTypeIds()))
+    except Exception:
+        return 0
+
+
+def group_of(el):
+    """Immediate parent Group, or None."""
+    try:
+        gid = el.GroupId
+    except Exception:
+        return None
+    if gid is None or eid_val(gid) <= 0:
+        return None
+    g = doc.GetElement(gid)
+    return g if isinstance(g, DB.Group) else None
+
+
+def group_is_nested(group):
+    try:
+        gid = group.GroupId
+        return gid is not None and eid_val(gid) > 0
+    except Exception:
+        return False
+
+
+def ungroup_records(records):
+    """Ungroup each recorded group, capturing its members. -> failures list."""
+    failed = []
+    for r in records:
+        g = doc.GetElement(r.id)
+        if not isinstance(g, DB.Group):
+            failed.append((r, "group no longer exists"))
+            continue
+        try:
+            if g.Pinned:
+                g.Pinned = False
+        except Exception:
+            pass
+        try:
+            r.member_ids = [i for i in g.UngroupMembers()]
+        except Exception as ex:
+            failed.append((r, str(ex)))
+    return failed
+
+
+def regroup_record(r, id_map):
+    """Rebuild one group from its recorded members, substituting new ids."""
+    ids = List[DB.ElementId]()
+    seen = set()
+    dropped = 0
+    for old in r.member_ids:
+        new = id_map.get(eid_val(old), old)
+        key = eid_val(new)
+        if key in seen:
+            continue
+        if doc.GetElement(new) is None:
+            dropped += 1
+            continue
+        seen.add(key)
+        ids.Add(new)
+
+    if ids.Count == 0:
+        r.notes.append("no surviving members - not regrouped")
+        return False
+    if dropped:
+        r.notes.append("{0} member(s) vanished before regrouping".format(dropped))
+
+    try:
+        g = doc.Create.NewGroup(ids)
+    except Exception as ex:
+        r.notes.append("regroup failed: {0}".format(ex))
+        return False
+
+    r.regrouped_id = g.Id
+
+    # Reclaim the original name. The old GroupType lingers with zero instances
+    # after the last one is ungrouped, and would block the rename, so remove it
+    # first - but only once it is genuinely unused.
+    old_gt = doc.GetElement(r.gtype_id)
+    if old_gt is not None and group_instance_count(old_gt) == 0:
+        try:
+            doc.Delete(old_gt.Id)
+        except Exception:
+            pass
+    try:
+        g.GroupType.Name = r.type_name
+    except Exception:
+        r.notes.append("kept generated name '{0}' - '{1}' was taken".format(
+            el_name(g.GroupType), r.type_name))
+
+    try:
+        if r.pinned:
+            g.Pinned = True
+    except Exception:
+        pass
+    return True
+
+
+# ---------------------------------------------------------------------------
 # planning
 # ---------------------------------------------------------------------------
 
@@ -913,6 +1116,7 @@ class Plan(object):
         self.kind = slab_kind(el)
         self.src_type = doc.GetElement(el.GetTypeId())
         self.src_type_name = el_name(self.src_type)
+        self.group = None
         self.blockers = []
         self.warnings = []
         self.infos = []
@@ -942,8 +1146,33 @@ class Plan(object):
 def build_plan(el, cfg, created_cache):
     p = Plan(el)
 
-    if el.GroupId is not None and eid_val(el.GroupId) > 0:
-        p.blockers.append("inside a model group")
+    grp = group_of(el)
+    p.group = grp
+    if grp is not None:
+        gcfg = cfg.get("groups", {})
+        if not gcfg.get("enabled", True):
+            p.blockers.append("inside model group '{0}' (group handling off)"
+                              .format(el_name(grp.GroupType)))
+        elif group_is_nested(grp):
+            # Ungrouping an inner group would detach it from its parent, and
+            # rebuilding that nesting is not something to attempt silently.
+            p.blockers.append("inside a NESTED group - ungroup manually first")
+        else:
+            n = group_instance_count(grp.GroupType)
+            if n > 1 and str(gcfg.get("multi_instance", "block")) != "split":
+                p.blockers.append(
+                    "group '{0}' has {1} instances - converting would split "
+                    "the group type (set groups.multi_instance to 'split' to "
+                    "allow)".format(el_name(grp.GroupType), n))
+            else:
+                p.infos.append("group '{0}' ungrouped and rebuilt".format(
+                    el_name(grp.GroupType)))
+                if n > 1:
+                    p.warnings.append(
+                        "group type '{0}' SPLITS: {1} other instance(s) keep "
+                        "the original type".format(el_name(grp.GroupType), n - 1))
+                if attached_detail_count(grp):
+                    p.warnings.append("attached detail groups will be lost")
     try:
         if el.AssemblyInstanceId is not None and eid_val(el.AssemblyInstanceId) > 0:
             p.blockers.append("inside an assembly")
@@ -1216,6 +1445,11 @@ def main():
         notify("Run this in a project document.", title="Convert Slab")
         return
 
+    if TOOLKIT_ERRORS:
+        output.print_md(
+            "> **anongee_toolkit not fully available** — running with reduced "
+            "UI. " + "; ".join(TOOLKIT_ERRORS))
+
     cfg = load_config()
 
     elements = gather_selection()
@@ -1311,11 +1545,45 @@ def main():
     # Progress window opens BEFORE the transaction group: showing a window
     # pumps the dispatcher at Background priority, which is best done with no
     # Revit transaction open.
+    # Unique groups touched by this run. Several slabs can share one group, so
+    # it must be ungrouped once, not once per element.
+    group_records = []
+    seen_groups = set()
+    for p in todo:
+        if p.group is not None and eid_val(p.group.Id) not in seen_groups:
+            seen_groups.add(eid_val(p.group.Id))
+            group_records.append(GroupRecord(p.group))
+
+    id_map = {}          # old element id -> new element id, for regrouping
+    regroup_failures = []
+
     tg = DB.TransactionGroup(doc, "Convert Slab v{0}".format(TOOL_VERSION))
     with progress("Converting slabs... {value}/{max_value}",
                   cancellable=True) as pb:
         tg.Start()
         try:
+            # -- phase 1: ungroup ---------------------------------------
+            if group_records:
+                pb.status = "ungrouping {0} group(s)".format(len(group_records))
+                t = DB.Transaction(doc, "Ungroup for conversion")
+                t.Start()
+                if cfg.get("swallow_warnings", True):
+                    apply_failure_handler(t)
+                fails = ungroup_records(group_records)
+                t.Commit()
+                for r, why in fails:
+                    regroup_failures.append((r, "ungroup failed: {0}".format(why)))
+                bad = set(eid_val(r.id) for r, _ in fails)
+                group_records = [r for r in group_records
+                                 if eid_val(r.id) not in bad]
+                # Anything whose group would not open must not be converted -
+                # it is still grouped, and Floor.Create would fail anyway.
+                if bad:
+                    todo = [p for p in todo
+                            if p.group is None or eid_val(p.group.Id) not in bad]
+                pb.status = ""
+
+            # -- phase 2: convert ---------------------------------------
             for i, p in enumerate(todo):
                 if pb.cancelled:
                     break
@@ -1329,6 +1597,7 @@ def main():
                     if r["status"] == "ok":
                         t.Commit()
                         new_ids.append(r["new_id"])
+                        id_map[eid_val(p.id)] = r["new_id"]
                     else:
                         t.RollBack()
                     results.append((p, r))
@@ -1339,6 +1608,22 @@ def main():
                                         "status": "failed", "delta": "",
                                         "notes": [traceback.format_exc()
                                                   .strip().splitlines()[-1]]}))
+
+            # -- phase 3: regroup ---------------------------------------
+            # Runs even if the loop was cancelled or elements failed: leaving
+            # the model ungrouped would be worse than a partial conversion.
+            if group_records:
+                pb.status = "rebuilding {0} group(s)".format(len(group_records))
+                t = DB.Transaction(doc, "Regroup after conversion")
+                t.Start()
+                if cfg.get("swallow_warnings", True):
+                    apply_failure_handler(t)
+                for r in group_records:
+                    if not regroup_record(r, id_map):
+                        regroup_failures.append((r, "; ".join(r.notes) or "unknown"))
+                t.Commit()
+                pb.status = ""
+
             tg.Assimilate()
         except Exception:
             try:
@@ -1364,6 +1649,22 @@ def main():
         ])
     output.print_table(rows, columns=["Old id", "New", "Type", "Status",
                                       "Geometry delta", "Notes"])
+
+    if group_records or regroup_failures:
+        output.print_md("### Groups")
+        grows = []
+        for r in group_records:
+            grows.append([
+                r.type_name,
+                str(len(r.member_ids)),
+                output.linkify(r.regrouped_id) if r.regrouped_id else "NOT REBUILT",
+                "; ".join(r.notes) or "-",
+            ])
+        for r, why in regroup_failures:
+            if r.regrouped_id is None and r not in group_records:
+                grows.append([r.type_name, str(len(r.member_ids)), "FAILED", why])
+        output.print_table(grows, columns=["Group type", "Members",
+                                           "Rebuilt as", "Notes"])
 
     lost = [(p, p.warnings) for p, r in results
             if r["status"] == "ok" and p.warnings]

@@ -5,7 +5,7 @@ Split out because both the progress bar and the modal dialogs need it, and
 because the priority choice has a real consequence (see ProgressBar._refresh).
 """
 
-__version__ = "1.5.0"
+__version__ = "1.6.0"
 __all__ = ["pump"]
 
 try:
