@@ -167,5 +167,38 @@ class OutcomesReachTheExportClean(unittest.TestCase):
                          "an outcome dict exports an id list under a plain key")
 
 
+class StoreyTableIsSelectable(unittest.TestCase):
+    """The storey stack has to be pickable, and visibly so.
+
+    Rows were a StackPanel of Grids with a click handler on the Grid: the combo
+    box and text boxes inside each row swallowed the mouse, so the handler
+    rarely fired and nothing ever looked selected. A ListBox gives native
+    selection -- highlight, arrow keys, SelectedIndex -- for free.
+    """
+
+    def test_the_storey_table_is_a_listbox(self):
+        tree = ET.parse(_XAML)
+        key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+        found = [el for el in tree.iter() if el.get(key) == "storey_rows"]
+        self.assertEqual(len(found), 1)
+        self.assertTrue(found[0].tag.endswith("ListBox"),
+                        "storey_rows is %s, not a ListBox" % found[0].tag)
+
+    def test_the_row_click_is_a_preview_handler(self):
+        # a bubbling handler never sees the click: the child controls take it
+        source = _script_source()
+        self.assertIn("PreviewMouseLeftButtonDown", source)
+        self.assertNotIn("grid.MouseLeftButtonDown", source)
+
+    def test_selection_drives_the_move_buttons(self):
+        source = _script_source()
+        self.assertIn("self.storey_rows.SelectedIndex", source)
+        self.assertIn("storey_selection_text", source)
+        names = _xaml_names(_XAML)
+        for control in ("btn_storey_up", "btn_storey_down", "btn_storey_add",
+                        "btn_storey_remove", "storey_selection_text"):
+            self.assertIn(control, names)
+
+
 if __name__ == "__main__":
     unittest.main()

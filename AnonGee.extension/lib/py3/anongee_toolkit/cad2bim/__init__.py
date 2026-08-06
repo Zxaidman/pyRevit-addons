@@ -35,7 +35,22 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.66.0"  # Test13's skewed beams, one progress bar, storey stack, grades.
+__version__ = "0.66.1"  # HOTFIX: the storey stack could not be selected.
+#
+#                         The rows were a StackPanel of Grids with a click handler on the
+#                         Grid, so the combo box and text boxes INSIDE each row swallowed the
+#                         mouse before the handler ever fired -- there was nothing to click
+#                         and nothing looked selected, which is exactly what the user found.
+#                         They are ListBoxItems in a ListBox now: selection is native, so the
+#                         row highlights, the arrow keys walk the stack and SelectedIndex is
+#                         what Move/Add/Remove act on. The click is a PREVIEW handler, which
+#                         tunnels to the row BEFORE its children can take it, so clicking
+#                         anywhere on a row -- including on its dropdown -- selects it.
+#                         Each row now shows its build number, the buttons grey out when they
+#                         would do nothing (top row cannot move up), and a line beside them
+#                         says "storey 2 of 5 selected".
+#
+# 0.66.0                  Test13's skewed beams, one progress bar, storey stack, grades.
 #
 #                         SKEWED BEAMS. Test13 is orthogonal throughout, yet 14 members per
 #                         storey came out tilted -- one by 44 degrees -- at widths no beam

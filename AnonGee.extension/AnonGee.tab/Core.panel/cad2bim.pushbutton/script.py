@@ -47,7 +47,7 @@ from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
                             Thickness, GridLength, GridUnitType, VerticalAlignment,
                             TextTrimming)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox, TextBox, CheckBox)
+                                     ComboBox, TextBox, CheckBox, ListBoxItem)
 import System.Windows.Forms
 
 
@@ -569,7 +569,8 @@ class CadToBimWindow(object):
         self.storey_rows = find("storey_rows")
         self._storey_plans = []
         self._storey_rows = []
-        self._storey_focus = None
+        self.storey_selection_text = find("storey_selection_text")
+        self.storey_rows.SelectionChanged += self.on_storey_selection_changed
         self.btn_storey_up = find("btn_storey_up")
         self.btn_storey_down = find("btn_storey_down")
         self.btn_storey_add = find("btn_storey_add")
@@ -1132,6 +1133,7 @@ class CadToBimWindow(object):
                                ["origin", "basept", "datum"])
             if found is not None:
                 self.multistorey_preview.Text = found.reason
+            self._show_storey_selection()
             return
 
         for combo, layer in ((self.cb_boundary_layer, found.boundary_layer),
@@ -1168,13 +1170,21 @@ class CadToBimWindow(object):
         return text or "plan {0}".format(index + 1)
 
     def _refresh_storey_rows(self):
-        """Redraw the storey table from self._storey_rows (the model)."""
-        self.storey_rows.Children.Clear()
+        """Redraw the storey table from self._storey_rows (the model).
+
+        Each storey is a real ListBoxItem, so selection is Revit-native: the
+        row highlights, the arrow keys walk the stack, and the Move/Add/Remove
+        buttons act on whatever is highlighted. A hand-rolled click handler on
+        the row could not work -- the combo box and text boxes inside it swallow
+        the mouse before the row ever sees it, which is why nothing looked
+        selectable.
+        """
+        keep = self.storey_rows.SelectedIndex
+        self.storey_rows.Items.Clear()
         self._storey_boxes = []
         for position, row in enumerate(self._storey_rows):
             grid = WpfGrid()
-            grid.Margin = Thickness(0, 1, 0, 1)
-            for width in (52.0, 0.0, 70.0, 52.0):
+            for width in (40.0, 30.0, 0.0, 70.0, 52.0):
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if not width
                                 else GridLength(width))
@@ -1182,9 +1192,15 @@ class CadToBimWindow(object):
             include = CheckBox()
             include.IsChecked = bool(row.get("include", True))
             include.VerticalAlignment = VerticalAlignment.Center
-            include.Content = str(position + 1)
+            include.ToolTip = "Untick to leave this storey out of the model"
             WpfGrid.SetColumn(include, 0)
             grid.Children.Add(include)
+
+            number = TextBlock()
+            number.Text = str(position + 1)
+            number.VerticalAlignment = VerticalAlignment.Center
+            WpfGrid.SetColumn(number, 1)
+            grid.Children.Add(number)
 
             plan_combo = ComboBox()
             plan_combo.Height = 22
@@ -1192,8 +1208,8 @@ class CadToBimWindow(object):
             for index in range(len(self._storey_plans)):
                 plan_combo.Items.Add(self._plan_label(index))
             plan_combo.SelectedIndex = min(row.get("plan") or 0,
-                                           len(self._storey_plans) - 1)
-            WpfGrid.SetColumn(plan_combo, 1)
+                                           max(0, len(self._storey_plans) - 1))
+            WpfGrid.SetColumn(plan_combo, 2)
             grid.Children.Add(plan_combo)
 
             height = TextBox()
@@ -1201,20 +1217,60 @@ class CadToBimWindow(object):
             height.Margin = Thickness(0, 1, 8, 1)
             height.Text = ("" if row.get("height_mm") is None
                            else "{0:g}".format(row["height_mm"]))
-            WpfGrid.SetColumn(height, 2)
+            WpfGrid.SetColumn(height, 3)
             grid.Children.Add(height)
 
             repeat = TextBox()
             repeat.Height = 22
             repeat.Margin = Thickness(0, 1, 0, 1)
             repeat.Text = str(int(row.get("repeat") or 1))
-            WpfGrid.SetColumn(repeat, 3)
+            WpfGrid.SetColumn(repeat, 4)
             grid.Children.Add(repeat)
 
-            grid.MouseLeftButtonDown += self._on_storey_row_clicked
-            self.storey_rows.Children.Add(grid)
+            item = ListBoxItem()
+            item.Content = grid
+            item.Padding = Thickness(2, 1, 2, 1)
+            # PREVIEW: the tunnelling event reaches the row before the combo box
+            # or text box inside it can handle the click, so clicking anywhere
+            # on a row selects it
+            item.PreviewMouseLeftButtonDown += self._on_storey_row_clicked
+            item.PreviewGotKeyboardFocus += self._on_storey_row_clicked
+            self.storey_rows.Items.Add(item)
             self._storey_boxes.append((row, plan_combo, height, repeat, include,
-                                       grid))
+                                       item))
+        if self._storey_boxes:
+            if not (0 <= keep < len(self._storey_boxes)):
+                keep = 0
+            self.storey_rows.SelectedIndex = keep
+        self._show_storey_selection()
+
+    def _show_storey_selection(self):
+        """Say which storey the Move/Add/Remove buttons will act on."""
+        for button in (self.btn_storey_up, self.btn_storey_down,
+                       self.btn_storey_add, self.btn_storey_remove):
+            button.IsEnabled = bool(self._storey_rows)
+        if not self._storey_rows:
+            self.storey_selection_text.Text = "no floor plans detected"
+            return
+        index = self.storey_rows.SelectedIndex
+        if index is None or index < 0:
+            self.storey_selection_text.Text = "click a row to select a storey"
+            return
+        self.btn_storey_up.IsEnabled = index > 0
+        self.btn_storey_down.IsEnabled = index < len(self._storey_rows) - 1
+        self.btn_storey_remove.IsEnabled = len(self._storey_rows) > 1
+        self.storey_selection_text.Text = "storey {0} of {1} selected".format(
+            index + 1, len(self._storey_rows))
+
+    def _on_storey_row_clicked(self, sender, args):
+        try:
+            self.storey_rows.SelectedItem = sender
+        except Exception:
+            pass
+        self._show_storey_selection()
+
+    def on_storey_selection_changed(self, sender, args):
+        self._show_storey_selection()
 
     def _capture_storey_rows(self):
         """Read the on-screen table back into the model before reordering it."""
@@ -1225,13 +1281,10 @@ class CadToBimWindow(object):
             row["include"] = bool(include.IsChecked)
 
     def _selected_storey(self):
-        for position, entry in enumerate(self._storey_boxes):
-            if entry[5] is self._storey_focus:
-                return position
-        return len(self._storey_rows) - 1 if self._storey_rows else -1
-
-    def _on_storey_row_clicked(self, sender, args):
-        self._storey_focus = sender
+        index = self.storey_rows.SelectedIndex
+        if index is None or index < 0:
+            return len(self._storey_rows) - 1 if self._storey_rows else -1
+        return index
 
     def on_storey_move_up(self, sender, args):
         self._move_storey(-1)
@@ -1249,7 +1302,8 @@ class CadToBimWindow(object):
         rows[position], rows[target] = rows[target], rows[position]
         self._refresh_storey_rows()
         if 0 <= target < len(self._storey_boxes):
-            self._storey_focus = self._storey_boxes[target][5]
+            self.storey_rows.SelectedIndex = target      # follow the moved row
+            self._show_storey_selection()
 
     def on_storey_add(self, sender, args):
         """Another storey built from an existing plan (a typical floor reused)."""
@@ -1264,6 +1318,8 @@ class CadToBimWindow(object):
                                   "height_mm": source.get("height_mm"),
                                   "repeat": 1, "include": True})
         self._refresh_storey_rows()
+        self.storey_rows.SelectedIndex = position + 1
+        self._show_storey_selection()
 
     def on_storey_remove(self, sender, args):
         self._capture_storey_rows()
@@ -1272,6 +1328,8 @@ class CadToBimWindow(object):
             return
         self._storey_rows.pop(position)
         self._refresh_storey_rows()
+        self.storey_rows.SelectedIndex = min(position, len(self._storey_rows) - 1)
+        self._show_storey_selection()
 
     def _read_storey_settings(self):
         """The per-storey rows as plain dicts, bottom-up (what the build wants)."""

@@ -349,26 +349,33 @@
                         <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="10" Margin="20,6,0,0"/>
 
                         <TextBlock Text="Detected storeys" FontWeight="Bold" Margin="20,10,0,2"/>
-                        <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Use the arrows to move a storey up or down the stack."
+                        <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Click a row to select it, then use the buttons below to move, add or remove that storey."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,0,0,4"/>
-                        <Grid Margin="20,0,0,2">
+                        <Grid Margin="26,0,0,2">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="52"/>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="30"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="70"/>
                                 <ColumnDefinition Width="52"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Build" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="1" Text="Plan drawing" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="2" Text="Height" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="3" Text="Repeat" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="1" Text="No." FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="2" Text="Plan drawing" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="3" Text="Height" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="4" Text="Repeat" FontSize="10" Foreground="Gray"/>
                         </Grid>
-                        <StackPanel x:Name="storey_rows" Margin="20,0,0,0"/>
+                        <ListBox x:Name="storey_rows" Margin="20,0,0,0" MaxHeight="190"
+                                 HorizontalContentAlignment="Stretch"
+                                 SelectionMode="Single"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"/>
                         <StackPanel Orientation="Horizontal" Margin="20,6,0,0">
                             <Button x:Name="btn_storey_up" Content="Move up" Width="82" Height="24"/>
                             <Button x:Name="btn_storey_down" Content="Move down" Width="92" Height="24" Margin="6,0,0,0"/>
                             <Button x:Name="btn_storey_add" Content="Add storey" Width="92" Height="24" Margin="6,0,0,0"/>
                             <Button x:Name="btn_storey_remove" Content="Remove" Width="82" Height="24" Margin="6,0,0,0"/>
+                            <TextBlock x:Name="storey_selection_text" VerticalAlignment="Center"
+                                       Margin="10,0,0,0" FontSize="10" Foreground="Gray"/>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
