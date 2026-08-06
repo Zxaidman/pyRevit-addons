@@ -284,6 +284,39 @@ class LevelNamesReachTheBuilder(unittest.TestCase):
         self.assertIn("self.chk_level_follow", source)
 
 
+class TheEngineKeepsModulesBetweenRuns(unittest.TestCase):
+    """A fresh click must run the library on disk, not last session's copy.
+
+    The CPython3 engine outlives a run: script.py is re-read every click, its
+    imports are not. v0.67.1 shipped naming.next_level_names and a session that
+    had already run v0.67.0 raised AttributeError on it until Revit restarted.
+    """
+
+    def test_stale_modules_are_dropped_before_the_imports(self):
+        source = _script_source()
+        purge = source.index("def _drop_stale_modules(")
+        call = source.index("_drop_stale_modules()\n\nfrom anongee_toolkit")
+        first_import = source.index("\nfrom anongee_toolkit import cad2bim")
+        self.assertLess(purge, call)
+        self.assertLess(call, first_import)
+
+    def test_the_parent_attribute_goes_too(self):
+        # `from anongee_toolkit import cad2bim` reads the attribute off the
+        # parent module and never consults sys.modules
+        source = _script_source()
+        block = source.split("def _drop_stale_modules(", 1)[1].split(
+            "\n\n_bootstrap", 1)[0]
+        self.assertIn("del sys.modules[name]", block)
+        self.assertIn("delattr(parent", block)
+
+    def test_a_library_older_than_the_button_says_so_up_front(self):
+        source = _script_source()
+        self.assertIn("_library_mismatch()", source)
+        for attribute in ("next_level_names", "recover_face_columns",
+                          "loops_for_unclaimed_notes"):
+            self.assertIn(attribute, source)
+
+
 class SettingsSaveAndLoad(unittest.TestCase):
     """The whole dialog has to survive a Revit session, not just two boxes."""
 

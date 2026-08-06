@@ -85,7 +85,37 @@ def _bootstrap_lib_path():
         cursor = parent
 
 
+def _drop_stale_modules():
+    """Forget any anongee_toolkit modules the ENGINE is still holding.
+
+    The CPython3 engine outlives a run: this file is re-read every click, but a
+    module it imported stays in sys.modules for the whole Revit session. Update
+    the extension and the new script runs against the OLD library -- v0.67.1's
+    `naming.next_level_names` was on disk, in the file, tested, and missing at
+    runtime, because a session that had already run v0.67.0 kept v0.67.0's
+    naming module. Nothing short of restarting Revit fixed it.
+
+    So each run starts from the files on disk. The parent package's attribute
+    goes too: `from anongee_toolkit import cad2bim` reads the attribute off the
+    already-imported parent and never consults sys.modules, so clearing one
+    without the other changes nothing. ezdxf, numpy and the rest are untouched
+    -- they are the expensive imports, and they do not change under us.
+    """
+    stale = [name for name in list(sys.modules)
+             if name == "anongee_toolkit" or name.startswith("anongee_toolkit.")]
+    parent = sys.modules.get("anongee_toolkit")
+    for name in stale:
+        del sys.modules[name]
+    if parent is not None:
+        for attribute in ("cad2bim", "revit", "ui"):
+            try:
+                delattr(parent, attribute)
+            except AttributeError:
+                pass
+
+
 _bootstrap_lib_path()
+_drop_stale_modules()
 
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
@@ -101,6 +131,30 @@ from anongee_toolkit.cad2bim.builders import (columns, beams, footings, grids,
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
+
+# What this button needs the library to have. Checked once, up front, so a
+# library older than the button says so plainly instead of failing an hour into
+# a build with "module has no attribute" (0.67.1, mid multi-storey run).
+_REQUIRED = ((naming, ("level_name", "next_level_names", "ordinal")),
+             (report, ("recover_face_columns", "build_beam_segments")),
+             (slab_outlines, ("loops_for_unclaimed_notes",)),
+             (settings, ("payload", "restorable")),
+             (materials, ("apply", "apply_grade")))
+
+
+def _library_mismatch():
+    """A sentence naming what is missing and where the library came from, or None."""
+    missing = ["{0}.{1}".format(module.__name__.rsplit(".", 1)[-1], attribute)
+               for module, attributes in _REQUIRED for attribute in attributes
+               if not hasattr(module, attribute)]
+    if not missing:
+        return None
+    return ("This button needs a newer cad2bim library.\n\nMissing: {0}\n\n"
+            "Loaded from:\n{1}\n\nVersion: {2}\n\nThe copy on sys.path is older "
+            "than the button. Check for a second anongee_toolkit folder "
+            "shadowing the extension's lib/py3.".format(
+                ", ".join(missing), getattr(cad2bim, "__file__", "?"),
+                getattr(cad2bim, "__version__", "?")))
 
 # --- deferred console: the whole run is buffered and only REVEALED when something
 # goes wrong (user request: a clean run should not open the pyRevit console at all).
@@ -1651,6 +1705,11 @@ def main():
 
     module_dir = os.path.dirname(os.path.abspath(report.__file__))
     _say("cad2bim {0} loaded from {1}".format(cad2bim.__version__, module_dir))
+    mismatch = _library_mismatch()
+    if mismatch:
+        _say(mismatch)
+        _error("cad2bim library out of date", mismatch)
+        return
     _say(compat.runtime_summary())
     try:
         _say("Host: Revit {0}".format(__revit__.Application.VersionNumber))

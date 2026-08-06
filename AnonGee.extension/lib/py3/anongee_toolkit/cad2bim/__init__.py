@@ -35,7 +35,30 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.2"  # The roof's slabs, from the v0.67.0 run's own export.
+__version__ = "0.67.3"  # HOTFIX: the engine kept last session's library.
+#
+#                         "module 'naming' has no attribute 'next_level_names'" on a
+#                         function that is in the file, exported, and unit-tested. The
+#                         CPython3 engine outlives a run: script.py is re-read on every
+#                         click, but a module it imported stays in sys.modules for the
+#                         whole Revit session -- so a session that had already run
+#                         v0.67.0 kept v0.67.0's naming module and the new button ran
+#                         against the old library. Only restarting Revit cleared it.
+#
+#                         Every run now drops anongee_toolkit from sys.modules before
+#                         importing, so the files on disk are what runs. The parent
+#                         package's attribute goes with it: `from anongee_toolkit import
+#                         cad2bim` reads that attribute and never consults sys.modules,
+#                         so clearing one without the other changes nothing (verified
+#                         against a simulated stale session). ezdxf and numpy are left
+#                         alone -- they are the expensive imports and they do not change.
+#
+#                         And if a library older than the button is ever on sys.path for
+#                         real -- a shadow copy of anongee_toolkit -- the run now says
+#                         so up front, naming what is missing and where it loaded from,
+#                         instead of failing an hour into a build.
+#
+# 0.67.2                  The roof's slabs, from the v0.67.0 run's own export.
 #
 #                         SLABS: the note recovery only ran when the slab-edge layer
 #                         had ALREADY found something. On the roof of the updated test10
