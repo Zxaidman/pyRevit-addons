@@ -64,6 +64,15 @@ _TYPICAL_COUNT = re.compile(
 # "Ground Floor @0.00+ Level" / "1st Floor @3.00+ Level" / "EL. +12.500"
 _ELEVATION = re.compile(
     r"(?:@|\bel\.?\s*|\blvl\.?\s*)\s*([+-]?\d+(?:\.\d+)?)", re.IGNORECASE)
+# ... and the other way round, which is how test12 writes it: "+8.600M LVL."
+_ELEVATION_TRAILING = re.compile(
+    r"([+-]?\d+(?:\.\d+)?)\s*(?:m|mm)?\.?\s*(?:lvl|level)\b", re.IGNORECASE)
+# A caption names a storey with one of these; anything else inside a plan box is
+# a dimension, a note or a mark, and must never end up as the storey's name.
+_TITLE_WORDS = re.compile(
+    r"\b(layout|plan|floor|storey|story|level|lvl|terrace|roof|parapet|lmr|"
+    r"basement|podium|refuge|typical|stilt|mezzanine)\b", re.IGNORECASE)
+_STRONG_TITLE_WORDS = re.compile(r"\b(layout|plan)\b", re.IGNORECASE)
 _ELEV_MM_CUTOFF = 100.0     # above this the number is millimetres, not metres
 
 # Auto-detection: layer NAMES only break ties, the shape of what is drawn decides.
@@ -128,6 +137,9 @@ def looks_like_a_plan_title(text):
         return False
     if _NOTE_MARKER.match(first):
         return False               # "2) ..." / "(a) ..." is a numbered note
+    if _STRONG_TITLE_WORDS.match(first):
+        return True                # "LAYOUT AT PARAPET & LMR BOTTOM LVL." --
+        #                            a caption announces itself in its first word
     if first.endswith(".") and len(re.findall(r"[A-Za-z]+", first)) >= 6:
         return False               # a full sentence, not a caption
     return True
@@ -186,11 +198,135 @@ def elevation_from_text(text):
     """
     if not text:
         return None
-    match = _ELEVATION.search(text)
+    match = _ELEVATION.search(text) or _ELEVATION_TRAILING.search(text)
     if not match:
         return None
     value = float(match.group(1))
     return value if abs(value) >= _ELEV_MM_CUTOFF else value * 1000.0
+
+
+def describe_plan(texts):
+    """What one floor box's texts say about it.
+
+    Returns (label, order, repeat, elevation_mm) with order None when nothing
+    inside names a storey the sort understands -- the caller then falls back to
+    the sheet's reading order, as it always has.
+
+    Two things beyond the ordered title, both from test12: a plan can be
+    captioned "LAYOUT AT REFUGE FLOOR LVL." -- a real title naming no ordinal,
+    which used to leave the storey unnamed -- and its elevation can sit in a
+    note of its own ("+8.600M LVL.") rather than in the title.
+    """
+    ordered = None                  # (order, text)
+    caption = None                  # (score, text)
+    elevation = None
+    for text in (texts or []):
+        value = (getattr(text, "text", None) or "").strip()
+        if not value:
+            continue
+        order = level_order_from_text(value)
+        if order is not None and (ordered is None or order < ordered[0]):
+            ordered = (order, value)
+        if looks_like_a_plan_title(value) and _TITLE_WORDS.search(value):
+            score = (2 if _STRONG_TITLE_WORDS.search(value) else 1, len(value))
+            if caption is None or score > caption[0]:
+                caption = (score, value)
+        if elevation is None and _TITLE_WORDS.search(value):
+            elevation = elevation_from_text(value)
+    if ordered is not None:
+        label, order = ordered[1], ordered[0]
+        elevation = elevation_from_text(label) or elevation
+    elif caption is not None:
+        label, order = caption[1], None
+    else:
+        return None, None, 1, elevation
+    return label, order, typical_count_from_text(label) or 1, elevation
+
+
+_ROW_OVERLAP = 0.5          # boxes sharing this much height are on one row
+
+
+def sheet_sequence(bounds):
+    """Indices of `bounds` in sheet reading order: top row first, left to right.
+
+    Plans on one row are rarely the same height -- test12's five plans differ by
+    up to 7 m -- so grouping on the exact top edge shuffles them into five
+    "rows" and reads them in the wrong order entirely. Boxes whose y extents
+    overlap by half their height are one row.
+    """
+    remaining = sorted(range(len(bounds)), key=lambda i: -bounds[i][3])
+    sequence = []
+    while remaining:
+        first = remaining.pop(0)
+        low, high = bounds[first][1], bounds[first][3]
+        row = [first]
+        for index in list(remaining):
+            y0, y1 = bounds[index][1], bounds[index][3]
+            overlap = min(high, y1) - max(low, y0)
+            shortest = min(high - low, y1 - y0)
+            if shortest > 0 and overlap >= _ROW_OVERLAP * shortest:
+                row.append(index)
+                remaining.remove(index)
+                low, high = min(low, y0), max(high, y1)
+        sequence.extend(sorted(row, key=lambda i: bounds[i][0]))
+    return sequence
+
+
+def sheet_orders(bounds, orders):
+    """Fill in the storeys the titles did not place, from the sheet layout.
+
+    `bounds` and `orders` are parallel lists, one entry per floor box, `orders`
+    holding None where no title named a storey. A plan without an ordinal is
+    NOT simply pushed to the bottom of the stack: it belongs where the sheet
+    draws it, BETWEEN the titled plans on either side of it. Test12 lays out
+    2ND, TYPICAL, REFUGE, TERRACE, PARAPET left to right; filling the lowest
+    free numbers instead put REFUGE and PARAPET underneath the 2nd floor.
+
+    Sheet reading order is top row first, then left to right. Returns the
+    filled orders (floats where a plan was interpolated -- they are sort keys,
+    nothing counts with them).
+    """
+    sequence = sheet_sequence(bounds)
+    filled = list(orders)
+    if all(order is None for order in orders):
+        for rank, index in enumerate(sequence):
+            filled[index] = rank
+        return filled
+    for position, index in enumerate(sequence):
+        if filled[index] is not None:
+            continue
+        before = None
+        for earlier in reversed(sequence[:position]):
+            if orders[earlier] is not None:
+                before = orders[earlier]
+                break
+        after = None
+        for later in sequence[position + 1:]:
+            if orders[later] is not None:
+                after = orders[later]
+                break
+        gap = sum(1 for i in sequence[:position] if orders[i] is None
+                  and _same_slot(sequence, orders, i, index))
+        if before is None:
+            filled[index] = after - 1.0 - gap
+        elif after is None or after <= before:
+            filled[index] = before + 1.0 + gap
+        else:
+            step = (after - before) / (2.0 + gap)
+            filled[index] = before + step * (1.0 + gap)
+    return filled
+
+
+def _same_slot(sequence, orders, first, second):
+    """True when two untitled plans fall between the same titled pair."""
+    def neighbours(index):
+        position = sequence.index(index)
+        before = next((orders[i] for i in reversed(sequence[:position])
+                       if orders[i] is not None), None)
+        after = next((orders[i] for i in sequence[position + 1:]
+                      if orders[i] is not None), None)
+        return before, after
+    return neighbours(first) == neighbours(second)
 
 
 def _record_bounds(record):
@@ -382,35 +518,31 @@ def split_floors(records, texts=None, align=True, marker_records=None,
             origin = inside[0]
         regions.append(FloorRegion(box, origin))
 
-    # name each region from the plan title inside it, if there is one
+    # name each region from the plan title inside it, if there is one. A title
+    # that names no ordinal ("LAYOUT AT REFUGE FLOOR LVL.") still NAMES the
+    # storey; only its position in the stack comes from the sheet layout.
+    sorted_by_title = []
     for region in regions:
-        best = None
-        for text in (texts or []):
-            point = getattr(text, "point_internal", None)
-            if point is None or not region.contains(point[0], point[1]):
-                continue
-            order = level_order_from_text(getattr(text, "text", None))
-            if order is None:
-                continue
-            if best is None or order < best[0]:
-                best = (order, getattr(text, "text", "").strip())
-        if best is not None:
-            region.order, region.label = best
-            region.repeat = typical_count_from_text(best[1]) or 1
+        inside_texts = [text for text in (texts or [])
+                        if getattr(text, "point_internal", None) is not None
+                        and region.contains(text.point_internal[0],
+                                            text.point_internal[1])]
+        label, order, repeat, _elevation = describe_plan(inside_texts)
+        if label is not None:
+            region.label = label
+            region.repeat = repeat
+        if order is not None:
+            region.order = order
+            sorted_by_title.append(region)
 
-    unnamed = [r for r in regions if r.label is None]
-    if unnamed:
-        # sheet reading order: top row first, then left to right. Rows group by
-        # overlapping y extents so a slightly misaligned plan stays in its row.
-        ordered = sorted(unnamed, key=lambda r: (-r.bounds[3], r.bounds[0]))
-        used = {r.order for r in regions if r.label is not None}
-        next_order = 0
-        for region in ordered:
-            while next_order in used:
-                next_order += 1
-            region.order = next_order
-            used.add(next_order)
-        if len(unnamed) == len(regions) and len(regions) > 1:
+    if len(sorted_by_title) < len(regions):
+        known = [region.order if region in sorted_by_title else None
+                 for region in regions]
+        for region, order in zip(regions,
+                                 sheet_orders([r.bounds for r in regions],
+                                              known)):
+            region.order = order
+        if not sorted_by_title and len(regions) > 1:
             notes.append("no plan titles found -- storeys ordered by sheet "
                          "layout (top row first, then left to right)")
 
@@ -620,21 +752,11 @@ def autodetect_storeys(records, texts=None, boundary_layer=None,
     origins = origin_points(records, origin_layer) if origin_layer else []
     plans = []
     for box in boxes:
-        label, order, repeat, elevation = None, None, 1, None
-        for text in (texts or []):
-            point = getattr(text, "point_internal", None)
-            if point is None:
-                continue
-            if not (box[0] <= point[0] <= box[2] and box[1] <= point[1] <= box[3]):
-                continue
-            value = getattr(text, "text", None)
-            found = level_order_from_text(value)
-            if found is None:
-                continue
-            if order is None or found < order:
-                label, order = (value or "").strip(), found
-                repeat = typical_count_from_text(value) or 1
-                elevation = elevation_from_text(value)
+        inside_texts = [text for text in (texts or [])
+                        if getattr(text, "point_internal", None) is not None
+                        and box[0] <= text.point_internal[0] <= box[2]
+                        and box[1] <= text.point_internal[1] <= box[3]]
+        label, order, repeat, elevation = describe_plan(inside_texts)
         inside = [p for p in origins
                   if box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]]
         plans.append({"label": label, "order": order, "repeat": repeat,
@@ -642,16 +764,12 @@ def autodetect_storeys(records, texts=None, boundary_layer=None,
                       "elevation_mm": elevation,
                       "has_origin": bool(inside)})
 
-    # unnamed plans fall back to the sheet's reading order, exactly as the split
+    # a plan the titles did not place goes where the SHEET draws it, exactly as
+    # the split does it
     named = [p for p in plans if p["order"] is not None]
-    unnamed = [p for p in plans if p["order"] is None]
-    used = set(p["order"] for p in named)
-    next_order = 0
-    for plan in sorted(unnamed, key=lambda p: (-p["bounds"][3], p["bounds"][0])):
-        while next_order in used:
-            next_order += 1
-        plan["order"] = next_order
-        used.add(next_order)
+    for plan, order in zip(plans, sheet_orders([p["bounds"] for p in plans],
+                                               [p["order"] for p in plans])):
+        plan["order"] = order
     plans.sort(key=lambda p: p["order"])
 
     _heights_from_elevations(plans, notes)

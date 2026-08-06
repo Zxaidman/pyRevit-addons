@@ -1389,6 +1389,190 @@ def recover_outline_columns(sections, records, column_texts=None,
     return len(new_rects)
 
 
+_FACE_LABEL_REACH_MM = 900.0      # a size label sits just off the member it names
+_FACE_SIZE_TOL_MM = 60.0          # drawn vs labelled dimension
+_FACE_LIKENESS = 0.6              # a guess this much of the face is the same member
+
+
+def recover_face_columns(sections, records, column_texts=None,
+                         mark_reach_mm=_FACE_LABEL_REACH_MM,
+                         size_tol_mm=_FACE_SIZE_TOL_MM):
+    """Place COMBINED columns whose outline exists only as a graph face.
+
+    A merged member -- test10's roof: a 12300x300 perimeter wall carrying four
+    300x3300 columns, every piece exploded to bare lines -- closes into no ring
+    at all, because the wall's own edge runs THROUGH each column root. Walking
+    the faces of that line soup recovers each drawn member exactly (see
+    shapes.recover_face_columns).
+
+    Deliberately gated, because a face is otherwise easy to invent: a recovered
+    rectangle is kept only when the plan's own SIZE LABEL agrees with it -- a
+    "300 X 12300" text within reach whose dimensions match what was walked. No
+    label, no column; a rectangle already covered by a placed column is a
+    duplicate and is dropped. In exchange the size limits do not apply: the
+    drawing and its label agree, which is better evidence than a size band.
+
+    Any earlier APPROXIMATE rectangle (the leftover-fragment passes) that falls
+    inside a recovered face is removed: the same member, guessed badly.
+
+    Returns the count placed.
+    """
+    labels = [text for text in (column_texts or [])
+              if getattr(text, "b_mm", None) and getattr(text, "h_mm", None)]
+    if not labels:
+        return 0
+    paths = _open_column_paths(records)
+    if not paths:
+        return 0
+    z = next((p[0][2] for p in paths if p and len(p[0]) > 2), 0.0)
+    candidates = shapes.recover_face_columns(paths, z=z)
+    if not candidates:
+        return 0
+    # A FIRM column always blocks a face -- that member is already placed. An
+    # APPROXIMATE one (the recovery passes' own guesses) only blocks while it is
+    # a fair likeness: a 212x424 blob standing in for a 300x2000 column is a
+    # fragment of the member, not the member, and must not veto it.
+    firm = {"entries": [entry for entry in sections.get("entries", [])
+                        if not entry.get("approx")]}
+    guessed = {"entries": [entry for entry in sections.get("entries", [])
+                           if entry.get("approx")]}
+    placed = _column_footprints(firm, sections.get("circles"))
+    approximate = _column_footprints(guessed, None)
+    reach_ft = config.mm_to_ft(mark_reach_mm)
+    new_rects = []
+    kept_fps = []
+    for rect in candidates:
+        cx, cy, _cz = rect.center
+        width_mm = rect.width_ft * _MM
+        height_mm = rect.height_ft * _MM
+        small, big = min(width_mm, height_mm), max(width_mm, height_mm)
+        if _covered_by(cx, cy, placed) or _covered_by(cx, cy, kept_fps):
+            continue
+        if _covered_by(cx, cy, approximate,
+                       min_area_ft2=_FACE_LIKENESS * rect.width_ft * rect.height_ft):
+            continue
+        label = _matching_size_label(labels, rect, reach_ft, size_tol_mm)
+        if label is None:
+            continue
+        deg = 0.0 if width_mm >= height_mm else 90.0
+        new_rects.append({"center": [cx, cy, z],
+                          "width_mm": small, "height_mm": big,
+                          "width_ft": small / _MM, "height_ft": big / _MM,
+                          "long_axis_deg": deg,
+                          "mark": getattr(label, "mark", None)})
+        kept_fps.append(("rect", cx, cy, math.cos(math.radians(deg)),
+                         math.sin(math.radians(deg)),
+                         big / _MM / 2.0, small / _MM / 2.0))
+    if not new_rects:
+        return 0
+    dropped = _drop_approximate_inside(sections, new_rects)
+    entries = sections.get("entries", [])
+    entries.append({"layer": "COLUMN (graph face)", "status": "face_recovered",
+                    "approx": False, "rectangles": new_rects})
+    sections["entries"] = entries
+    counts = sections.setdefault("status_counts", {})
+    counts["face_recovered"] = counts.get("face_recovered", 0) + len(new_rects)
+    sections["total_rectangles"] = (sections.get("total_rectangles", 0)
+                                    + len(new_rects) - dropped)
+    return len(new_rects)
+
+
+def _open_column_paths(records):
+    """Column-layer geometry that closes into no ring of its own."""
+    paths = []
+    for record in (records or []):
+        if record.category != CATEGORY_COLUMN:
+            continue
+        points = record.points or []
+        if len(points) < 2:
+            continue
+        if len(points) > 3 and _ring_closed(points):
+            continue                      # a closed outline is already a column
+        paths.append(points)
+    return paths
+
+
+def _covered_by(cx, cy, footprints, min_area_ft2=0.0):
+    """True when (cx, cy) lies inside any footprint of at least `min_area_ft2`."""
+    for fp in footprints or []:
+        if fp[0] == "circle":
+            _k, px, py, pr = fp
+            if math.pi * pr * pr < min_area_ft2:
+                continue
+            if (cx - px) ** 2 + (cy - py) ** 2 <= pr ** 2:
+                return True
+            continue
+        _k, px, py, ca, sa, hl, hs = fp
+        if 4.0 * hl * hs < min_area_ft2:
+            continue
+        dx, dy = cx - px, cy - py
+        u = dx * ca + dy * sa
+        v = dy * ca - dx * sa
+        if abs(u) <= hl and abs(v) <= hs:
+            return True
+    return False
+
+
+def _matching_size_label(labels, rect, reach_ft, size_tol_mm):
+    """The nearest size label that AGREES with this rectangle, or None."""
+    cx, cy, _cz = rect.center
+    half_w = rect.width_ft / 2.0
+    half_h = rect.height_ft / 2.0
+    width_mm = rect.width_ft * _MM
+    height_mm = rect.height_ft * _MM
+    best = None
+    for text in labels:
+        point = getattr(text, "point_internal", None)
+        if point is None:
+            continue
+        outside = ((max(abs(point[0] - cx) - half_w, 0.0) ** 2
+                    + max(abs(point[1] - cy) - half_h, 0.0) ** 2) ** 0.5)
+        if outside > reach_ft:
+            continue
+        if not _dims_match_tol(width_mm, height_mm, text.b_mm, text.h_mm,
+                               size_tol_mm):
+            continue
+        if best is None or outside < best[0]:
+            best = (outside, text)
+    return best[1] if best else None
+
+
+def _dims_match_tol(width_mm, height_mm, b_mm, h_mm, tol_mm):
+    small, big = min(width_mm, height_mm), max(width_mm, height_mm)
+    label_small, label_big = min(b_mm, h_mm), max(b_mm, h_mm)
+    return (abs(small - label_small) <= tol_mm
+            and abs(big - label_big) <= tol_mm)
+
+
+def _drop_approximate_inside(sections, new_rects):
+    """Remove guessed rectangles that a recovered face now covers properly."""
+    boxes = []
+    for rect in new_rects:
+        cx, cy, _cz = rect["center"]
+        half_w = max(rect["width_ft"], rect["height_ft"]) / 2.0
+        half_h = min(rect["width_ft"], rect["height_ft"]) / 2.0
+        if rect["long_axis_deg"] == 90.0:
+            half_w, half_h = half_h, half_w
+        boxes.append((cx, cy, half_w, half_h))
+    dropped = 0
+    for entry in sections.get("entries", []):
+        if not entry.get("approx"):
+            continue
+        kept = []
+        for rect in entry.get("rectangles", []):
+            cx, cy, _cz = rect["center"]
+            inside = any(abs(cx - bx) <= hw and abs(cy - by) <= hh
+                         for bx, by, hw, hh in boxes)
+            if inside:
+                dropped += 1
+            else:
+                kept.append(rect)
+        entry["rectangles"] = kept
+    sections["entries"] = [e for e in sections.get("entries", [])
+                           if e.get("rectangles")]
+    return dropped
+
+
 def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
                               pad_ft=None):
     """Run a beam END up to a ROUND or ROTATED column's centre to close the junction gap.

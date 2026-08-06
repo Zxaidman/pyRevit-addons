@@ -35,7 +35,68 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.66.1"  # HOTFIX: the storey stack could not be selected.
+__version__ = "0.67.0"  # Beam material, combined columns, noted slabs, saved settings.
+#
+#                         STRUCTURAL FRAMING TOOK NO MATERIAL. The beams outcome carried
+#                         counts only: every other creator records the ids it placed under
+#                         the private _element_ids key, and _create_beams did not. The
+#                         material pass therefore found no beam elements and said "nothing of
+#                         this kind was built" on every run with beams in it. It records them
+#                         now, and a static test walks each creator's returns so a kind can
+#                         never again be built without being reachable.
+#
+#                         COMBINED COLUMNS (test10's new roof). A wall-column carrying four
+#                         columns, every piece exploded to bare lines, closes into no ring at
+#                         all -- the wall's own top edge runs THROUGH each column root, so
+#                         the single-cycle assembly gives up and the leftover-fragment pass
+#                         guesses 45-degree blobs. The roof placed 6 members, 4 of them junk,
+#                         where its labels name 10. shapes.recover_face_columns treats the
+#                         soup as a planar graph -- weld, split at every T, walk the bounded
+#                         faces -- and each face IS one drawn member. report.recover_face_
+#                         columns keeps a face only where the plan's own size label agrees
+#                         with it ("300 X 12300" within reach, dimensions matching), so no
+#                         label means no column; the size limits do not apply, because the
+#                         drawing and its label agreeing is better evidence than a size band.
+#                         Any approximate rectangle a recovered face covers is dropped, but
+#                         only when it was a FRAGMENT: a guess of the right size is the same
+#                         member and keeps its place. Roof: 10 of 10. Test1/2/3 each gain the
+#                         two wall-columns they were missing; every other fixture: no change.
+#
+#                         SLABS NOTED BUT NEVER DRAWN. The outline sources were either/or:
+#                         finding ANY slab-edge ring ended the search. Test10's roof draws
+#                         rings over its south bays and a single line over the north ones,
+#                         yet all six carry "200 THK." -- so three slabs went missing in
+#                         silence. slab_outlines.loops_for_unclaimed_notes makes the two
+#                         sources additive exactly where the drawing asks: a face of the
+#                         placed members is taken ONLY when it holds a thickness note that no
+#                         drawn ring covers, and only when it overlaps none of them. The note
+#                         doubles as the keep_point, so a bay whose fourth side is a WALL is
+#                         no longer dropped as a shaft. Roof: 6 slabs. Test13, whose A-FLOR
+#                         layer holds nothing but four slivers per storey, gains 47 real bays
+#                         per storey. Fixtures whose notes are all covered: unchanged.
+#
+#                         SETTINGS THAT LAST. Only the naming templates and standard sizes
+#                         survived a Revit session; everything else started from defaults
+#                         each morning. The whole dialog is now captured -- driven by
+#                         ui.xaml's own x:Names, so a control added tomorrow is saved the day
+#                         it appears -- and restored on the next run, with Save/Load buttons
+#                         in the footer for a settings file the office can share. Combos are
+#                         stored by LABEL, never by ElementId, so a file reloads into another
+#                         model; a control this drawing owns (the multi-storey tick and its
+#                         two layers, which auto-detection answers) is saved but never
+#                         restored, and a disabled control is left alone.
+#
+#                         TEST12's STOREYS. Four of its five captions name no ordinal
+#                         ("LAYOUT AT REFUGE FLOOR LVL."), so those storeys came out unnamed
+#                         AND were pushed to the bottom of the stack. A caption that names no
+#                         ordinal still NAMES the storey; only its position comes from the
+#                         sheet, and it now holds its place BETWEEN the titled plans either
+#                         side of it. Reading order groups plans into rows by overlapping y
+#                         extents (test12's five plans differ in height by 7 m and were read
+#                         as five rows). Elevations are read from a note of their own
+#                         ("+8.600M LVL."), not just from the title, which gives test12 its
+#                         storey heights. Also: the Naming tab's footing row was never bound,
+#                         so the box came up blank -- ten template keys, nine bound.
 #
 #                         The rows were a StackPanel of Grids with a click handler on the
 #                         Grid, so the combo box and text boxes INSIDE each row swallowed the

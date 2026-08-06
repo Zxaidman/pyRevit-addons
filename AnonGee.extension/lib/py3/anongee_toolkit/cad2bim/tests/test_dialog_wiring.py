@@ -77,8 +77,24 @@ class SlabToleranceRow(unittest.TestCase):
     def test_slab_tolerance_boxes_are_all_present(self):
         names = _xaml_names(_XAML)
         for control in ("tb_slab_snap", "tb_slab_heal", "tb_slab_chain",
-                        "tb_slab_width", "tb_slab_step"):
+                        "tb_slab_width", "tb_slab_step", "tb_slab_note_area"):
             self.assertIn(control, names)
+
+    def test_every_tolerance_the_build_reads_is_on_the_tab(self):
+        """The user's standing rule: a tolerance the project uses is shown here.
+
+        Every key _read_tolerances returns has to come from a control, not from
+        a constant buried in a module.
+        """
+        source = _script_source()
+        block = source.split("def _read_tolerances(", 1)[1].split(
+            "def ", 1)[0]
+        keys = re.findall(r'"([a-z0-9_]+)":\s*self\._read_(?:float|int)\(',
+                          block)
+        self.assertGreater(len(keys), 10)
+        for key in ("slab_note_min_area_m2", "face_label_reach_mm",
+                    "face_size_tol_mm"):
+            self.assertIn(key, keys, "%s is not read from a control" % key)
 
 
 class NamingTabControls(unittest.TestCase):
@@ -99,18 +115,35 @@ class NamingTabControls(unittest.TestCase):
         self.assertIn("btn_name_defaults", names)
         self.assertIn("naming_saved_text", names)
 
-    def test_every_template_key_has_a_dialog_row(self):
+    def _template_keys(self):
         with open(os.path.join(os.path.dirname(_HERE), "naming.py"),
                   "rb") as handle:
             source = handle.read().decode("utf-8")
         block = source.split("DEFAULTS = {", 1)[1].split("}", 1)[0]
         keys = re.findall(r'"([a-z_]+)":', block)
         self.assertTrue(keys)
+        return keys
+
+    def test_every_template_key_has_a_dialog_row(self):
         names = _xaml_names(_XAML)
-        for key in keys:
+        for key in self._template_keys():
             self.assertIn(key, self._CONTROL,
                           "no dialog row for template %r" % key)
             self.assertIn("tb_name_{0}".format(self._CONTROL[key]), names)
+
+    def test_every_template_key_is_bound_in_the_dialog(self):
+        """A row in the XAML that __init__ never binds is a dead box.
+
+        `footing` was exactly that: the template, the row and the preview label
+        all existed, and the box came up blank because the binding loop had
+        nine keys in it instead of ten.
+        """
+        source = _script_source()
+        block = source.split("self.name_boxes = {}", 1)[1].split(
+            "self.naming_saved_text", 1)[0]
+        bound = set(re.findall(r'\("([a-z_]+)",\s*"[a-z_]+"\)', block))
+        for key in self._template_keys():
+            self.assertIn(key, bound, "the Naming tab never binds %r" % key)
 
 
 class MaterialAndFootingControls(unittest.TestCase):
@@ -159,6 +192,34 @@ class OutcomesReachTheExportClean(unittest.TestCase):
         # the original is untouched: the material pass still needs the ids
         self.assertIn(namespace["_IDS"], outcomes["columns"])
 
+    def test_every_material_kind_records_the_ids_it_created(self):
+        """A creator that returns counts only is invisible to the material pass.
+
+        `_create_beams` did exactly that: the beams outcome had no _IDS key, so
+        `_apply_materials` found no elements and said "nothing of this kind was
+        built" on every run with beams in it.
+        """
+        source = _script_source()
+        creator = {"column": "_create_columns", "beam": "_create_beams",
+                   "slab": "_create_slabs", "stair": "_create_stairs",
+                   "footing": "_create_footings"}
+        tree = ast.parse(source)
+        functions = dict((node.name, node) for node in ast.walk(tree)
+                         if isinstance(node, ast.FunctionDef))
+        for kind, name in creator.items():
+            node = functions.get(name)
+            self.assertIsNotNone(node, "no %s in script.py" % name)
+            records = False
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.Dict):
+                    continue
+                for key in inner.keys:
+                    if isinstance(key, ast.Name) and key.id == "_IDS":
+                        records = True
+            self.assertTrue(records,
+                            "%s never records _IDS: %s takes no material"
+                            % (name, kind))
+
     def test_no_outcome_dict_exports_an_id_list_under_a_plain_key(self):
         # reading a builder's own result["created_ids"] is fine; putting one
         # into an outcome dict under a plain key is what broke the export
@@ -198,6 +259,55 @@ class StoreyTableIsSelectable(unittest.TestCase):
         for control in ("btn_storey_up", "btn_storey_down", "btn_storey_add",
                         "btn_storey_remove", "storey_selection_text"):
             self.assertIn(control, names)
+
+
+class SettingsSaveAndLoad(unittest.TestCase):
+    """The whole dialog has to survive a Revit session, not just two boxes."""
+
+    def test_the_footer_has_both_buttons(self):
+        names = _xaml_names(_XAML)
+        for control in ("btn_settings_save", "btn_settings_load", "status_text"):
+            self.assertIn(control, names)
+
+    def test_the_buttons_are_wired(self):
+        source = _script_source()
+        self.assertIn("self.btn_settings_save.Click += self.on_settings_save",
+                      source)
+        self.assertIn("self.btn_settings_load.Click += self.on_settings_load",
+                      source)
+
+    def test_the_run_remembers_the_whole_dialog(self):
+        source = _script_source()
+        self.assertIn('"dialog": self._capture_settings()', source)
+        self.assertIn('_saved_prefs.get("dialog")', source)
+        self.assertIn("saved_settings=saved_settings", source)
+
+    def test_capture_is_driven_by_the_xaml_names(self):
+        """Listing controls by hand is how a new one gets forgotten."""
+        source = _script_source()
+        self.assertIn("for name in _control_names():", source)
+        self.assertIn("settings.saveable(name)", source)
+        self.assertIn("settings.restorable(name)", source)
+
+    def test_every_saveable_xaml_control_is_a_kind_capture_understands(self):
+        """A control type _control_value cannot read saves as nothing at all."""
+        import xml.etree.ElementTree as Tree
+        known = ("TextBox", "CheckBox", "RadioButton", "ComboBox", "Slider",
+                 "TextBlock", "ListBox", "Button", "StackPanel", "Grid",
+                 "Border", "Expander", "TabItem", "ScrollViewer", "Window",
+                 "Separator", "Label")
+        key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+        unknown = []
+        for element in Tree.parse(_XAML).iter():
+            name = element.get(key)
+            if not name:
+                continue
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag not in known:
+                unknown.append((name, tag))
+        self.assertEqual(unknown, [],
+                         "settings cannot read these control types: %s"
+                         % unknown)
 
 
 if __name__ == "__main__":

@@ -322,6 +322,69 @@ class PlacedMemberFaces(unittest.TestCase):
             self.assertAlmostEqual(r_mm, 400.0, delta=2.0)
 
 
+class UnclaimedThicknessNotes(unittest.TestCase):
+    """A noted bay whose slab edge was never drawn still becomes a slab.
+
+    Test10's roof draws A-FLOR rings over its south bays and a single edge line
+    over the north ones, yet every bay carries "200 THK.". Finding SOME rings
+    used to end the search, so the north bays went missing in silence.
+    """
+
+    def _seg(self, x0, y0, x1, y1, w=300.0):
+        return {"start": [x0 * _FT, y0 * _FT, 0.0],
+                "end": [x1 * _FT, y1 * _FT, 0.0], "width_mm": w}
+
+    def _two_bays(self):
+        # two 5 m bays side by side, drawn as placed beams
+        segs = []
+        for x in (0.0, 5000.0, 10000.0):
+            segs.append(self._seg(x, 0, x, 5000))
+        for y in (0.0, 5000.0):
+            segs.append(self._seg(0, y, 10000, y))
+        return segs
+
+    def _drawn_left_bay(self):
+        return _Record([(150, 150), (4850, 150), (4850, 4850), (150, 4850)],
+                       closed=True)
+
+    def test_the_undrawn_noted_bay_is_recovered(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        self.assertEqual(len(drawn), 1)
+        texts = [_Text("200 THK.", 2500, 2500), _Text("200 THK.", 7500, 2500)]
+        extra = slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts)
+        self.assertEqual(len(extra), 1)
+        ring = extra[0][0]
+        xs = [p[0] * _MM for p in ring]
+        self.assertGreater(min(xs), 5000.0)      # the RIGHT bay, not the drawn one
+
+    def test_a_plan_whose_notes_are_all_covered_gains_nothing(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 2500, 2500)]
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts), [])
+
+    def test_no_notes_means_no_extra_work(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), []), [])
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), [_Text("PLAN AT LEVEL 2", 7500, 2500)]),
+            [])
+
+    def test_a_note_over_nothing_recovers_nothing(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 40000, 40000)]     # far off the beam graph
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts), [])
+
+    def test_a_sliver_is_not_a_slab(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 7500, 2500)]
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts, min_area_m2=100.0), [])
+
+
 class ColumnWiderThanBeam(unittest.TestCase):
     """A column overhanging its beam must give the slab a STEP, not a slope.
 

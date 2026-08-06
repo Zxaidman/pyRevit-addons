@@ -486,6 +486,195 @@ def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
     return rects, consumed
 
 
+_FACE_SNAP_FT = 2.0 / 304.8       # endpoints this close are the same node
+_FACE_MAX_SEGMENTS = 6000         # a whole-sheet soup is not one member: bail out
+_FACE_MAX_RING = 400              # a walk longer than this is not a column
+
+
+def recover_face_columns(paths, z=0.0, snap_ft=_FACE_SNAP_FT):
+    """Rectangles from the FACES of an axis-aligned line soup.
+
+    `assemble_rectilinear_rings` needs a component that reduces to ONE simple
+    cycle, which a merged/combined column never does: test10's roof draws a
+    12300-long perimeter wall-column with four 300x3300 columns standing on it,
+    every piece exploded to bare lines, and the wall's own top edge continues
+    THROUGH each column root. Those interior edges make T-junctions, the cycle
+    test fails, and the whole comb collapses to nothing (or to a 45-degree blob
+    from the leftover-fragment pass).
+
+    Treating the soup as a planar graph solves it exactly: weld the endpoints,
+    split every edge at the nodes lying on it, and walk the bounded faces. Each
+    face of that comb is one drawn member -- four 300x3300 columns and one
+    12300x300 wall -- which is what the plan's own labels say is there.
+
+    Returns [Rectangle]; a face that is not rectilinear, or that merely encloses
+    other faces (the union outline, walked as a face in its own right), is
+    dropped. Size acceptance is left to the caller.
+    """
+    segments = _face_segments(paths, snap_ft)
+    if not segments or len(segments) > _FACE_MAX_SEGMENTS:
+        return []
+    adjacency = _face_adjacency(segments)
+    rings = _walk_bounded_faces(adjacency)
+    rings = _drop_enclosing_rings(rings)
+    rectangles = []
+    for ring in rings:
+        simplified = simplify_ring(ring)
+        if len(simplified) < 4 or not is_rectilinear(simplified):
+            continue
+        for rect in decompose_to_rectangles(simplified, z):
+            if rect.width_ft > _TOL and rect.height_ft > _TOL:
+                rectangles.append(rect)
+    return rectangles
+
+
+def _snap_values(values, tol):
+    """{value: representative} so coordinates that agree to `tol` become one."""
+    out = {}
+    keys = []
+    for value in sorted(values):
+        if keys and abs(keys[-1] - value) <= tol:
+            out[value] = keys[-1]
+            continue
+        keys.append(value)
+        out[value] = value
+    return out
+
+
+def _face_segments(paths, tol):
+    """Axis-aligned segments on a welded coordinate grid. [] if any path skews."""
+    raw = []
+    for path in paths or []:
+        points = [(p[0], p[1]) for p in path or []]
+        if len(points) < 2:
+            continue
+        skewed = False
+        pieces = []
+        for a, b in zip(points, points[1:]):
+            dx, dy = abs(a[0] - b[0]), abs(a[1] - b[1])
+            if dx <= tol and dy <= tol:
+                continue                       # zero length
+            if dx > tol and dy > tol:
+                skewed = True                  # this path is not orthogonal
+                break
+            pieces.append((a, b))
+        if not skewed:
+            raw.extend(pieces)
+    if not raw:
+        return []
+    xs = _snap_values([p[0] for seg in raw for p in seg], tol)
+    ys = _snap_values([p[1] for seg in raw for p in seg], tol)
+    out = []
+    for a, b in raw:
+        p = (xs[a[0]], ys[a[1]])
+        q = (xs[b[0]], ys[b[1]])
+        if p != q:
+            out.append((p, q))
+    return out
+
+
+def _face_adjacency(segments):
+    """{node: [neighbours]} with every segment split at the nodes lying on it."""
+    nodes = set()
+    for a, b in segments:
+        nodes.add(a)
+        nodes.add(b)
+    by_x = {}
+    by_y = {}
+    for node in nodes:
+        by_x.setdefault(node[0], []).append(node[1])
+        by_y.setdefault(node[1], []).append(node[0])
+    for values in list(by_x.values()) + list(by_y.values()):
+        values.sort()
+    edges = set()
+    for a, b in segments:
+        if a[0] == b[0]:                        # vertical
+            lo, hi = sorted((a[1], b[1]))
+            cuts = [y for y in by_x.get(a[0], []) if lo <= y <= hi]
+            points = [(a[0], y) for y in sorted(set(cuts))]
+        else:                                   # horizontal
+            lo, hi = sorted((a[0], b[0]))
+            cuts = [x for x in by_y.get(a[1], []) if lo <= x <= hi]
+            points = [(x, a[1]) for x in sorted(set(cuts))]
+        for p, q in zip(points, points[1:]):
+            if p != q:
+                edges.add((p, q) if p < q else (q, p))
+    adjacency = {}
+    for p, q in edges:
+        adjacency.setdefault(p, []).append(q)
+        adjacency.setdefault(q, []).append(p)
+    return adjacency
+
+
+def _walk_bounded_faces(adjacency):
+    """Every face of a planar graph, walked by always turning the same way."""
+    rings = []
+    seen = set()
+    for start in sorted(adjacency):
+        for first in adjacency[start]:
+            if (start, first) in seen:
+                continue
+            ring = [start]
+            u, v = start, first
+            ok = True
+            while True:
+                seen.add((u, v))
+                ring.append(v)
+                w = _next_edge_cw(adjacency, u, v)
+                u, v = v, w
+                if (u, v) == (start, first):
+                    break
+                if len(ring) > _FACE_MAX_RING:
+                    ok = False
+                    break
+            if ok and len(ring) > 3:
+                rings.append(ring[:-1])
+    return rings
+
+
+def _next_edge_cw(adjacency, u, v):
+    """At `v`, the neighbour that turns most tightly from the edge u->v."""
+    base = math.atan2(u[1] - v[1], u[0] - v[0])
+    best = None
+    neighbours = adjacency.get(v) or [u]
+    for w in neighbours:
+        if w == u and len(neighbours) > 1:
+            continue                            # doubling back is the last resort
+        turn = (math.atan2(w[1] - v[1], w[0] - v[0]) - base) % (2 * math.pi)
+        if best is None or turn < best[0]:
+            best = (turn, w)
+    return best[1] if best else u
+
+
+def _drop_enclosing_rings(rings):
+    """Keep the faces that hold no other face -- drop each union outline.
+
+    The walk yields the outline of a whole connected component as well as its
+    individual faces; keeping both would place the comb twice.
+    """
+    if len(rings) < 2:
+        return rings
+    centres = []
+    for ring in rings:
+        cx = sum(p[0] for p in ring) / float(len(ring))
+        cy = sum(p[1] for p in ring) / float(len(ring))
+        centres.append((cx, cy))
+    kept = []
+    for index, ring in enumerate(rings):
+        encloses = False
+        for other, centre in enumerate(centres):
+            if other == index:
+                continue
+            if len(rings[other]) >= len(ring):
+                continue                        # only a bigger walk can enclose
+            if _point_in_polygon(centre[0], centre[1], ring):
+                encloses = True
+                break
+        if not encloses:
+            kept.append(ring)
+    return kept
+
+
 def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft,
                        bridge_ft=0.0, z=0.0):
     """Recover a fragmented lift/stair core's columns by pairing opposing faces.

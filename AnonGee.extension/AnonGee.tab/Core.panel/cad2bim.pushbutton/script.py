@@ -47,8 +47,10 @@ from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
                             Thickness, GridLength, GridUnitType, VerticalAlignment,
                             TextTrimming)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox, TextBox, CheckBox, ListBoxItem)
+                                     ComboBox, TextBox, CheckBox, ListBoxItem,
+                                     RadioButton, Slider)
 import System.Windows.Forms
+import xml.etree.ElementTree as ElementTree
 
 
 def _bootstrap_lib_path():
@@ -87,7 +89,8 @@ _bootstrap_lib_path()
 
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
-                                     prefs, report, slab_outlines, stair_layout)
+                                     prefs, report, settings, slab_outlines,
+                                     stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -351,6 +354,102 @@ def _load_window(xaml_path):
         stream.Close()
 
 
+_XAML_NAME_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+_CONTROL_NAMES = None
+
+
+def _control_names():
+    """Every x:Name in ui.xaml, read once.
+
+    The saved-settings pass needs the list of controls, and the XAML file is the
+    only place that HAS the list -- WPF gives no enumeration of named elements.
+    Reading the same file the window was built from means a control added to the
+    dialog tomorrow is saved and restored without touching this code.
+    """
+    global _CONTROL_NAMES
+    if _CONTROL_NAMES is None:
+        try:
+            tree = ElementTree.parse(_XAML)
+            _CONTROL_NAMES = [element.get(_XAML_NAME_KEY) for element in tree.iter()
+                              if element.get(_XAML_NAME_KEY)]
+        except Exception:
+            _CONTROL_NAMES = []      # settings are a convenience, never a blocker
+    return _CONTROL_NAMES
+
+
+def _control_value(control):
+    """A control's value as plain JSON, or None when it holds nothing to save."""
+    if control is None:
+        return None
+    if isinstance(control, ComboBox):
+        item = control.SelectedItem
+        return str(item) if item is not None else (control.Text or "")
+    if isinstance(control, (CheckBox, RadioButton)):
+        return bool(control.IsChecked)
+    if isinstance(control, Slider):
+        return float(control.Value)
+    if isinstance(control, TextBox):
+        return control.Text or ""
+    return None
+
+
+def _set_control_value(control, value):
+    """Put a saved value back on a control. True when it landed.
+
+    A DISABLED control is left alone: the dialog turns those off because this
+    model cannot do the thing (no beam family loaded, say), and a saved tick
+    must not talk it back into trying.
+    """
+    if control is None or value is None:
+        return False
+    try:
+        if not control.IsEnabled:
+            return False
+    except Exception:
+        pass
+    try:
+        if isinstance(control, ComboBox):
+            index = settings.pick_index(control.Items, value)
+            if index >= 0:
+                control.SelectedIndex = index
+                return True
+            if control.IsEditable:
+                control.Text = str(value)
+                return True
+            return False
+        if isinstance(control, (CheckBox, RadioButton)):
+            control.IsChecked = bool(value)
+            return True
+        if isinstance(control, Slider):
+            control.Value = float(value)
+            return True
+        if isinstance(control, TextBox):
+            control.Text = str(value)
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _open_settings_file():
+    dialog = System.Windows.Forms.OpenFileDialog()
+    dialog.Title = "Load cad2bim settings"
+    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
+        return dialog.FileName
+    return None
+
+
+def _save_settings_file():
+    dialog = System.Windows.Forms.SaveFileDialog()
+    dialog.Title = "Save cad2bim settings"
+    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
+    dialog.FileName = "cad2bim_settings.json"
+    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
+        return dialog.FileName
+    return None
+
+
 def _open_dxf():
     dialog = System.Windows.Forms.OpenFileDialog()
     dialog.Title = "Pick a DXF to link and convert"
@@ -455,7 +554,8 @@ class CadToBimWindow(object):
                  stair_type_options=None, level_elevations=None,
                  stair_regions=None, preset=None, storey_detection=None,
                  saved_naming=None, saved_standards=None,
-                 footing_type_options=None, material_options=None):
+                 footing_type_options=None, material_options=None,
+                 saved_settings=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -630,7 +730,8 @@ class CadToBimWindow(object):
                              ("stair", "stair"),
                              ("stair_waist", "stair_waist"),
                              ("level", "level"),
-                             ("grid", "grid")):
+                             ("grid", "grid"),
+                             ("footing", "footing")):
             box = find("tb_name_{0}".format(control))
             box.Text = saved_naming.get(key, naming.DEFAULTS[key])
             box.TextChanged += self.on_naming_changed
@@ -653,6 +754,9 @@ class CadToBimWindow(object):
         self.tb_slab_chain = find("tb_slab_chain")
         self.tb_slab_width = find("tb_slab_width")
         self.tb_slab_step = find("tb_slab_step")
+        self.tb_slab_note_area = find("tb_slab_note_area")
+        self.tb_face_reach = find("tb_face_reach")
+        self.tb_face_size = find("tb_face_size")
         self.tb_stair_cluster = find("tb_stair_cluster")
         self.tb_tread_min = find("tb_tread_min")
         self.tb_tread_max = find("tb_tread_max")
@@ -684,6 +788,19 @@ class CadToBimWindow(object):
         self.tb_stair_count.LostFocus += self._on_stair_count_edit
         self.tb_stair_riser.LostFocus += self._on_stair_sync
         self._stair_sync()
+
+        self.status_text = find("status_text")
+        self.btn_settings_save = find("btn_settings_save")
+        self.btn_settings_load = find("btn_settings_load")
+        self.btn_settings_save.Click += self.on_settings_save
+        self.btn_settings_load.Click += self.on_settings_load
+        # last run's dialog, restored before the preset so the round trip
+        # through "draw stair outlines" still wins
+        if saved_settings:
+            landed = self._apply_settings(saved_settings)
+            if landed:
+                self.status_text.Text = ("{0} setting(s) restored from the last "
+                                         "run".format(landed))
 
         if preset:
             self._apply_preset(preset)
@@ -803,6 +920,9 @@ class CadToBimWindow(object):
                                              d["standard_columns"])
         self.tb_std_beams.Text = saved.get("beam_widths",
                                            d["standard_beam_widths"])
+        self.tb_slab_note_area.Text = str(d["slab_note_min_area_m2"])
+        self.tb_face_reach.Text = str(int(d["face_label_reach_mm"]))
+        self.tb_face_size.Text = str(int(d["face_size_tol_mm"]))
         self.tb_footing_projection.Text = str(int(d["footing_projection_mm"]))
         self.tb_footing_thickness.Text = str(int(d["footing_thickness_mm"]))
         self.tb_filter_transparency.Text = str(int(d["filter_transparency"]))
@@ -837,6 +957,12 @@ class CadToBimWindow(object):
                                                   d["slab_min_width_mm"]),
             "slab_min_step_mm": self._read_float(self.tb_slab_step,
                                                  d["slab_min_step_mm"]),
+            "slab_note_min_area_m2": self._read_float(
+                self.tb_slab_note_area, d["slab_note_min_area_m2"]),
+            "face_label_reach_mm": self._read_float(self.tb_face_reach,
+                                                    d["face_label_reach_mm"]),
+            "face_size_tol_mm": self._read_float(self.tb_face_size,
+                                                 d["face_size_tol_mm"]),
             "stair_cluster_mm": self._read_float(self.tb_stair_cluster,
                                                  d["stair_cluster_mm"]),
             "stair_tread_min_mm": self._read_float(self.tb_tread_min,
@@ -1348,18 +1474,90 @@ class CadToBimWindow(object):
         return settings
 
     def _remember_conventions(self):
-        """Keep the office conventions for the NEXT Revit session.
+        """Keep this dialog for the NEXT Revit session.
 
-        Only the naming templates and the standard sizes: everything else on
-        the dialog is about this drawing and should start fresh each run.
+        The naming templates and standard sizes keep their own files (they are
+        office conventions, edited on their own tab and shared between tools);
+        everything ELSE on the window goes into the preferences under "dialog",
+        so a user who tuned twenty boxes finds them tuned tomorrow morning.
         """
         naming.save(self._read_naming())
         prefs.update({"standards": {"column": self.tb_std_columns.Text or "",
-                                    "beam_widths": self.tb_std_beams.Text or ""}})
+                                    "beam_widths": self.tb_std_beams.Text or ""},
+                      "dialog": self._capture_settings()})
         failure = prefs.last_error()
         self.naming_saved_text.Text = (
             "could not save: {0}".format(failure)[:70] if failure
             else "saved to {0}".format(prefs.path()))
+
+    def _capture_settings(self):
+        """Every box, tick, slider and dropdown on this window, as plain JSON.
+
+        Driven by ui.xaml's own x:Names, so nothing has to be listed here twice
+        -- a control added to the dialog is captured the day it appears.
+        """
+        values = {}
+        for name in _control_names():
+            if not settings.saveable(name):
+                continue
+            value = _control_value(self.window.FindName(name))
+            if value is not None:
+                values[name] = value
+        layer_map = dict((layer, str(combo.SelectedItem))
+                         for layer, combo in self._combos
+                         if combo.SelectedItem is not None)
+        text_map = dict((layer, str(combo.SelectedItem))
+                        for layer, combo in self._text_combos
+                        if combo.SelectedItem is not None)
+        return settings.payload(values, layer_map, text_map,
+                                cad2bim.__version__)
+
+    def _apply_settings(self, data):
+        """Put a saved settings dict back on the window. Returns how many landed.
+
+        Layer mappings are restored by LAYER NAME, so a saved file helps on the
+        next drawing from the same office even when the layer list differs --
+        the layers it recognises are mapped, the rest keep their guess.
+        """
+        controls, layer_map, text_map = settings.sections(data)
+        landed = 0
+        for name, value in controls.items():
+            if not settings.restorable(name):
+                continue
+            if _set_control_value(self.window.FindName(name), value):
+                landed += 1
+        for store, saved in ((self._combos, layer_map),
+                             (self._text_combos, text_map)):
+            for layer, combo in store:
+                index = settings.pick_index(combo.Items, saved.get(layer))
+                if index >= 0:
+                    combo.SelectedIndex = index
+                    landed += 1
+        self._show_naming_preview()
+        self._stair_sync()
+        return landed
+
+    def on_settings_save(self, sender, args):
+        path = _save_settings_file()
+        if not path:
+            return
+        failure = settings.write(path, self._capture_settings())
+        self.status_text.Text = ("could not save: {0}".format(failure)[:90]
+                                 if failure else "settings saved to {0}".format(
+                                     os.path.basename(path)))
+
+    def on_settings_load(self, sender, args):
+        path = _open_settings_file()
+        if not path:
+            return
+        data = settings.read(path)
+        if not data:
+            self.status_text.Text = "not a cad2bim settings file: {0}".format(
+                os.path.basename(path))
+            return
+        landed = self._apply_settings(data)
+        self.status_text.Text = "{0} setting(s) loaded -- {1}".format(
+            landed, settings.describe(data))
 
     _NAMING_SAMPLE = {"b": 400, "h": 600, "d": 600, "w": 300, "t": 200,
                       "r": 150, "k": 200, "n": 2, "e": 3000,
@@ -1575,7 +1773,11 @@ def main():
     # Naming templates and standard sizes are office conventions, not per-drawing
     # numbers, so they come back from the preferences file the last run wrote.
     saved_naming = naming.load()
-    saved_standards = prefs.load().get("standards") or {}
+    _saved_prefs = prefs.load()
+    saved_standards = _saved_prefs.get("standards") or {}
+    # ... and the rest of the dialog comes back too: every tolerance, tick and
+    # dropdown the last run finished with, restored by name
+    saved_settings = _saved_prefs.get("dialog") or None
     _say("Storeys: {0}".format(storey_detection.reason))
     for note in storey_detection.notes:
         _say("  storey: {0}".format(note))
@@ -1600,7 +1802,8 @@ def main():
                                 saved_naming=saved_naming,
                                 saved_standards=saved_standards,
                                 footing_type_options=footing_type_options,
-                                material_options=material_options)
+                                material_options=material_options,
+                                saved_settings=saved_settings)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed
@@ -1903,6 +2106,20 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
         _say("columns: placed {0} blade/outline column(s) beyond the size "
              "limits".format(recovered_outline))
 
+    # COMBINED columns -- a wall-column carrying several columns, exploded to
+    # bare lines -- close into no ring at all, because the wall's own edge runs
+    # through each column root. Walk the FACES of that line soup instead; a
+    # rectangle is kept only where the plan's own size label agrees with it.
+    recovered_faces = report.recover_face_columns(
+        sections, revit_result.records, column_texts,
+        mark_reach_mm=tolerances.get("face_label_reach_mm",
+                                     config.DEFAULTS["face_label_reach_mm"]),
+        size_tol_mm=tolerances.get("face_size_tol_mm",
+                                   config.DEFAULTS["face_size_tol_mm"]))
+    if recovered_faces:
+        _say("columns: recovered {0} combined column(s) from the outline "
+             "graph".format(recovered_faces))
+
     # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
     # end to the column centre (columns are now final). Axis-aligned columns are untouched.
     snapped_ends = report.snap_beam_ends_to_columns(
@@ -2146,6 +2363,11 @@ def _create_beams(doc, beam_segments, selections):
         _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]),
+            # the placed instances (straight and curved -- the curved tallies
+            # were folded in above), so the material pass can reach them:
+            # without this the beams outcome carried counts only and every run
+            # reported "nothing of this kind was built"
+            _IDS: result["created"],
             "error_details": [str(e)[:220] for e in result["errors"][:8]],
             "skip_details": _skip_details(result["skipped"])}
 
@@ -2317,6 +2539,22 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
         loops = slab_outlines.slab_loops_from_placed_members(
             records, beam_segments.get("segments"), column_rects=column_rects)
         source = "placed_members"
+    else:
+        # A drawing can note "200 THK." over a bay whose slab edge was never
+        # drawn (test10's roof: rings on the south bays, one line on the north).
+        # Finding SOME rings used to end the search, so those bays went missing
+        # in silence. Recover exactly the noted ones from the placed members.
+        extra = slab_outlines.loops_for_unclaimed_notes(
+            loops, records, beam_segments.get("segments"), texts,
+            column_rects=column_rects,
+            min_area_m2=(selections.get("tolerances") or {}).get(
+                "slab_note_min_area_m2",
+                config.DEFAULTS["slab_note_min_area_m2"]))
+        if extra:
+            loops = list(loops) + list(extra)
+            source = "slab_edges + beam graph"
+            _say("slabs: {0} bay(s) recovered from the beam graph where a "
+                 "thickness note had no drawn outline".format(len(extra)))
     if not loops:
         _say("Slabs -- no closed slab outline found (any source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}

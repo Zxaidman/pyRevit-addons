@@ -65,6 +65,12 @@ DEFAULTS = {
     "slab_chain_mm": 150.0,       # loose slab-edge lines chain within this
     "slab_min_width_mm": 500.0,   # a face slimmer than this (2A/P) is a member
     "slab_min_step_mm": 20.0,     # a boundary jog below this is noise, not a step
+    "slab_note_min_area_m2": 1.0, # smallest bay recovered for a thickness note whose
+                                  # outline was never drawn (test10's roof)
+
+    # --- combined columns (Tolerances tab) ----------------------------------
+    "face_label_reach_mm": 900.0, # how far outside a member its size label may sit
+    "face_size_tol_mm": 60.0,     # drawn vs labelled dimension of a recovered face
 
     # --- standard sizes (Tolerances tab; a drawn size within snap_tol_mm of one
     # of these is rounded onto it, so a 298 wide beam reads as the 300 it is).

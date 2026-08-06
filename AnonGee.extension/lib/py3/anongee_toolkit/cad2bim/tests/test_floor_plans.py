@@ -615,6 +615,92 @@ class NotesAreNotPlanTitles(unittest.TestCase):
         # short enough to be a caption: only a long sentence is a note
         self.assertEqual(floor_plans.level_order_from_text("GROUND FLOOR."), 0)
 
+    def test_a_long_caption_that_starts_with_layout_is_still_a_caption(self):
+        # "LAYOUT AT PARAPET & LMR BOTTOM LVL." is six words and ends in a stop,
+        # but a caption announces itself in its first word
+        self.assertTrue(floor_plans.looks_like_a_plan_title(
+            "LAYOUT AT PARAPET & LMR BOTTOM LVL."))
+        self.assertFalse(floor_plans.looks_like_a_plan_title(
+            "THE TERRACE SLAB SHALL BE CAST IN ONE POUR AFTER CURING."))
+
+
+class PlansWithoutAnOrdinal(unittest.TestCase):
+    """Test12: four of five captions name no ordinal at all.
+
+    "LAYOUT AT REFUGE FLOOR LVL." is a real title -- it just says nothing the
+    sort understands, so the storey used to come out unnamed and was pushed to
+    the bottom of the stack. It should keep its name and hold its place on the
+    sheet.
+    """
+
+    def test_a_caption_without_an_ordinal_still_names_the_storey(self):
+        label, order, repeat, elevation = floor_plans.describe_plan(
+            [_Text("LAYOUT AT REFUGE FLOOR LVL.", 0, 0)])
+        self.assertEqual(label, "LAYOUT AT REFUGE FLOOR LVL.")
+        self.assertIsNone(order)
+        self.assertEqual(repeat, 1)
+        self.assertIsNone(elevation)
+
+    def test_an_ordinal_caption_still_wins_over_a_plain_one(self):
+        label, order, _repeat, _elev = floor_plans.describe_plan(
+            [_Text("LAYOUT AT REFUGE FLOOR LVL.", 0, 0),
+             _Text("LAYOUT AT 2ND FLOOR LVL.", 0, 0)])
+        self.assertEqual(label, "LAYOUT AT 2ND FLOOR LVL.")
+        self.assertEqual(order, 2)
+
+    def test_a_dimension_or_a_mark_never_names_a_storey(self):
+        for junk in ("C12", "300 X 600", "4500", "S1 200 THK."):
+            label, order, _repeat, _elev = floor_plans.describe_plan(
+                [_Text(junk, 0, 0)])
+            self.assertIsNone(label, junk)
+            self.assertIsNone(order, junk)
+
+    def test_the_elevation_can_live_in_a_note_of_its_own(self):
+        _label, _order, _repeat, elevation = floor_plans.describe_plan(
+            [_Text("LAYOUT AT 2ND FLOOR LVL.", 0, 0),
+             _Text("+8.600M LVL.", 0, -1000)])
+        self.assertEqual(elevation, 8600.0)
+
+    def test_a_trailing_elevation_note_parses(self):
+        self.assertEqual(floor_plans.elevation_from_text("+76.450M LVL."),
+                         76450.0)
+        self.assertEqual(floor_plans.elevation_from_text("+11.550M LVL."),
+                         11550.0)
+
+
+class SheetReadingOrder(unittest.TestCase):
+    """Where an untitled plan belongs in the stack."""
+
+    # test12's layout: five plans in one row, differing in height by metres
+    _ROW = [(0, 5291, 148078, 55845), (180642, 5291, 328513, 53815),
+            (346832, 5291, 494704, 60826), (513616, 5291, 661488, 53815),
+            (709484, 5291, 857355, 59166)]
+
+    def test_one_row_of_unequal_plans_reads_left_to_right(self):
+        self.assertEqual(floor_plans.sheet_sequence(self._ROW), [0, 1, 2, 3, 4])
+
+    def test_two_rows_read_top_first(self):
+        boxes = [(0, 0, 100, 100), (200, 0, 300, 100),
+                 (0, 200, 100, 300), (200, 200, 300, 300)]
+        self.assertEqual(floor_plans.sheet_sequence(boxes), [2, 3, 0, 1])
+
+    def test_an_untitled_plan_holds_its_place_between_titled_ones(self):
+        # 2ND(2), TYPICAL(?), REFUGE(?), TERRACE(999), PARAPET(?)
+        orders = floor_plans.sheet_orders(self._ROW, [2, None, None, 999, None])
+        self.assertEqual(orders[0], 2)
+        self.assertEqual(orders[3], 999)
+        self.assertTrue(2 < orders[1] < orders[2] < 999,
+                        "untitled plans out of sheet order: %s" % (orders,))
+        self.assertGreater(orders[4], 999)      # above the terrace, as drawn
+
+    def test_a_sheet_with_no_titles_reads_in_layout_order(self):
+        orders = floor_plans.sheet_orders(self._ROW, [None] * 5)
+        self.assertEqual(orders, [0, 1, 2, 3, 4])
+
+    def test_a_fully_titled_sheet_is_untouched(self):
+        orders = floor_plans.sheet_orders(self._ROW, [0, 1, 2, 3, 999])
+        self.assertEqual(orders, [0, 1, 2, 3, 999])
+
 
 if __name__ == "__main__":
     unittest.main()

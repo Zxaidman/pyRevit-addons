@@ -29,12 +29,20 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" x:Name="status_text" Text="Ready"
-                       VerticalAlignment="Center"/>
-            <Button Grid.Column="1" x:Name="btn_run" Content="Run" Width="120" Height="24"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button Grid.Column="1" x:Name="btn_settings_save" Content="Save settings" Width="94" Height="24"
+                    ToolTip="Write every box, tick and dropdown on this dialog to a JSON file"/>
+            <Button Grid.Column="2" x:Name="btn_settings_load" Content="Load settings" Width="94" Height="24"
+                    Margin="6,0,0,0"
+                    ToolTip="Put a saved settings file back on this dialog"/>
+            <Button Grid.Column="3" x:Name="btn_run" Content="Run" Width="110" Height="24"
+                    Margin="8,0,0,0"
                     ToolTip="Apply the layer mapping and build the selected elements"/>
-            <Button Grid.Column="2" x:Name="btn_cancel" Content="Cancel" Width="76" Height="24"
+            <Button Grid.Column="4" x:Name="btn_cancel" Content="Cancel" Width="76" Height="24"
                     Margin="8,0,0,0"/>
         </Grid>
 
@@ -446,6 +454,7 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="24"/>
                                 <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Region max side" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_region" Height="22" Margin="0,1,8,1"/>
@@ -455,7 +464,13 @@
                             <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_circ_max" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="2" Text="Standard b x h" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_std_columns" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Combined label reach" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_face_reach" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Combined size match" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_face_size" Height="22" Margin="0,1"/>
                         </Grid>
+                        <TextBlock Text="A COMBINED column -- a wall-column carrying several columns, drawn as one merged outline -- is recovered from the faces of its linework, but only where a size label agrees with what was walked. Label reach is how far outside a member its label may sit; size match is how far the drawn size may differ from the labelled one."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
                         <TextBlock Text="BEAMS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -520,8 +535,10 @@
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_slab_width" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Min corner step" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_slab_step" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Min noted bay area (m2)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_slab_note_area" Height="22" Margin="0,1"/>
                         </Grid>
-                        <TextBlock Text="Node weld distance decides when two boundary points are the same junction; edge heal closes small gaps; min corner step is the smallest jog that is real geometry rather than drafting noise."
+                        <TextBlock Text="Node weld distance decides when two boundary points are the same junction; edge heal closes small gaps; min corner step is the smallest jog that is real geometry rather than drafting noise. Min noted bay area is the smallest slab recovered from the beam graph for a thickness note whose outline was never drawn."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
                         <TextBlock Text="STAIRCASE" FontWeight="Bold" Margin="0,10,0,2"/>
