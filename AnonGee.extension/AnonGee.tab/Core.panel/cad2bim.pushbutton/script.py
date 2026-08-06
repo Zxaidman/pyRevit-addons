@@ -738,6 +738,7 @@ class CadToBimWindow(object):
             self.name_boxes[key] = box
             self.name_labels[key] = find("lbl_name_{0}".format(control))
         self.naming_saved_text = find("naming_saved_text")
+        self.chk_level_follow = find("chk_level_follow")
         self.btn_name_defaults = find("btn_name_defaults")
         self.btn_name_defaults.Click += self.on_naming_defaults
         self._show_naming_preview()
@@ -1153,6 +1154,7 @@ class CadToBimWindow(object):
                 config.DEFAULTS["filter_transparency"]),
             "filter_colour_lines": bool(self.chk_filter_lines.IsChecked),
             "naming": self._read_naming(),
+            "level_follow_existing": bool(self.chk_level_follow.IsChecked),
             "standard_text": {"column": self.tb_std_columns.Text,
                               "beam_widths": self.tb_std_beams.Text},
         }
@@ -1560,7 +1562,7 @@ class CadToBimWindow(object):
             landed, settings.describe(data))
 
     _NAMING_SAMPLE = {"b": 400, "h": 600, "d": 600, "w": 300, "t": 200,
-                      "r": 150, "k": 200, "n": 2, "e": 3000,
+                      "r": 150, "k": 200, "n": 3, "o": "3rd", "e": 3000,
                       "label": "First Floor", "name": "A"}
 
     def _show_naming_preview(self):
@@ -1959,6 +1961,17 @@ def _storey_level_pairs(doc, selections, built):
             break
     ladder = existing[start:]
     needed = count + 1
+    # How the new levels are NAMED: either continue what the model already calls
+    # its levels ("02 2ND FLOOR LVL." -> "03 3RD FLOOR LVL."), which is what an
+    # office template arrives with, or render the Naming tab's level template.
+    convention = None
+    if selections.get("level_follow_existing", True):
+        convention = naming.next_level_names(
+            [compat.get_element_name(level) for level in existing],
+            max(needed - len(ladder), 0))
+        if convention:
+            _say("Multi-storey: naming new levels after the model's own "
+                 "convention ({0} ...)".format(convention[0]))
     if len(ladder) < needed:
         transaction = Transaction(doc, "CAD to BIM: storey levels")
         transaction.Start()
@@ -1967,11 +1980,19 @@ def _storey_level_pairs(doc, selections, built):
             created = 0
             while len(ladder) < needed:
                 # the level being ADDED tops the storey whose height it takes
-                rise_mm = heights_mm[min(len(ladder) - 1, count - 1)]
+                storey = min(len(ladder) - 1, count - 1)
+                rise_mm = heights_mm[storey]
                 elevation = ladder[-1].Elevation + config.mm_to_ft(rise_mm)
                 new_level = Level.Create(doc, elevation)
+                if convention:
+                    name = convention[created] if created < len(convention) else None
+                else:
+                    name = naming.level_name(
+                        len(ladder) + 1, elevation * config.MM_PER_FT,
+                        label=built[storey][1] if storey < len(built) else None)
                 try:
-                    new_level.Name = "CAD Level {0}".format(len(ladder) + 1)
+                    if name:
+                        new_level.Name = name
                 except Exception:
                     pass          # a name clash keeps Revit's default name
                 ladder.append(new_level)

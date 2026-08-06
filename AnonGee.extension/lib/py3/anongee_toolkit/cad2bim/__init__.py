@@ -35,7 +35,28 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.0"  # Beam material, combined columns, noted slabs, saved settings.
+__version__ = "0.67.1"  # HOTFIX: new levels ignored the Naming tab entirely.
+#
+#                         _storey_level_pairs hard-coded `"CAD Level {0}".format(...)`
+#                         at the Level.Create call -- naming.level_name existed, was
+#                         tested, and was never called by anything. Whatever the Naming
+#                         tab said, every level created came out "CAD Level 11".
+#
+#                         It renders the template now, and the level template gained {o}:
+#                         the level number written as an ordinal, so "{o} Floor Level"
+#                         gives "3rd Floor Level" instead of the "3th" that "{n}th" makes.
+#                         {label} is the plan title that storey came from.
+#
+#                         Better still, a model usually knows its own convention. When
+#                         the levels it already has are numbered -- 00 GROUND LVL, 01 1ST
+#                         FLOOR LVL., 02 2ND FLOOR LVL. -- a level this run adds now reads
+#                         like the next line of that list (03 3RD FLOOR LVL.), continuing
+#                         the number at its own width and moving the body's ordinal on in
+#                         its own case. This is ON by default, with a tick on the Naming
+#                         tab to turn it off; a model with no such pattern falls straight
+#                         through to the template.
+#
+# 0.67.0                  Beam material, combined columns, noted slabs, saved settings.
 #
 #                         STRUCTURAL FRAMING TOOK NO MATERIAL. The beams outcome carried
 #                         counts only: every other creator records the ids it placed under

@@ -129,6 +129,69 @@ class CustomTemplates(unittest.TestCase):
         self.assertEqual(naming.floor_type_name(200), "GENERIC SLAB")
 
 
+class LevelNames(unittest.TestCase):
+    """New levels are named, not numbered "CAD Level 11" whatever was typed."""
+
+    def setUp(self):
+        naming.apply({})
+
+    def test_the_template_decides_the_name(self):
+        naming.apply({"level": "{o} Floor Level"})
+        self.assertEqual(naming.level_name(3, 9000), "3rd Floor Level")
+        self.assertEqual(naming.level_name(11, 33000), "11th Floor Level")
+
+    def test_the_ordinal_field_reads_properly(self):
+        for number, text in ((1, "1st"), (2, "2nd"), (3, "3rd"), (4, "4th"),
+                             (11, "11th"), (12, "12th"), (13, "13th"),
+                             (21, "21st"), (22, "22nd"), (23, "23rd"),
+                             (101, "101st"), (111, "111th")):
+            self.assertEqual(naming.ordinal(number), text)
+
+
+class ContinuingTheModelsOwnLevelNames(unittest.TestCase):
+    """An office template arrives with its levels already named.
+
+    "00 GROUND LVL", "01 1ST FLOOR LVL.", "02 2ND FLOOR LVL." -- a level this
+    run adds should read like the next line of that list.
+    """
+
+    EXISTING = ["00 GROUND LVL", "01 1ST FLOOR LVL.", "02 2ND FLOOR LVL."]
+
+    def test_the_next_names_continue_the_list(self):
+        self.assertEqual(naming.next_level_names(self.EXISTING, 3),
+                         ["03 3RD FLOOR LVL.", "04 4TH FLOOR LVL.",
+                          "05 5TH FLOOR LVL."])
+
+    def test_the_number_keeps_its_width(self):
+        names = naming.next_level_names(["001 GROUND", "002 1ST FLOOR"], 1)
+        self.assertEqual(names, ["003 2ND FLOOR"])
+
+    def test_a_separator_is_kept(self):
+        names = naming.next_level_names(["00 - GROUND LVL", "01 - 1ST FLOOR"], 2)
+        self.assertEqual(names, ["02 - 2ND FLOOR", "03 - 3RD FLOOR"])
+
+    def test_lower_case_names_stay_lower_case(self):
+        names = naming.next_level_names(["00 ground", "01 1st floor"], 1)
+        self.assertEqual(names, ["02 2nd floor"])
+
+    def test_a_model_with_no_convention_falls_back_to_the_template(self):
+        for names in (["Level 1", "Level 2"], ["Ground", "First"], [], None,
+                      ["01 1ST FLOOR LVL."]):
+            self.assertIsNone(naming.next_level_names(names, 2), names)
+
+    def test_a_body_without_an_ordinal_is_carried_over_as_it_is(self):
+        # "00 PODIUM" / "01 PODIUM" -- nothing to move on, so the number does
+        # the work and the words stay put
+        names = naming.next_level_names(["00 PODIUM", "01 PODIUM"], 2)
+        self.assertEqual(names, ["02 PODIUM", "03 PODIUM"])
+
+    def test_the_highest_level_is_what_gets_continued(self):
+        # levels arrive in whatever order the collector gives them
+        shuffled = ["02 2ND FLOOR LVL.", "00 GROUND LVL", "01 1ST FLOOR LVL."]
+        self.assertEqual(naming.next_level_names(shuffled, 1),
+                         ["03 3RD FLOOR LVL."])
+
+
 class AcrossSessions(unittest.TestCase):
     """The dialog is rebuilt every run, so conventions live in a file."""
 

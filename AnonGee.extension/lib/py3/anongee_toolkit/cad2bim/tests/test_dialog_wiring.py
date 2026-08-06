@@ -114,6 +114,7 @@ class NamingTabControls(unittest.TestCase):
             self.assertIn("lbl_name_{0}".format(control), names)
         self.assertIn("btn_name_defaults", names)
         self.assertIn("naming_saved_text", names)
+        self.assertIn("chk_level_follow", names)
 
     def _template_keys(self):
         with open(os.path.join(os.path.dirname(_HERE), "naming.py"),
@@ -259,6 +260,28 @@ class StoreyTableIsSelectable(unittest.TestCase):
         for control in ("btn_storey_up", "btn_storey_down", "btn_storey_add",
                         "btn_storey_remove", "storey_selection_text"):
             self.assertIn(control, names)
+
+
+class LevelNamesReachTheBuilder(unittest.TestCase):
+    """The Naming tab decides what a created level is called.
+
+    _storey_level_pairs hard-coded "CAD Level {0}" at the Level.Create call, so
+    naming.level_name -- written and tested -- was called by nothing at all.
+    """
+
+    def test_the_level_name_comes_from_naming(self):
+        source = _script_source()
+        self.assertIn("naming.level_name(", source)
+        self.assertIn("naming.next_level_names(", source)
+
+    def test_no_hard_coded_level_name_is_left(self):
+        source = _script_source()
+        self.assertNotIn('"CAD Level {0}".format', source)
+
+    def test_following_the_model_is_a_choice_the_dialog_offers(self):
+        source = _script_source()
+        self.assertIn('"level_follow_existing"', source)
+        self.assertIn("self.chk_level_follow", source)
 
 
 class SettingsSaveAndLoad(unittest.TestCase):

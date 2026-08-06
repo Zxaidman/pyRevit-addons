@@ -16,7 +16,7 @@ A template is a plain format string over the sizes that type carries:
     stair         {r} {t} {w} {k}  riser/tread/width/waist
     stair_waist   {k}              the stair's waist type
     footing       {t}              600 thick foundation pad
-    level         {n} {e} {label}  a storey level this run creates
+    level         {n} {o} {e} {label}  a storey level ({o} = 1st/2nd/3rd)
     grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
 Sizes reach a template already rounded to whole millimetres, so "{b} X {h}"
@@ -26,6 +26,8 @@ failing a build halfway through, and says so through `problems()`.
 
 Revit-free, so the templates can be unit-tested outside Revit.
 """
+
+import re
 
 from . import prefs
 
@@ -52,7 +54,7 @@ FIELDS = {
     "stair": ("r", "t", "w", "k"),
     "stair_waist": ("k",),
     "footing": ("t",),
-    "level": ("n", "e", "label"),
+    "level": ("n", "o", "e", "label"),
     "grid": ("name",),
 }
 
@@ -163,10 +165,80 @@ def level_name(index, elevation_mm=0.0, label=None):
 
     `index` counts from 1 over the levels ADDED, `elevation_mm` is where the
     level sits, and `label` is the plan title that storey came from (empty when
-    the drawing did not name it).
+    the drawing did not name it). `{o}` is the same number written as an
+    ordinal, so "{o} Floor Level" gives "3rd Floor Level" and not "3th".
     """
-    return _render("level", {"n": int(index), "e": _mm(elevation_mm),
+    return _render("level", {"n": int(index), "o": ordinal(index),
+                             "e": _mm(elevation_mm),
                              "label": (label or "").strip()})
+
+
+def ordinal(number):
+    """1 -> "1st", 2 -> "2nd", 3 -> "3rd", 11 -> "11th"."""
+    value = int(number)
+    if 10 <= abs(value) % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(abs(value) % 10, "th")
+    return "{0}{1}".format(value, suffix)
+
+
+# "00 GROUND LVL" / "01 1ST FLOOR LVL." -- a numbered level naming convention
+_NUMBERED_LEVEL = re.compile(r"^\s*(\d+)(\s*[-_.:]?\s*)(.*)$")
+_ORDINAL_IN_NAME = re.compile(r"\b(\d+)\s*(st|nd|rd|th)\b", re.IGNORECASE)
+
+
+def next_level_names(existing_names, count):
+    """Continue the MODEL's own level naming, or None when it has no pattern.
+
+    An office template arrives with its levels already named to a convention --
+    "00 GROUND LVL", "01 1ST FLOOR LVL.", "02 2ND FLOOR LVL." -- and a level
+    this run adds should read like the next line of that list rather than like
+    a template nobody set. The number is continued at the width it is written
+    (02 -> 03), and the body is the highest-numbered existing body with its
+    ordinal moved on ("2ND FLOOR LVL." -> "3RD FLOOR LVL.", in that name's own
+    case).
+
+    Returns `count` names, or None when the existing names carry no numbered
+    convention to continue -- the caller then falls back to the template.
+    """
+    numbered = []
+    for name in (existing_names or []):
+        match = _NUMBERED_LEVEL.match(name or "")
+        if not match:
+            continue
+        numbered.append((int(match.group(1)), len(match.group(1)),
+                         match.group(2), match.group(3).strip()))
+    if len(numbered) < 2:
+        return None                 # one level is a coincidence, not a pattern
+    numbered.sort(key=lambda row: row[0])
+    highest = numbered[-1]
+    width = max(row[1] for row in numbered)
+    separator = highest[2] or " "
+    # the body's ordinal need not equal the level number ("002 1ST FLOOR" on a
+    # model whose ground floor is 001), so carry the OFFSET between them
+    source = next((row for row in reversed(numbered)
+                   if _ORDINAL_IN_NAME.search(row[3])), highest)
+    match = _ORDINAL_IN_NAME.search(source[3])
+    offset = (int(match.group(1)) - source[0]) if match else 0
+    out = []
+    for step in range(1, int(count) + 1):
+        number = highest[0] + step
+        out.append("{0}{1}{2}".format(
+            str(number).zfill(width), separator,
+            _renumber_body(source[3], number + offset)).strip())
+    return out
+
+
+def _renumber_body(body, number):
+    """"2ND FLOOR LVL." at number 3 -> "3RD FLOOR LVL." (keeping its case)."""
+    match = _ORDINAL_IN_NAME.search(body or "")
+    if not match:
+        return body or ""
+    text = ordinal(number)
+    if match.group(2).isupper():
+        text = text.upper()
+    return body[:match.start()] + text + body[match.end():]
 
 
 def grid_name(name):
