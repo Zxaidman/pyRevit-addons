@@ -1893,13 +1893,18 @@ def build_beam_segments(records, circles=None, limits=None, standards=None,
 
         if len(ring) == 4:
             result = shapes.beam_centerline_from_quad(ring)
-            if result:
-                start, end, width = result
-                if width > quad_width_max_ft:
-                    _explode_too_wide("quad_too_wide_explode")
-                    continue
-                segments.append(_beam_segment(start, end, width, z, record.layer, "rect"))
-                status["rect"] += 1
+            if not result:
+                # a TAPERING quad is two members' edges closed into one ring by
+                # the link reader; its legs are real beam edges, so let them
+                # re-pair rather than reading a skewed beam off the trapezoid
+                _explode_too_wide("tapered_quad_explode")
+                continue
+            start, end, width = result
+            if width > quad_width_max_ft:
+                _explode_too_wide("quad_too_wide_explode")
+                continue
+            segments.append(_beam_segment(start, end, width, z, record.layer, "rect"))
+            status["rect"] += 1
         elif shapes.is_rectilinear(ring):
             pieces = [shapes.beam_centerline_from_rect(rect)
                       for rect in shapes.decompose_to_rectangles(ring)]

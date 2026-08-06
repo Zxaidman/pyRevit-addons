@@ -877,12 +877,23 @@ def _midpoint(a, b):
     return ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
 
 
+# A beam outline is a PARALLELOGRAM: its two long edges run the same way. A quad
+# whose long edges converge is not one beam -- it is two members' edges closed
+# into one ring by the link reader, and reading a centreline off it gives a
+# SKEWED beam of a width neither member has (Test13's 14 tilted members, at up
+# to 44 degrees, in a drawing with nothing but orthogonal beams).
+_QUAD_TAPER_SIN = math.sin(math.radians(2.0))
+_QUAD_END_TOL_FT = 15.0 / 304.8   # the two end widths of one beam agree this well
+_QUAD_END_FRACTION = 0.05
+
+
 def beam_centerline_from_quad(ring):
     """Centerline of a 4-corner (possibly rotated) thin quad.
 
     Returns (start, end, width_ft) along the long axis -- the line joining the
-    midpoints of the two SHORT edges. Works at any orientation, so diagonal beams
-    are handled, not just axis-aligned ones.
+    midpoints of the two SHORT edges -- or None when the quad TAPERS and is
+    therefore not one beam's outline. Works at any orientation, so diagonal
+    beams are handled, not just axis-aligned ones.
     """
     if len(ring) != 4:
         return None
@@ -890,8 +901,29 @@ def beam_centerline_from_quad(ring):
     side_a = _distance(p0, p1)   # edges p0-p1 and p2-p3
     side_b = _distance(p1, p2)   # edges p1-p2 and p3-p0
     if side_a >= side_b:
-        return _midpoint(p1, p2), _midpoint(p3, p0), side_b
-    return _midpoint(p0, p1), _midpoint(p2, p3), side_a
+        long_edges = ((p0, p1), (p2, p3))
+        ends = (side_b, _distance(p3, p0))
+        centre = (_midpoint(p1, p2), _midpoint(p3, p0))
+    else:
+        long_edges = ((p1, p2), (p3, p0))
+        ends = (side_a, _distance(p2, p3))
+        centre = (_midpoint(p0, p1), _midpoint(p2, p3))
+    if not _edges_are_parallel(long_edges[0], long_edges[1]):
+        return None
+    mean_width = (ends[0] + ends[1]) / 2.0
+    if abs(ends[0] - ends[1]) > max(_QUAD_END_TOL_FT,
+                                    _QUAD_END_FRACTION * mean_width):
+        return None                  # one end wider than the other: not a beam
+    return centre[0], centre[1], mean_width
+
+
+def _edges_are_parallel(first, second):
+    """True when two ring edges run the same way (either direction round)."""
+    one = _vunit(_vsub(first[1], first[0]))
+    two = _vunit(_vsub(second[1], second[0]))
+    if one == (0.0, 0.0) or two == (0.0, 0.0):
+        return False
+    return abs(_vcross(one, two)) <= _QUAD_TAPER_SIN
 
 
 def beam_centerline_from_rect(rect):
@@ -927,6 +959,14 @@ def _vunit(v):
     return (v[0] / length, v[1] / length) if length > 1e-12 else (0.0, 0.0)
 
 
+# A real beam's two edges are the same distance apart all the way along. Edges
+# belonging to DIFFERENT beams converge, and pairing them produced Test13's
+# skewed members: the gap used to be measured at one point only, so a pair that
+# closed from 635mm to 200mm across its overlap looked as good as a parallel one.
+_TAPER_TOL_FT = 15.0 / 304.8   # drafting noise between two edges of one beam
+_TAPER_FRACTION = 0.05         # ... or 5% of the gap, for a wide member
+
+
 def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
                         min_overlap_ft=None, sin_tol=None):
     """Pair near-parallel lines ~one width apart into straight members.
@@ -934,11 +974,14 @@ def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
     `lines`: list of (p0, p1, z) with p0/p1 = (x, y) in feet. Returns
     (segments, leftover): each segment is dict(start, end, width_ft) whose
     centerline lies on the midline over the shared overlap and whose width is the
-    measured perpendicular gap. Greedy and order-independent: each line is used at
+    MEAN perpendicular gap. Greedy and order-independent: each line is used at
     most once, paired with the partner giving the largest genuine overlap. Lines
-    with no parallel partner (junction fragments) are returned as leftover. The
-    width band / overlap / parallel-angle tolerances default to config but can be
-    overridden per run.
+    with no parallel partner (junction fragments) are returned as leftover.
+
+    A candidate whose gap TAPERS along the overlap is refused: its two lines
+    belong to different members, however parallel they look at one end. The
+    width band / overlap / parallel-angle tolerances default to config but can
+    be overridden per run.
     """
     min_width_ft = _PAIR_MIN_WIDTH_FT if min_width_ft is None else min_width_ft
     max_width_ft = _PAIR_MAX_WIDTH_FT if max_width_ft is None else max_width_ft
@@ -975,9 +1018,26 @@ def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
             overlap = hi - lo
             if overlap < min_overlap_ft:
                 continue
+            # the gap at BOTH ends of the overlap, not just at b0: two edges of
+            # one beam stay the same distance apart, edges of two different
+            # beams close in on each other
+            along = _vdot(other, direction)
+            if abs(along) < 1e-12:
+                continue
+            slope = _vdot(other, normal) / along
+            t_b0 = _vdot(_vsub(b0, a0), direction)
+            off_lo = signed_gap + (lo - t_b0) * slope
+            off_hi = signed_gap + (hi - t_b0) * slope
+            taper = abs(abs(off_lo) - abs(off_hi))
+            mean_gap = (abs(off_lo) + abs(off_hi)) / 2.0
+            if taper > max(_TAPER_TOL_FT, _TAPER_FRACTION * mean_gap):
+                continue
+            if mean_gap < min_width_ft or mean_gap > max_width_ft:
+                continue
             if best is None or overlap > best["overlap"]:
-                best = {"j": j, "signed_gap": signed_gap, "lo": lo, "hi": hi,
-                        "overlap": overlap, "gap": gap}
+                best = {"j": j, "signed_gap": (off_lo + off_hi) / 2.0,
+                        "lo": lo, "hi": hi,
+                        "overlap": overlap, "gap": mean_gap}
         if best:
             used[i] = True
             used[best["j"]] = True

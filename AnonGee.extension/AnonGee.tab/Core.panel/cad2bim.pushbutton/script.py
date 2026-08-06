@@ -191,6 +191,18 @@ _BAR = _NullProgress()
 # bar opens when Run is pressed.
 _READ_STEPS = 2
 _BUILD_STEPS = 9
+# A multi-storey run repeats the build once per storey. Reporting each storey
+# 0-100 made the bar restart five times; instead the storey being built is an
+# OFFSET into one continuous 0-100 over storeys x steps.
+_STOREY_INDEX = 0
+_STOREY_COUNT = 1
+
+
+def _storey_span(index, count):
+    """Tell the bar which storey of how many is being built."""
+    global _STOREY_INDEX, _STOREY_COUNT
+    _STOREY_INDEX = max(0, int(index))
+    _STOREY_COUNT = max(1, int(count))
 
 
 def _open_progress(phase):
@@ -267,8 +279,15 @@ def _progress(done, total, label):
     """Move the current bar and log the same step to the deferred console.
 
     The console line survives into the log a failed run prints; the bar is what
-    the user watches while a big drawing is being read or built.
+    the user watches while a big drawing is being read or built. In a
+    multi-storey run the step is folded into ONE span over every storey, so the
+    bar climbs to 100 once rather than restarting per floor.
     """
+    if total == _BUILD_STEPS and _STOREY_COUNT > 1:
+        done = _STOREY_INDEX * _BUILD_STEPS + done
+        total = _STOREY_COUNT * _BUILD_STEPS
+        label = "storey {0}/{1}: {2}".format(_STOREY_INDEX + 1, _STOREY_COUNT,
+                                             label)
     try:
         caption = getattr(_BAR, "_caption", "cad2bim")
         _BAR.title = "{0}: {1}  ({{value}}/{{max_value}}, {{eta}} left)".format(
@@ -529,6 +548,16 @@ class CadToBimWindow(object):
                 self._material_ids[label] = material_id
             combo.SelectedIndex = 0
             self.material_combos[kind] = combo
+        # concrete grade: one figure per element kind, written to a parameter
+        # of its own or appended to the element's name
+        self.grade_boxes = {}
+        for kind in materials.KINDS:
+            self.grade_boxes[kind] = find("tb_grade_{0}".format(kind))
+        self.cb_grade_param = find("cb_grade_param")
+        for label in materials.GRADE_PARAM_CHOICES:
+            self.cb_grade_param.Items.Add(label)
+        self.cb_grade_param.Text = "Comments"
+        self.chk_grade_in_mark = find("chk_grade_in_mark")
         self.chk_view_filters = find("chk_view_filters")
         self.tb_filter_transparency = find("tb_filter_transparency")
         self.chk_filter_lines = find("chk_filter_lines")
@@ -538,6 +567,17 @@ class CadToBimWindow(object):
         self.tb_storey_height = find("tb_storey_height")
         self.multistorey_preview = find("multistorey_preview")
         self.storey_rows = find("storey_rows")
+        self._storey_plans = []
+        self._storey_rows = []
+        self._storey_focus = None
+        self.btn_storey_up = find("btn_storey_up")
+        self.btn_storey_down = find("btn_storey_down")
+        self.btn_storey_add = find("btn_storey_add")
+        self.btn_storey_remove = find("btn_storey_remove")
+        self.btn_storey_up.Click += self.on_storey_move_up
+        self.btn_storey_down.Click += self.on_storey_move_down
+        self.btn_storey_add.Click += self.on_storey_add
+        self.btn_storey_remove.Click += self.on_storey_remove
         layer_names = [name for name, _count in layer_rows]
         for combo in (self.cb_boundary_layer, self.cb_origin_layer):
             combo.Items.Add("(none)")
@@ -976,6 +1016,10 @@ class CadToBimWindow(object):
             "materials": dict(
                 (kind, self._material_ids.get(combo.SelectedItem))
                 for kind, combo in self.material_combos.items()),
+            "grades": dict((kind, (box.Text or "").strip())
+                           for kind, box in self.grade_boxes.items()),
+            "grade_parameter": (self.cb_grade_param.Text or "Comments").strip(),
+            "grade_in_mark": bool(self.chk_grade_in_mark.IsChecked),
             "view_filters": bool(self.chk_view_filters.IsChecked),
             "filter_transparency": self._read_int(
                 self.tb_filter_transparency,
@@ -1018,6 +1062,7 @@ class CadToBimWindow(object):
                          ("create_footings", self.chk_footings),
                          ("view_filters", self.chk_view_filters),
                          ("filter_colour_lines", self.chk_filter_lines),
+                         ("grade_in_mark", self.chk_grade_in_mark),
                          ("multistorey", self.chk_multistorey)):
             if key in preset and box.IsEnabled:
                 box.IsChecked = bool(preset[key])
@@ -1054,13 +1099,16 @@ class CadToBimWindow(object):
                        else self.cb_origin_layer)
             if wanted:
                 control.SelectedItem = wanted
-        for row, saved in zip(self._storey_boxes,
-                              preset.get("storey_settings") or []):
-            _plan, height_box, repeat_box, include_box = row
-            height = saved.get("height_mm")
-            height_box.Text = "" if height is None else "{0:g}".format(height)
-            repeat_box.Text = str(int(saved.get("repeat") or 1))
-            include_box.IsChecked = saved.get("include", True)
+        saved_rows = preset.get("storey_settings") or []
+        if saved_rows and self._storey_plans:
+            self._storey_rows = [
+                {"plan": min(saved.get("plan") or 0,
+                             len(self._storey_plans) - 1),
+                 "height_mm": saved.get("height_mm"),
+                 "repeat": int(saved.get("repeat") or 1),
+                 "include": saved.get("include", True)}
+                for saved in saved_rows]
+            self._refresh_storey_rows()
         for key, box in self.name_boxes.items():
             value = (preset.get("naming") or {}).get(key)
             if value:
@@ -1096,60 +1144,149 @@ class CadToBimWindow(object):
         self._build_storey_rows(found.plans)
 
     def _build_storey_rows(self, plans):
-        """One editable row per detected plan: label, height, repeat.
+        """One editable row per storey: which plan, its height, its repeat.
 
         The rows are created here rather than declared in the XAML because how
-        many there are is only known once the drawing has been read; each row's
-        two boxes are kept in self._storey_boxes so _read_selections can read
-        them back in the same bottom-up order.
+        many there are is only known once the drawing has been read. Each row's
+        PLAN is a dropdown over every detected floor drawing, so the same plan
+        can be used on several storeys (a typical floor drawn once and built
+        five times), and the row ORDER is the build order, bottom-up.
         """
+        self._storey_plans = list(plans or [])
+        self._storey_rows = []
+        for index in range(len(self._storey_plans)):
+            self._storey_rows.append({"plan": index, "height_mm": None,
+                                      "repeat": self._storey_plans[index].get(
+                                          "repeat") or 1,
+                                      "include": True})
+        self._refresh_storey_rows()
+
+    def _plan_label(self, index):
+        plan = self._storey_plans[index]
+        label = (plan.get("label") or "").splitlines()
+        text = label[0].strip() if label else ""
+        return text or "plan {0}".format(index + 1)
+
+    def _refresh_storey_rows(self):
+        """Redraw the storey table from self._storey_rows (the model)."""
         self.storey_rows.Children.Clear()
         self._storey_boxes = []
-        for plan in plans or []:
-            row = WpfGrid()
-            row.Margin = Thickness(0, 1, 0, 1)
-            for width in (0.0, 80.0, 60.0):
+        for position, row in enumerate(self._storey_rows):
+            grid = WpfGrid()
+            grid.Margin = Thickness(0, 1, 0, 1)
+            for width in (52.0, 0.0, 70.0, 52.0):
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if not width
                                 else GridLength(width))
-                row.ColumnDefinitions.Add(column)
-            # the checkbox IS the label: untick a plan to leave that storey out
+                grid.ColumnDefinitions.Add(column)
             include = CheckBox()
-            include.IsChecked = True
+            include.IsChecked = bool(row.get("include", True))
             include.VerticalAlignment = VerticalAlignment.Center
-            label = TextBlock()
-            label.Text = (plan.get("label")
-                          or "storey {0}".format(len(self._storey_boxes) + 1))
-            label.TextTrimming = TextTrimming.CharacterEllipsis
-            include.Content = label
+            include.Content = str(position + 1)
             WpfGrid.SetColumn(include, 0)
-            row.Children.Add(include)
+            grid.Children.Add(include)
+
+            plan_combo = ComboBox()
+            plan_combo.Height = 22
+            plan_combo.Margin = Thickness(0, 1, 8, 1)
+            for index in range(len(self._storey_plans)):
+                plan_combo.Items.Add(self._plan_label(index))
+            plan_combo.SelectedIndex = min(row.get("plan") or 0,
+                                           len(self._storey_plans) - 1)
+            WpfGrid.SetColumn(plan_combo, 1)
+            grid.Children.Add(plan_combo)
+
             height = TextBox()
             height.Height = 22
             height.Margin = Thickness(0, 1, 8, 1)
-            height.Text = ("" if plan.get("height_mm") is None
-                           else "{0:g}".format(plan["height_mm"]))
-            WpfGrid.SetColumn(height, 1)
-            row.Children.Add(height)
+            height.Text = ("" if row.get("height_mm") is None
+                           else "{0:g}".format(row["height_mm"]))
+            WpfGrid.SetColumn(height, 2)
+            grid.Children.Add(height)
+
             repeat = TextBox()
             repeat.Height = 22
             repeat.Margin = Thickness(0, 1, 0, 1)
-            repeat.Text = str(int(plan.get("repeat") or 1))
-            WpfGrid.SetColumn(repeat, 2)
-            row.Children.Add(repeat)
-            self.storey_rows.Children.Add(row)
-            self._storey_boxes.append((plan, height, repeat, include))
+            repeat.Text = str(int(row.get("repeat") or 1))
+            WpfGrid.SetColumn(repeat, 3)
+            grid.Children.Add(repeat)
+
+            grid.MouseLeftButtonDown += self._on_storey_row_clicked
+            self.storey_rows.Children.Add(grid)
+            self._storey_boxes.append((row, plan_combo, height, repeat, include,
+                                       grid))
+
+    def _capture_storey_rows(self):
+        """Read the on-screen table back into the model before reordering it."""
+        for row, plan_combo, height, repeat, include, _grid in self._storey_boxes:
+            row["plan"] = max(0, plan_combo.SelectedIndex)
+            row["height_mm"] = self._read_float(height, None)
+            row["repeat"] = self._read_int(repeat, row.get("repeat") or 1)
+            row["include"] = bool(include.IsChecked)
+
+    def _selected_storey(self):
+        for position, entry in enumerate(self._storey_boxes):
+            if entry[5] is self._storey_focus:
+                return position
+        return len(self._storey_rows) - 1 if self._storey_rows else -1
+
+    def _on_storey_row_clicked(self, sender, args):
+        self._storey_focus = sender
+
+    def on_storey_move_up(self, sender, args):
+        self._move_storey(-1)
+
+    def on_storey_move_down(self, sender, args):
+        self._move_storey(1)
+
+    def _move_storey(self, step):
+        self._capture_storey_rows()
+        position = self._selected_storey()
+        target = position + step
+        if position < 0 or target < 0 or target >= len(self._storey_rows):
+            return
+        rows = self._storey_rows
+        rows[position], rows[target] = rows[target], rows[position]
+        self._refresh_storey_rows()
+        if 0 <= target < len(self._storey_boxes):
+            self._storey_focus = self._storey_boxes[target][5]
+
+    def on_storey_add(self, sender, args):
+        """Another storey built from an existing plan (a typical floor reused)."""
+        if not self._storey_plans:
+            return
+        self._capture_storey_rows()
+        position = max(0, self._selected_storey())
+        source = (self._storey_rows[position] if self._storey_rows
+                  else {"plan": 0})
+        self._storey_rows.insert(position + 1,
+                                 {"plan": source.get("plan", 0),
+                                  "height_mm": source.get("height_mm"),
+                                  "repeat": 1, "include": True})
+        self._refresh_storey_rows()
+
+    def on_storey_remove(self, sender, args):
+        self._capture_storey_rows()
+        position = self._selected_storey()
+        if position < 0 or len(self._storey_rows) <= 1:
+            return
+        self._storey_rows.pop(position)
+        self._refresh_storey_rows()
 
     def _read_storey_settings(self):
         """The per-storey rows as plain dicts, bottom-up (what the build wants)."""
+        self._capture_storey_rows()
         settings = []
-        for plan, height_box, repeat_box, include_box in self._storey_boxes:
+        for row in self._storey_rows:
+            plan = self._storey_plans[min(row.get("plan") or 0,
+                                          len(self._storey_plans) - 1)]
             settings.append({
                 "label": plan.get("label"),
+                "plan": row.get("plan") or 0,
                 "order": plan.get("order"),
-                "include": bool(include_box.IsChecked),
-                "height_mm": self._read_float(height_box, None),
-                "repeat": self._read_int(repeat_box, plan.get("repeat") or 1)})
+                "include": bool(row.get("include", True)),
+                "height_mm": row.get("height_mm"),
+                "repeat": int(row.get("repeat") or 1)})
         return settings
 
     def _remember_conventions(self):
@@ -1495,6 +1632,7 @@ def main():
         all_outcomes = {}
         for index, (region, label) in enumerate(built):
             base_id, top_id = level_pairs[index]
+            _storey_span(index, len(built))
             _say("")
             _say("=== {0} ({1} records) ===".format(label, len(region.records)))
             storey_selections = dict(selections)
@@ -1627,6 +1765,16 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
         if text_mapping.get(t.layer_key) == layers.CATEGORY_COLUMN_SCHEDULE]
     beam_texts = [t for t in dxf_texts
                   if text_mapping.get(t.layer_key) == layers.CATEGORY_BEAM_TEXT]
+    # Slab notes are found by CONTENT anywhere, so routing is OPTIONAL: map a
+    # layer to "slab text" to narrow the search, otherwise every text is offered
+    # exactly as before.
+    slab_texts = [t for t in dxf_texts
+                  if text_mapping.get(t.layer_key) == layers.CATEGORY_SLAB_TEXT]
+    if not slab_texts:
+        slab_texts = dxf_texts
+    else:
+        _say("slabs: reading notes from {0} routed label(s)".format(
+            len(slab_texts)))
 
     # The schedule (mark -> size) sizes MARK-ONLY plan labels (columns AND beams). The
     # table is authoritative; any sized plan label supplements a mark the table omits.
@@ -1752,7 +1900,7 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
     _progress(6, _BUILD_STEPS, "create slabs")
     if selections["create_slabs"]:
         outcomes["slabs"] = _create_slabs(doc, revit_result.records, slab_beam_segments,
-                                          dxf_texts, selections, schedule,
+                                          slab_texts, selections, schedule,
                                           column_rects=column_footprints)
     # STAIRS (option 1, parametric): a STAIRCASE / ST-n text marks the bay; a
     # generic dog-leg from the Staircase tab numbers is laid out inside it.
@@ -2025,7 +2173,9 @@ def _apply_materials(doc, outcomes, selections):
     """
     wanted = dict((kind, material_id) for kind, material_id
                   in (selections.get("materials") or {}).items() if material_id)
-    if not wanted:
+    grades = dict((kind, text) for kind, text
+                  in (selections.get("grades") or {}).items() if text)
+    if not wanted and not grades:
         return None
     from Autodesk.Revit.DB import Transaction
     source = {"column": "columns", "beam": "beams", "slab": "slabs",
@@ -2035,19 +2185,33 @@ def _apply_materials(doc, outcomes, selections):
     summary = {}
     try:
         txn_failures.attach_warning_swallower(transaction)
-        for kind, material_id in wanted.items():
+        for kind in sorted(set(list(wanted) + list(grades))):
+            material_id = wanted.get(kind)
             key = source.get(kind)
             ids = (outcomes.get(key) or {}).get(_IDS) if key else None
             elements = materials.elements_of(doc, ids)
+            if elements and grades.get(kind):
+                stamped, missed = materials.apply_grade(
+                    doc, elements, grades[kind],
+                    selections.get("grade_parameter"),
+                    append_to_name=bool(selections.get("grade_in_mark")))
+                _say("grade: {0} -- {1} of {2} element(s) stamped {3}".format(
+                    kind, stamped, len(elements), grades[kind]))
+                summary.setdefault(kind, {})["graded"] = stamped
+                summary[kind]["grade_missed"] = missed
+            if material_id is None:
+                continue
             if not elements:
                 # says WHY nothing happened: nothing built, or the ids were
                 # lost -- both looked identical as a silent no-op before
-                summary[kind] = {"elements": 0, "skipped": 0, "none_built": True}
+                summary.setdefault(kind, {}).update(
+                    {"elements": 0, "skipped": 0, "none_built": True})
                 _say("material: {0} -- nothing of this kind was built in this "
                      "run".format(kind))
                 continue
             applied, skipped = materials.apply(doc, elements, material_id, kind)
-            summary[kind] = {"elements": applied, "skipped": skipped}
+            summary.setdefault(kind, {}).update({"elements": applied,
+                                                 "skipped": skipped})
             _say("material: {0} -- {1} of {2} element(s) set".format(
                 kind, applied, len(elements)))
         transaction.Commit()

@@ -81,10 +81,15 @@ CATEGORY_GRID_TEXT = "grid text"
 # (e.g. "C9" on the plan, "C9 400x600" in the table). Routed apart from plan
 # column text because the table is a block of cells, not member-adjacent labels.
 CATEGORY_COLUMN_SCHEDULE = "schedule (column/beam/slab)"
+# Slab notes ("S1 150 THK", "150 THK.") name and size a floor. They are found by
+# CONTENT wherever they sit, so routing a layer here is a way to say "the slab
+# notes are on THIS layer" -- which narrows the search on a drawing whose other
+# text happens to read like a thickness.
+CATEGORY_SLAB_TEXT = "slab text"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
-                   CATEGORY_GRID_TEXT, CATEGORY_COLUMN_SCHEDULE,
-                   CATEGORY_TEXT_IGNORE)
+                   CATEGORY_GRID_TEXT, CATEGORY_SLAB_TEXT,
+                   CATEGORY_COLUMN_SCHEDULE, CATEGORY_TEXT_IGNORE)
 
 
 def classify_text_layer(layer_name):
@@ -102,6 +107,8 @@ def classify_text_layer(layer_name):
         return CATEGORY_COLUMN_TEXT
     if "beam" in text or "girder" in text or "joist" in text:
         return CATEGORY_BEAM_TEXT
+    if "slab" in text or "flor" in text or "floor" in text or "thk" in text:
+        return CATEGORY_SLAB_TEXT
     return CATEGORY_TEXT_IGNORE
 
 

@@ -349,19 +349,27 @@
                         <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="10" Margin="20,6,0,0"/>
 
                         <TextBlock Text="Detected storeys" FontWeight="Bold" Margin="20,10,0,2"/>
-                        <TextBlock Text="One row per floor plan found, bottom-up. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one TYPICAL plan builds -- auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;."
+                        <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Use the arrows to move a storey up or down the stack."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,0,0,4"/>
                         <Grid Margin="20,0,0,2">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="52"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="52"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Plan" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="1" Text="Height (mm)" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="2" Text="Repeat" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="0" Text="Build" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="1" Text="Plan drawing" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="2" Text="Height" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="3" Text="Repeat" FontSize="10" Foreground="Gray"/>
                         </Grid>
                         <StackPanel x:Name="storey_rows" Margin="20,0,0,0"/>
+                        <StackPanel Orientation="Horizontal" Margin="20,6,0,0">
+                            <Button x:Name="btn_storey_up" Content="Move up" Width="82" Height="24"/>
+                            <Button x:Name="btn_storey_down" Content="Move down" Width="92" Height="24" Margin="6,0,0,0"/>
+                            <Button x:Name="btn_storey_add" Content="Add storey" Width="92" Height="24" Margin="6,0,0,0"/>
+                            <Button x:Name="btn_storey_remove" Content="Remove" Width="82" Height="24" Margin="6,0,0,0"/>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -566,6 +574,39 @@
                             <ComboBox  Grid.Row="1" Grid.Column="3" x:Name="cb_mat_stair" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="2" Grid.Column="0" Text="Footings" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_mat_footing" Height="22" Margin="0,1,8,1"/>
+                        </Grid>
+
+                        <TextBlock Text="Concrete grade" FontWeight="Bold" Margin="0,10,0,2"/>
+                        <TextBlock Text="Written to the parameter named below on every element this run creates. Leave a grade blank to write nothing for that element. Tick &quot;append to the name&quot; to add it to the mark instead of a parameter of its own, so C12 becomes C12 (M30) in whichever parameter the Structure tab names."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Columns" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_grade_column" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Beams" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_grade_beam" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Slabs" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_grade_slab" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Stairs" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_grade_stair" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Footings" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_grade_footing" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Parameter" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="2" Grid.Column="3" x:Name="cb_grade_param" Height="22" Margin="0,1" IsEditable="True"/>
+                            <CheckBox  Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="4" x:Name="chk_grade_in_mark"
+                                       Content="Append the grade to the element name instead (C12 -&gt; C12 (M30))"
+                                       Margin="0,6,0,0"/>
                         </Grid>
 
                         <Separator Margin="0,10,0,6"/>

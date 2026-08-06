@@ -345,6 +345,42 @@ class AutoDetectStoreys(unittest.TestCase):
         self.assertEqual(found.boundary_layer, "MY-BOX")
 
 
+class ReuseAndReorderStoreys(unittest.TestCase):
+    """The storey table IS the stack: its order builds bottom-up, and one plan
+    can be used by several rows (a typical floor drawn once, built five times)."""
+
+    def _regions(self):
+        return [floor_plans.FloorRegion((0, 0, 1, 1), (0, 0), label="GROUND",
+                                        order=0, records=["g"]),
+                floor_plans.FloorRegion((0, 0, 1, 1), (0, 0), label="TYPICAL",
+                                        order=1, records=["t"])]
+
+    def test_one_plan_can_build_several_storeys(self):
+        stack = floor_plans.apply_storey_settings(
+            self._regions(),
+            [{"plan": 0}, {"plan": 1}, {"plan": 1}, {"plan": 1}])
+        self.assertEqual([r.label for r in stack],
+                         ["GROUND", "TYPICAL", "TYPICAL", "TYPICAL"])
+        # the records are SHARED, not copied: one plan, four storeys
+        self.assertIs(stack[1].records, stack[2].records)
+
+    def test_the_row_order_is_the_build_order(self):
+        stack = floor_plans.apply_storey_settings(
+            self._regions(), [{"plan": 1}, {"plan": 0}])
+        self.assertEqual([r.label for r in stack], ["TYPICAL", "GROUND"])
+
+    def test_each_reused_storey_keeps_its_own_height(self):
+        stack = floor_plans.apply_storey_settings(
+            self._regions(),
+            [{"plan": 1, "height_mm": 3000.0}, {"plan": 1, "height_mm": 4500.0}])
+        self.assertEqual([r.storey_height_mm for r in stack], [3000.0, 4500.0])
+
+    def test_a_row_naming_a_plan_that_is_gone_falls_back(self):
+        stack = floor_plans.apply_storey_settings(
+            self._regions(), [{"plan": 9, "label": "TYPICAL"}])
+        self.assertEqual([r.label for r in stack], ["TYPICAL"])
+
+
 class PerStoreySettings(unittest.TestCase):
     def _regions(self):
         return [floor_plans.FloorRegion((0, 0, 1, 1), (0, 0), label="GROUND",
@@ -355,24 +391,24 @@ class PerStoreySettings(unittest.TestCase):
     def test_heights_and_repeats_reach_the_regions(self):
         regions = floor_plans.apply_storey_settings(
             self._regions(),
-            [{"label": "GROUND", "height_mm": 4200.0, "repeat": 1},
-             {"label": "TYPICAL", "height_mm": 3000.0, "repeat": 5}])
+            [{"label": "GROUND", "plan": 0, "height_mm": 4200.0, "repeat": 1},
+             {"label": "TYPICAL", "plan": 1, "height_mm": 3000.0, "repeat": 5}])
         self.assertEqual(regions[0].storey_height_mm, 4200.0)
         self.assertEqual(regions[1].repeat, 5)
 
     def test_rows_match_positionally_when_labels_are_missing(self):
         regions = [floor_plans.FloorRegion((0, 0, 1, 1), (0, 0), order=i,
                                            records=[1]) for i in range(2)]
-        floor_plans.apply_storey_settings(
+        stack = floor_plans.apply_storey_settings(
             regions, [{"label": None, "height_mm": 5000.0, "repeat": 1},
                       {"label": None, "height_mm": 2800.0, "repeat": 1}])
-        self.assertEqual([r.storey_height_mm for r in regions], [5000.0, 2800.0])
+        self.assertEqual([r.storey_height_mm for r in stack], [5000.0, 2800.0])
 
     def test_an_unticked_plan_is_dropped(self):
         regions = floor_plans.apply_storey_settings(
             self._regions(),
-            [{"label": "GROUND", "include": False, "repeat": 1},
-             {"label": "TYPICAL", "include": True, "repeat": 2}])
+            [{"label": "GROUND", "plan": 0, "include": False, "repeat": 1},
+             {"label": "TYPICAL", "plan": 1, "include": True, "repeat": 2}])
         self.assertEqual([r.label for r in regions], ["TYPICAL"])
         self.assertEqual(regions[0].repeat, 2)
 
@@ -381,12 +417,12 @@ class PerStoreySettings(unittest.TestCase):
             self._regions(), [{"label": "GROUND"}, {"label": "TYPICAL"}])
         self.assertEqual(len(regions), 2)
 
-    def test_dropping_every_plan_leaves_nothing_to_build(self):
-        regions = floor_plans.apply_storey_settings(
-            self._regions(),
-            [{"label": "GROUND", "include": False},
-             {"label": "TYPICAL", "include": False}])
-        self.assertEqual(regions, [])
+    def test_dropping_every_plan_leaves_the_split_alone(self):
+        # every row unticked is a mistake, not an instruction to build nothing
+        regions = self._regions()
+        self.assertEqual(len(floor_plans.apply_storey_settings(
+            regions, [{"label": "GROUND", "plan": 0, "include": False},
+                      {"label": "TYPICAL", "plan": 1, "include": False}])), 2)
 
     def test_expand_repeats_names_each_copy(self):
         regions = self._regions()

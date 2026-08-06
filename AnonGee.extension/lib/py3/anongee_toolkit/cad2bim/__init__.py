@@ -35,7 +35,43 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.65.0"  # Test12 prep: combined footings, Materials & Graphics tab, light
+__version__ = "0.66.0"  # Test13's skewed beams, one progress bar, storey stack, grades.
+#
+#                         SKEWED BEAMS. Test13 is orthogonal throughout, yet 14 members per
+#                         storey came out tilted -- one by 44 degrees -- at widths no beam
+#                         has (634.9, 444.9). All came from the `rect` path: a 4-corner ring
+#                         that is a TRAPEZOID, two members' edges closed into one quad by the
+#                         link reader. beam_centerline_from_quad read a centreline off it
+#                         anyway, taking whichever end width came first. A beam outline is a
+#                         parallelogram, so a quad is refused unless its long edges run
+#                         parallel AND its two end widths agree; a refused quad is exploded
+#                         so its legs re-pair as the real beams they are. Test13: 14 skewed
+#                         -> 0, and 193 members instead of 182. Test11 loses 4 "beams" that
+#                         tapered 202mm to 60mm, which were never beams. pair_parallel_lines
+#                         gained the same rule: the gap is measured at BOTH ends of the
+#                         overlap now, so two converging edges cannot pair.
+#
+#                         ONE PROGRESS BAR for a multi-storey run: the storey is an offset
+#                         into a single 0-100 over storeys x steps, captioned "storey 2/5",
+#                         instead of restarting per floor.
+#
+#                         THE STOREY TABLE IS THE STACK. Each row picks WHICH detected plan
+#                         it builds, so one typical drawing can build five floors; Move
+#                         up/down reorders the stack; Add/Remove change how many storeys
+#                         there are. Reused storeys SHARE their records rather than copying
+#                         a whole floor's geometry five times.
+#
+#                         CONCRETE GRADE per element on the Materials tab, written to a
+#                         parameter of its own or appended to the element's name (C12 ->
+#                         "C12 (M30)"), never doubling up on a re-run.
+#
+#                         STAIR MATERIALS: a Stairs type holds no material -- it points at
+#                         Stairs: Runs and Stairs: Landings types, and THOSE carry the tread,
+#                         riser and monolithic materials. Walking to them is what was
+#                         missing. SLAB TEXT is a routable layer category now; leaving it
+#                         unmapped keeps the old "find notes anywhere" behaviour.
+#
+# 0.65.0                  Test12 prep: combined footings, Materials & Graphics tab, light
 #                         filters, and the note that was naming four storeys "GROUND".
 #
 #                         TEST12. Four of its five storeys came out named "GROUND" from a

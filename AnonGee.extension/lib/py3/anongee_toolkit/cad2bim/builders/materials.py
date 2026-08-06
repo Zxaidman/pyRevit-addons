@@ -40,9 +40,14 @@ _LOOKUP_NAMES = ("Structural Material", "Material", "Concrete Material",
 
 # A stair type spreads its materials over the tread, riser, landing and support
 # parameters; there is no single structural one to set.
+# A stair's materials are NOT on the Stairs type: they live on the RUN and
+# LANDING types the stair points at (Stairs: Runs, Stairs: Landings), which is
+# why setting the stairs type alone reported "0 set".
 _STAIR_PARAM_NAMES = ("Monolithic Material", "Tread Material", "Riser Material",
-                      "Landing Material", "Support Material",
+                      "Landing Material", "Support Material", "Nosing Material",
                       "Structural Material", "Material")
+_STAIR_SUBTYPE_PARAMS = ("Run Type", "Landing Type", "Right Support Type",
+                         "Left Support Type", "Middle Support Type")
 
 # Built-in material parameters worth trying beyond STRUCTURAL_MATERIAL_PARAM.
 # A beam or column family that hides its material behind the "Material for Model
@@ -151,12 +156,41 @@ def _set_floor_material(floor_type, material_id):
         return False
 
 
-def _set_stair_materials(stairs_type, material_id):
-    """Set every material parameter a stair type exposes. True if any took."""
-    done = False
-    for name in _STAIR_PARAM_NAMES:
+def _set_stair_materials(doc, stairs_type, material_id):
+    """Set the materials of a stair AND of its run/landing/support types.
+
+    A Stairs type holds no material of its own -- it points at a Stairs: Runs
+    type and a Stairs: Landings type, and THOSE carry the tread, riser and
+    monolithic materials. Walking to them is what makes a stair take the
+    material the dialog picked.
+    """
+    done = _set_named(stairs_type, _STAIR_PARAM_NAMES, material_id)
+    for name in _STAIR_SUBTYPE_PARAMS:
         try:
             parameter = stairs_type.LookupParameter(name)
+        except Exception:
+            parameter = None
+        if parameter is None:
+            continue
+        try:
+            sub_type = doc.GetElement(parameter.AsElementId())
+        except Exception:
+            sub_type = None
+        if sub_type is None:
+            continue
+        if _set_named(sub_type, _STAIR_PARAM_NAMES, material_id):
+            done = True
+        if _set_material_parameter(sub_type, material_id):
+            done = True
+    return done
+
+
+def _set_named(element, names, material_id):
+    """Set every named material parameter `element` exposes. True if any took."""
+    done = False
+    for name in names:
+        try:
+            parameter = element.LookupParameter(name)
         except Exception:
             parameter = None
         if parameter is None or parameter.IsReadOnly:
@@ -205,7 +239,7 @@ def apply(doc, elements, material_id, kind):
                 if kind in ("slab", "footing"):
                     done = _set_floor_material(element_type, material_id)
                 if not done and kind == "stair":
-                    done = _set_stair_materials(element_type, material_id)
+                    done = _set_stair_materials(doc, element_type, material_id)
                 if not done:
                     done = _set_material_parameter(element_type, material_id)
                 if done:
@@ -219,6 +253,90 @@ def apply(doc, elements, material_id, kind):
         else:
             skipped += 1
     return applied, skipped
+
+
+GRADE_PARAM_CHOICES = ("Comments", "Mark", "Type Comments", "Type Mark",
+                       "Concrete Grade", "Description")
+
+
+def apply_grade(doc, elements, grade, parameter_name, append_to_name=False):
+    """Stamp a concrete grade onto every element this run created.
+
+    Two ways, because offices differ: write it to a parameter of its own
+    (`parameter_name`, tried on the instance then the type), or APPEND it to
+    whatever the element is already called -- "C12" becoming "C12 (M30)" in the
+    parameter the Structure tab named. Appending never doubles up: an element
+    already carrying the grade is left alone, so a second run is a no-op.
+
+    Returns (applied, skipped).
+    """
+    text = (grade or "").strip()
+    if not text:
+        return 0, 0
+    applied = 0
+    skipped = 0
+    for element in elements or []:
+        if element is None:
+            continue
+        if append_to_name:
+            done = _append_grade(element, text)
+        else:
+            done = _write_text(element, doc, parameter_name, text)
+        if done:
+            applied += 1
+        else:
+            skipped += 1
+    return applied, skipped
+
+
+def _append_grade(element, grade):
+    """Add " (M30)" to the element's name parameter, once."""
+    from ..compat import name_parameter, set_element_mark
+    suffix = "({0})".format(grade) if not grade.startswith("(") else grade
+    current = ""
+    try:
+        parameter = element.LookupParameter(name_parameter() or "Mark")
+        if parameter is not None:
+            current = parameter.AsString() or ""
+    except Exception:
+        current = ""
+    if suffix in current:
+        return True                      # already stamped: a re-run is a no-op
+    combined = "{0} {1}".format(current, suffix).strip()
+    try:
+        return bool(set_element_mark(element, combined))
+    except Exception:
+        return False
+
+
+def _write_text(element, doc, parameter_name, text):
+    """Set a text parameter on the instance, falling back to its type."""
+    name = (parameter_name or "").strip()
+    if not name:
+        return False
+    for holder in (element, _type_of(doc, element)):
+        if holder is None:
+            continue
+        try:
+            parameter = holder.LookupParameter(name)
+        except Exception:
+            parameter = None
+        if parameter is None or parameter.IsReadOnly:
+            continue
+        try:
+            if parameter.Set(text):
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _type_of(doc, element):
+    try:
+        type_id = element.GetTypeId()
+        return doc.GetElement(type_id) if type_id is not None else None
+    except Exception:
+        return None
 
 
 def elements_of(doc, element_ids):

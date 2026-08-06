@@ -712,35 +712,57 @@ def _heights_from_elevations(plans, notes):
 
 
 def apply_storey_settings(regions, settings):
-    """Copy the dialog's per-storey height/repeat onto the split regions.
+    """Rebuild the storey stack from the dialog's table.
 
-    `settings` is the detection's plan list after the user has edited it, in the
-    same bottom-up order. Rows are matched by LABEL when both sides have one
-    (the split and the detection can disagree on how many boxes carried
-    geometry), else positionally. A row the user unticked is DROPPED, so the
-    returned list can be shorter than the one passed in.
+    `settings` is one row per STOREY, bottom-up, each naming which detected plan
+    it uses ("plan": an index into the detection's plan list). That is what lets
+    the same drawing build several floors -- a typical plan drawn once and used
+    on rows 2, 3 and 4 -- and what makes the row ORDER the build order, so a
+    storey can be moved up or down the stack.
+
+    A row the user unticked is dropped. With no settings, or rows that name no
+    plan, the split's own order is kept untouched.
     """
     if not settings:
         return regions
-    by_label = dict((s.get("label"), s) for s in settings if s.get("label"))
-    kept = []
-    for index, region in enumerate(regions):
-        setting = by_label.get(region.label)
-        if setting is None and index < len(settings):
-            setting = settings[index]
-        if setting is None:
-            kept.append(region)
+    by_label = dict((r.label, r) for r in regions if r.label)
+    stack = []
+    for index, row in enumerate(settings):
+        if not row.get("include", True):
             continue
-        if not setting.get("include", True):
-            continue                    # unticked on the Multi-storey tab
-        height = setting.get("height_mm")
+        source = None
+        if row.get("plan") is not None:
+            position = int(row["plan"])
+            if 0 <= position < len(regions):
+                source = regions[position]
+        if source is None:
+            source = by_label.get(row.get("label"))
+        if source is None and index < len(regions):
+            source = regions[index]
+        if source is None:
+            continue
+        storey = _reuse(source)
+        height = row.get("height_mm")
         if height:
-            region.storey_height_mm = float(height)
-        repeat = setting.get("repeat")
+            storey.storey_height_mm = float(height)
+        repeat = row.get("repeat")
         if repeat:
-            region.repeat = max(1, int(repeat))
-        kept.append(region)
-    return kept
+            storey.repeat = max(1, int(repeat))
+        stack.append(storey)
+    return stack or regions
+
+
+def _reuse(region):
+    """A shallow copy of a region, so ONE plan can build several storeys.
+
+    The records are SHARED, not copied: they are read-only to the builders, and
+    a typical plan reused five times would otherwise carry five copies of a
+    whole floor's geometry.
+    """
+    return FloorRegion(region.bounds, region.origin, label=region.label,
+                       order=region.order, records=region.records,
+                       texts=region.texts, repeat=region.repeat,
+                       storey_height_mm=region.storey_height_mm)
 
 
 def expand_repeats(regions):
