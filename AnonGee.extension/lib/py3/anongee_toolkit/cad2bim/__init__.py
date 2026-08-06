@@ -35,7 +35,24 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.1"  # HOTFIX: new levels ignored the Naming tab entirely.
+__version__ = "0.67.2"  # The roof's slabs, from the v0.67.0 run's own export.
+#
+#                         SLABS: the note recovery only ran when the slab-edge layer
+#                         had ALREADY found something. On the roof of the updated test10
+#                         there is no slab edge at all, so the run fell to the placed
+#                         members, found no face (a bay walled on one side reads as a
+#                         shaft) and built 0 slabs. The recovery now runs whatever the
+#                         source found -- a note no outline covers gets its bay, with the
+#                         note itself as the keep_point. Roof: 0 -> 6.
+#
+#                         COLUMNS: the run placed the 12300 wall AND two 2700-long pieces
+#                         of that same wall, which came in as closed outlines of their
+#                         own. A placed column now blocks a recovered face only while it
+#                         is a fair LIKENESS of it, and any rectangle lying wholly inside
+#                         a face -- however it was found -- is a piece of that member and
+#                         goes. Roof: 12 columns, 2 of them doubled -> 10, one per label.
+#
+# 0.67.1                  HOTFIX: new levels ignored the Naming tab entirely.
 #
 #                         _storey_level_pairs hard-coded `"CAD Level {0}".format(...)`
 #                         at the Level.Create call -- naming.level_name existed, was

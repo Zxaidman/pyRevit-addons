@@ -183,6 +183,32 @@ class LabelGatedRecovery(unittest.TestCase):
         self.assertNotIn("recovered_rect", statuses)
         self.assertEqual(sections["total_rectangles"], 3)
 
+    def test_a_piece_of_the_wall_read_as_its_own_column_is_dropped(self):
+        """Test10's roof, in Revit: the 12300 wall AND two 2700 pieces of it.
+
+        The pieces came in as closed outlines of their own, so nothing marked
+        them approximate -- yet two solids in one place is always wrong, and the
+        face agrees with the plan's label.
+        """
+        sections = _sections([_rect(1500, 150, 3000, 300),
+                              _rect(4500, 150, 3000, 300)])
+        placed = report.recover_face_columns(sections, _comb(), _labels())
+        self.assertEqual(placed, 3)
+        found = sorted(_placed([r for e in sections["entries"]
+                                for r in e["rectangles"]]))
+        self.assertEqual(found, [(1150, 1300, 300, 2000),
+                                 (3000, 150, 300, 6000),
+                                 (4150, 1300, 300, 2000)])
+
+    def test_a_column_standing_on_the_wall_is_not_a_piece_of_it(self):
+        # the teeth overlap the wall's ends but reach far beyond it: they are
+        # members in their own right and must survive
+        sections = _sections()
+        report.recover_face_columns(sections, _comb(), _labels())
+        heights = sorted(max(r["width_mm"], r["height_mm"])
+                         for e in sections["entries"] for r in e["rectangles"])
+        self.assertEqual([round(h) for h in heights], [2000, 2000, 6000])
+
     def test_a_fair_guess_at_the_same_member_still_blocks_it(self):
         """Only a FRAGMENT is overruled -- a rect of the right size is the member.
 

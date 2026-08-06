@@ -2560,22 +2560,23 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
         loops = slab_outlines.slab_loops_from_placed_members(
             records, beam_segments.get("segments"), column_rects=column_rects)
         source = "placed_members"
-    else:
-        # A drawing can note "200 THK." over a bay whose slab edge was never
-        # drawn (test10's roof: rings on the south bays, one line on the north).
-        # Finding SOME rings used to end the search, so those bays went missing
-        # in silence. Recover exactly the noted ones from the placed members.
-        extra = slab_outlines.loops_for_unclaimed_notes(
-            loops, records, beam_segments.get("segments"), texts,
-            column_rects=column_rects,
-            min_area_m2=(selections.get("tolerances") or {}).get(
-                "slab_note_min_area_m2",
-                config.DEFAULTS["slab_note_min_area_m2"]))
-        if extra:
-            loops = list(loops) + list(extra)
-            source = "slab_edges + beam graph"
-            _say("slabs: {0} bay(s) recovered from the beam graph where a "
-                 "thickness note had no drawn outline".format(len(extra)))
+    # A drawing can note "200 THK." over a bay whose slab edge was never drawn
+    # (test10's roof: rings on the south bays, one line on the north -- and in
+    # the Revit records, no ring at all). Whatever the source found, a note that
+    # no outline covers gets its bay recovered from the placed members, where
+    # the note itself is the keep_point: a bay whose fourth side is a WALL is
+    # otherwise dropped as a shaft, which is why the roof built no slabs.
+    extra = slab_outlines.loops_for_unclaimed_notes(
+        loops, records, beam_segments.get("segments"), texts,
+        column_rects=column_rects,
+        min_area_m2=(selections.get("tolerances") or {}).get(
+            "slab_note_min_area_m2",
+            config.DEFAULTS["slab_note_min_area_m2"]))
+    if extra:
+        loops = list(loops) + list(extra)
+        source = "{0} + beam graph".format(source)
+        _say("slabs: {0} bay(s) recovered from the beam graph where a "
+             "thickness note had no drawn outline".format(len(extra)))
     if not loops:
         _say("Slabs -- no closed slab outline found (any source).")
         return {"created": 0, "skipped": 0, "errors": 0, "source": source}

@@ -1428,16 +1428,11 @@ def recover_face_columns(sections, records, column_texts=None,
     candidates = shapes.recover_face_columns(paths, z=z)
     if not candidates:
         return 0
-    # A FIRM column always blocks a face -- that member is already placed. An
-    # APPROXIMATE one (the recovery passes' own guesses) only blocks while it is
-    # a fair likeness: a 212x424 blob standing in for a 300x2000 column is a
-    # fragment of the member, not the member, and must not veto it.
-    firm = {"entries": [entry for entry in sections.get("entries", [])
-                        if not entry.get("approx")]}
-    guessed = {"entries": [entry for entry in sections.get("entries", [])
-                           if entry.get("approx")]}
-    placed = _column_footprints(firm, sections.get("circles"))
-    approximate = _column_footprints(guessed, None)
+    # A placed column blocks a face only while it is a fair LIKENESS of it: a
+    # 212x424 blob standing in for a 300x2000 column, or a 2700-long piece of a
+    # 12300 wall read as an outline of its own, is part of the member rather
+    # than the member, and must not veto the one the label agrees with.
+    placed = _column_footprints(sections, sections.get("circles"))
     reach_ft = config.mm_to_ft(mark_reach_mm)
     new_rects = []
     kept_fps = []
@@ -1446,10 +1441,10 @@ def recover_face_columns(sections, records, column_texts=None,
         width_mm = rect.width_ft * _MM
         height_mm = rect.height_ft * _MM
         small, big = min(width_mm, height_mm), max(width_mm, height_mm)
-        if _covered_by(cx, cy, placed) or _covered_by(cx, cy, kept_fps):
+        likeness = _FACE_LIKENESS * rect.width_ft * rect.height_ft
+        if _covered_by(cx, cy, kept_fps):
             continue
-        if _covered_by(cx, cy, approximate,
-                       min_area_ft2=_FACE_LIKENESS * rect.width_ft * rect.height_ft):
+        if _covered_by(cx, cy, placed, min_area_ft2=likeness):
             continue
         label = _matching_size_label(labels, rect, reach_ft, size_tol_mm)
         if label is None:
@@ -1544,26 +1539,56 @@ def _dims_match_tol(width_mm, height_mm, b_mm, h_mm, tol_mm):
             and abs(big - label_big) <= tol_mm)
 
 
+def _rect_half_box(rect):
+    """A rectangle's AXIS-ALIGNED half extents (half width, half height).
+
+    Two conventions live in these dicts: a plain rect has no `long_axis_deg`
+    and its width/height are the x/y extents as drawn, while an oriented one
+    carries its SMALL side as the width and its long side along the angle.
+    Both come out right here, and a rotated rect gives its true bounding box.
+    """
+    w = rect["width_mm"] / _MM
+    h = rect["height_mm"] / _MM
+    deg = rect.get("long_axis_deg")
+    if deg is None:
+        return w / 2.0, h / 2.0
+    long_half, short_half = max(w, h) / 2.0, min(w, h) / 2.0
+    theta = math.radians(deg)
+    cos, sin = abs(math.cos(theta)), abs(math.sin(theta))
+    return (long_half * cos + short_half * sin,
+            long_half * sin + short_half * cos)
+
+
 def _drop_approximate_inside(sections, new_rects):
-    """Remove guessed rectangles that a recovered face now covers properly."""
-    boxes = []
-    for rect in new_rects:
-        cx, cy, _cz = rect["center"]
-        half_w = max(rect["width_ft"], rect["height_ft"]) / 2.0
-        half_h = min(rect["width_ft"], rect["height_ft"]) / 2.0
-        if rect["long_axis_deg"] == 90.0:
-            half_w, half_h = half_h, half_w
-        boxes.append((cx, cy, half_w, half_h))
+    """Remove the rectangles a recovered face now covers properly.
+
+    Two kinds go: a GUESS whose centre the face contains (the 45-degree blob a
+    comb corner leaves behind), and ANY rectangle -- however it was found --
+    that lies WHOLLY inside the face. Test10's roof placed its 12300 wall as
+    well as two 2700-long pieces of that same wall, read as closed outlines of
+    their own: two solids in one place is always wrong, and the face, agreeing
+    with the plan's own label, is the one to keep.
+    """
+    boxes = [(rect["center"][0], rect["center"][1]) + _rect_half_box(rect)
+             for rect in new_rects]
+    pad = config.mm_to_ft(2.0)
     dropped = 0
     for entry in sections.get("entries", []):
-        if not entry.get("approx"):
-            continue
+        approx = bool(entry.get("approx"))
         kept = []
         for rect in entry.get("rectangles", []):
             cx, cy, _cz = rect["center"]
-            inside = any(abs(cx - bx) <= hw and abs(cy - by) <= hh
-                         for bx, by, hw, hh in boxes)
-            if inside:
+            own_w, own_h = _rect_half_box(rect)
+            covered = False
+            for bx, by, hw, hh in boxes:
+                if approx and abs(cx - bx) <= hw and abs(cy - by) <= hh:
+                    covered = True                  # a guess at this member
+                    break
+                if (abs(cx - bx) + own_w <= hw + pad
+                        and abs(cy - by) + own_h <= hh + pad):
+                    covered = True                  # a piece of this member
+                    break
+            if covered:
                 dropped += 1
             else:
                 kept.append(rect)
