@@ -1,582 +1,124 @@
-# Task Plan — CAD to BIM (cad2bim) Column & Beam Work
+# Task Plan — cad2bim v0.68: CLR type fix, modular refactor, merge to main
 
-## Main Goal
-Build out the `cad2bim` toolkit inside the pyRevit extension so a structural CAD plan
-(DXF / linked CAD) is read, every structural member is recovered/sized/named from its
-label or schedule, and placed in Revit. **Columns are the focus that is now COMPLETE.
-Beams are the NEXT major area of work** (to continue on the same branch).
+**Goal:** clear the "Duplicate type name within an assembly" crash introduced by the
+v0.67.3 module reload, break the four oversized modules into small focused ones with
+zero behaviour change, prove no regressions across the fixture suite, then merge this
+branch into main and archive it.
 
-- Repo: `Zxaidman/pyRevit-addons`
-- Working branch (KEEP — do not delete): `claude/ecstatic-dijkstra-rmvyl7`
-- Default/base branch: `main`
-- cad2bim version after this session: **0.24.0**
+**Branch:** `claude/ecstatic-dijkstra-rmvyl7` → merge into `main` at the end.
 
-## Key Architectural Decisions
-1. **Label-guided re-tiling of fused outlines** (the core innovation of this session).
-   When abutting members share one drawn outline (a lift/stair core drawn as loose wall
-   lines, OR one column cast hard against another), the existing greedy decomposition
-   mis-cuts the shared corners/edges. Instead of fixing the geometry-only decomposition
-   (ambiguous, can't be solved without labels), we re-tile each fused blob FROM ITS
-   LABELS, BEFORE text-correction runs.
-2. **New pass = `report.recover_core_walls_from_labels(sections, column_texts, schedule)`**,
-   called in `script.py` right before `correct_columns_with_text`.
-3. **Algorithm = greedy-by-longest carve on a cell grid.** The blob's exact-cover pieces
-   define a cell grid (unique x/y edges). Members are carved LONGEST-dimension first;
-   each label claims the label-sized run of still-unclaimed inside-cells nearest its
-   label point. Proven to reconstruct the true cover.
-4. **Safety gates (critical for zero regression):**
-   - Only blobs of `status in ("composite","recovered_strip")` are candidates.
-   - Connected component must have `>= 2` pieces.
-   - The blob must contain `>= 1` MARKED label (so a working markless-only core is never
-     touched).
-   - The carve must achieve a CLEAN FULL TILING (every inside cell claimed) or the blob
-     is left exactly as decomposed (fallback = current behavior).
-   - Once firing, it uses ALL sized labels (marked AND markless-but-sized), so a sized
-     stub packed into a marked blob is placed (unnamed).
-5. **Do NOT grid-snap carved walls** — they sit at true drawn positions; snapping would
-   move them off. The "just name it" path in `correct_columns_with_text` keeps them.
-6. **width/height convention** of carved rects matches the column builder:
-   `width_mm` = x-extent, `height_mm` = y-extent, `long_axis_deg = 90 if height>=width
-   else 0`. Builder (`builders/columns.py:112-115`) auto-derives the same when absent, so
-   placement is provably identical.
+**Non-negotiable through every phase:** the 403-test suite stays green, the 22 stored
+slab fingerprints stay byte-identical, and the DXF fixture sweep (columns / beams /
+slabs per fixture) stays unchanged unless a change is intended and explained.
 
-## Phases
+---
 
-### Phase 1 — Fused CORE walls (Test19 lift core) — ✅ DONE (committed d5c02ea)
-- [x] Diagnose: core drawn as loose lines on `S-COLS`, assembled by
-      `recover_rectilinear_columns` into a `recovered_strip` entry of 5 mis-cut strips.
-- [x] Implement `recover_core_walls_from_labels` + helpers in `report.py`.
-- [x] Wire into `script.py` before `correct_columns_with_text`.
-- [x] Verify: C8/C9/C10/C12 move to TRUE centres; C6 already correct.
-- [x] Zero regression on Tests 9–18 + 3 Messy plans (byte-identical).
-- [x] Regression test `tests/test_core_wall_labels.py`.
-- [x] Version bump 0.23.3 → 0.24.0.
+## Phase 1 — "Duplicate type name within an assembly" (BLOCKER)
 
-### Phase 2 — C16 swallowed by C15 (stacked adjacent columns) — ✅ DONE (committed 4eb7b2a)
-- [x] Diagnose: same fused-outline bug between 2 stacked columns; C15+C16 fuse into 2
-      strips; text-correction merges both into C15, consuming C16's geometry → C16 dropped.
-- [x] Relax gate `len(comp) < 3` → `len(comp) < 2`.
-- [x] Widen `_CORE_LABEL_MARGIN_MM` 600 → 1100 (C16's label sits ~935mm below its column).
-- [x] Verify C16 placed at true (3150,-1050); zero regression elsewhere.
-- [x] Add stacked-pair + markless-lower-fallback tests.
+**Status:** complete
 
-### Phase 3 — Draw the markless 300×600 under C17 — ✅ DONE (committed 25100af)
-- [x] Diagnose: markless-but-sized stub fused under C17; carve skipped markless labels.
-- [x] Allow markless sized labels into the carve, BUT only inside a blob holding >=1
-      marked label (per-blob `any(lbl[0] for lbl in blob_labels)` gate).
-- [x] Verify markless placed at true (7850,-1050) UNNAMED; zero regression elsewhere.
-- [x] Update tests: stacked-pair-both-placed + markless-only-core no-op.
+Root cause is understood and confirmed by reading the code (see findings.md #1).
+Python.NET builds a real CLR type for every Python class that derives from a .NET
+interface. The AppDomain rejects a second type with the same name, and v0.67.3's
+`_drop_stale_modules()` makes those modules re-import on every click:
 
-### Phase 4 — PR + merge — ✅ DONE
-- [x] PR #4 created (`claude/ecstatic-dijkstra-rmvyl7` → `main`).
-- [x] No review comments, no CI configured, mergeable_state clean.
-- [x] Merged via MERGE COMMIT (sha 9d52313) so main has all 50 column commits as
-      ancestors → branch stays cleanly ahead for beams. Branch PRESERVED.
+| Site | Kind | Re-created because |
+|------|------|--------------------|
+| `cad2bim/builders/txn_failures.py` `WarningSwallower(IFailuresPreprocessor)` | module level | purged + re-imported each run |
+| `revit/transactions.py` `SuppressWarningsPreprocessor(IFailuresPreprocessor)` | module level | purged + re-imported each run |
+| `cad2bim.pushbutton/script.py` `_wrap_selection_filter._Filter(ISelectionFilter)` | inside a function | re-created on every CALL (latent since long before v0.67.3) |
 
-### Phase 5 — BEAMS — ⏳ IN PROGRESS (investigation done; implementation NOT started)
+Run 1 in a fresh Revit session builds the types; run 2 purges, re-imports and tries to
+build them again → the crash the user saw.
 
-**Current state (Test19): only 1 of 23 beams (B23) is placed.** Beam detection is the
-big gap. Investigation found a MIXED drawing convention (see findings.md "BEAMS").
+**Approach:** keep the reload (it fixes the whole stale-library class of bugs) and make
+CLR type creation idempotent instead. A tiny purge-proof registry module holds each
+created type; every site asks the registry first and only builds the class on a miss.
 
-Sub-phases (priority order TBD with user):
-- [x] **5a. Wire beam-text routing** — DONE. `script.py` now routes `beam_texts =
-      [...CATEGORY_BEAM_TEXT]` and passes them to `build_beam_segments(texts=beam_texts)`
-      (moved the beam call below the text-routing block). Each detected segment gets
-      width=min(label), depth=max(label), mark via `_apply_beam_marks` (midpoint→nearest
-      sized label within mark_radius). Verified: Test19 B23 now sized 300x900 + mark
-      (was family-default depth). Added `tests/test_beam_text_sizing.py` (3 tests).
-      NOTE: only helps DETECTED beams — Test19 still 1/23 until 5b lands.
-- [x] **5b. Perimeter / floor-clipped beam detection** — DONE (the user's A-FLOR insight).
-      Revit clips a perimeter beam's inner edge against the floor (A-FLOR) outline, so only
-      ONE beam edge survives on S-BEAM; the other edge IS the floor edge. Fix: classify
-      `flor|floor` -> CATEGORY_SLAB_EDGE (was unmapped placeholder); `build_beam_segments`
-      collects floor_lines; new `_edge_pair_beams` pass pairs leftover beam lines + slab
-      edges into width-band candidates and keeps one ONLY where an unplaced beam label of
-      matching width sits across it (`_point_to_segment_dist` < mark_radius). Spatial dedup
-      (`_coincides_with_a_beam`, tol `_EDGE_DUP_TOL_MM=250`) drops an edge pair that
-      re-traces an already-placed beam (fixes Test9/10/11 where the floor outline duplicates
-      beams). Verified: existing line_pair/curved BYTE-IDENTICAL on all fixtures; Test19 1->21
-      of 23; Raheja +4. Added tests/test_perimeter_beams.py (5). KNOWN gaps: B20 (its -600
-      edge is consumed by B23's line_pair, validated correct) and B22 (900 wide > 600 limit).
-- [x] **5c. Curved beam placement** (B18) — DONE. Was detected (`curved_pair`) but discarded
-      ("placement to follow"). Now: arc fragments are clustered into concentric EDGES
-      (`_group_arc_edges`), inner/outer edge pairs become curved beam segments
-      (`_curved_beams_from_edges`) with centreline radius, width=gap, swept angle via
-      `_arc_span` (largest-gap), depth+mark from nearest label (`_apply_curved_marks`).
-      `build_beam_segments` now returns a `curved_segments` list. Builder
-      `beams.place_curved_beams` places each along an `Arc` (wired into script.py
-      `_create_beams`). Verified: Test19 B18 = center(11000,5500) R2500 width400 depth900
-      span 279->443 deg; straight-beam counts byte-identical on ALL fixtures; 3 Messy plans
-      also gain curved beams; arc_lone drops to ~0. Added `tests/test_curved_beams.py` (4).
-- [ ] **5d. Implied/spanning beams + far labels**. Several labels (B3,B5,B7,B8,B9,B10,B22,
-      B18,B19) sit 1200–2800 mm from any beam line — geometry may be implied (span between
-      columns) or drawn in a way not yet matched. Needs ground-truth clarification.
+- [x] 1.1 `lib/py3/anongee_clr.py` — top-level (outside `anongee_toolkit`, so the purge
+      never touches it): `get_or_create(name, factory)` + `registered()`. Pure Python,
+      unit-testable without Revit.
+- [x] 1.2 `txn_failures.py` — class body moves into a factory, module attribute comes
+      from the registry. Public name `WarningSwallower` unchanged.
+- [x] 1.3 `revit/transactions.py` — same treatment for `SuppressWarningsPreprocessor`.
+- [x] 1.4 `script.py` `_wrap_selection_filter` — build through the registry, which also
+      fixes picking stair outlines twice in one session.
+- [x] 1.5 Tests: registry unit tests + a static test asserting no module under
+      `anongee_toolkit` declares a CLR-derived class at import time outside the registry.
+- [x] 1.6 Ship as v0.67.4 for the user to confirm two consecutive runs in one session.
 
-**DECISION NEEDED FROM USER**: the expected beam output / drawing convention is ambiguous
-(unlike columns where the user gave ground truth per step). Confirm: are perimeter beams
-single EDGE lines (extend inward by width) or centrelines? How many beams should place?
-Which sub-phase first? (Recommended start: 5a infra, then 5b detection.)
+**Exit criteria:** user runs the button twice in one Revit session without the crash.
 
-- [x] **5e. Revit-run beam fixes (v0.27.0)** from the user's 0.26.0 JSON exports (3 issues):
-      (A) Revit link reader returns floor outlines as POLYLINES not lines -> floor pool empty,
-      only ~1 beam placed; now slab_edge polylines are exploded into segments. (B) mark-only
-      beam labels never sized -> build_beam_segments now takes `schedule`, sizes via
-      `_label_size`; beam schedule is Mark|W|H|L (H=depth, L=span) so `parse_schedule` reads a
-      BEAM row as W x H (columns stay W x L). (C) placed beams had no Mark -> both placers now
-      `_set_mark`; duplicate marks de-named to nearest (`_dedupe_marks`). Columns byte-identical;
-      added tests (schedule W x H, polyline floor, schedule sizing, dedup). NOTE: A/C are Revit
-      API / link-geometry paths -- verified by logic + DXF harness, not runtime in Revit.
+---
 
+## Phase 2 — Refactor: smaller, focused modules
 
+**Status:** pending (starts only after Phase 1 is confirmed in Revit)
 
-### Phase 7 — Pushbutton features (v0.29.0) + XAML hotfix — DONE (verified in Revit; bar kept simple, WPF circular later)
-- [x] ui.xaml hotfix: missing space `IsChecked="True"Margin=` broke XamlReader.Load (window
-      failed to open after Link). One-char fix, committed separately.
-- [x] FEATURE A disallow beam end-joins: builders/beams.py `_disallow_joins(instance)` calls
-      StructuralFramingUtils.DisallowJoinAtEnd(inst,0/1), best-effort; called in both placers.
-- [x] FEATURE B deferred console + [####------] progress: script.py `_DeferredOut`/`_say`
-      buffer (all print()->_say), `_OUT.flush()` only AFTER main-window Run, `_progress(i,7,..)`
-      per phase (link, read, columns, beams, create x3). No pyrevit import. Buffer/bar verified
-      standalone; 12 test files pass. NOTE: Revit-API/UI paths -- verify on re-run.
-- Brainstorming spec: docs/superpowers/specs/2026-06-26-beam-join-and-deferred-console-design.md
-- NEXT (deferred bug batch): B22->C12, B20 300x900, Test10 grid-6, Test15 between-grid +
-  short-curve (zero-len) errors.
+Current sizes (the four the user is reacting to):
 
+| File | Lines | Split into |
+|------|-------|-----------|
+| `cad2bim/report.py` | 3039 | `columns/sections.py`, `columns/recovery.py`, `columns/text_fit.py`, `beams/segments.py`, `beams/cleanup.py`, `export.py`, keep `report.py` as the facade |
+| `cad2bim.pushbutton/script.py` | 2956 | `dialog/` (window + tabs), `run/` (phases), `progress.py`, `console.py`; `script.py` becomes the entry point |
+| `cad2bim/stair_layout.py` | 1683 | `stairs/runs.py`, `stairs/landings.py`, `stairs/fan.py`, `stairs/plan.py` |
+| `cad2bim/slab_outlines.py` | 1550 | `slabs/edges.py`, `slabs/graph.py`, `slabs/exactness.py`, `slabs/labels.py` |
 
-### Phase 8 — BEAM BUG BATCH (from 0.28.1 Revit run) — IN PROGRESS (v0.30.0)
-- [x] 8a SHORT-CURVE errors (Test15, 2x "Curve length too small"). Cause: snap_beam_ends_to_columns
-      moves a beam END but does NOT recompute length_mm; a beam whose ends collapse onto one
-      column passes the <50mm filter (stale length) then Line.CreateBound(start==end) throws.
-      FIXED v0.30.0: place_beams recomputes length from the LIVE start/end (post-snap) and skips
-      the collapsed sliver. Builder-only change; 12/12 unit tests pass.
+**Rules for this phase (regression discipline):**
+1. One module extracted per commit — never two at once.
+2. Pure moves. No logic edits, no renames of public functions, no "while I'm here".
+3. The old module keeps its public API by re-exporting, so no call site changes in the
+   same commit as a move.
+4. After EVERY extraction: full unit suite + slab fingerprint replay + fixture sweep.
+   Any diff at all stops the commit until it is explained.
+5. `script.py` last — it is the riskiest and cannot be unit-tested outside Revit beyond
+   the static wiring checks.
 
-  **DIAGNOSTIC (v0.30.0): beams.raw_geometry added to the JSON export.** The DXF source
-  carries beams as loose LINES, not the polylines Revit's link reader builds, so the DXF
-  harness places ZERO beams (verified: Test10/15/18/19 all -> 0 segments, every beam is
-  bare_line_unpaired) and CANNOT reproduce 8b-8e. The export now dumps the exact beam- and
-  slab-edge-layer geometry (mm) the link reader returned. `tests/replay_beams.py` rebuilds
-  CurveRecords from it and re-runs the real build_beam_segments OFFLINE -> 8b-8e diagnosable
-  from ONE export, no guess-and-check Revit runs.
-  >> NEXT RUN: user runs v0.30.0 on Test10/Test15/Test18 (text mode), shares JSON; then
-     `python3 tests/replay_beams.py <export.json> [mark]` reproduces each miss locally.
+- [ ] 2.1 Agree the target layout with the user (this file, before any code moves)
+- [ ] 2.2 Baseline capture: fingerprints + sweep + suite, stored in the scratchpad
+- [ ] 2.3 `report.py` → columns/ + beams/ + export.py
+- [ ] 2.4 `slab_outlines.py` → slabs/
+- [ ] 2.5 `stair_layout.py` → stairs/
+- [ ] 2.6 `script.py` → dialog/ + run/ (+ keep the static wiring tests passing)
+- [ ] 2.7 Delete the facades if (and only if) every call site has moved cleanly
 
-  Symptom notes gathered from the 0.28.1 OUTPUT exports (pre-geometry-dump):
-  - 8e Test10: grid X-lines [-300,3000,8000,11000,14000,17000,20000,25000,28300]=grids 1..9
-    (grid 6 = x=17000). x=17000 verticals cover y up to 22850 then resume at 26450 -- the
-    y~=23000->24500 (H->I) bay segment is the miss; some neighbour lines share that gap.
-- [x] 8b FIXED v0.31.0. Cause: U-polyline chains two grid beams' facing edges; simplify_ring
-      closed it into an 1800-wide "quad" on the midline; nearest label rewrote width->300
-      (laundering past the width filter + stealing the mark). Fix: too-wide quads explode into
-      the pair pool (real on-grid beams re-pair); label can't rescue out-of-range width.
-      Offline replay: 14 phantoms (y=30650 J/K, y=60675 S/T) gone; rows E/F+Q/R repaired too.
-- [x] 8c FIXED v0.31.0. B22's far piece has no label (label sits over near piece) + its inner
-      edge survives only as floor outline. New label-free CONTINUATION pass: leftover beam+slab
-      edge pairs (>=1 beam edge) that collinearly continue a placed same-width beam across a
-      crossing member (<=1200mm gap); depth inherited. Verified: Test18 both variants
-      (2765..4465,676) + Test19 (3150..4850,3000) reach C12's face; nothing else changes.
-- [x] 8d FIXED v0.31.0. B23's label (drawn between stacked B20/B23) out-scored B20's own
-      off-midspan label by MIDPOINT distance. Marks now label-OWNS-segment by centreline
-      distance (edge-pair B4/B5 cure), midpoint fallback for unclaimed. B20=600x900 both
-      Test18s, all B1-B23 marks correct; Test15 marks redistribute only where provably wrong
-      (B101 sits 6mm ON the horizontal it now names).
-- [x] 8e FIXED v0.31.0 (was: grid 6 = x=20000, H->I = y 26300..27700). simplify_ring wraps the
-      vertex list, so the open snake's last leg (vertical beam edge, collinear with the
-      fabricated closing edge) was deleted. Ring rejected when it loses a real vertex ->
-      polyline explodes -> beam pairs. Only Test10 changes; +grid-6 beam.
+---
 
-  ALL FIXES VERIFIED OFFLINE against the five 0.30.0 raw-geometry exports via
-  tests/replay_beams.py + stash-diff (old vs new on identical input).
-  >> NEXT: user re-runs v0.31.0 in Revit on Test10/15/18/19 to confirm in-model.
+## Phase 3 — Review pass
 
-### Phase 8+ — 0.31.0 Revit feedback round (v0.32.0) — DONE, AWAITING REVIT CONFIRM
-User's 0.31.0 run: Test10 PERFECT; Test15 rows fixed but marks wrong/missing + some beams
-undrawn (user screenshots = exactly the missing set); Test18/19 B20 fixed, B22 = two pieces
-with phantom 300 gap.
-- [x] MARKS: beam labels are MTEXT whose rotation is the text_direction VECTOR ((0,1,0) =
-      vertical), not dxf.rotation -- all 682 labels read rot=0, so rotated (vertical) labels
-      (anchor at one END of the text run, often ~60-210mm from the crossing row's centreline)
-      claimed horizontal beams row after row. Reader now captures rotation; ownership/fallback/
-      edge-pair label matching is orientation-gated (+-20 deg, labels run ALONG their beam);
-      dedupe keeps by centreline distance. texts_sized exports "rot".
-- [x] UNDRAWN BEAMS: whole bays traced as nearly-closed 5-pt snakes -> skew closing edge ->
-      non_rectilinear bbox 2950 wide -> width-filtered, real edges CONSUMED. Too-wide outlines
-      now explode from ALL 3 branches (quad/composite/non-rect). Test15 offline: 682 labels ->
-      682 segments, 100% marked correct, 0 undrawn, 0 mismatch.
-- [x] B22 ONE PIECE: continuation now EXTENDS the placed beam across the crossing (was: second
-      piece + gap). Test18 x2 + Test19 verified single span to C12's face.
-- [x] Regression: Test10/18 byte-identical; 13/13 unit tests.
->> 0.32.0 Revit run: Test10/18/19 CLEAN. Two new items -> fixed in v0.33.0:
+**Status:** pending
 
-### Phase 8++ — 0.32.0 feedback (v0.33.0) — DONE, AWAITING REVIT CONFIRM
-- [x] SNAP DRIFT (Test11, verticals H->I): snap moved the end ONTO the column centre; grid-I
-      columns are deliberately OFF the beam axis -> beam skewed off its CAD outline. End now
-      slides ALONG THE BEAM'S AXIS to the station abeam of the centre (projection). Replay:
-      22 snaps, all axial, 0 lateral drift. New unit test (off-axis column).
-- [x] B648 UNDRAWN (Test15 + same beam markless in Test14): bay between C315/C319 (750x1200
-      rotated) leaves a 301mm edge-overlap stub; BOTH ends inside BOTH columns' reach and
-      first-match sent both to the SAME centre -> zero length -> skipped. Ends now snap to
-      the NEAREST column each -> stub stretches to the full bay (B648 = 1500, S->O). Zero
-      collapsed segments post-snap; detection byte-identical everywhere; 13/13 tests.
->> 0.33.0 run: ALL tests good except one regression -> fixed in v0.34.0:
+- [ ] 3.1 `/code-review` over the whole branch diff vs main
+- [ ] 3.2 Fix what the review turns up (correctness first, then simplification)
+- [ ] 3.3 Re-run: unit suite, fingerprints, sweep, and a real Revit run by the user
 
-### Phase 8+++ — 0.33.0 feedback + STRESS SUITE (v0.34.0) — DONE
-- [x] SLOPED BEAMS FLATTENED (Test11 grid-I 6->7, 7->8): the 4-deg bays arrive as ONE
-      non-rectilinear snake (two angled edges + diamond-face jogs); the bbox fallback
-      flattened them horizontal. 0.32.0 only looked right because teleport-snap dragged ends
-      to the centres. FIX: non-rect ring with longest edge >2 deg off-axis explodes
-      (skew_outline_explode); angled edges pair -> sloped beam; axial snap runs it
-      centre-to-centre. Replay: both bays 4.00 deg; ONLY those 2 segments change anywhere.
-- [x] STRESS FIXTURE (user request): fixtures/make_stress_plan.py -> cad/StressPlan-Beams.dxf.
-      Zones: Z1 baseline ring + ROTATED vertical labels; Z2 4-deg sloped; Z3 45-deg diagonal;
-      Z4 900-wide + crossing + continuation MERGE (one piece); Z5 floor-clipped perimeter
-      (A-FLOR partner edge); Z6 stacked-label mark-theft (B20/B23 trap); Z7 curved arc chains;
-      Z8 junk (duplicate line, zero-length line, 20mm sliver, orphan label, "125 THK." note) --
-      must fabricate NOTHING. tests/test_beam_stress.py: 14 tests = full DXF pipeline asserts
-      + link-reader POLYLINE snakes (U-snake, collinear-leg open snake, skew snake) fed
-      straight into build_beam_segments. ALL PASS. Suite now 14 files, all green.
->> 0.34.0 run: fixtures COMPLETE (stress plan renamed Test20). Test20 revealed one
-   infrastructure bug -> fixed in v0.35.0, which also ships SLABS STEP 1:
+---
 
-### Phase 10 — Test20 text-anchor fix + SLABS wired (v0.35.0) — DONE
-- [x] Test20: NO label sizing/marks at all + B7/B8 (the label-required beams) undrawn.
-      Cause: text alignment is GRID-anchored; Test20 has no grid layer -> fell back to the
-      link's GetTotalTransform, which Revit reported as IDENTITY (unit scale baked into the
-      imported geometry, not the instance transform) -> every label 304.8x off -> nothing
-      within mark_radius. FIX: anchor on ALL shared geometry when no grids (method
-      "geometry_anchored"); link transform only when both anchors empty. Stress DXF now
-      declares $INSUNITS=4 (mm) + regenerated under its Test20 name.
-- [x] SLABS STEP 1 (user request): _create_slabs wired after beams (runs when beams run).
-      Outlines: closed A-FLOR rings, else beam-perimeter-graph faces. Thickness/mark from
-      "S1 150 THK"/"150 THK." notes INSIDE the loop (content-driven, any text layer).
-      Floor type: model's first, duplicated per thickness ("150 THK"); level = beams' level.
-      Own transaction group; console line + "slabs" in the JSON export; progress bar 7->8
-      phases. KNOWN step-1 limits: no UI pickers (type/level), no openings, curved beams not
-      in the graph, no slab schedule.
->> 0.35.0 run: GRID+COLUMN+BEAM = 100% of known issues SOLVED (user confirmed).
-   Slabs failed to place -> fixed in v0.36.0:
+## Phase 4 — Merge and archive
 
-### Phase 11 — SLABS round 2 (v0.36.0) — DONE, AWAITING REVIT CONFIRM
-- [x] Floor.Create "No method matches given arguments (Document, list, ElementId,
-      ElementId)": pythonnet does NOT convert a Python list to IList<CurveLoop>. Loops now
-      packed into System.Collections.Generic.List[CurveLoop] (Revit 2025 API sig:
-      Floor.Create(doc, IList<CurveLoop>, floorTypeId, levelId)). Floors flagged structural
-      (FLOOR_PARAM_IS_STRUCTURAL, best-effort).
-- [x] UI pickers (queued item): chk_slabs is LIVE ("Create slabs (from slab outline or beam
-      layout)", auto-disabled when the model has no floor type) + cb_floor_type combo; slab
-      creation gated on its own checkbox; uses selections["floor_type_id"].
-- [x] OPENINGS (queued item): _nest_openings -- a loop fully inside another becomes the
-      enclosing floor's inner CurveLoop (hole), not a stacked slab.
-- Remaining queued: curved beams as slab-graph edges; slab schedule; slab level picker
-  (currently the beams' top level); slab marks S1/S2 from a dedicated slab-text layer.
->> 0.36.0 run over the RENAMED fixture set (Test0=Messy, Test1-Test7; column-only
-   fixtures culled; old fixtures considered good through beam v0.34.0):
+**Status:** pending
 
-### Phase 12 — SLABS round 3 (v0.37.0) — DONE, AWAITING REVIT CONFIRM
-- [x] test4/5 slab-beam OVERLAP: graph faces sat on beam CENTRELINES. Faces now inset
-      per-edge by that beam's half width (width carried through healing/splitting;
-      corners rebuilt by intersecting offset carriers).
-- [x] THREE-SOURCE CHAIN (user request): slab_edges -> NEW member_edges (faces of the
-      DRAWN beam+column outlines = true face-line boundary, member bodies filtered by
-      mean width 2A/P) -> beam_graph_inset. test4/5: member_edges 243 panels.
-- [x] test6 schedule: combined one-layer schedule's SLAB table (Mark|H|Volume) now parsed
-      (S-mark thickness-only blocks); slab pass receives the schedule (S1..S9 sized).
-      Category renamed "schedule (column/beam/slab)"; multiple layers can map to it.
-- [x] test7 inline labels: "S7_150 THK." underscore convention now parses.
-- [x] test6/7 Floor.Create error on the curved slab: adjacent panel (shared edge) was
-      swallowed as a HOLE (point-in-polygon arbitrary ON the boundary). _ring_inside now
-      demands 50mm strict interior clearance; rings sanitized (short/collinear merged).
-- [x] Stress DXF regenerated (culled by the rename); 14/14 test files pass.
->> 0.37.0 run: test4/5 member_edges 158 created / 99 ERRORS; arcs drawn as line strings;
-   test6 D-slab (S8) missing; some slabs misaligned with beam outlines.
+- [ ] 4.1 User confirms a clean Revit run on the refactored build (no regressions)
+- [ ] 4.2 Squash/merge `claude/ecstatic-dijkstra-rmvyl7` → `main`
+- [ ] 4.3 Push main, archive the branch
+- [ ] 4.4 Final version bump + version-history entry
 
-### Phase 13 — SLABS round 4 (v0.38.0) — DONE, AWAITING REVIT CONFIRM
-- [x] ARC-AWARE SLAB EDGES: slab-layer arcs are 3-POINT circle fits; rings previously took
-      them as two straight chords (S8's D-ring broken; curves drawn as line strings). Now:
-      tessellate for geometry (16 chords) + carry (start,mid,end); builder emits ONE real
-      Arc.Create per curved stretch (welded endpoints, walk-oriented, consumed once).
-      Offline test6/7: 9/9 rings form and are simple; D-slab = 7.3 m2 with 3 arcs.
-- [x] MEMBER-EDGE 99 ERRORS: faces threading round-column arc CHORDS (columns present in
-      the Revit run, absent from the old export dump). Arc records now tessellated in the
-      member-edge graph; faces must be SIMPLE rings; builder SKIPS (never errors) any
-      self-intersecting outline.
-- [x] DIAG: raw_geometry now also dumps COLUMN-layer records -> full member-edge replay
-      offline next round.
-- [ ] PENDING DIAGNOSIS (needs the 0.38.0 export with column records): "slab not aligned
-      with beam outline in some places" -- suspect junction healing (350mm) fabricating
-      edges where drawn edges merely end.
->> 0.38.0 run: numbers ~unchanged (test4/5 97 errors, test6/7 D-slab error persists);
-   arcs real on test1-3 slab_edges but chorded elsewhere; "something wrong, can't point out".
+**Gate:** nothing merges until the user reports a clean run. This is their call, not mine.
 
-### Phase 14 — SLABS round 5 (v0.39.0) — DONE, AWAITING REVIT CONFIRM
-- [x] Regression audit 0.37 vs 0.38 per test: beams/columns identical everywhere; slabs
-      test1-3 identical counts (arcs now real), test4/5 99->97 errors, test6/7 error:1 stays.
-- [x] LIVE BUG A (the un-pinpointable wrongness): _ring_arcs attached arcs to NEIGHBOUR
-      panels via shared junction corners -> straight edges replaced by bulging arcs. Ring
-      must now TRAVERSE the arc (mid point on ring path).
-- [x] LIVE BUG B: ring traversing an arc BACKWARD made the walk jump the wrong way,
-      skipping up to 97% of the boundary (0.45m loop on 14.5m perimeter x3 = test6/7 error
-      + micro-slab debris). Chord run now detected by circle-side test; span keyed at the
-      run's walk-order start; Arc oriented to the walk. Offline: test1/2/3/6/7 rings ALL
-      close at ratio 1.000, 0 gaps.
-- [x] Member-edge source registers arc triples too (real curved edges without slab layer).
-- [x] Diagnostics for test4/5's remaining ~97 errors: export stamps cad2bim_version;
-      raw_geometry at 0.1mm (int-mm rounding made replay diverge: 255 vs 230 loops);
-      slabs outcome carries error_details/skip_details; PINCH rings (repeated vertex,
-      passes crossing test, fails Revit) filtered in proto + builder.
->> NEXT: user runs v0.39.0 (pull + RESTART Revit). test4/5's error_details in the export
-   will name the exact Revit failure for the remaining loops; alignment issue diagnosis
-   follows from the 0.1mm replay.
+---
 
-### Phase 15 — v0.40.0: test8 beam-over-column (CLIENT PRIORITY) + SLABS round 6 — DONE,
-###            AWAITING REVIT CONFIRM (user feedback on the 0.39.0 run, 4 items)
-- [x] **test8 (item 4, client): no beam drawn ON TOP of a column.** New report pass
-      `split_beams_at_columns(beam_segments, sections, circles)` in script.py right after
-      the end snap. Per column footprint (rects incl. rotated via long_axis_deg, circles):
-      * centreline crossing strictly inside the span -> SPLIT at the faces (2 pieces);
-      * segment buried face-to-face in one column (column outline mis-read as a beam,
-        e.g. AC6/AC10/BC6 350x1800 exact-coextensive "beams") -> DROPPED;
-      * terminal end >100mm PAST the column centre (drawn to the far face) -> TRIMMED
-        back to the near face; an end AT/BEFORE the centre = junction convention (what
-        snap_beam_ends_to_columns produces) -> never moves;
-      * grazing a shared face line (<10mm penetration at interval midpoint) never counts;
-      * leftover pieces <100mm (drafting overshoot / sliver between adjacent columns)
-        are dropped; mark stays on the LONGEST piece (one-segment-per-mark invariant).
-      VERIFIED offline (replay_split/verify_post_split on export items): test8 29 solid
-      overlaps -> 0 (28 segments changed); test1-7 AND every .archive_fixtures export
-      (0.16.1-0.39.0, tests 10-20): ZERO segments changed. 11-case tests/test_beam_split.py.
-      Slabs receive a PRE-SPLIT snapshot (split reuses untouched dicts, never mutates)
-      so the beam-graph slab source still closes its bay loops over the columns.
-- [x] **test4/5 blank bays (item 1).** Dangling degree-1 stubs (edges ending mid-air)
-      pinched 96 member-edge faces -> silently filtered = blank areas. Iterative stub
-      pruning before the face walk: 158+96 -> 249 clean faces, 0 non-simple (test4+5).
-- [x] **test1-3 shaft slabs (item 2).** Without a floor layer, lift/stair shafts became
-      slab faces. New _beam_fraction filter: a member-edge face needs >=30% of its
-      perimeter ON beam-layer edges; wall-bounded shaft faces are dropped. test1: 47 faces.
-- [x] **test6/7 S8 curved slab missing (item 3).** The 142mm junction fillet arc is
-      SHORTER than the 150mm chain tolerance -> greedy first-match glued its WRONG end
-      (out-and-back pinch = "self-intersecting outline" skip). _chain_into_rings now
-      scores all four attach modes across all unused pieces and takes the globally
-      closest; _piece_fingerprint dedupes re-drawn shared edges first. 9 rings, 0 bad.
-- [x] Suite: 15 test files OK (incl. new test_beam_split.py); slab checks re-verified on
-      0.39.0 exports after all edits.
->> NEXT: user runs v0.40.0 in Revit on test1-8 (+ archives if wanted). Expected: test8
-   beams stop at column faces everywhere; test4/5 blank bays fill; test1-3 no shaft
-   slabs without floor layer; test6/7 S8 curved slab appears. Watch beam counts:
-   test8 233 -> 211 segments (28 split/trimmed/dropped) is INTENDED.
+## Decisions
 
-### Phase 16 — v0.41.0: 0.40.0 feedback (4 items) — DONE, AWAITING REVIT CONFIRM
-- [x] **test4/5 slab-over-beam + merged bays (item 2).** ROOT CAUSE measured: a beam edge
-      tip 44mm from a column ring corner rounds into a DIFFERENT 50mm grid cell, never
-      merges, dangles, gets pruned -> the bay face floods over the beam-body corridor
-      (user's images 1+3 reproduced offline pixel-for-pixel). FIX: node identity by
-      NEIGHBOUR-CELL CLUSTERING (union-find, any pair <=50mm merges; cluster spread
-      capped ~75mm). Census: beam-swallowing faces 24 -> 0, clean bays 249 -> 323 on
-      both test4 and test5; both reported regions render clean.
-- [x] **Columns as TRIM geometry (user proposal, item 2).** slab_loops_from_member_edges
-      takes column_rects: raw column-layer linework inside a footprint is replaced by
-      the exact 4-edge ring (fragments/diagonal marker strokes gone); wall linework
-      stays so shafts remain bounded. script.py passes placed rects + outline obstacles.
-- [x] **Arc chords >= 2x snap.** Fixed 16-chord tessellation put small-fillet vertices
-      ~25mm apart; clustering chain-collapsed them and LOST a real bay (test2/3/6
-      ground-truth diff caught it). Adaptive 2..16 chords; all truth bays match again.
-- [x] **test1-3 stair wells (item 1).** Stair wells measure beam-fraction 0.33 vs real
-      panels >=0.44 (lift shafts <0.3): _MIN_BEAM_FRACTION 0.3 -> 0.35. A wall-fraction
-      ceiling was tried first and REJECTED: it also dropped real bays nestled into the
-      core's L (regression caught by ground-truth diff before commit).
-- [x] **test8 double beams on column strips (item 4).** The 250x3250 blade columns
-      (AC19-24/BC23-28) exceed size limits -> dropped, unplaced -> no footprint, and the
-      beam layer RE-TRACES their outlines: (a) dedupe_beam_segments drops exact twins +
-      contained collinear fragments (12 on test8; only 3 genuine degenerate cleanups
-      anywhere else incl. archives); (b) column_outline_footprints turns closed
-      rectangular column-layer outlines into split obstacles even when unplaced --
-      blade-body beams drop, real inter-blade connectors stay. Post-state: 0 solid
-      overlaps on test8.
-- [x] Suite 15 files OK (test_beam_split 20 cases, test_slabs_proto 18).
->> NEXT: user runs v0.41.0. Expected: test4/5 SLABS ALIGN with beam outlines (no slab
-   over beams, no merged bays -- expect ~323 loops, up from 250); test1-3 without floor
-   layer: no stair-well slabs (landing-band voids at beam-fraction 0.6-0.9 remain, no
-   geometric signal without the floor layer); test8: no double beams, nothing on blade
-   columns (beams: 203 -> ~170 segments is INTENDED).
+| # | Decision | Why |
+|---|----------|-----|
+| 1 | Keep the v0.67.3 module reload; fix the CLR types instead | Reverting reintroduces "no attribute next_level_names" after every update |
+| 2 | Registry module lives OUTSIDE `anongee_toolkit` | Anything inside is purged by design, so it could not hold the cache |
+| 3 | Refactor is pure moves, one module per commit | The only way to prove "no regressions" on a codebase whose tests are mostly end-to-end replays |
+| 4 | Facade modules stay until every caller is migrated | Keeps each commit independently revertable |
 
-### Phase 17 — v0.42.0: 0.41.0 feedback — DONE, AWAITING REVIT CONFIRM
-User confirmed: test4/5 "major accomplishment, all slab area drawn, no beam body overlap";
-rotated-column trim "perfect". Remaining: round columns messy, test6 member leaks, test8
-columns. Real-world CADs mostly have NO floor layer -> member_edges is the flagship path.
-- [x] **Round-column trim (items 1+2).** Round columns are DRAWN as dozens of tiny arc
-      fragments (2-30mm bboxes) on the column layer -- tessellation + clustering turned
-      them into stub soup: slanted bay edges, notches (user's img1/img2). Circle
-      footprints from sections["circles"] now swallow all column linework within r+pad
-      (fragments included; swallowed arcs no longer register arc triples -> phantom
-      micro-arcs gone = test3's "loop discontinuous" Floor error) and contribute ONE
-      clean polygon ring (chords >= 2x snap). Renders: bay edges straight, clean wraps.
-      ANSWERED: member_edges reads the REVIT LINK records; DXF is texts only.
-- [x] **test6 member-body slabs (item 3).** Slab ON B21/B20 + merged B22/B4/B5 cross:
-      the 900-wide B22 body strip beats _MIN_PANEL_WIDTH and corridor crosses pass all
-      perimeter filters. New _body_coverage: face area >50% under placed beam bodies
-      (grid sampling, pre-split segment snapshot) -> member, dropped. test6: 9 clean
-      bays (8 grid + D-slab); also kills test8's beam-inside-strip slivers.
-- [x] **test8 columns (item 5).** recover_outline_columns: closed 4-corner column-layer
-      outlines beyond the size limits become REAL columns at drawn size/position/angle,
-      named by the nearest unclaimed column mark. test8: +19 (AC19-24, BC23/24/26/27,
-      AC2/3/4/15/18, BC2/17/18/19 -- all 19 marked); all other fixtures: 0 (deduped
-      against placed). The strips' "missing beams" were these columns' bodies re-traced
-      on the beam layer; BC25/BC28 outlines are fragmented (not closed) -> still absent.
-- [x] Builder-walk mirror: every ring on every fixture contiguous, 0 non-simple, 0
-      zero-length. Suite 15 files OK. Split/dedupe idempotent on 0.41.0 exports (0 changes).
->> NEXT: user runs v0.42.0. Expected: test1-3 round-column slab edges clean; test6
-   without slab layer -> 9 slabs (no B21/B20/B22-cross); test8 -> +19 columns placed
-   ON the strips (console: "placed 19 blade/outline column(s)"), slabs ~77. If beams
-   are STILL missing on test8, need the location/mark specifics next round.
+## Errors Encountered
 
-### Phase 18 — v0.43.0: placed-geometry slab source + performance — DONE, AWAITING REVIT
-User: test4/5 stuck/slow; 0.42.0 regressed rect trim + round-column arcs; proposed taking
-outlines from the PLACED geometry graph. All four addressed at the root:
-- [x] **Perf (test4/5 stuck).** _heal_endpoints/_split_at_crossings were all-pairs O(n^2):
-      45.6s offline on test4. Spatial grid buckets (_seg_grid, 3m cells) -> 2.1s drawn /
-      3.6s placed. Also the footprint DOUBLING (placed rects + outline fits of the same
-      columns) both doubled cost and caused 0.42.0's jagged rect trims: only
-      column_trim_footprints(sections) is passed now (recover_outline_columns already
-      placed every usable closed outline).
-- [x] **Placed-geometry source (user proposal).** slab_loops_from_placed_members: straight
-      beams contribute edge lines (centreline +/- w/2 + end caps), columns their footprint
-      rings; drawn beam ARCS (curved edges/fillets) + wall linework kept. _create_slabs
-      runs placed AND drawn-edge sources, keeps the larger covered area (placed wins near
-      ties): placed on test1-7 (test7 fallback 1 -> 9 faces), drawn on test8 (1070 vs
-      871 m2, its unlabelled beams are undetected -- user acknowledged).
-- [x] **Round-column arcs restored.** _circle_wrap_arcs: boundary runs along a circle
-      footprint synthesize (start, mid, end) triples with endpoints projected onto the
-      circle -> genuine Arc.Create (0.42.0 had chords).
-- [x] **Beam-edge alignment exact.** Cluster nodes PREFER beam-edge points (the centroid
-      with ring vertices tilted straight boundaries ~40mm); measured: bay edge exactly at
-      centreline - w/2 across the strip.
-- [x] **Builder contiguity.** Adjacent arc spans share a welded vertex; arcs now emit from
-      FINAL ring positions ("loop discontinuous" gone; mirror contiguous everywhere).
->> NEXT: user runs v0.43.0. Expected: test1-7 slabs aligned to placed beams with real arcs
-   at round columns; test4/5 FAST; test8 unchanged slab source (member) + console shows
-   the source comparison line. ROADMAP AGREED (after slabs): (1) STRUCTURAL WALLS --
-   column-layer wall linework -> walls base-to-top like columns; (2) ARCH WALLS -- on top
-   of beams, to the level above, else free-standing 2-3m; (3) STAIRCASE from plan --
-   feasible: flight outlines + riser lines exist on stair layers; Revit API supports
-   sketch-based stairs (needs fixture with stair layers exported).
-
-### Phase 19 — v0.44.0: two-source chain, junction caps, Project1 + stairs — DONE
-- [x] **Chain = slab_edges -> placed_members only (user directive).** Drawn-linework
-      fallbacks retired from _create_slabs (functions kept for tests/harness). test8 will
-      now use placed geometry too -- its slab coverage follows its beam detection; missing
-      beams there are a BEAM issue to fix with mark/location specifics.
-- [x] **Misalignment audit.** Every face edge measured against its carrier: long edges 0mm
-      on all fixtures. Residual = end-cap corner welds at junctions (56 x 24mm jogs on
-      test4): caps now only at FREE beam ends. Left: ~24mm corner shortcuts where a ring
-      apex welds into a beam crossing node (inherent to the 50mm snap; endpoints exact).
-- [x] **Layer groundwork (user: walls/stairs must be layer-based).** New categories
-      structural wall / arch wall / stair + conventions (shear|retain, wall|parapet,
-      stair|strs|step); override dialog lists them automatically.
-- [x] **Project1 assessed** (LayoutPlan-Project1.dxf, offline DXF path): default mapping
-      covers all structural layers; columns 327 rects, beams 661 segments (150-400mm);
-      no grid layer (gridless path exists); 300 mark + 300 size texts on _ASC layers.
-      Next: user runs it in Revit with export for the full-pipeline picture.
-- [x] **Staircase decoded** (StaircasePlan-Test1.dxf): flight = >=3 equidistant riser
-      lines between two boundary lines (300mm treads, 1500 wide), landing = rect at flight
-      end, DN text = direction, ST-n mark, S1 slab label, SW1..6 shear walls 300x3300/6300
-      as closed outlines on S-COLS (recover_outline_columns-compatible). Stair pass design:
-      detect flights/landings -> Revit StairsEditScope sketched runs; walls: struct wall
-      base-to-top (like columns), arch wall on beams to next level else 2-3m free.
->> NEXT: user runs v0.44.0 on test1-8 + Project1 (map layers in the dialog; export JSON).
-   Then: structural-wall placement pass, stair pass, arch walls.
-
-### Phase 20 — v0.45.0: the 14.4mm misalignment SOLVED (exactness pass) — DONE
-The paired with/without-slab-layer 0.44.0 exports made the defect exactly measurable.
-- [x] **Root cause**: a walk node is a weld-cluster centroid (up to snap/2 off the true
-      junction); the wrap-arc endpoint projection kept it on the circle but OFF the beam
-      edge line -> the measured 14.413mm step at round columns (img1), and the tilted
-      long edges on test2/3/6 strips (img2-4).
-- [x] **Fix = EXACTNESS PASS** (_snap_ring_to_carriers): every output vertex snaps to
-      authoritative geometry -- two nearest carrier lines' crossing at corners, the
-      line x circle intersection at wrap ends (gated to snap distance so mid-wrap chord
-      vertices stay radial), the foot on a single carrier along plain edges. Carriers
-      exclude tessellated arc chords (they had polluted the candidates and hijacked
-      junctions -- an arc's carrier is its circle).
-- [x] **Measured vs slab-layer ground truth**: test1 3.4mm / test2 5.5mm / test3 3.3mm
-      max deviation (chord sag at wraps -- Revit gets true arcs), 137/137 bays matched,
-      most exactly 0.0mm; the img1 junction reproduces the drawn (-40.2, 27550.0)
-      EXACTLY. test6's single 29.8mm = slab meets the PLACED chamfer column's face
-      (column size-snap vs drawing; edges coincide in the model).
-- [x] Export default name per user convention (_export_name):
-      [version]_[element]_[testN]_[with_textmode|no_text].json.
-- [x] Stress DXF regenerates into TEMP when absent (repo copy stays in .old_fixture).
-- [x] Mirror contiguous everywhere; suite 15 files OK.
->> NEXT: user runs v0.45.0 (expect slab edges pixel-on drawn boundaries at beams AND
-   round columns). Then: structural walls, arch walls, stairs (fixtures ready), Project1.
-
-### Phase 21 — v0.45.1-0.45.4: trim isolation, exact-junction attempts, rename — DONE
-- [x] 0.45.1 diagnostic (beam edges only) → trim interaction proven the culprit.
-- [x] 0.45.2 topology-aware carrier choice (direction-matched crossings): the diamond-apex
-      welding fixed; user confirmed happy, residual 50mm-offset gap on test4/5 remained.
-- [x] 0.45.3 body-clip of column rings (user's algorithm) — offline correct (55 faces,
-      10-47mm, both directions) but the Revit run showed no improvement → 0.45.4 REVERTED
-      to 0.45.2 logic. The 50mm-offset gap stays OPEN (needs fresh export + coordinates).
-- [x] 0.45.4 rename: slabs_proto.py → slab_outlines.py; "prototype" naming retired.
->> SLAB STATUS per user: ~50% (real-world CADs untested); PAUSED for staircases.
-
-### Phase 22 — v0.46.0: STAIRCASE option 1 (parametric, text-located) — DONE
-User's two-option plan; option 1 first:
-- [x] Staircase tab (riser max / tread / run width / landing depth; landing 0 = run
-      width) + "Create staircases" checkbox; defaults in config.DEFAULTS.
-- [x] stair_layout.py (Revit-free): STAIRCASE/ST-n text -> bay via placed-members faces
-      with keep_points (wall-bounded bays skip the shaft filters); dog-leg layout
-      (risers = ceil(storey/riser), split over two runs anchored at the landing edge,
-      DN/UP picks the landing end); 12 tests.
-- [x] builders/stairs.py: StairsEditScope per stair, CreateStraightRun x2, automatic
-      landing, user numbers on a duplicated stairs type.
-- [x] Exports: stair/wall raw geometry (cat "stair"/"wall") + stair notes in texts_sized.
-- [x] Replays: test1 -> 2 stairs, stair fixture -> ST-1 + ST-2; slab counts unchanged.
-- [x] Option 2 (v0.47.0): stair-layer LINEWORK drives run/landing positions -- riser
-      clusters -> runs (tread/width/counts/landing all measured from the drawing);
-      chain prefers linework, falls back to text+parametric; replays reproduce the
-      drawn stairs exactly on StaircasePlan + test1.
->> NEXT: user runs 0.47.0 with "Create staircases" on StaircasePlan-Test1 / test1-3
-   (map S-STRS to "stair" for option 2; unmap it to exercise option 1).
-
-### Phase 9 — SLAB PROTOTYPE (held; wire in AFTER beams close) — PROTO DONE v0.31.0
-- [x] slabs_proto.py (Revit-free): TWO outline sources -- (1) A-FLOR slab-edge rings as
-      drawn (closed polylines taken directly; loose lines chained into rings); (2) FALLBACK
-      when no slab layer: BEAM PERIMETER GRAPH -- beam centrelines endpoint-HEALED (each end
-      extended <=600mm onto the nearest carrier, so centrelines meet at column centres),
-      split at X/T crossings, planar faces walked half-edge (max-CCW turn); bounded faces
-      >=1 m2 = slab panels. Labels/sizing like columns+beams: "S1 150 THK" inside the loop
-      names+sizes it; mark-only "S3" resolves thickness via schedule; unlabelled -> type default.
-- [x] builders/slabs.py skeleton: Floor.Create(CurveLoop) per loop, type duplicated per
-      thickness ("150 THK") + cached, Mark stamped. NOT imported by script.py.
-- [x] tests/test_slabs_proto.py (10 tests, all pass).
-- [x] Proven on real 0.30.0 exports: Test10 46 loops (A-FLOR) / 40 (graph); Test18/19 9 / 3-5
-      (graph loses outer bays where the CURVED beam breaks the ring -- known proto limit);
-      Test15: A-FLOR unusable (0 loops) but graph -> 233 panels from 642 beams = exactly the
-      fallback case. Demo: /tmp/demo_slabs.py pattern in progress.md.
-- [ ] LATER (when wiring): include curved beams as arc edges in the graph; slab openings
-      (stair/lift voids as inner loops); slab text layer routing in the UI; level/offset.
-
-### Phase 6 — BEAM refinements from 0.27.0 Revit run — IN PROGRESS
-Source: user 0.27.0 JSON exports + report (Test19, Test18 redrawn/fragmented, Test15).
-- [x] **6a. FEATURE: beam end -> rotated/round column CENTRE.** When a beam END junctions a
-      ROTATED column (oriented_rect) or ROUND column, beam end leaves a gap. Snap/extend the
-      beam endpoint to the column centre. Needs column centres + rotated/round flags into beam
-      step. Plan: new report pass `snap_beam_ends_to_columns(beam_segments, sections, circles)`
-      called in script.py after build_beam_segments (both available there).
-- [x] **6b. BUG: B4/B5 mark swap (ownership).** `_edge_pair_beams` labels claim nearest
-      candidate first-come; two same-width labels (B4,B5 300x600) -> B4 grabs B5's nearer
-      beam. Fix: candidate owned by NEAREST label (compute owner map), each label takes only
-      owned candidates. Real B4 (near core) then places; B5 keeps its own.
-- [x] **6c. BUG: B22 (900x900) missing.** width 900 > beam_width_max 600 & pair_max 700.
-      Raise limits to admit ~900-wide beams; re-check regression (wider false pairs risk).
-- [ ] **6d. BUG: real B4 near core unplaced** (likely resolved by 6b; verify).
-- [ ] **6e. BUG: Test18 B20 -> 300x900 unmarked** instead of 600x900 B20. Investigate
-      (600 edge pair lost to a 300 line_pair; dedup cleared mark).
-- [x] **6f. Test15 FULL analysis** (315 placed, 255 degenerate, 133 unpaired, 23 width_oor,
-      slab_edge 0). Sweep all beam cases; find systemic misses.
-
-## Status: COLUMNS COMPLETE (PR #4 merged). BEAMS: 5a+5c+5b+5e DONE (v0.27.0).
-Order done: 5a (text), 5c (curved), 5b (perimeter/floor-clipped). Test19 = 21/23 beams.
-NEXT (optional): 5d the 2 stragglers -- B22 (raise beam_width_max 600 -> ~1000 AND
-pair_max 700 to allow 900-wide beams; check regression) and B20 (shares its -600 edge with
-B23; needs a smarter pairing that respects label widths -- low priority). Otherwise beams
-are effectively done; confirm scope with user.
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| `naming has no attribute next_level_names` (v0.67.1) | 1 | v0.67.3 purges `anongee_toolkit` from `sys.modules` each run |
+| `Duplicate type name within an assembly` (v0.67.3, 2nd run) | 1 | Phase 1: purge-proof CLR type registry |

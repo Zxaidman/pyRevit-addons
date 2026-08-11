@@ -117,6 +117,11 @@ def _drop_stale_modules():
 _bootstrap_lib_path()
 _drop_stale_modules()
 
+# NOT purged above, and deliberately: it holds the CLR types Python.NET emitted
+# for this Revit session. Rebuilding one of those raises "Duplicate type name
+# within an assembly", so the registry has to outlive the reload.
+import anongee_clr
+
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
                                      prefs, report, settings, slab_outlines,
@@ -2822,14 +2827,22 @@ def _pick_stair_regions():
 
 
 def _wrap_selection_filter():
-    """The CLR-derived ISelectionFilter instance (built lazily so the module
-    imports outside Revit)."""
-    from Autodesk.Revit.UI.Selection import ISelectionFilter
+    """The CLR-derived ISelectionFilter instance.
 
-    class _Filter(ISelectionFilter, _CurveElementFilter):
-        __namespace__ = "CadToBim"
+    Built through the registry, so the CLR type is emitted once per Revit
+    session however often this is called: the class used to be declared inside
+    this function, which meant picking stair outlines a SECOND time in one
+    session raised "Duplicate type name within an assembly".
+    """
+    def build():
+        from Autodesk.Revit.UI.Selection import ISelectionFilter
 
-    return _Filter()
+        class _Filter(ISelectionFilter, _CurveElementFilter):
+            __namespace__ = "CadToBim"
+
+        return _Filter
+
+    return anongee_clr.get_or_create("CurveSelectionFilter", build)()
 
 
 def _create_stairs(doc, records, beam_segments, texts, selections,

@@ -20,23 +20,40 @@ from Autodesk.Revit.DB import (
     FailureProcessingResult,
     FailureSeverity,
 )
+import anongee_clr
+
 from anongee_toolkit.revit.application import get_current_doc
 
 
-class SuppressWarningsPreprocessor(IFailuresPreprocessor):
-    """
-    IFailuresPreprocessor that silently discards all warnings so they never
-    surface as modal dialogs during batch operations.
+def _build_suppress_warnings_preprocessor():
+    """Emit the CLR type. Called ONCE per Revit session, by the registry.
+
+    Python.NET emits a real CLR type from this class body and the AppDomain
+    refuses a second type of the same name, so it must not run at import time:
+    a button that re-imports its library on every run would crash on the second
+    click. See anongee_clr.
     """
 
-    def PreprocessFailures(self, failures_accessor):
-        try:
-            for failure in list(failures_accessor.GetFailureMessages()):
-                if failure.GetSeverity() == FailureSeverity.Warning:
-                    failures_accessor.DeleteWarning(failure)
-        except Exception:
-            pass
-        return FailureProcessingResult.Continue
+    class SuppressWarningsPreprocessor(IFailuresPreprocessor):
+        """
+        IFailuresPreprocessor that silently discards all warnings so they never
+        surface as modal dialogs during batch operations.
+        """
+
+        def PreprocessFailures(self, failures_accessor):
+            try:
+                for failure in list(failures_accessor.GetFailureMessages()):
+                    if failure.GetSeverity() == FailureSeverity.Warning:
+                        failures_accessor.DeleteWarning(failure)
+            except Exception:
+                pass
+            return FailureProcessingResult.Continue
+
+    return SuppressWarningsPreprocessor
+
+
+SuppressWarningsPreprocessor = anongee_clr.get_or_create(
+    "SuppressWarningsPreprocessor", _build_suppress_warnings_preprocessor)
 
 
 class RevitTransaction:

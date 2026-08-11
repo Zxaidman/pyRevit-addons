@@ -35,7 +35,32 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.3"  # HOTFIX: the engine kept last session's library.
+__version__ = "0.67.4"  # HOTFIX: "Duplicate type name within an assembly".
+#
+#                         v0.67.3's reload has a sting: Python.NET does not merely
+#                         subclass a .NET interface, it EMITS a real CLR type into a
+#                         dynamic assembly, and an AppDomain -- one per Revit session --
+#                         refuses a second type of the same name. Re-importing the
+#                         library therefore ran those class bodies again, so the SECOND
+#                         click in a session crashed. Three such classes existed:
+#                         WarningSwallower, SuppressWarningsPreprocessor, and the
+#                         ISelectionFilter behind "draw stair outlines" -- that last one
+#                         was declared inside its own function and so had been crashing
+#                         on a second PICK since long before the reload existed.
+#
+#                         lib/py3/anongee_clr.py now owns them. It sits OUTSIDE
+#                         anongee_toolkit, so the reload cannot touch it, and it hands
+#                         back the type it built the first time: the factory runs once
+#                         per session however often the module is imported. Verified
+#                         against a stand-in for Python.NET that raises on a duplicate
+#                         name exactly as the CLR does -- three consecutive runs, one
+#                         type emitted.
+#
+#                         A static test now walks the whole toolkit for a module-level
+#                         class deriving from a Revit interface, which is the shape of
+#                         this bug, so a new one cannot be added quietly.
+#
+# 0.67.3                  HOTFIX: the engine kept last session's library.
 #
 #                         "module 'naming' has no attribute 'next_level_names'" on a
 #                         function that is in the file, exported, and unit-tested. The

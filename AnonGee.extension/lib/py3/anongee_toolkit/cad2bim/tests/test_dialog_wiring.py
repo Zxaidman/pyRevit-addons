@@ -295,10 +295,15 @@ class TheEngineKeepsModulesBetweenRuns(unittest.TestCase):
     def test_stale_modules_are_dropped_before_the_imports(self):
         source = _script_source()
         purge = source.index("def _drop_stale_modules(")
-        call = source.index("_drop_stale_modules()\n\nfrom anongee_toolkit")
+        call = source.index("\n_drop_stale_modules()")
         first_import = source.index("\nfrom anongee_toolkit import cad2bim")
+        registry = source.index("\nimport anongee_clr")
         self.assertLess(purge, call)
         self.assertLess(call, first_import)
+        # the CLR registry is imported AFTER the purge and is not part of it:
+        # it holds this session's emitted types and must outlive the reload
+        self.assertLess(call, registry)
+        self.assertLess(registry, first_import)
 
     def test_the_parent_attribute_goes_too(self):
         # `from anongee_toolkit import cad2bim` reads the attribute off the
