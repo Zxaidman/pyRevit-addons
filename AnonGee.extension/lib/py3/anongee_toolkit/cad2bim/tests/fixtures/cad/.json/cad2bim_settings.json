@@ -96,22 +96,23 @@
     "tb_tread_min": "150"
   },
   "layers": {
-    "A-CUTOUT": "unmapped",
-    "A-DETL-WIDE": "unmapped",
-    "A-FLOR": "slab_edge",
+    "0": "unmapped",
+    "A-ANNO-Cutline n Arrow": "unmapped",
+    "A-STAIR-Steps": "stair",
+    "A-WALL-CUT-Brick": "arch wall",
+    "ARCH BEAM": "beam",
     "Boundary": "floor boundary",
+    "COLUMN": "column",
     "Origin": "floor origin",
-    "S-BEAM": "beam",
-    "S-COL": "column",
-    "S-STRS": "stair",
-    "S-STRS-MBND": "stair"
+    "PARAPET WALL": "arch wall",
+    "RAILING- 1": "unmapped",
+    "S-RCC-COL": "column",
+    "wall": "arch wall"
   },
   "schema": 1,
   "texts": {
-    "A-FLOR-IDEN": "slab text",
-    "G-ANNO-TEXT": "ignore",
-    "S-BEAM-IDEN": "beam text",
-    "S-COL-IDEN": "column text"
+    "COLUMN NO._ASC": "column text",
+    "COLUMN SIZE_ASC": "column text"
   },
-  "version": "0.67.5"
+  "version": "0.68.0"
 }
