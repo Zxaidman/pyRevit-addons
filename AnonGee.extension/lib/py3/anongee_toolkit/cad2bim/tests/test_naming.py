@@ -8,39 +8,19 @@ a build), and that templates and standard sizes survive to the next session
 through the preferences file. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import shutil
 import sys
 import tempfile
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 
 
-def _load():
-    for name in ("_nm",):
-        if name not in sys.modules:
-            module = types.ModuleType(name)
-            module.__path__ = []
-            sys.modules[name] = module
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        parent, child = full.rsplit(".", 1)
-        setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_nm.prefs", "prefs.py")
-    return load("_nm.naming", "naming.py"), sys.modules["_nm.prefs"]
-
-
-naming, prefs = _load()
+naming, prefs = _loader.load("naming", "prefs")
 
 
 class DefaultNames(unittest.TestCase):

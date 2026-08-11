@@ -8,11 +8,11 @@ loose edge lines chain into a ring; labels size/name a loop from inside it, with
 mark-only labels resolving thickness through the schedule. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -20,31 +20,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load():
-    for name in ("_slb", "_slb.geom", "_slb.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_slb.config", "config.py")
-    load("_slb.geom.shapes", "geom", "shapes.py")
-    load("_slb.classify.layers", "classify", "layers.py")
-    return load("_slb.slab_outlines", "slab_outlines.py")
-
-
-slab_outlines = _load()
-layers = sys.modules["_slb.classify.layers"]
+slab_outlines, layers = _loader.load("slab_outlines", "classify.layers")
 
 
 def _seg(x0, y0, x1, y1, w=0.0):

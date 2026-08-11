@@ -8,11 +8,11 @@ its schedule size + the leftover geometry -- but only with hard evidence, and ne
 top of an existing column. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -20,31 +20,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load_report():
-    for name in ("_aglr", "_aglr.geom", "_aglr.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_aglr.config", "config.py")
-    load("_aglr.geom.shapes", "geom", "shapes.py")
-    load("_aglr.classify.marks", "classify", "marks.py")
-    load("_aglr.classify.layers", "classify", "layers.py")
-    return load("_aglr.report", "report.py")
-
-
-report = _load_report()
+report = _loader.load("report")
 
 
 class _Lbl(object):

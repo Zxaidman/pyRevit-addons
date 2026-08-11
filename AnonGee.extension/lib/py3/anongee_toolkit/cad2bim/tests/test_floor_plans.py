@@ -9,11 +9,11 @@ dropped; missing/extra origin markers leave a note instead of failing.
 Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -21,31 +21,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load():
-    for name in ("_fp", "_fp.geom", "_fp.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_fp.config", "config.py")
-    load("_fp.geom.shapes", "geom", "shapes.py")
-    load("_fp.classify.layers", "classify", "layers.py")
-    return load("_fp.floor_plans", "floor_plans.py")
-
-
-floor_plans = _load()
-layers = sys.modules["_fp.classify.layers"]
+floor_plans, layers = _loader.load("floor_plans", "classify.layers")
 
 
 class _Rec(object):

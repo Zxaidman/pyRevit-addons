@@ -9,38 +9,18 @@ Locks the three failure modes Test16 exposed, none of which the Test10 fix cover
 Standalone (no numpy / no Revit): shapes.py + config.py load by file path.
 """
 
-import importlib.util
 import math
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 
 
-def _load_shapes():
-    # Mirror the package tree so shapes' `from .. import config` resolves.
-    for name in ("_ag2", "_ag2.geom"):
-        if name not in sys.modules:
-            mod = types.ModuleType(name)
-            mod.__path__ = []
-            sys.modules[name] = mod
-
-    def _load(full, *parts):
-        spec = importlib.util.spec_from_file_location(
-            full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        spec.loader.exec_module(mod)
-        return mod
-
-    _load("_ag2.config", "config.py")
-    return _load("_ag2.geom.shapes", "geom", "shapes.py")
-
-
-shapes = _load_shapes()
+shapes = _loader.load("geom.shapes")
 _MM = 304.8
 _FT = 1.0 / _MM
 

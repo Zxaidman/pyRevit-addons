@@ -6,50 +6,20 @@ asked for one JSON, not one per floor), and every tunable the Tolerances tab
 exposes must actually reach the geometry modules. Standalone (no Revit).
 """
 
-import importlib.util
 import json
 import os
 import sys
 import tempfile
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 
 
-def _load():
-    for name in ("_exp", "_exp.geom", "_exp.classify", "_exp.readers"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_exp.config", "config.py")
-    load("_exp.geom.shapes", "geom", "shapes.py")
-    load("_exp.geom.transform", "geom", "transform.py")
-    load("_exp.classify.layers", "classify", "layers.py")
-    load("_exp.classify.marks", "classify", "marks.py")
-    load("_exp.model", "model.py")
-    load("_exp.slab_outlines", "slab_outlines.py")
-    load("_exp.stair_layout", "stair_layout.py")
-    return load("_exp.report", "report.py")
-
-
-report = _load()
-config = sys.modules["_exp.config"]
-slab_outlines = sys.modules["_exp.slab_outlines"]
-stair_layout = sys.modules["_exp.stair_layout"]
+report, export, config, slab_outlines, stair_layout = _loader.load(
+    "report", "export", "config", "slab_outlines", "stair_layout")
 
 
 class _Result(object):
@@ -163,18 +133,18 @@ class ExportSurvivesRevitObjects(unittest.TestCase):
             self.IntegerValue = value
 
     def test_an_element_id_encodes_as_its_integer(self):
-        self.assertEqual(report._jsonable(self._FakeId(42)), 42)
+        self.assertEqual(export._jsonable(self._FakeId(42)), 42)
 
     def test_anything_else_encodes_as_its_text(self):
         class Opaque(object):
             def __str__(self):
                 return "<a revit thing>"
-        self.assertEqual(report._jsonable(Opaque()), "<a revit thing>")
+        self.assertEqual(export._jsonable(Opaque()), "<a revit thing>")
 
     def test_dump_does_not_raise_on_an_unexpected_object(self):
         import json
         payload = {"outcomes": {"columns": {"ids": [self._FakeId(7)]}}}
-        text = json.dumps(payload, default=report._jsonable)
+        text = json.dumps(payload, default=export._jsonable)
         self.assertIn("7", text)
 
 

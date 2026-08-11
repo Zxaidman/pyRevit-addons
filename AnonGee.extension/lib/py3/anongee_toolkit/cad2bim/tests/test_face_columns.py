@@ -11,11 +11,11 @@ face is easy to invent, one is kept only when the plan's own SIZE LABEL agrees
 with it. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -23,34 +23,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load():
-    for name in ("_fc", "_fc.geom", "_fc.classify"):
-        if name not in sys.modules:
-            module = types.ModuleType(name)
-            module.__path__ = []
-            sys.modules[name] = module
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(
-            full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_fc.config", "config.py")
-    load("_fc.geom.shapes", "geom", "shapes.py")
-    load("_fc.classify.marks", "classify", "marks.py")
-    load("_fc.classify.layers", "classify", "layers.py")
-    return load("_fc.report", "report.py")
-
-
-report = _load()
-shapes = sys.modules["_fc.geom.shapes"]
-layers = sys.modules["_fc.classify.layers"]
+report, shapes, layers = _loader.load("report", "geom.shapes", "classify.layers")
 
 
 class _Rec(object):

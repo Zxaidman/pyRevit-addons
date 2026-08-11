@@ -15,12 +15,12 @@ edges, the open snake whose last leg is collinear with the fabricated closing ed
 and the skewed snake between rotated columns. Standalone (needs ezdxf for part 1).
 """
 
-import importlib.util
 import math
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -52,37 +52,7 @@ def _stress_dxf():
 _DXF = _stress_dxf()
 
 
-def _load():
-    for name in ("_bst", "_bst.geom", "_bst.classify", "_bst.readers"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_bst.config", "config.py")
-    load("_bst.model", "model.py")
-    load("_bst.geom.shapes", "geom", "shapes.py")
-    load("_bst.classify.layers", "classify", "layers.py")
-    load("_bst.classify.marks", "classify", "marks.py")
-    load("_bst.readers.dxf_reader", "readers", "dxf_reader.py")
-    return load("_bst.report", "report.py")
-
-
-report = _load()
-model = sys.modules["_bst.model"]
-layers = sys.modules["_bst.classify.layers"]
-marks = sys.modules["_bst.classify.marks"]
-dxf_reader = sys.modules["_bst.readers.dxf_reader"]
+report, model, layers, marks, dxf_reader = _loader.load("report", "model", "classify.layers", "classify.marks", "readers.dxf_reader")
 
 
 def _run_dxf():
