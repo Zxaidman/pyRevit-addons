@@ -27,6 +27,17 @@
   (no geometry code in the diff).
 - Shipped v0.67.4, pushed.
 
+### Phase 1b — a wall placed whole AND in pieces (v0.67.5)
+- The user's v0.67.3 export (pushed as c31830f) confirms the roof slab fix landed in
+  Revit (6 bays via "placed_members + beam graph") but shows 12 roof columns: the
+  12300x300 wall plus two 2700x300 lengths of it, placed as composite outlines.
+- Added `report.drop_nested_columns`: wholly inside + same thickness + parallel.
+- First cut used containment alone: -48 columns on test12, -16 on test9, all real
+  members swallowed by a bigger blob's bounding box. Narrowed to the three conditions;
+  the fixture sweep now drops only genuine duplicates (verified pair by pair:
+  2540x450 inside 2800x450, 2380x200 inside 2610x200, a literal 300x1400 twice).
+- Suite 416 green. Sweep: test12 -9, Project1 -6, test9 -3, test8 -2, others 0.
+
 ### Waiting on
-- User to run v0.67.4 twice in ONE Revit session and confirm the crash is gone, then
+- User to run v0.67.5 twice in ONE Revit session and confirm the crash is gone, then
   push the JSON export. Phase 2 (refactor) does not start until that lands.
