@@ -20,6 +20,8 @@ _BUTTON = os.path.normpath(os.path.join(
 _SCRIPT = os.path.join(_BUTTON, "script.py")
 # the dialogs moved into the library; the button keeps the run pipeline
 _WINDOW = os.path.normpath(os.path.join(_HERE, "..", "ui_window.py"))
+# ...and the element-creation drivers moved beside them
+_BUILDERS = os.path.normpath(os.path.join(_HERE, "..", "run_builders.py"))
 _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")
 
@@ -47,9 +49,16 @@ def _window_source():
         return handle.read().decode("utf-8")
 
 
+def _builders_source():
+    """The element-creation drivers: one transaction and one outcome per kind."""
+    with open(_BUILDERS, "rb") as handle:
+        return handle.read().decode("utf-8")
+
+
 def _all_source():
     """Both, for checks that span the dialog and the run it starts."""
-    return _script_source() + "\n" + _window_source()
+    return "\n".join((_script_source(), _window_source(),
+                      _builders_source()))
 
 
 class DialogControlNames(unittest.TestCase):
@@ -187,7 +196,7 @@ class OutcomesReachTheExportClean(unittest.TestCase):
     """The live ElementIds the material pass needs must not reach json.dump."""
 
     def _script_namespace(self):
-        source = _script_source()
+        source = _builders_source()
         start = source.index('_IDS = "_element_ids"')
         end = source.index("def _skip_details(")
         namespace = {}
@@ -214,7 +223,7 @@ class OutcomesReachTheExportClean(unittest.TestCase):
         `_apply_materials` found no elements and said "nothing of this kind was
         built" on every run with beams in it.
         """
-        source = _script_source()
+        source = _builders_source()
         creator = {"column": "_create_columns", "beam": "_create_beams",
                    "slab": "_create_slabs", "stair": "_create_stairs",
                    "footing": "_create_footings"}
@@ -238,7 +247,7 @@ class OutcomesReachTheExportClean(unittest.TestCase):
     def test_no_outcome_dict_exports_an_id_list_under_a_plain_key(self):
         # reading a builder's own result["created_ids"] is fine; putting one
         # into an outcome dict under a plain key is what broke the export
-        source = _script_source()
+        source = _builders_source()
         self.assertNotIn('"created_ids":', source,
                          "an outcome dict exports an id list under a plain key")
 
