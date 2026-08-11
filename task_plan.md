@@ -99,19 +99,30 @@ Current sizes (the four the user is reacting to):
 
 ## Phase 3 — Review pass
 
-**Status:** next
+**Status:** complete (bar the Revit run, which is Phase 4's gate)
 
-- [ ] 3.1 `/code-review` over the whole branch diff vs main
-- [ ] 3.2 Fix what the review turns up (correctness first, then simplification)
-- [ ] 3.3 Re-run: unit suite, fingerprints, sweep, and a real Revit run by the user
+- [x] 3.1 `/code-review high` over the refactor series. Verified the moves are
+      textual, a def/class census confirmed nothing was lost, no undefined names.
+- [x] 3.2 Four findings, all fixed in one commit:
+      1. `tests/replay_beams.py` — pre-refactor loader, could not import report
+      2. `tests/demo_slabs.py` — same, plus the single-storey-only export shape and
+         a stale pair-unpack of slab loops
+      3. `run_picking._uidoc` — resolved `__revit__` through builtins only (the rest
+         of the toolkit tries `__main__` first) and raised where the callers expect
+         None, turning a skip into an aborted run
+      4. `script.py` — the new module imports run before main()'s try/except, so a
+         stale library gave a raw traceback instead of the "library out of date"
+         dialog. Guarded, with fallbacks for the names the report itself needs.
+- [x] 3.3 Re-ran everything: 419 tests, 22 fingerprints, stair replay, 17-DXF sweep
+      — all identical to the pre-refactor baseline. Shipped as v0.68.0.
 
 ---
 
 ## Phase 4 — Merge and archive
 
-**Status:** pending
+**Status:** waiting on the Revit run
 
-- [ ] 4.1 User confirms a clean Revit run on the refactored build (no regressions)
+- [ ] 4.1 User confirms a clean Revit run on v0.68.0 (no regressions)
 - [ ] 4.2 Squash/merge `claude/ecstatic-dijkstra-rmvyl7` → `main`
 - [ ] 4.3 Push main, archive the branch
 - [ ] 4.4 Final version bump + version-history entry

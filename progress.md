@@ -67,6 +67,16 @@ The v0.67.5 exports the user pushed confirm all three Phase 1 fixes in Revit:
 test10 roof 12 -> 10 columns and 6 slabs, test12's five storeys named and ordered,
 test13 43-44 slabs per storey via "slab_edges + beam graph".
 
+### Phase 3 — review pass (complete)
+- `/code-review high` over the nine refactor commits: moves verified textual, def/class
+  census clean, no undefined names, 416 tests passing at review time.
+- Four findings, none on the geometry path (which is why the replays could not see
+  them), all fixed: two dead in-repo harnesses, the `__revit__` lookup in run_picking,
+  and the unguarded module imports that would have hidden the "library out of date"
+  dialog behind a raw traceback.
+- Re-verified: 419 tests, fingerprints, stair replay, fixture sweep — all identical.
+- Shipped as **v0.68.0**.
+
 ### Next
-- Phase 3: `/code-review` over the branch, fix what it finds, then the user runs the
-  refactored build in Revit before anything merges to main.
+- The user runs v0.68.0 in Revit. Nothing merges to main until they report it clean,
+  and they still choose merge-commit vs squash.

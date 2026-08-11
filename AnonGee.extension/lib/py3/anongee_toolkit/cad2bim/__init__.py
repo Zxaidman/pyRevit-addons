@@ -35,7 +35,44 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.5"  # A wall placed whole AND in pieces.
+__version__ = "0.68.0"  # Same behaviour, twenty modules instead of four.
+#
+#                         No feature and no fix: every commit in this release is a
+#                         MOVE, made because four files had grown past the point where
+#                         a change could be made confidently -- report.py 3039 lines,
+#                         script.py 2956, stair_layout 1683, slab_outlines 1550.
+#
+#                             report.py       -> beam_segments, beam_cleanup,
+#                                                columns_recovery, column_geom,
+#                                                export, limits      (888 left)
+#                             script.py       -> ui_window, run_builders, run_picking,
+#                                                run_console, ui_dialogs  (962 left)
+#                             stair_layout.py -> stair_runs, stair_landings,
+#                                                stair_text, stair_tolerances (721)
+#                             slab_outlines.py-> slab_graph, slab_labels    (445)
+#
+#                         The old modules re-export everything they used to define, so
+#                         no call site changed. Each split was proved a no-op FOUR ways
+#                         before it was committed: the unit suite, the 22 stored slab
+#                         fingerprints, a stair replay over every fixture DXF, and a
+#                         sweep of all 17 DXFs comparing columns, faces, nested drops,
+#                         slabs, note recoveries and beams. Not one number moved.
+#
+#                         Two things could not be pure moves and were done deliberately.
+#                         The mutable TOLERANCES are read through their owning module
+#                         (slab_graph._SNAP_MM, tol._TREAD_MIN_MM) rather than
+#                         from-imported, because a from-import freezes the default and
+#                         silently ignores the Tolerances tab. And the pushbutton's
+#                         imports of its new modules are GUARDED: they run before main()
+#                         can catch anything, so a stale library would have shown a raw
+#                         traceback instead of the "library out of date" dialog.
+#
+#                         The test loader was rebuilt too: its throwaway package now
+#                         carries a real __path__, so modules import siblings by file
+#                         exactly as they do in Revit -- import cycles included. Twenty
+#                         hand-rolled loaders became one.
+#
+# 0.67.5                  A wall placed whole AND in pieces.
 #
 #                         The v0.67.3 export shows the roof still carrying 12 columns
 #                         where its labels name 10: the 12300x300 perimeter wall plus
