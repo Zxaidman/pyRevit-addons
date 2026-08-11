@@ -2205,6 +2205,14 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
         _say("columns: recovered {0} combined column(s) from the outline "
              "graph".format(recovered_faces))
 
+    # Last: a column WHOLLY inside another is a length of that same member read
+    # twice (test10's roof: the 12300 wall plus two 2700 pieces of it). Two
+    # solids cannot share ground, so the contained one goes.
+    nested = report.drop_nested_columns(sections)
+    if nested:
+        _say("columns: dropped {0} column(s) contained by a larger one".format(
+            nested))
+
     # Close the junction gap where a beam end meets a ROUND or ROTATED column: run the beam
     # end to the column centre (columns are now final). Axis-aligned columns are untouched.
     snapped_ends = report.snap_beam_ends_to_columns(

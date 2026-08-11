@@ -46,6 +46,9 @@ created type; every site asks the registry first and only builds the class on a 
 - [x] 1.5 Tests: registry unit tests + a static test asserting no module under
       `anongee_toolkit` declares a CLR-derived class at import time outside the registry.
 - [x] 1.6 Ship as v0.67.4 for the user to confirm two consecutive runs in one session.
+- [x] 1.7 (from the v0.67.3 export) `drop_nested_columns`: the roof's 12300 wall was
+      placed alongside two 2700 lengths of itself. Wholly inside + same thickness +
+      parallel; shipped as v0.67.5.
 
 **Exit criteria:** user runs the button twice in one Revit session without the crash.
 

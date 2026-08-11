@@ -1539,6 +1539,79 @@ def _dims_match_tol(width_mm, height_mm, b_mm, h_mm, tol_mm):
             and abs(big - label_big) <= tol_mm)
 
 
+def drop_nested_columns(sections, pad_mm=2.0, thickness_tol_mm=20.0):
+    """Remove a column that is a LENGTH of another column, read twice.
+
+    Test10's roof placed its 12300x300 perimeter wall AND two 2700x300 lengths
+    of that same wall, which arrived as closed outlines of their own and so
+    passed every earlier check. Two solids cannot share ground.
+
+    Kept deliberately narrow, because "inside a bigger rectangle" alone is not
+    evidence of a duplicate: a 400x660 column can sit inside the bounding box of
+    a 5630x400 wall it merely abuts, and dropping that would lose a real member.
+    All three must hold:
+
+      * the small one lies WHOLLY inside the big one;
+      * they are the same THICKNESS (short side), within `thickness_tol_mm`;
+      * their long axes are PARALLEL.
+
+    which is the signature of one wall drawn as a whole and again in pieces.
+    Returns the count removed.
+    """
+    boxes = []
+    for entry in sections.get("entries", []):
+        for rect in entry.get("rectangles", []):
+            half_w, half_h = _rect_half_box(rect)
+            cx, cy, _cz = rect["center"]
+            width = rect["width_mm"]
+            height = rect["height_mm"]
+            boxes.append({"entry": entry, "rect": rect, "cx": cx, "cy": cy,
+                          "hw": half_w, "hh": half_h,
+                          "thickness": min(width, height),
+                          "axis": _long_axis_deg(rect),
+                          "area": 4.0 * half_w * half_h})
+    if len(boxes) < 2:
+        return 0
+    pad = config.mm_to_ft(pad_mm)
+    boxes.sort(key=lambda box: box["area"])          # smallest first
+    doomed = []
+    for index, small in enumerate(boxes):
+        for big in boxes[index + 1:]:                # only larger ones
+            if abs(small["cx"] - big["cx"]) + small["hw"] > big["hw"] + pad:
+                continue
+            if abs(small["cy"] - big["cy"]) + small["hh"] > big["hh"] + pad:
+                continue
+            if abs(small["thickness"] - big["thickness"]) > thickness_tol_mm:
+                continue                             # a different member
+            turn = abs(small["axis"] - big["axis"]) % 180.0
+            if min(turn, 180.0 - turn) > 3.0:
+                continue                             # crossing, not colinear
+            doomed.append(small)
+            break
+    if not doomed:
+        return 0
+    for box in doomed:
+        try:
+            box["entry"]["rectangles"].remove(box["rect"])
+        except ValueError:
+            continue
+    sections["entries"] = [entry for entry in sections.get("entries", [])
+                           if entry.get("rectangles")]
+    sections["total_rectangles"] = max(
+        sections.get("total_rectangles", 0) - len(doomed), 0)
+    counts = sections.setdefault("status_counts", {})
+    counts["nested_dropped"] = counts.get("nested_dropped", 0) + len(doomed)
+    return len(doomed)
+
+
+def _long_axis_deg(rect):
+    """The angle the rectangle's LONG side runs at, in degrees."""
+    deg = rect.get("long_axis_deg")
+    if deg is not None:
+        return float(deg)
+    return 0.0 if rect["width_mm"] >= rect["height_mm"] else 90.0
+
+
 def _rect_half_box(rect):
     """A rectangle's AXIS-ALIGNED half extents (half width, half height).
 

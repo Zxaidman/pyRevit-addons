@@ -35,7 +35,26 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.67.4"  # HOTFIX: "Duplicate type name within an assembly".
+__version__ = "0.67.5"  # A wall placed whole AND in pieces.
+#
+#                         The v0.67.3 export shows the roof still carrying 12 columns
+#                         where its labels name 10: the 12300x300 perimeter wall plus
+#                         two 2700x300 LENGTHS of that same wall. In the Revit records
+#                         those pieces are closed outlines of their own, so they are
+#                         placed by the ordinary path and v0.67.2's face-recovery
+#                         cleanup -- which only runs when a face IS recovered -- never
+#                         saw them.
+#
+#                         drop_nested_columns runs after every recovery pass and removes
+#                         a rectangle that is a LENGTH of another: wholly inside it, the
+#                         same thickness, and parallel. All three conditions matter --
+#                         "inside a bigger rectangle" alone drops a 400x660 column that
+#                         merely abuts a 5630x400 wall, which cost 48 real members on
+#                         test12 before the rule was narrowed. With them, every drop
+#                         across the fixtures is a wall drawn twice (2540x450 inside
+#                         2800x450) or a literal duplicate at the same centre.
+#
+# 0.67.4                  HOTFIX: "Duplicate type name within an assembly".
 #
 #                         v0.67.3's reload has a sting: Python.NET does not merely
 #                         subclass a .NET interface, it EMITS a real CLR type into a

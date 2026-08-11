@@ -233,5 +233,40 @@ class LabelGatedRecovery(unittest.TestCase):
         self.assertEqual(report.recover_face_columns(sections, closed, labels), 0)
 
 
+class NestedColumns(unittest.TestCase):
+    """A column wholly inside another is the same member read twice."""
+
+    def test_a_piece_of_a_wall_is_dropped(self):
+        sections = _sections([_rect(3000, 150, 12300, 300),
+                              _rect(1500, 150, 2700, 300),
+                              _rect(4500, 150, 2700, 300)])
+        self.assertEqual(report.drop_nested_columns(sections), 2)
+        kept = [r for e in sections["entries"] for r in e["rectangles"]]
+        self.assertEqual(len(kept), 1)
+        self.assertEqual(round(max(kept[0]["width_mm"], kept[0]["height_mm"])),
+                         12300)
+        self.assertEqual(sections["total_rectangles"], 1)
+
+    def test_columns_that_merely_touch_are_both_kept(self):
+        # a column standing ON the wall overlaps its end but reaches beyond it
+        sections = _sections([_rect(3000, 150, 12300, 300),
+                              _rect(1500, 1150, 300, 2300)])
+        self.assertEqual(report.drop_nested_columns(sections), 0)
+
+    def test_two_identical_columns_in_one_place_collapse_to_one(self):
+        # the same member read twice: two solids cannot share ground
+        sections = _sections([_rect(0, 0, 400, 400), _rect(0, 0, 400, 400)])
+        self.assertEqual(report.drop_nested_columns(sections), 1)
+
+    def test_neighbouring_columns_are_untouched(self):
+        sections = _sections([_rect(0, 0, 400, 400), _rect(3000, 0, 400, 400),
+                              _rect(0, 3000, 600, 900)])
+        self.assertEqual(report.drop_nested_columns(sections), 0)
+
+    def test_an_empty_model_is_no_work(self):
+        self.assertEqual(report.drop_nested_columns(_sections()), 0)
+        self.assertEqual(report.drop_nested_columns(_sections([_rect(0, 0, 300, 300)])), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
