@@ -120,14 +120,23 @@ Current sizes (the four the user is reacting to):
 
 ## Phase 4 — Merge and archive
 
-**Status:** waiting on the Revit run
+**Status:** complete
 
-- [ ] 4.1 User confirms a clean Revit run on v0.68.0 (no regressions)
-- [ ] 4.2 Squash/merge `claude/ecstatic-dijkstra-rmvyl7` → `main`
-- [ ] 4.3 Push main, archive the branch
-- [ ] 4.4 Final version bump + version-history entry
+- [~] 4.1 The user waived the Revit-run gate and asked for the merge. v0.68.0 has NOT
+      been run in Revit; it is verified by the suite, the fingerprints, the stair
+      replay and the fixture sweep, all of which are offline.
+- [x] 4.2 Merged with a MERGE COMMIT (26400ae), keeping every version from v0.36 to
+      v0.68 in main's history -- the trail the regressions have been traced through.
+      The user did not choose a style; this was the recommendation.
+- [x] 4.3 main pushed (313438a, including a settings fixture the user pushed to the
+      branch after the merge). The branch is fully contained in main.
+- [x] 4.4 v0.68.0 shipped with its version-history entry before the merge.
 
-**Gate:** nothing merges until the user reports a clean run. This is their call, not mine.
+**Not done:** the `v0.68.0` and `archive/...` tags exist LOCALLY but the remote
+refuses tag pushes through this proxy ("Everything up-to-date", no ref created).
+The branch is therefore left in place on the remote -- with tags unavailable, the
+branch is what keeps the history reachable, and every one of its commits is an
+ancestor of main.
 
 ---
 

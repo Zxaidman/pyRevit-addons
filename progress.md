@@ -77,6 +77,19 @@ test13 43-44 slabs per storey via "slab_edges + beam graph".
 - Re-verified: 419 tests, fingerprints, stair replay, fixture sweep — all identical.
 - Shipped as **v0.68.0**.
 
-### Next
-- The user runs v0.68.0 in Revit. Nothing merges to main until they report it clean,
-  and they still choose merge-commit vs squash.
+### Phase 4 — merged (complete)
+- User waived the Revit-run gate and asked to proceed. Stated once, then merged.
+- `git merge --no-ff` into main: 26400ae, then 313438a folding in the settings fixture
+  the user pushed after the merge. main tested green (419) before each push.
+- Merge style: merge commit, keeping the v0.36 -> v0.68 history. The user never chose;
+  this was the recommendation and the safer default for regression tracing.
+- Tags `v0.68.0` and `archive/claude-ecstatic-dijkstra-rmvyl7` were created locally but
+  the remote will not accept tag pushes through this proxy -- it reports "Everything
+  up-to-date" and creates no ref. The branch stays on the remote as the archive; all
+  68 commits are ancestors of main either way.
+
+### Open
+- v0.68.0 has not been run in Revit. It is a pure refactor over a v0.67.5 that ran
+  clean, verified four ways offline, but the first real run is still ahead.
+- Whether to delete the remote branch (tags being unavailable, it costs nothing to
+  keep, and it is where the next session's work would go).
