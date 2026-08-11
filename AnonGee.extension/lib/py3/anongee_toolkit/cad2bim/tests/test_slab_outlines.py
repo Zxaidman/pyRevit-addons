@@ -20,7 +20,8 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-slab_outlines, layers = _loader.load("slab_outlines", "classify.layers")
+slab_outlines, slab_graph, layers = _loader.load(
+    "slab_outlines", "slab_graph", "classify.layers")
 
 
 def _seg(x0, y0, x1, y1, w=0.0):
@@ -156,7 +157,7 @@ class MemberEdgeFaces(unittest.TestCase):
         a = (1.0, 1.0)
         b = (1.0 + 0.144, 1.0)                       # 44 mm right of a cell edge
         segs = [((0.0, 0.0), a), (a, b)]             # chain broken at a? no: shared
-        key, nodes = slab_outlines._cluster_nodes(
+        key, nodes = slab_graph._cluster_nodes(
             [(0.0, 0.0), a, (1.1444, 1.0), b], 0.164)   # 50 mm in ft
         self.assertEqual(key(a), key((1.1444, 1.0)))    # 44 mm apart: same node
         self.assertNotEqual(key((0.0, 0.0)), key(a))
@@ -164,7 +165,7 @@ class MemberEdgeFaces(unittest.TestCase):
     def test_cluster_chain_does_not_collapse_arc(self):
         # transitive chains must NOT swallow a run of closely-spaced arc chords
         pts = [(i * 0.10, 0.0) for i in range(10)]      # 30 mm steps, 270 mm run
-        key, nodes = slab_outlines._cluster_nodes(pts, 0.164)
+        key, nodes = slab_graph._cluster_nodes(pts, 0.164)
         self.assertGreater(len(set(key(p) for p in pts)), 3)
 
     def test_small_arc_tessellates_with_chords_above_snap(self):
@@ -476,7 +477,7 @@ class ChamferSquaring(unittest.TestCase):
                 ((0.0, 0.0), (0.0, 3000.0 * _FT))]
 
     def test_false_chamfer_becomes_the_corner(self):
-        ring = slab_outlines._square_off_chamfers(self._corner_ring(),
+        ring = slab_graph._square_off_chamfers(self._corner_ring(),
                                                   self._carriers())
         corners = [(round(x * _MM), round(y * _MM)) for x, y in ring]
         self.assertIn((3000, 3000), corners)          # squared off
@@ -488,14 +489,14 @@ class ChamferSquaring(unittest.TestCase):
         # the same stub, but this time a carrier runs along it (a real chamfer)
         carriers = self._carriers() + [((3000.0 * _FT, 2960.0 * _FT),
                                         (2960.0 * _FT, 3000.0 * _FT))]
-        ring = slab_outlines._square_off_chamfers(self._corner_ring(), carriers)
+        ring = slab_graph._square_off_chamfers(self._corner_ring(), carriers)
         self.assertEqual(len(ring), 5)
 
     def test_long_edges_are_never_touched(self):
         square = [(0.0, 0.0), (3000.0 * _FT, 0.0),
                   (3000.0 * _FT, 3000.0 * _FT), (0.0, 3000.0 * _FT)]
         self.assertEqual(
-            slab_outlines._square_off_chamfers(square, self._carriers()), square)
+            slab_graph._square_off_chamfers(square, self._carriers()), square)
 
 
 if __name__ == "__main__":
