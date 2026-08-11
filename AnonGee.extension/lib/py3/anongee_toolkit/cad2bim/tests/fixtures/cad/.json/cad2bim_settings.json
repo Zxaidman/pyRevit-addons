@@ -25,6 +25,7 @@
     "chk_footings": true,
     "chk_grade_in_mark": true,
     "chk_grids": true,
+    "chk_level_follow": true,
     "chk_multistorey": true,
     "chk_slabs": true,
     "chk_stairs": true,
@@ -53,7 +54,7 @@
     "tb_face_reach": "900",
     "tb_face_size": "60",
     "tb_filter_transparency": "0",
-    "tb_footing_projection": "300",
+    "tb_footing_projection": "500",
     "tb_footing_thickness": "600",
     "tb_grade_beam": "M30",
     "tb_grade_column": "M40",
@@ -88,35 +89,29 @@
     "tb_stair_tread": "300",
     "tb_stair_waist": "200",
     "tb_stair_width": "1250",
-    "tb_std_beams": "200X500, 200X600, 200X700, 200X800, 200X900, 250X600, 300X600, 350X600, 400X600, 450X600, 500X600, 600X600, 700X600, 800X600, 900X600, 1000X600",
-    "tb_std_columns": "150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000",
+    "tb_std_beams": "150, 200, 250, 300, 350, 400, 450, 500, 600, 700, 800, 900, 1000",
+    "tb_std_columns": "200X500, 200X600, 200X700, 200X800, 200X900, 250X600, 300X600, 350X600, 400X600, 450X600, 500X600, 600X600, 700X600, 800X600, 900X600, 1000X600",
     "tb_storey_height": "3000",
     "tb_tread_max": "500",
     "tb_tread_min": "150"
   },
   "layers": {
-    "A-ANNO-DIMS": "unmapped",
-    "A-DETL": "unmapped",
+    "A-CUTOUT": "unmapped",
+    "A-DETL-WIDE": "unmapped",
     "A-FLOR": "slab_edge",
     "Boundary": "floor boundary",
     "Origin": "floor origin",
     "S-BEAM": "beam",
-    "S-BEAM-HDLN": "unmapped",
-    "S-COLS": "column",
-    "S-COLS-HDLN": "unmapped",
-    "S-GRID": "grid",
-    "S-GRID-IDEN": "unmapped",
+    "S-COL": "column",
     "S-STRS": "stair",
-    "S-STRS-ANNO": "unmapped"
+    "S-STRS-MBND": "stair"
   },
   "schema": 1,
   "texts": {
     "A-FLOR-IDEN": "slab text",
     "G-ANNO-TEXT": "ignore",
     "S-BEAM-IDEN": "beam text",
-    "S-COLS-IDEN": "column text",
-    "S-GRID-IDEN": "grid text",
-    "S-STRS-IDEN": "ignore"
+    "S-COL-IDEN": "column text"
   },
-  "version": "0.67.0"
+  "version": "0.67.5"
 }
