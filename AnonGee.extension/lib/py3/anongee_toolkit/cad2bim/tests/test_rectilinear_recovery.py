@@ -12,37 +12,17 @@ Runs standalone (no numpy / no Revit): shapes.py + config.py are loaded by file
 path into a synthetic package.
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 
 
-def _load_shapes():
-    # Mirror the package tree so shapes' `from .. import config` resolves.
-    for name in ("_ag", "_ag.geom"):
-        if name not in sys.modules:
-            mod = types.ModuleType(name)
-            mod.__path__ = []
-            sys.modules[name] = mod
-
-    def _load(full, *parts):
-        spec = importlib.util.spec_from_file_location(
-            full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        spec.loader.exec_module(mod)
-        return mod
-
-    _load("_ag.config", "config.py")
-    return _load("_ag.geom.shapes", "geom", "shapes.py")
-
-
-shapes = _load_shapes()
+shapes = _loader.load("geom.shapes")
 
 _MM = 304.8       # ft -> mm
 _FT = 1.0 / _MM   # mm -> ft

@@ -9,25 +9,44 @@ build_beam_segments, so 8b-8e can be diagnosed without another Revit run.
 
   python3 replay_beams.py <export.json> [mark-filter]
 """
-import importlib.util, os, sys, types, json, math
+import json, math, os, sys
 
-PKG = "/home/user/pyRevit-addons/AnonGee.extension/lib/py3/anongee_toolkit/cad2bim"
-for name in ("_c2b", "_c2b.geom", "_c2b.classify", "_c2b.readers"):
-    m = types.ModuleType(name); m.__path__ = []; sys.modules[name] = m
-def L(full, *parts):
-    spec = importlib.util.spec_from_file_location(full, os.path.join(PKG, *parts))
-    mod = importlib.util.module_from_spec(spec); sys.modules[full] = mod
-    if "." in full:
-        p, c = full.rsplit(".", 1); setattr(sys.modules[p], c, mod)
-    spec.loader.exec_module(mod); return mod
-config = L("_c2b.config", "config.py")
-model  = L("_c2b.model", "model.py")
-L("_c2b.geom.shapes", "geom", "shapes.py")
-layers = L("_c2b.classify.layers", "classify", "layers.py")
-marks  = L("_c2b.classify.marks", "classify", "marks.py")
-report = L("_c2b.report", "report.py")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import _loader                        # loads cad2bim by file, real import graph
+
+config, model, layers, marks, report = _loader.load(
+    "config", "model", "classify.layers", "classify.marks", "report")
 MM = config.MM_PER_FT
 FT = 1.0 / MM
+
+
+def storey_payload(document, wanted=None):
+    """One storey's section out of an export, or the export itself.
+
+    A multi-storey run writes ONE file with a `storeys` array instead of the
+    flat payload these harnesses were written against, so every stored fixture
+    now looks like the former. `wanted` picks a storey by index or by a
+    fragment of its label; the lowest storey is the default.
+    """
+    storeys = document.get("storeys")
+    if not storeys:
+        return document
+    if wanted is None:
+        chosen = storeys[0]
+    elif str(wanted).lstrip("-").isdigit():
+        chosen = storeys[int(wanted)]
+    else:
+        matches = [s for s in storeys
+                   if str(wanted).lower() in (s.get("storey") or "").lower()]
+        if not matches:
+            raise SystemExit("no storey matching %r; have: %s"
+                             % (wanted, [s.get("storey") for s in storeys]))
+        chosen = matches[0]
+    print("storey: %s (%d of %d)"
+          % (chosen.get("storey"), storeys.index(chosen) + 1, len(storeys)))
+    return chosen
+
+
 
 class T:  # minimal TextRecord stand-in for build_beam_segments (it reads point_internal/mark/b_mm/h_mm)
     def __init__(self, mark, x, y, b, h, layer, rot=None):
@@ -45,7 +64,8 @@ def records_from_raw(raw):
     return recs
 
 def main():
-    d = json.load(open(sys.argv[1]))
+    d = storey_payload(json.load(open(sys.argv[1])),
+                       os.environ.get("STOREY"))
     want = sys.argv[2].upper() if len(sys.argv) > 2 else None
     raw = d["beams"].get("raw_geometry")
     if not raw:

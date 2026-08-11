@@ -486,6 +486,195 @@ def recover_rectilinear_columns(paths, z=0.0, snap_ft=_ASM_SNAP_FT,
     return rects, consumed
 
 
+_FACE_SNAP_FT = 2.0 / 304.8       # endpoints this close are the same node
+_FACE_MAX_SEGMENTS = 6000         # a whole-sheet soup is not one member: bail out
+_FACE_MAX_RING = 400              # a walk longer than this is not a column
+
+
+def recover_face_columns(paths, z=0.0, snap_ft=_FACE_SNAP_FT):
+    """Rectangles from the FACES of an axis-aligned line soup.
+
+    `assemble_rectilinear_rings` needs a component that reduces to ONE simple
+    cycle, which a merged/combined column never does: test10's roof draws a
+    12300-long perimeter wall-column with four 300x3300 columns standing on it,
+    every piece exploded to bare lines, and the wall's own top edge continues
+    THROUGH each column root. Those interior edges make T-junctions, the cycle
+    test fails, and the whole comb collapses to nothing (or to a 45-degree blob
+    from the leftover-fragment pass).
+
+    Treating the soup as a planar graph solves it exactly: weld the endpoints,
+    split every edge at the nodes lying on it, and walk the bounded faces. Each
+    face of that comb is one drawn member -- four 300x3300 columns and one
+    12300x300 wall -- which is what the plan's own labels say is there.
+
+    Returns [Rectangle]; a face that is not rectilinear, or that merely encloses
+    other faces (the union outline, walked as a face in its own right), is
+    dropped. Size acceptance is left to the caller.
+    """
+    segments = _face_segments(paths, snap_ft)
+    if not segments or len(segments) > _FACE_MAX_SEGMENTS:
+        return []
+    adjacency = _face_adjacency(segments)
+    rings = _walk_bounded_faces(adjacency)
+    rings = _drop_enclosing_rings(rings)
+    rectangles = []
+    for ring in rings:
+        simplified = simplify_ring(ring)
+        if len(simplified) < 4 or not is_rectilinear(simplified):
+            continue
+        for rect in decompose_to_rectangles(simplified, z):
+            if rect.width_ft > _TOL and rect.height_ft > _TOL:
+                rectangles.append(rect)
+    return rectangles
+
+
+def _snap_values(values, tol):
+    """{value: representative} so coordinates that agree to `tol` become one."""
+    out = {}
+    keys = []
+    for value in sorted(values):
+        if keys and abs(keys[-1] - value) <= tol:
+            out[value] = keys[-1]
+            continue
+        keys.append(value)
+        out[value] = value
+    return out
+
+
+def _face_segments(paths, tol):
+    """Axis-aligned segments on a welded coordinate grid. [] if any path skews."""
+    raw = []
+    for path in paths or []:
+        points = [(p[0], p[1]) for p in path or []]
+        if len(points) < 2:
+            continue
+        skewed = False
+        pieces = []
+        for a, b in zip(points, points[1:]):
+            dx, dy = abs(a[0] - b[0]), abs(a[1] - b[1])
+            if dx <= tol and dy <= tol:
+                continue                       # zero length
+            if dx > tol and dy > tol:
+                skewed = True                  # this path is not orthogonal
+                break
+            pieces.append((a, b))
+        if not skewed:
+            raw.extend(pieces)
+    if not raw:
+        return []
+    xs = _snap_values([p[0] for seg in raw for p in seg], tol)
+    ys = _snap_values([p[1] for seg in raw for p in seg], tol)
+    out = []
+    for a, b in raw:
+        p = (xs[a[0]], ys[a[1]])
+        q = (xs[b[0]], ys[b[1]])
+        if p != q:
+            out.append((p, q))
+    return out
+
+
+def _face_adjacency(segments):
+    """{node: [neighbours]} with every segment split at the nodes lying on it."""
+    nodes = set()
+    for a, b in segments:
+        nodes.add(a)
+        nodes.add(b)
+    by_x = {}
+    by_y = {}
+    for node in nodes:
+        by_x.setdefault(node[0], []).append(node[1])
+        by_y.setdefault(node[1], []).append(node[0])
+    for values in list(by_x.values()) + list(by_y.values()):
+        values.sort()
+    edges = set()
+    for a, b in segments:
+        if a[0] == b[0]:                        # vertical
+            lo, hi = sorted((a[1], b[1]))
+            cuts = [y for y in by_x.get(a[0], []) if lo <= y <= hi]
+            points = [(a[0], y) for y in sorted(set(cuts))]
+        else:                                   # horizontal
+            lo, hi = sorted((a[0], b[0]))
+            cuts = [x for x in by_y.get(a[1], []) if lo <= x <= hi]
+            points = [(x, a[1]) for x in sorted(set(cuts))]
+        for p, q in zip(points, points[1:]):
+            if p != q:
+                edges.add((p, q) if p < q else (q, p))
+    adjacency = {}
+    for p, q in edges:
+        adjacency.setdefault(p, []).append(q)
+        adjacency.setdefault(q, []).append(p)
+    return adjacency
+
+
+def _walk_bounded_faces(adjacency):
+    """Every face of a planar graph, walked by always turning the same way."""
+    rings = []
+    seen = set()
+    for start in sorted(adjacency):
+        for first in adjacency[start]:
+            if (start, first) in seen:
+                continue
+            ring = [start]
+            u, v = start, first
+            ok = True
+            while True:
+                seen.add((u, v))
+                ring.append(v)
+                w = _next_edge_cw(adjacency, u, v)
+                u, v = v, w
+                if (u, v) == (start, first):
+                    break
+                if len(ring) > _FACE_MAX_RING:
+                    ok = False
+                    break
+            if ok and len(ring) > 3:
+                rings.append(ring[:-1])
+    return rings
+
+
+def _next_edge_cw(adjacency, u, v):
+    """At `v`, the neighbour that turns most tightly from the edge u->v."""
+    base = math.atan2(u[1] - v[1], u[0] - v[0])
+    best = None
+    neighbours = adjacency.get(v) or [u]
+    for w in neighbours:
+        if w == u and len(neighbours) > 1:
+            continue                            # doubling back is the last resort
+        turn = (math.atan2(w[1] - v[1], w[0] - v[0]) - base) % (2 * math.pi)
+        if best is None or turn < best[0]:
+            best = (turn, w)
+    return best[1] if best else u
+
+
+def _drop_enclosing_rings(rings):
+    """Keep the faces that hold no other face -- drop each union outline.
+
+    The walk yields the outline of a whole connected component as well as its
+    individual faces; keeping both would place the comb twice.
+    """
+    if len(rings) < 2:
+        return rings
+    centres = []
+    for ring in rings:
+        cx = sum(p[0] for p in ring) / float(len(ring))
+        cy = sum(p[1] for p in ring) / float(len(ring))
+        centres.append((cx, cy))
+    kept = []
+    for index, ring in enumerate(rings):
+        encloses = False
+        for other, centre in enumerate(centres):
+            if other == index:
+                continue
+            if len(rings[other]) >= len(ring):
+                continue                        # only a bigger walk can enclose
+            if _point_in_polygon(centre[0], centre[1], ring):
+                encloses = True
+                break
+        if not encloses:
+            kept.append(ring)
+    return kept
+
+
 def recover_core_walls(paths, bbox, wall_min_ft, wall_max_ft, overlap_min_ft,
                        bridge_ft=0.0, z=0.0):
     """Recover a fragmented lift/stair core's columns by pairing opposing faces.
@@ -877,12 +1066,23 @@ def _midpoint(a, b):
     return ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
 
 
+# A beam outline is a PARALLELOGRAM: its two long edges run the same way. A quad
+# whose long edges converge is not one beam -- it is two members' edges closed
+# into one ring by the link reader, and reading a centreline off it gives a
+# SKEWED beam of a width neither member has (Test13's 14 tilted members, at up
+# to 44 degrees, in a drawing with nothing but orthogonal beams).
+_QUAD_TAPER_SIN = math.sin(math.radians(2.0))
+_QUAD_END_TOL_FT = 15.0 / 304.8   # the two end widths of one beam agree this well
+_QUAD_END_FRACTION = 0.05
+
+
 def beam_centerline_from_quad(ring):
     """Centerline of a 4-corner (possibly rotated) thin quad.
 
     Returns (start, end, width_ft) along the long axis -- the line joining the
-    midpoints of the two SHORT edges. Works at any orientation, so diagonal beams
-    are handled, not just axis-aligned ones.
+    midpoints of the two SHORT edges -- or None when the quad TAPERS and is
+    therefore not one beam's outline. Works at any orientation, so diagonal
+    beams are handled, not just axis-aligned ones.
     """
     if len(ring) != 4:
         return None
@@ -890,8 +1090,29 @@ def beam_centerline_from_quad(ring):
     side_a = _distance(p0, p1)   # edges p0-p1 and p2-p3
     side_b = _distance(p1, p2)   # edges p1-p2 and p3-p0
     if side_a >= side_b:
-        return _midpoint(p1, p2), _midpoint(p3, p0), side_b
-    return _midpoint(p0, p1), _midpoint(p2, p3), side_a
+        long_edges = ((p0, p1), (p2, p3))
+        ends = (side_b, _distance(p3, p0))
+        centre = (_midpoint(p1, p2), _midpoint(p3, p0))
+    else:
+        long_edges = ((p1, p2), (p3, p0))
+        ends = (side_a, _distance(p2, p3))
+        centre = (_midpoint(p0, p1), _midpoint(p2, p3))
+    if not _edges_are_parallel(long_edges[0], long_edges[1]):
+        return None
+    mean_width = (ends[0] + ends[1]) / 2.0
+    if abs(ends[0] - ends[1]) > max(_QUAD_END_TOL_FT,
+                                    _QUAD_END_FRACTION * mean_width):
+        return None                  # one end wider than the other: not a beam
+    return centre[0], centre[1], mean_width
+
+
+def _edges_are_parallel(first, second):
+    """True when two ring edges run the same way (either direction round)."""
+    one = _vunit(_vsub(first[1], first[0]))
+    two = _vunit(_vsub(second[1], second[0]))
+    if one == (0.0, 0.0) or two == (0.0, 0.0):
+        return False
+    return abs(_vcross(one, two)) <= _QUAD_TAPER_SIN
 
 
 def beam_centerline_from_rect(rect):
@@ -927,6 +1148,14 @@ def _vunit(v):
     return (v[0] / length, v[1] / length) if length > 1e-12 else (0.0, 0.0)
 
 
+# A real beam's two edges are the same distance apart all the way along. Edges
+# belonging to DIFFERENT beams converge, and pairing them produced Test13's
+# skewed members: the gap used to be measured at one point only, so a pair that
+# closed from 635mm to 200mm across its overlap looked as good as a parallel one.
+_TAPER_TOL_FT = 15.0 / 304.8   # drafting noise between two edges of one beam
+_TAPER_FRACTION = 0.05         # ... or 5% of the gap, for a wide member
+
+
 def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
                         min_overlap_ft=None, sin_tol=None):
     """Pair near-parallel lines ~one width apart into straight members.
@@ -934,11 +1163,14 @@ def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
     `lines`: list of (p0, p1, z) with p0/p1 = (x, y) in feet. Returns
     (segments, leftover): each segment is dict(start, end, width_ft) whose
     centerline lies on the midline over the shared overlap and whose width is the
-    measured perpendicular gap. Greedy and order-independent: each line is used at
+    MEAN perpendicular gap. Greedy and order-independent: each line is used at
     most once, paired with the partner giving the largest genuine overlap. Lines
-    with no parallel partner (junction fragments) are returned as leftover. The
-    width band / overlap / parallel-angle tolerances default to config but can be
-    overridden per run.
+    with no parallel partner (junction fragments) are returned as leftover.
+
+    A candidate whose gap TAPERS along the overlap is refused: its two lines
+    belong to different members, however parallel they look at one end. The
+    width band / overlap / parallel-angle tolerances default to config but can
+    be overridden per run.
     """
     min_width_ft = _PAIR_MIN_WIDTH_FT if min_width_ft is None else min_width_ft
     max_width_ft = _PAIR_MAX_WIDTH_FT if max_width_ft is None else max_width_ft
@@ -975,9 +1207,26 @@ def pair_parallel_lines(lines, min_width_ft=None, max_width_ft=None,
             overlap = hi - lo
             if overlap < min_overlap_ft:
                 continue
+            # the gap at BOTH ends of the overlap, not just at b0: two edges of
+            # one beam stay the same distance apart, edges of two different
+            # beams close in on each other
+            along = _vdot(other, direction)
+            if abs(along) < 1e-12:
+                continue
+            slope = _vdot(other, normal) / along
+            t_b0 = _vdot(_vsub(b0, a0), direction)
+            off_lo = signed_gap + (lo - t_b0) * slope
+            off_hi = signed_gap + (hi - t_b0) * slope
+            taper = abs(abs(off_lo) - abs(off_hi))
+            mean_gap = (abs(off_lo) + abs(off_hi)) / 2.0
+            if taper > max(_TAPER_TOL_FT, _TAPER_FRACTION * mean_gap):
+                continue
+            if mean_gap < min_width_ft or mean_gap > max_width_ft:
+                continue
             if best is None or overlap > best["overlap"]:
-                best = {"j": j, "signed_gap": signed_gap, "lo": lo, "hi": hi,
-                        "overlap": overlap, "gap": gap}
+                best = {"j": j, "signed_gap": (off_lo + off_hi) / 2.0,
+                        "lo": lo, "hi": hi,
+                        "overlap": overlap, "gap": mean_gap}
         if best:
             used[i] = True
             used[best["j"]] = True

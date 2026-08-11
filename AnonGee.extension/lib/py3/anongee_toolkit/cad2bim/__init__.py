@@ -35,7 +35,677 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.50.0"  # STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
+__version__ = "0.68.0"  # Same behaviour, twenty modules instead of four.
+#
+#                         No feature and no fix: every commit in this release is a
+#                         MOVE, made because four files had grown past the point where
+#                         a change could be made confidently -- report.py 3039 lines,
+#                         script.py 2956, stair_layout 1683, slab_outlines 1550.
+#
+#                             report.py       -> beam_segments, beam_cleanup,
+#                                                columns_recovery, column_geom,
+#                                                export, limits      (888 left)
+#                             script.py       -> ui_window, run_builders, run_picking,
+#                                                run_console, ui_dialogs  (962 left)
+#                             stair_layout.py -> stair_runs, stair_landings,
+#                                                stair_text, stair_tolerances (721)
+#                             slab_outlines.py-> slab_graph, slab_labels    (445)
+#
+#                         The old modules re-export everything they used to define, so
+#                         no call site changed. Each split was proved a no-op FOUR ways
+#                         before it was committed: the unit suite, the 22 stored slab
+#                         fingerprints, a stair replay over every fixture DXF, and a
+#                         sweep of all 17 DXFs comparing columns, faces, nested drops,
+#                         slabs, note recoveries and beams. Not one number moved.
+#
+#                         Two things could not be pure moves and were done deliberately.
+#                         The mutable TOLERANCES are read through their owning module
+#                         (slab_graph._SNAP_MM, tol._TREAD_MIN_MM) rather than
+#                         from-imported, because a from-import freezes the default and
+#                         silently ignores the Tolerances tab. And the pushbutton's
+#                         imports of its new modules are GUARDED: they run before main()
+#                         can catch anything, so a stale library would have shown a raw
+#                         traceback instead of the "library out of date" dialog.
+#
+#                         The test loader was rebuilt too: its throwaway package now
+#                         carries a real __path__, so modules import siblings by file
+#                         exactly as they do in Revit -- import cycles included. Twenty
+#                         hand-rolled loaders became one.
+#
+# 0.67.5                  A wall placed whole AND in pieces.
+#
+#                         The v0.67.3 export shows the roof still carrying 12 columns
+#                         where its labels name 10: the 12300x300 perimeter wall plus
+#                         two 2700x300 LENGTHS of that same wall. In the Revit records
+#                         those pieces are closed outlines of their own, so they are
+#                         placed by the ordinary path and v0.67.2's face-recovery
+#                         cleanup -- which only runs when a face IS recovered -- never
+#                         saw them.
+#
+#                         drop_nested_columns runs after every recovery pass and removes
+#                         a rectangle that is a LENGTH of another: wholly inside it, the
+#                         same thickness, and parallel. All three conditions matter --
+#                         "inside a bigger rectangle" alone drops a 400x660 column that
+#                         merely abuts a 5630x400 wall, which cost 48 real members on
+#                         test12 before the rule was narrowed. With them, every drop
+#                         across the fixtures is a wall drawn twice (2540x450 inside
+#                         2800x450) or a literal duplicate at the same centre.
+#
+# 0.67.4                  HOTFIX: "Duplicate type name within an assembly".
+#
+#                         v0.67.3's reload has a sting: Python.NET does not merely
+#                         subclass a .NET interface, it EMITS a real CLR type into a
+#                         dynamic assembly, and an AppDomain -- one per Revit session --
+#                         refuses a second type of the same name. Re-importing the
+#                         library therefore ran those class bodies again, so the SECOND
+#                         click in a session crashed. Three such classes existed:
+#                         WarningSwallower, SuppressWarningsPreprocessor, and the
+#                         ISelectionFilter behind "draw stair outlines" -- that last one
+#                         was declared inside its own function and so had been crashing
+#                         on a second PICK since long before the reload existed.
+#
+#                         lib/py3/anongee_clr.py now owns them. It sits OUTSIDE
+#                         anongee_toolkit, so the reload cannot touch it, and it hands
+#                         back the type it built the first time: the factory runs once
+#                         per session however often the module is imported. Verified
+#                         against a stand-in for Python.NET that raises on a duplicate
+#                         name exactly as the CLR does -- three consecutive runs, one
+#                         type emitted.
+#
+#                         A static test now walks the whole toolkit for a module-level
+#                         class deriving from a Revit interface, which is the shape of
+#                         this bug, so a new one cannot be added quietly.
+#
+# 0.67.3                  HOTFIX: the engine kept last session's library.
+#
+#                         "module 'naming' has no attribute 'next_level_names'" on a
+#                         function that is in the file, exported, and unit-tested. The
+#                         CPython3 engine outlives a run: script.py is re-read on every
+#                         click, but a module it imported stays in sys.modules for the
+#                         whole Revit session -- so a session that had already run
+#                         v0.67.0 kept v0.67.0's naming module and the new button ran
+#                         against the old library. Only restarting Revit cleared it.
+#
+#                         Every run now drops anongee_toolkit from sys.modules before
+#                         importing, so the files on disk are what runs. The parent
+#                         package's attribute goes with it: `from anongee_toolkit import
+#                         cad2bim` reads that attribute and never consults sys.modules,
+#                         so clearing one without the other changes nothing (verified
+#                         against a simulated stale session). ezdxf and numpy are left
+#                         alone -- they are the expensive imports and they do not change.
+#
+#                         And if a library older than the button is ever on sys.path for
+#                         real -- a shadow copy of anongee_toolkit -- the run now says
+#                         so up front, naming what is missing and where it loaded from,
+#                         instead of failing an hour into a build.
+#
+# 0.67.2                  The roof's slabs, from the v0.67.0 run's own export.
+#
+#                         SLABS: the note recovery only ran when the slab-edge layer
+#                         had ALREADY found something. On the roof of the updated test10
+#                         there is no slab edge at all, so the run fell to the placed
+#                         members, found no face (a bay walled on one side reads as a
+#                         shaft) and built 0 slabs. The recovery now runs whatever the
+#                         source found -- a note no outline covers gets its bay, with the
+#                         note itself as the keep_point. Roof: 0 -> 6.
+#
+#                         COLUMNS: the run placed the 12300 wall AND two 2700-long pieces
+#                         of that same wall, which came in as closed outlines of their
+#                         own. A placed column now blocks a recovered face only while it
+#                         is a fair LIKENESS of it, and any rectangle lying wholly inside
+#                         a face -- however it was found -- is a piece of that member and
+#                         goes. Roof: 12 columns, 2 of them doubled -> 10, one per label.
+#
+# 0.67.1                  HOTFIX: new levels ignored the Naming tab entirely.
+#
+#                         _storey_level_pairs hard-coded `"CAD Level {0}".format(...)`
+#                         at the Level.Create call -- naming.level_name existed, was
+#                         tested, and was never called by anything. Whatever the Naming
+#                         tab said, every level created came out "CAD Level 11".
+#
+#                         It renders the template now, and the level template gained {o}:
+#                         the level number written as an ordinal, so "{o} Floor Level"
+#                         gives "3rd Floor Level" instead of the "3th" that "{n}th" makes.
+#                         {label} is the plan title that storey came from.
+#
+#                         Better still, a model usually knows its own convention. When
+#                         the levels it already has are numbered -- 00 GROUND LVL, 01 1ST
+#                         FLOOR LVL., 02 2ND FLOOR LVL. -- a level this run adds now reads
+#                         like the next line of that list (03 3RD FLOOR LVL.), continuing
+#                         the number at its own width and moving the body's ordinal on in
+#                         its own case. This is ON by default, with a tick on the Naming
+#                         tab to turn it off; a model with no such pattern falls straight
+#                         through to the template.
+#
+# 0.67.0                  Beam material, combined columns, noted slabs, saved settings.
+#
+#                         STRUCTURAL FRAMING TOOK NO MATERIAL. The beams outcome carried
+#                         counts only: every other creator records the ids it placed under
+#                         the private _element_ids key, and _create_beams did not. The
+#                         material pass therefore found no beam elements and said "nothing of
+#                         this kind was built" on every run with beams in it. It records them
+#                         now, and a static test walks each creator's returns so a kind can
+#                         never again be built without being reachable.
+#
+#                         COMBINED COLUMNS (test10's new roof). A wall-column carrying four
+#                         columns, every piece exploded to bare lines, closes into no ring at
+#                         all -- the wall's own top edge runs THROUGH each column root, so
+#                         the single-cycle assembly gives up and the leftover-fragment pass
+#                         guesses 45-degree blobs. The roof placed 6 members, 4 of them junk,
+#                         where its labels name 10. shapes.recover_face_columns treats the
+#                         soup as a planar graph -- weld, split at every T, walk the bounded
+#                         faces -- and each face IS one drawn member. report.recover_face_
+#                         columns keeps a face only where the plan's own size label agrees
+#                         with it ("300 X 12300" within reach, dimensions matching), so no
+#                         label means no column; the size limits do not apply, because the
+#                         drawing and its label agreeing is better evidence than a size band.
+#                         Any approximate rectangle a recovered face covers is dropped, but
+#                         only when it was a FRAGMENT: a guess of the right size is the same
+#                         member and keeps its place. Roof: 10 of 10. Test1/2/3 each gain the
+#                         two wall-columns they were missing; every other fixture: no change.
+#
+#                         SLABS NOTED BUT NEVER DRAWN. The outline sources were either/or:
+#                         finding ANY slab-edge ring ended the search. Test10's roof draws
+#                         rings over its south bays and a single line over the north ones,
+#                         yet all six carry "200 THK." -- so three slabs went missing in
+#                         silence. slab_outlines.loops_for_unclaimed_notes makes the two
+#                         sources additive exactly where the drawing asks: a face of the
+#                         placed members is taken ONLY when it holds a thickness note that no
+#                         drawn ring covers, and only when it overlaps none of them. The note
+#                         doubles as the keep_point, so a bay whose fourth side is a WALL is
+#                         no longer dropped as a shaft. Roof: 6 slabs. Test13, whose A-FLOR
+#                         layer holds nothing but four slivers per storey, gains 47 real bays
+#                         per storey. Fixtures whose notes are all covered: unchanged.
+#
+#                         SETTINGS THAT LAST. Only the naming templates and standard sizes
+#                         survived a Revit session; everything else started from defaults
+#                         each morning. The whole dialog is now captured -- driven by
+#                         ui.xaml's own x:Names, so a control added tomorrow is saved the day
+#                         it appears -- and restored on the next run, with Save/Load buttons
+#                         in the footer for a settings file the office can share. Combos are
+#                         stored by LABEL, never by ElementId, so a file reloads into another
+#                         model; a control this drawing owns (the multi-storey tick and its
+#                         two layers, which auto-detection answers) is saved but never
+#                         restored, and a disabled control is left alone.
+#
+#                         TEST12's STOREYS. Four of its five captions name no ordinal
+#                         ("LAYOUT AT REFUGE FLOOR LVL."), so those storeys came out unnamed
+#                         AND were pushed to the bottom of the stack. A caption that names no
+#                         ordinal still NAMES the storey; only its position comes from the
+#                         sheet, and it now holds its place BETWEEN the titled plans either
+#                         side of it. Reading order groups plans into rows by overlapping y
+#                         extents (test12's five plans differ in height by 7 m and were read
+#                         as five rows). Elevations are read from a note of their own
+#                         ("+8.600M LVL."), not just from the title, which gives test12 its
+#                         storey heights. Also: the Naming tab's footing row was never bound,
+#                         so the box came up blank -- ten template keys, nine bound.
+#
+#                         The rows were a StackPanel of Grids with a click handler on the
+#                         Grid, so the combo box and text boxes INSIDE each row swallowed the
+#                         mouse before the handler ever fired -- there was nothing to click
+#                         and nothing looked selected, which is exactly what the user found.
+#                         They are ListBoxItems in a ListBox now: selection is native, so the
+#                         row highlights, the arrow keys walk the stack and SelectedIndex is
+#                         what Move/Add/Remove act on. The click is a PREVIEW handler, which
+#                         tunnels to the row BEFORE its children can take it, so clicking
+#                         anywhere on a row -- including on its dropdown -- selects it.
+#                         Each row now shows its build number, the buttons grey out when they
+#                         would do nothing (top row cannot move up), and a line beside them
+#                         says "storey 2 of 5 selected".
+#
+# 0.66.0                  Test13's skewed beams, one progress bar, storey stack, grades.
+#
+#                         SKEWED BEAMS. Test13 is orthogonal throughout, yet 14 members per
+#                         storey came out tilted -- one by 44 degrees -- at widths no beam
+#                         has (634.9, 444.9). All came from the `rect` path: a 4-corner ring
+#                         that is a TRAPEZOID, two members' edges closed into one quad by the
+#                         link reader. beam_centerline_from_quad read a centreline off it
+#                         anyway, taking whichever end width came first. A beam outline is a
+#                         parallelogram, so a quad is refused unless its long edges run
+#                         parallel AND its two end widths agree; a refused quad is exploded
+#                         so its legs re-pair as the real beams they are. Test13: 14 skewed
+#                         -> 0, and 193 members instead of 182. Test11 loses 4 "beams" that
+#                         tapered 202mm to 60mm, which were never beams. pair_parallel_lines
+#                         gained the same rule: the gap is measured at BOTH ends of the
+#                         overlap now, so two converging edges cannot pair.
+#
+#                         ONE PROGRESS BAR for a multi-storey run: the storey is an offset
+#                         into a single 0-100 over storeys x steps, captioned "storey 2/5",
+#                         instead of restarting per floor.
+#
+#                         THE STOREY TABLE IS THE STACK. Each row picks WHICH detected plan
+#                         it builds, so one typical drawing can build five floors; Move
+#                         up/down reorders the stack; Add/Remove change how many storeys
+#                         there are. Reused storeys SHARE their records rather than copying
+#                         a whole floor's geometry five times.
+#
+#                         CONCRETE GRADE per element on the Materials tab, written to a
+#                         parameter of its own or appended to the element's name (C12 ->
+#                         "C12 (M30)"), never doubling up on a re-run.
+#
+#                         STAIR MATERIALS: a Stairs type holds no material -- it points at
+#                         Stairs: Runs and Stairs: Landings types, and THOSE carry the tread,
+#                         riser and monolithic materials. Walking to them is what was
+#                         missing. SLAB TEXT is a routable layer category now; leaving it
+#                         unmapped keeps the old "find notes anywhere" behaviour.
+#
+# 0.65.0                  Test12 prep: combined footings, Materials & Graphics tab, light
+#                         filters, and the note that was naming four storeys "GROUND".
+#
+#                         TEST12. Four of its five storeys came out named "GROUND" from a
+#                         general NOTE -- "2) THE BEAM & COLUMN SIZES MAY VARY AT GROUND &
+#                         PODIUM LEVEL." mentions a storey, so every boxed plan that could
+#                         see it took order 0. A note is numbered, or a whole sentence; a
+#                         plan caption is neither, and is never that long. Test12's storeys
+#                         now fall back to sheet order (correct -- it has no captions), while
+#                         Test9 and Test10 keep every real title they had.
+#
+#                         COMBINED FOOTINGS. Pads that OVERLAP fuse into one footing instead
+#                         of stacking two floors on each other: merging is transitive, so
+#                         three columns in a row give one pad, and it repeats because a
+#                         merged pad is bigger than its parents and can reach one neither
+#                         touched. A group sharing an orientation keeps it. Depth follows
+#                         plan AREA around the dialog's figure (the depth at one square
+#                         metre), clamped to half and twice it and rounded to a buildable
+#                         50mm. Footings are ON by default at 300mm minimum projection and
+#                         600mm depth. The pad type is named by THICKNESS alone now that it
+#                         is a floor type -- naming it after a plan size gave "F 0 X 0 X 300"
+#                         and would have invented one type per column.
+#
+#                         MATERIALS & GRAPHICS is its own tab (anything graphical lands there
+#                         from now on), and every writable material parameter is set rather
+#                         than just the first -- a family can expose both the built-in
+#                         structural material and its own shared one, and setting only the
+#                         first leaves the visible one untouched. The pass now says when a
+#                         kind had nothing built rather than reporting a silent no-op.
+#
+#                         VIEW FILTERS use light tints, since the fill is what identifies an
+#                         element and a saturated fill over a floor plate is unreadable.
+#                         Transparency is on the tab (0 = solid) and colouring the LINES is
+#                         now opt-in -- the patterns alone are what was wanted.
+#
+# 0.64.0                  HOTFIX plus: footings as foundation SLABS, two bars, materials
+#                         on instances too.
+#
+#                         THE CRASH first, and it was mine: 0.63.0 put live ElementIds into
+#                         `outcomes` so the material pass could reach the created elements,
+#                         but outcomes are JSON-exported and an ElementId is not
+#                         serialisable. json.dump raised AFTER the model was built, losing
+#                         the report and reporting a crash for a run that had worked -- and
+#                         taking the view-filter pass, which runs later, down with it. The
+#                         ids now ride under a private key that _strip_ids() removes before
+#                         anything is written, and both exports carry a last-resort encoder
+#                         so a stray Revit object can never fail a finished run again.
+#
+#                         FOOTINGS are Floor.Create against a Structural Foundation floor
+#                         type -- the same call the slabs use -- instead of a foundation
+#                         FAMILY instance. That is what removes the -3000 offset: a family
+#                         hangs its own depth below the level it is hosted on, while a
+#                         sketched pad sits ON the level, and its height offset is explicitly
+#                         zeroed. The pad is still the column footprint grown by the
+#                         projection and turned to the column's long axis, and it is now an
+#                         editable sketch like everything else this tool places.
+#
+#                         TWO PROGRESS BARS. Linking and reading the CAD happens BEFORE the
+#                         dialog opens, so one bar sat at whatever percent the read reached
+#                         while the user filled the dialog in, then looked like it RESET when
+#                         the build started. The read bar now closes as the dialog opens and
+#                         a separate build bar opens when Run is pressed, each captioned and
+#                         each running 0-100 over its own phase.
+#
+#                         MATERIALS are written to the INSTANCE as well as the type. Where a
+#                         material lives is entirely up to how the family was built, and
+#                         setting only the type leaves an instance-parameter family
+#                         untouched -- which is what the user saw. Stairs get their own
+#                         route: a stair type spreads its materials over tread, riser,
+#                         landing and support parameters, none of which is the built-in
+#                         structural one, which is why stairs reported 0 set.
+#
+# 0.63.0                  Progress bar, materials + view filters, footings, skip details.
+#
+#                         PROGRESS BAR. The run reported itself only into the deferred
+#                         console, which a successful run never shows -- a big drawing looked
+#                         like Revit had hung. The toolkit's CPython-safe ProgressBar (the one
+#                         ConvertFloor uses; pyrevit.forms.ProgressBar is IronPython-only) now
+#                         strips across the top of the Revit window with the stage, count and
+#                         ETA, and comes down in a finally so it can never be left behind.
+#                         Imported defensively: an older ui/ folder, or no host window, falls
+#                         back to a no-op and the run continues.
+#
+#                         MATERIALS. One picker per element kind on the Structure tab, written
+#                         onto the TYPES this run creates -- that is where Revit keeps a
+#                         structural member's material, and every element of one size already
+#                         shares a duplicated type. A floor is the exception: its material
+#                         lives in the compound structure, so it goes on the structural layer.
+#                         A family that exposes no material parameter is counted, not fatal.
+#
+#                         VIEW FILTERS. One reusable ParameterFilterElement per category,
+#                         colour-coded (columns blue, beams red, slabs green, stairs purple,
+#                         footings amber, grids grey), added to every OPEN view. Made once and
+#                         found by name afterwards, so repeated runs do not litter the project.
+#                         Template-driven views are skipped -- the template owns their filters.
+#
+#                         FOOTINGS. A Structural Foundation under each column on the columns'
+#                         BASE level, sized column + 2 x projection and turned to the column's
+#                         long axis, one type per distinct size. Round columns get a square
+#                         pad. In a multi-storey run only the LOWEST storey lays them: a
+#                         building has one set of foundations, not one per floor.
+#
+#                         SKIP DETAILS reach the export for every element kind, GROUPED by
+#                         reason with a count and one example (digits masked when grouping, so
+#                         900 "C##: no symbol" skips are one line, not eight truncated ones).
+#                         Test2 reported 9 skipped stairs with no way to see why.
+#
+# 0.62.0                  Level/grid naming, shipped standard sizes, landings that meet.
+#
+#                         CONVENTION: anything this tool invents -- a name, a tolerance, a
+#                         size -- belongs on the main dialog, never buried in code. Levels
+#                         and grids were the two that had been missed: a level was always
+#                         "CAD Level {n}" and a grid took its bubble text raw. Both are
+#                         templates now ({n} {e} {label} for a level, {name} for a grid, so
+#                         "1st Floor (L2 @3000)" or "G-A" are a typing job, not a code
+#                         change), and every remaining invented name is on the tab. A grid
+#                         the drawing never labelled still goes out unnamed rather than
+#                         becoming a bare prefix.
+#
+#                         STANDARD SIZES ship with the common RC set (10 column b x h, 7 beam
+#                         widths) instead of an empty box, so a drawing whose members are a
+#                         couple of millimetres off round onto the size they mean out of the
+#                         box. The Tolerances tab still remembers whatever is typed over them.
+#
+#                         LANDINGS now MEET the flight. An arrival landing was squared to the
+#                         run axis, which against a fanned flight's angled outermost riser
+#                         left a wedge of daylight -- the drawn riser is the landing's near
+#                         edge instead. Between two flights where either is fanned, a BRIDGE
+#                         landing is sketched through the four ends of the two drawn risers
+#                         it joins, so it shares an edge with each exactly, in place of
+#                         Revit's automatic landing (which is left to serve square flights,
+#                         where it is already right).
+#
+#                         And a landing no longer runs through a column: notch_landings cuts
+#                         the overlap out as a rectilinear STEP -- Test2 stair 1's mid landing
+#                         now steps 250mm round C38 and C40, exactly as drawn. A cut that
+#                         would hole the landing or take most of it away is refused, since
+#                         Revit's landing sketch takes one simple loop.
+#
+# 0.61.0                  Naming tab, per-element tolerances, sketched winders, SW10 again.
+#
+#                         NAMING. Every auto-created family type was named by a hard-coded
+#                         format at its Duplicate() call ("400 X 600", "200 THK"). The new
+#                         Naming tab owns those as templates -- one per type, with a live
+#                         preview and a validity check -- and naming.py renders them. A
+#                         malformed template falls back to its default and says so rather
+#                         than failing a build halfway through. Templates and the standard
+#                         beam/column sizes are office conventions, not per-drawing numbers,
+#                         so prefs.py keeps them in %APPDATA%/AnonGee/cad2bim.json and the
+#                         dialog opens with them already filled in, session after session.
+#
+#                         TOLERANCES are now grouped by the element each number affects --
+#                         General, Columns, Beams, Slabs, Staircase -- with each element's
+#                         standard sizes sitting with its own limits instead of in a separate
+#                         block at the top.
+#
+#                         MULTI-STOREY. Each detected plan has a checkbox: untick one and
+#                         that storey is left out of the model.
+#
+#                         STAIRS. The spiral now gets an arrival landing -- it ended on its
+#                         last riser with nothing to step onto. And a fanned flight is built
+#                         with CreateSketchedRun from the DRAWN riser lines (they are the
+#                         risers, the chains through their ends the boundaries, the chain
+#                         through their midpoints the path), so the angled treads come out as
+#                         drawn instead of being squared off by a straight run.
+#
+#                         SW10/SW11, third time. _anchor_growth needs exactly one end of a
+#                         carved wall to be free, and Test2's has SW9 crossing below AND a
+#                         900x900 column sitting on top -- so no end was ever pinned. The end
+#                         to pin is the one whose neighbour merely BUTTS; the carve came from
+#                         the member that runs ACROSS the wall (SW9 reaches 6000mm past it,
+#                         the column only 250mm). Verified by replaying the production chain
+#                         on the REVIT records in the pushed export, which is what the two
+#                         earlier fixes missed: the DXF path re-tiles the core instead and
+#                         was already right.
+#
+# 0.60.0                  Arc stairs, angled risers, multi-storey auto-detection.
+#
+#                         STAIRS. StaircasePlan-Test2 built 4 of its 6 stairs; the two that
+#                         failed are the ones drawn with ARCS and with ANGLED risers.
+#                         (a) The spiral: _spiral_run DEMANDED every line in the cluster be
+#                         radial, so the stairwell walls drawn on the same layer killed it on
+#                         the first line. It now SELECTS the radial lines and asks instead
+#                         that they dominate the cluster and turn at an even pitch. Its 24
+#                         risers are each drawn twice, which halved the going, so equal
+#                         angles now merge; and the going is read across the MIDDLE when the
+#                         usual walk line (300mm off a 300mm inner radius) reads an
+#                         implausible 139mm for treads that are exactly 300 wide.
+#                         (b) The winders: a balanced winder keeps the going constant on the
+#                         walk line, so its risers ROTATE and their ends spread unevenly --
+#                         the parallel detector sees a different direction per riser and
+#                         finds nothing. _fan_runs recovers the flight from what is still
+#                         true: the riser MIDPOINTS lie one tread apart on a straight line
+#                         and the risers turn monotonically by a real angle. Test2 now plans
+#                         all six stairs with no notes; across all ten DXF fixtures nothing
+#                         else changed at all.
+#
+#                         MULTI-STOREY. The tab no longer waits to be told: autodetect_storeys
+#                         reads the drawing and answers it. Layers are found by SHAPE, not by
+#                         name -- the boundary layer is the one whose big disjoint boxes
+#                         ENCLOSE most of the drawing (measured 1.00 on Test9 and 0.67 on
+#                         Test10 against 0.28 for the best impostor, a layer of shear walls
+#                         that used to be read as 24 floor plans), and the origin layer the
+#                         one with exactly one small mark inside each box. The checkbox, both
+#                         combos and one row per plan are filled in from that, each row
+#                         carrying its OWN storey height and a repeat count auto-read from a
+#                         title like "TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)". Titles that
+#                         quote an elevation ("1st Floor @3.00+ Level") state the rise to the
+#                         plan above, so those heights fill themselves in; a typical plan
+#                         splits the rise it covers. New levels are created at each storey's
+#                         own height. Test10's four boxed plans come out named and ordered
+#                         Ground / 1st / (unnamed) / Terrace with the ground rise read as
+#                         3000mm; Test9's three come out Upper Basement / Ground / First.
+#
+# 0.59.1                  HOTFIX: the dialog crashed on open with
+#                         "'CadToBimWindow' object has no attribute 'tb_slab_step'" -- 0.59.0
+#                         added the Min corner step box to ui.xaml and read it in both
+#                         _init_tolerances and _read_tolerances, but never BOUND it with
+#                         find(). Bound now, plus test_dialog_wiring.py, which parses
+#                         script.py and both .xaml files statically and fails when a control
+#                         is bound-but-absent or used-but-unbound -- the class of slip that
+#                         only ever surfaces when the window opens inside Revit.
+#
+# 0.59.0                  C17's slab corners came out SLOPED: the column is 400 wide on a
+#                         300 beam, so its face sits 50mm past the beam edge -- exactly the
+#                         50mm node-weld slop. Two tolerances collided there. _split_at_crossings
+#                         judged the beam tip's touch as "at the end" of the 400mm column face
+#                         (50/400 = the slop in parameter space) so no T was cut, and the weld
+#                         then pulled the column's corner onto the beam tip -- collapsing the
+#                         step into a diagonal. The INTERIOR test now uses a step tolerance
+#                         (slab_min_step_mm, 20mm) instead of the junction slop, and the weld
+#                         refuses to merge two PINNED junctions (a T plus a corner) further
+#                         apart than that -- drafting slop is a FREE TIP meeting a junction, and
+#                         still welds. All four corners round C17 now step; every fixture keeps
+#                         its face count and area bar the corner slivers that used to overlap
+#                         the columns, and test9's third storey recovers a 18.5 m2 bay.
+#
+# 0.58.0                  StaircasePlan-Test2 stair 1 came out 3100 wide with its centreline
+#                         300mm off. Its ten risers span x 11200..13700 (2500, the flight) but
+#                         the bottom LANDING EDGE is drawn 11200..14300, straight across the
+#                         600 well between the flights -- and the run's width was the UNION of
+#                         its members' ends, so that one line stretched the flight over the well.
+#                         A flight's span is now the MODAL riser span (the extent most of its
+#                         lines actually have, always a real drawn one) instead of the union:
+#                         stair 1 lands on 11200..13700 and 14300..16800 with the 600 well
+#                         between, exactly as drawn. This also corrects StaircasePlan-Test1's
+#                         ST-2 from 1500 to 1450 -- 16 of its risers are 1450 long and only the
+#                         few boundary lines were 1500, so the union had been over-reading it.
+#
+# 0.57.1                  HOTFIX for the SW10/SW11 shift the user spotted after 0.57.0 -- a
+#                         REGRESSION from making that fixture's schedule readable. A wall
+#                         crossed by another wall is decomposed into pieces, so SW10's drawn
+#                         piece stops at SW9's face: y 100..7550, 7450 long, centred 3825. Once
+#                         the schedule could be read it supplied the true 7850, which was applied
+#                         about the PIECE's centre -- so the wall kept centre 3825 and grew 200mm
+#                         past its free end instead of growing back over the carve. _anchor_growth
+#                         now pins the FREE end when a resized column grows and exactly one end
+#                         abuts another rectangle: SW10 lands on y -300..7550, centre 3625, which
+#                         is exactly what is drawn. A column that is already its scheduled length
+#                         keeps its centre, so nothing else moves.
+#
+# 0.57.0                  StaircasePlan-Test2, from the fixture the user pushed mid-round.
+#                         (1) ITS SCHEDULE READ NOTHING: the table is a Revit export whose mark
+#                         column is headed "Comments", not "Mark", so no header was recognised
+#                         and no table was found. "comments"/"comment"/"name" now head a mark
+#                         column: 0 -> 119 schedule entries on that fixture (C1..C15 300x900,
+#                         B1..B* 300x600), with the Height/Length columns ignored as before.
+#                         (2) MOST RISERS WERE LOST, two independent causes. A line's direction
+#                         is UNSIGNED, but the bucket key did not wrap, so a flight with some
+#                         risers drawn end-for-end split across a "0 degrees" and a "180 degrees"
+#                         bucket and lost most of its lines. And a gap of exactly TWO treads --
+#                         one riser simply not drawn, a break line over it -- ended the flight,
+#                         because only a gap inside the tread range continued it; such a gap now
+#                         counts as k treads and the missing riser lines are rebuilt, so the
+#                         count stays right. Test2 stair 1: 4+4 -> 10+10 risers; stair 6: one
+#                         10-riser run -> 10+8. StaircasePlan-Test1 and StructuralPlan-Test1
+#                         replay byte-identical.
+#                         STILL OPEN on Test2: two stairs are drawn with ARCS (62 on S-STRS) and
+#                         the riser pass reads straight lines only, so they find no flight; one
+#                         more resolves a single 3-riser run. The reversed orientation of stair 2
+#                         needs its DN note read for the climb direction -- next round.
+#
+# 0.56.0                  (1) KEYED SIZE SCHEDULES (test9's "B20(c)"): a label may carry a
+#                         parenthesised KEY instead of a size, with a MARK/SIZE table
+#                         ("SCHEDULE OF BEAM SIZE": (a) = 200x600) holding the sections.
+#                         marks.size_key parses the key onto every text, the table reader
+#                         accepts "(a)" as a mark, and _label_size resolves inline size ->
+#                         schedule[mark] -> schedule[key], so columns, beams and slabs all
+#                         understand the convention. On test9: 140 of 174 beam labels now size
+#                         (0 before). Each storey also reads its OWN schedule first -- test9's
+#                         floors disagree about what (a) means -- with the whole file as the
+#                         fallback for a schedule that lives on one sheet.
+#                         (2) NAME PARAMETER: the CAD mark went into Mark, full stop. The
+#                         Structure tab now has an editable "Name parameter" combo (Mark,
+#                         Comments, Type Mark, Type Comments, or anything typed); compat
+#                         .set_element_mark writes there and falls back to Mark when a family
+#                         has no such parameter, so nothing is ever lost.
+#                         (3) SLOPED TRIM AT COLUMN CORNERS: the face walk can leave a short
+#                         stub across a corner and the exactness pass kept it (both ends sit on
+#                         real carriers), so the slab sloped where it should step.
+#                         _square_off_chamfers extends the two neighbouring edges to their own
+#                         crossing and replaces the stub with that corner -- but only when the
+#                         stub lies along NO carrier, so a genuinely chamfered column survives.
+#                         test7: 1 sloped corner -> 0, face counts unchanged (45 / 9).
+#
+# 0.55.0                  0.54.0 feedback (test7 drawn-outline stair + test10 grids).
+#                         (1) A stair built inside a DRAWN outline came out stretched: the two
+#                         flights were pushed to the bay's edges, so their width followed
+#                         whatever rectangle was drawn instead of the 1250 asked for, the half
+#                         landing spanned the whole bay, and the arrival landing shrank to a
+#                         stub. The flights now sit SIDE BY SIDE, centred across the bay, each
+#                         exactly the dialog run width; the half landing is a rectangle of the
+#                         landing depth spanning the pair (2 x run width) at the turn; and the
+#                         arrival landing spans the same pair. (2) The half landing was also
+#                         MISSING in the model: Revit's automatic landing did not fill the turn,
+#                         so the planned ring is now SKETCHED (CreateSketchedLanding at the
+#                         elevation after the first flight, rounded to a riser by the API) with
+#                         the automatic landing kept as the fallback and a note when it is used.
+#                         (3) GRIDS ONCE PER PROJECT: a grid is a datum spanning every level, so
+#                         a multi-storey run repeating the same grid per floor stacked copies.
+#                         create_grids now fingerprints each line by direction + perpendicular
+#                         offset (50mm), skips anything already in the model, and reports it as
+#                         skipped -- which also stops a re-run duplicating the first run's grids.
+#
+# 0.54.0                  0.53.0 feedback. (1) DRAW the stair outlines instead of picking
+#                         existing lines: "Pick detail lines in Revit" only ever offered
+#                         already-drawn CurveElements, and a CAD link's lines are not
+#                         selectable, so the pick looked broken. The Staircase tab now carries a
+#                         "Draw stair outlines in Revit..." button -- the window CLOSES, the view
+#                         comes back, and PickPoint (with Revit's real snapping to the CAD link
+#                         and the model) collects corner after corner, drawing a detail line as
+#                         the outline grows and closing the loop on Escape; Escape on an empty
+#                         outline ends the session and the window REOPENS with every setting
+#                         restored (_apply_preset). Run then builds the stairs inside those
+#                         outlines. Revit forbids running its own line command from a modal
+#                         dialog and the API cannot resume a posted command, which is why the
+#                         outline is drawn by the script rather than by the Detail Line tool.
+#                         (2) MULTI-STOREY ALIGNMENT: every storey was shifted so its origin
+#                         marker landed on (0, 0), which put the model at REVIT's origin, far
+#                         from the drawing. Storeys now anchor on the BASE storey's marker, so
+#                         the lowest (left-most) plan does not move at all -- the model is built
+#                         straight on top of its CAD -- and the upper storeys stack onto that
+#                         same marker. Verified on test9/test10: base storey shift exactly
+#                         0.0 mm, all three storeys split as before.
+#
+# 0.53.0                  0.52.0 feedback, four items. (1) ONE JSON per multi-storey run: the
+#                         payload builder is split out of export_json, so the storeys collect
+#                         into a single file with a `storeys` array (shared source/version/units
+#                         lifted into the header, each section tagged with its storey) instead
+#                         of one file per floor. (2) STAIR REGIONS FROM DETAIL LINES: a drag-box
+#                         is only as accurate as the drag, so the "Draw region" source becomes
+#                         "Pick detail lines in Revit" -- the user draws the outline with Revit's
+#                         own tools (snapping to the CAD link and the model), picks the lines,
+#                         and they chain end-to-end into closed rings of ANY shape (arcs
+#                         tessellated). (3) THE SHIFTED-MODEL BUG: the layer table was built from
+#                         the REVIT records alone, and Revit's import drops a bare POINT -- the
+#                         floor-ORIGIN convention -- so the Origin layer never appeared in the
+#                         Layers tab or the Multi-storey combos and every storey built off a
+#                         guessed centre. The table is now the UNION of the Revit and DXF layers
+#                         (DXF-only ones are listed in the log) and the chosen mapping is applied
+#                         to both record sets. Verified on test9/test10: Origin (3 POINTs) and
+#                         Boundary (3 polylines) both surface and route by convention.
+#                         (4) UI: the Build tab splits into STRUCTURE (grids, columns, beams,
+#                         slabs, levels, export) and ARCHITECTURE (staircases); every stair
+#                         setting -- type, source, shape, dimensions -- now lives on the
+#                         Staircase tab; and the Tolerances tab gains the slab and stair tunables
+#                         that were module constants (node weld, edge heal, chain gap, min bay
+#                         width, stair cluster gap, drawn tread min/max, arrival landing merge),
+#                         pushed into the modules by apply_tolerances at run start.
+#
+# 0.52.0                  (1) THE MISSING STAIR LINES, found in the 0.50.0 test9 export's new
+#                         stairs OUTCOME: four clusters reported "no riser lines" although they
+#                         held 22-23 riser lines at a clean 300mm. Cause: a flight's positions
+#                         run 300, 300, ... and then jump 800mm to the LANDING and the boundary
+#                         line past it -- the group was rejected whole for being non-uniform.
+#                         FIX: gaps outside the tread range now SEGMENT the group into maximal
+#                         equidistant chains (_equidistant_chains), so each flight survives its
+#                         own landing. test9: 5 -> 7 stairs, zero notes; test10 (6) and project1
+#                         (6) unchanged; StaircasePlan/test1 replays byte-identical. Clusters
+#                         smaller than 1.5m (arrow glyphs) no longer emit a note.
+#                         (2) CONSOLE ON FAILURE ONLY (user request): the run is buffered from
+#                         start to end and the pyRevit console is only opened when something
+#                         actually goes wrong -- an exception, a rollback, or an outcome with
+#                         errors. A clean run prints nothing at all; a failed one flushes the
+#                         whole log (progress bar, per-phase counts, notes) for diagnosis.
+#
+# 0.51.0                  MULTI-STOREY from ONE dxf + generic stair SHAPES (0.50.0 feedback).
+#                         (1) New Multi-storey tab: the user boxes each floor plan on a
+#                         BOUNDARY layer and drops one marker per plan on an ORIGIN layer;
+#                         both layers are picked BY NAME in the tab (names differ per
+#                         drawing), floor_plans.split_floors turns them into one record set
+#                         per storey, each SHIFTED so its marker lands on the model origin,
+#                         and the build loop runs the whole pipeline once per storey on its
+#                         own level pair (levels created at the tab's storey height when the
+#                         model runs out). Storeys order by the plan title inside the box
+#                         ("GROUND FLOOR PLAN", "LEVEL 2", "TERRACE"), else by sheet layout;
+#                         a shared schedule is read from the WHOLE file, and each storey
+#                         exports its own JSON. Verified on test1+test2 laid side by side:
+#                         2376/2376 records routed, both storeys aligned to 0.0mm.
+#                         (2) Staircase tab gains a SHAPE picker with drawn icons -- U,
+#                         straight, L, C and circular -- used whenever the CAD has no stair
+#                         linework to measure; L/C wrap the bay's sides, circular becomes a
+#                         spiral run sized on the walk line. (3) New stair source "Draw
+#                         region in Revit": the window closes, PickBox collects one box per
+#                         stair from the view (Esc ends), and the chosen shape is built in
+#                         each. Suite 17 files (12 floor-plan + 31 stair tests).
+#                         VERIFIED on the user's new StructuralPlan-Test9/Test10: both split
+#                         into their 3 storeys, every record routed, each storey aligned onto
+#                         its origin POINT. Two reader fixes came out of them -- a bare POINT
+#                         is now read (it is the origin convention, and was being dropped),
+#                         and the markers are taken from the DXF records while the REVIT
+#                         records are what gets split, because Revit's import does not always
+#                         carry a POINT through. Test10's own titles order correctly
+#                         ("Ground Floor @0.00+ Level" -> 0, "1st Floor @3.00+ Level" -> 1,
+#                         "Typical Floor @7.00+..." -> sheet order).
+#
+# 0.50.0                  STAIRCASE round 4 (0.49.0 feedback): (1) RAILINGS auto-hosted on each
 #                         new stair are deleted after placement (user request) -- own transaction
 #                         after the edit scopes; (2) SHAPES: an L stair (two flights, one corner)
 #                         places via the winding path (relaxed to 2+ multi-direction runs); a

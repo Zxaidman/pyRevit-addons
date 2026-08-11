@@ -12,42 +12,18 @@ lines): the fragmented Test18 core comes through as ONE open-path polyline enclo
 redrawn (fix) plan leaves no open path at all. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 _FT = 1.0 / 304.8
 
 
-def _load_report():
-    for name in ("_agc", "_agc.geom", "_agc.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_agc.config", "config.py")
-    load("_agc.geom.shapes", "geom", "shapes.py")
-    load("_agc.classify.marks", "classify", "marks.py")
-    load("_agc.classify.layers", "classify", "layers.py")
-    return load("_agc.report", "report.py")
-
-
-report = _load_report()
+report = _loader.load("report")
 
 
 def _open_path(pts):

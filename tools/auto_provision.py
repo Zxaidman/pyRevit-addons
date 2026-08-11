@@ -8,8 +8,8 @@ import sys
 # ezdxf pulls pyparsing / numpy / fontTools / typing_extensions automatically and
 # powers the CAD to BIM button's DXF parsing (run this with a CPython matching the
 # pyRevit CPython3 engine, e.g. 3.12 win-amd64, so the numpy/ezdxf binaries match).
-PY3_DEPENDENCIES = "numpy openpyxl pythonnet ezdxf"
-PY2_DEPENDENCIES = "openpyxl"
+PY3_DEPENDENCIES = "numpy openpyxl pythonnet ezdxf shapely tkinterdnd2"
+PY2_DEPENDENCIES = ""
 
 # 2. Setup folder pathways relative to this script
 TOOLS_DIR = os.path.dirname(os.path.abspath(__file__))

@@ -9,11 +9,11 @@ reach INTO a column stay untouched, grazing a face never splits, sub-100 mm left
 (drafting overshoot) are dropped. Standalone (no Revit / no numpy).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -21,31 +21,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load_report():
-    for name in ("_bsp", "_bsp.geom", "_bsp.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_bsp.config", "config.py")
-    load("_bsp.geom.shapes", "geom", "shapes.py")
-    load("_bsp.classify.marks", "classify", "marks.py")
-    load("_bsp.classify.layers", "classify", "layers.py")
-    return load("_bsp.report", "report.py")
-
-
-report = _load_report()
+report = _loader.load("report")
 
 
 def _seg(x0, y0, x1, y1, mark=None):

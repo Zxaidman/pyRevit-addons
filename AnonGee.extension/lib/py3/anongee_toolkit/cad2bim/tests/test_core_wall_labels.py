@@ -9,11 +9,11 @@ pass re-tiles the blob from its size+mark labels so every wall lands at its true
 position -- but only when the labels tile the WHOLE blob cleanly. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -21,31 +21,7 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load_report():
-    for name in ("_cwl", "_cwl.geom", "_cwl.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_cwl.config", "config.py")
-    load("_cwl.geom.shapes", "geom", "shapes.py")
-    load("_cwl.classify.marks", "classify", "marks.py")
-    load("_cwl.classify.layers", "classify", "layers.py")
-    return load("_cwl.report", "report.py")
-
-
-report = _load_report()
+report, shapes = _loader.load("report", "geom.shapes")
 
 
 class _Lbl(object):
@@ -220,6 +196,95 @@ class CoreWallLabels(unittest.TestCase):
         n = report.recover_core_walls_from_labels(sec, labels)
         self.assertEqual(n, 0)
         self.assertEqual(self._carved(sec), [])
+
+
+
+
+class GrowBackOverTheCarve(unittest.TestCase):
+    """StaircasePlan-Test2 SW10: a wall carved by a crossing wall must grow back
+    over the carve, not push past its free end.
+
+    The drawn wall spans y -300..7550 (7850 long). Decomposition gives SW10 only
+    the part above the crossing wall SW9 (y 100..7550, 7450 long), so applying
+    the schedule's 7850 about THAT centre moved the wall 200mm up and off the
+    drawing. The free end must be pinned instead.
+
+    The rectangles come from decompose_to_rectangles here, NOT hand-built: those
+    carry no long_axis_deg and store width/height as X and Y sizes, and reading
+    them under the oriented short/long convention is what let the bug survive an
+    earlier hand-built fixture.
+    """
+
+    def _decomposed_u(self):
+        """The drawn SW9/SW10/SW11 channel, exactly as the export carries it."""
+        ring = [(x * _FT, y * _FT) for x, y in
+                [(17200, -300), (16800, -300), (11200, -300), (10800, -300),
+                 (10800, 7550), (11200, 7550), (11200, 100), (16800, 100),
+                 (16800, 7550), (17200, 7550)]]
+        return [r.to_dict() for r in shapes.decompose_to_rectangles(ring)]
+
+    def _run(self, rects):
+        sections = {"entries": [{"layer": "S-COLS", "status": "rect",
+                                 "rectangles": list(rects)}]}
+        texts = [_Lbl("SW10", None, None, 11000.0, 3825.0),
+                 _Lbl("SW11", None, None, 17000.0, 3825.0),
+                 _Lbl("SW9", None, None, 14000.0, -100.0)]
+        report.correct_columns_with_text(
+            sections, texts, 1300.0 * _FT,
+            schedule={"SW10": (400.0, 7850.0), "SW11": (400.0, 7850.0),
+                      "SW9": (400.0, 5600.0)})
+        return {rect.get("mark"): rect
+                for rect in sections["entries"][0]["rectangles"]}
+
+    def test_the_drawn_channel_decomposes_into_three_legs(self):
+        spans = sorted((round(r["width_mm"]), round(r["height_mm"]))
+                       for r in self._decomposed_u())
+        self.assertEqual(spans, [(400, 7450), (400, 7450), (6400, 400)])
+
+    def test_free_end_is_pinned_when_growing(self):
+        placed = self._run(self._decomposed_u())
+        for mark in ("SW10", "SW11"):
+            grown = placed.get(mark)
+            self.assertIsNotNone(grown, mark)
+            centre_mm = grown["center"][1] * _MM
+            half = max(grown["width_mm"], grown["height_mm"]) / 2.0
+            self.assertAlmostEqual(centre_mm, 3625.0, places=3)
+            self.assertAlmostEqual(centre_mm - half, -300.0, places=3)
+            self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)
+
+    def test_a_column_stacked_on_the_free_end_does_not_block_the_growth(self):
+        """The case that survived TWO fixes: BOTH ends abut something.
+
+        Test2's SW10 has SW9 crossing below it and a 900x900 column sitting on
+        its top end, so "exactly one end abuts" was never true and the wall kept
+        its carved centre. The end to pin is the one whose neighbour merely
+        BUTTS; the carve came from the member that runs ACROSS the wall.
+        """
+        rects = self._decomposed_u()
+        for x in (11000.0, 17000.0):        # the columns capping both walls
+            rects.append({"center": [x * _FT, 8000.0 * _FT, 0.0],
+                          "width_mm": 900.0, "height_mm": 900.0,
+                          "width_ft": 900.0 * _FT, "height_ft": 900.0 * _FT})
+        placed = self._run(rects)
+        for mark in ("SW10", "SW11"):
+            grown = placed.get(mark)
+            self.assertIsNotNone(grown, mark)
+            centre_mm = grown["center"][1] * _MM
+            half = max(grown["width_mm"], grown["height_mm"]) / 2.0
+            self.assertAlmostEqual(centre_mm, 3625.0, places=3)
+            self.assertAlmostEqual(centre_mm - half, -300.0, places=3)
+            self.assertAlmostEqual(centre_mm + half, 7550.0, places=3)
+
+    def test_uncarved_column_keeps_its_centre(self):
+        # already the scheduled length: nothing to grow, nothing to re-anchor
+        whole = {"center": [11000.0 * _FT, 3625.0 * _FT, 0.0],
+                 "width_mm": 400.0, "height_mm": 7850.0,
+                 "width_ft": 400.0 * _FT, "height_ft": 7850.0 * _FT,
+                 "long_axis_deg": 90.0}
+        others = [r for r in self._decomposed_u() if r["width_mm"] > 1000.0]
+        kept = self._run([whole] + others).get("SW10")
+        self.assertIsNotNone(kept)
+        self.assertAlmostEqual(kept["center"][1] * _MM, 3625.0, places=3)
 
 
 if __name__ == "__main__":

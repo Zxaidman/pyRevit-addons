@@ -1,0 +1,39 @@
+{
+ "source": "StructuralPlan-Test1",
+ "cad2bim_version": "0.63.0",
+ "units": "mm (sizes and positions; positions derived from internal feet)",
+ "totals": {
+  "dxf_curves": 390,
+  "by_category": {
+   "unmapped": 85,
+   "column": 90,
+   "beam": 109,
+   "stair": 41,
+   "slab_edge": 48,
+   "grid": 17
+  }
+ },
+ "comparison": {
+  "revit_curves": 390,
+  "dxf_curves": 1237,
+  "matched": 233,
+  "dxf_only": 1004,
+  "revit_only": 157,
+  "clipped": 152,
+  "transform": {
+   "method": "grid_anchored"
+  }
+ },
+ "grids": {
+  "created": 17,
+  "skipped": 0,
+  "errors": 0,
+  "error_details": [],
+  "skip_details": []
+ },
+ "columns": {
+  "outcome": {
+   "rect": 64,
+   "circular": 2,
+   "created_ids": [
+    

@@ -1,9 +1,0 @@
-title: CAD to BIM
-tooltip: >
-  Pick a DXF, link it (choose unit + positioning), then build Revit
-  grids / columns / beams from its geometry and text marks. Uses hybrid
-  extraction: the Revit link for placement plus ezdxf for geometry + text,
-  matched by the link transform, building from the cleaner DXF geometry.
-  Runs on the pyRevit CPython3 engine.
-author: AnonGee
-min_revit_version: 2022

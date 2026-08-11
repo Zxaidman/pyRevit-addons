@@ -1,0 +1,16 @@
+title: Modeless Window
+author: AnonGee
+tooltip: |
+  Reference pattern for a modeless (non-blocking) WPF window. Revit stays
+  interactive while the window is open; all Revit API work is marshalled to
+  Revit's primary thread through an IExternalEventHandler bridge.
+
+  Actions
+    • Query Model — reads the active document (title, element count, walls in
+      the active view) from the Revit thread.
+    • Select Walls in View — selects all wall elements in the active view.
+    • Re-read Document — refreshes the document summary after model changes.
+
+  Notes
+    • No pyRevit modules are imported; the window survives after the script
+      returns (persistent CPython 3 engine).

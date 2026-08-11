@@ -8,11 +8,11 @@ loose edge lines chain into a ring; labels size/name a loop from inside it, with
 mark-only labels resolving thickness through the schedule. Standalone (no Revit).
 """
 
-import importlib.util
 import os
 import sys
-import types
 import unittest
+
+import _loader
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
@@ -20,31 +20,8 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-def _load():
-    for name in ("_slb", "_slb.geom", "_slb.classify"):
-        if name not in sys.modules:
-            m = types.ModuleType(name)
-            m.__path__ = []
-            sys.modules[name] = m
-
-    def load(full, *parts):
-        spec = importlib.util.spec_from_file_location(full, os.path.join(_PKG, *parts))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[full] = mod
-        if "." in full:
-            parent, child = full.rsplit(".", 1)
-            setattr(sys.modules[parent], child, mod)
-        spec.loader.exec_module(mod)
-        return mod
-
-    load("_slb.config", "config.py")
-    load("_slb.geom.shapes", "geom", "shapes.py")
-    load("_slb.classify.layers", "classify", "layers.py")
-    return load("_slb.slab_outlines", "slab_outlines.py")
-
-
-slab_outlines = _load()
-layers = sys.modules["_slb.classify.layers"]
+slab_outlines, slab_graph, layers = _loader.load(
+    "slab_outlines", "slab_graph", "classify.layers")
 
 
 def _seg(x0, y0, x1, y1, w=0.0):
@@ -180,7 +157,7 @@ class MemberEdgeFaces(unittest.TestCase):
         a = (1.0, 1.0)
         b = (1.0 + 0.144, 1.0)                       # 44 mm right of a cell edge
         segs = [((0.0, 0.0), a), (a, b)]             # chain broken at a? no: shared
-        key, nodes = slab_outlines._cluster_nodes(
+        key, nodes = slab_graph._cluster_nodes(
             [(0.0, 0.0), a, (1.1444, 1.0), b], 0.164)   # 50 mm in ft
         self.assertEqual(key(a), key((1.1444, 1.0)))    # 44 mm apart: same node
         self.assertNotEqual(key((0.0, 0.0)), key(a))
@@ -188,7 +165,7 @@ class MemberEdgeFaces(unittest.TestCase):
     def test_cluster_chain_does_not_collapse_arc(self):
         # transitive chains must NOT swallow a run of closely-spaced arc chords
         pts = [(i * 0.10, 0.0) for i in range(10)]      # 30 mm steps, 270 mm run
-        key, nodes = slab_outlines._cluster_nodes(pts, 0.164)
+        key, nodes = slab_graph._cluster_nodes(pts, 0.164)
         self.assertGreater(len(set(key(p) for p in pts)), 3)
 
     def test_small_arc_tessellates_with_chords_above_snap(self):
@@ -322,6 +299,123 @@ class PlacedMemberFaces(unittest.TestCase):
             self.assertAlmostEqual(r_mm, 400.0, delta=2.0)
 
 
+class UnclaimedThicknessNotes(unittest.TestCase):
+    """A noted bay whose slab edge was never drawn still becomes a slab.
+
+    Test10's roof draws A-FLOR rings over its south bays and a single edge line
+    over the north ones, yet every bay carries "200 THK.". Finding SOME rings
+    used to end the search, so the north bays went missing in silence.
+    """
+
+    def _seg(self, x0, y0, x1, y1, w=300.0):
+        return {"start": [x0 * _FT, y0 * _FT, 0.0],
+                "end": [x1 * _FT, y1 * _FT, 0.0], "width_mm": w}
+
+    def _two_bays(self):
+        # two 5 m bays side by side, drawn as placed beams
+        segs = []
+        for x in (0.0, 5000.0, 10000.0):
+            segs.append(self._seg(x, 0, x, 5000))
+        for y in (0.0, 5000.0):
+            segs.append(self._seg(0, y, 10000, y))
+        return segs
+
+    def _drawn_left_bay(self):
+        return _Record([(150, 150), (4850, 150), (4850, 4850), (150, 4850)],
+                       closed=True)
+
+    def test_the_undrawn_noted_bay_is_recovered(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        self.assertEqual(len(drawn), 1)
+        texts = [_Text("200 THK.", 2500, 2500), _Text("200 THK.", 7500, 2500)]
+        extra = slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts)
+        self.assertEqual(len(extra), 1)
+        ring = extra[0][0]
+        xs = [p[0] * _MM for p in ring]
+        self.assertGreater(min(xs), 5000.0)      # the RIGHT bay, not the drawn one
+
+    def test_a_plan_whose_notes_are_all_covered_gains_nothing(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 2500, 2500)]
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts), [])
+
+    def test_no_notes_means_no_extra_work(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), []), [])
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), [_Text("PLAN AT LEVEL 2", 7500, 2500)]),
+            [])
+
+    def test_a_note_over_nothing_recovers_nothing(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 40000, 40000)]     # far off the beam graph
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts), [])
+
+    def test_a_sliver_is_not_a_slab(self):
+        drawn = slab_outlines.slab_loops_from_edges([self._drawn_left_bay()])
+        texts = [_Text("200 THK.", 7500, 2500)]
+        self.assertEqual(slab_outlines.loops_for_unclaimed_notes(
+            drawn, [], self._two_bays(), texts, min_area_m2=100.0), [])
+
+
+class ColumnWiderThanBeam(unittest.TestCase):
+    """A column overhanging its beam must give the slab a STEP, not a slope.
+
+    C17 of StaircasePlan-Test2: a 400 x 900 column on a 300-wide beam leaves the
+    column face 50 mm beyond the beam edge -- exactly the junction slop, so the
+    beam-edge tip used to weld onto the column ring corner and the boundary cut
+    the corner off diagonally. Both points are pinned junctions, so neither moves.
+    """
+
+    def _plan(self):
+        # one bay; the right-hand column (at mid height of the right beam) is
+        # 100 mm wider than the 300 mm beams that frame it
+        segs = [{"start": [0.0, 0.0, 0.0], "end": [6000 * _FT, 0.0, 0.0],
+                 "width_mm": 300.0},
+                {"start": [6000 * _FT, 0.0, 0.0],
+                 "end": [6000 * _FT, 6000 * _FT, 0.0], "width_mm": 300.0},
+                {"start": [6000 * _FT, 6000 * _FT, 0.0],
+                 "end": [0.0, 6000 * _FT, 0.0], "width_mm": 300.0},
+                {"start": [0.0, 6000 * _FT, 0.0], "end": [0.0, 0.0, 0.0],
+                 "width_mm": 300.0},
+                {"start": [0.0, 3000 * _FT, 0.0],
+                 "end": [6000 * _FT, 3000 * _FT, 0.0], "width_mm": 300.0}]
+        # x 5800..6200 (100 mm each side of the beam edges), y 2550..3450
+        rect = ("rect", 6000 * _FT, 3000 * _FT, 0.0, 1.0, 450 * _FT, 200 * _FT)
+        return segs, rect
+
+    def test_boundary_steps_round_the_wide_column(self):
+        segs, rect = self._plan()
+        loops = slab_outlines.slab_loops_from_placed_members(
+            [], segs, column_rects=[rect])
+        self.assertEqual(len(loops), 2)
+        corners = set()
+        for ring, _z, _arcs in loops:
+            for x, y in ring:
+                corners.add((round(x * _MM), round(y * _MM)))
+        # the beam edge stops at the column face...
+        self.assertIn((5850, 2550), corners)
+        self.assertIn((5850, 3450), corners)
+        # ...and the column's own corner is a vertex of its own, 50 mm along
+        self.assertIn((5800, 2550), corners)
+        self.assertIn((5800, 3450), corners)
+
+    def test_no_boundary_edge_runs_diagonally(self):
+        segs, rect = self._plan()
+        loops = slab_outlines.slab_loops_from_placed_members(
+            [], segs, column_rects=[rect])
+        for ring, _z, _arcs in loops:
+            for i, a in enumerate(ring):
+                b = ring[(i + 1) % len(ring)]
+                dx, dy = abs(b[0] - a[0]) * _MM, abs(b[1] - a[1]) * _MM
+                self.assertLess(min(dx, dy), 0.5,
+                                "sloped trim %s -> %s" % (a, b))
+
+
 class SlabLabels(unittest.TestCase):
     def _one_loop(self):
         ring = [(0.0, 0.0), (5000 * _FT, 0.0), (5000 * _FT, 5000 * _FT),
@@ -360,6 +454,49 @@ class SlabLabels(unittest.TestCase):
         slabs = slab_outlines.apply_slab_labels(
             self._one_loop(), [_Text("S3", 2500, 2500)], schedule={"S3": (125.0, 125.0)})
         self.assertEqual(slabs[0]["thickness_mm"], 125.0)
+
+
+class ChamferSquaring(unittest.TestCase):
+    """A short stub across a corner that lies on NO carrier is a false chamfer.
+
+    It shows up as a SLOPED trim where the slab should step around a column;
+    a real (drawn) chamfer has a carrier of its own and must survive.
+    """
+
+    def _corner_ring(self):
+        # a square whose top-right corner is cut by a 56mm diagonal stub
+        return [(0.0, 0.0), (3000.0 * _FT, 0.0),
+                (3000.0 * _FT, 2960.0 * _FT), (2960.0 * _FT, 3000.0 * _FT),
+                (0.0, 3000.0 * _FT)]
+
+    def _carriers(self):
+        # the four real edges: two horizontals and two verticals
+        return [((0.0, 0.0), (3000.0 * _FT, 0.0)),
+                ((3000.0 * _FT, 0.0), (3000.0 * _FT, 3000.0 * _FT)),
+                ((0.0, 3000.0 * _FT), (3000.0 * _FT, 3000.0 * _FT)),
+                ((0.0, 0.0), (0.0, 3000.0 * _FT))]
+
+    def test_false_chamfer_becomes_the_corner(self):
+        ring = slab_graph._square_off_chamfers(self._corner_ring(),
+                                                  self._carriers())
+        corners = [(round(x * _MM), round(y * _MM)) for x, y in ring]
+        self.assertIn((3000, 3000), corners)          # squared off
+        self.assertEqual(len(ring), 4)
+        for point in corners:
+            self.assertNotIn(point, [(3000, 2960), (2960, 3000)])
+
+    def test_drawn_chamfer_survives(self):
+        # the same stub, but this time a carrier runs along it (a real chamfer)
+        carriers = self._carriers() + [((3000.0 * _FT, 2960.0 * _FT),
+                                        (2960.0 * _FT, 3000.0 * _FT))]
+        ring = slab_graph._square_off_chamfers(self._corner_ring(), carriers)
+        self.assertEqual(len(ring), 5)
+
+    def test_long_edges_are_never_touched(self):
+        square = [(0.0, 0.0), (3000.0 * _FT, 0.0),
+                  (3000.0 * _FT, 3000.0 * _FT), (0.0, 3000.0 * _FT)]
+        self.assertEqual(
+            slab_graph._square_off_chamfers(square, self._carriers()), square)
 
 
 if __name__ == "__main__":

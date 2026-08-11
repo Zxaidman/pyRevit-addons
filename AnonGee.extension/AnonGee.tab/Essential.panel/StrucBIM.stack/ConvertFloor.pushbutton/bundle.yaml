@@ -1,0 +1,19 @@
+title: "Convert\nSlab"
+author: AnonGee
+tooltip: >
+  Convert Structural Floor <-> Structural Foundation (slab).
+
+  Works on a pre-selection or lets you pick in plan, 3D, section or
+  elevation. Shows a pre-flight list of every element with its resolved
+  target type and anything that cannot survive the conversion, and only
+  touches the model after you confirm.
+
+  Preserved: sketch loops and sketched openings, level and height offset,
+  slope arrow, slab shape edits, structural flag, phase, workset, pin
+  state, all writable instance/shared parameters, geometry joins and
+  join order, hosted reinforcement (re-hosted), Opening elements
+  (recreated).
+
+  Lost by design (reported first): tags, dimensions, face-hosted
+  instances, parts, slab edges, analytical associations, element id.
+highlight: new

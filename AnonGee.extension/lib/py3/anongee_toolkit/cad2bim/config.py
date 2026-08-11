@@ -55,6 +55,42 @@ DEFAULTS = {
     "stair_run_width_mm": 1250.0, # width of each run
     "stair_landing_mm": 0.0,      # landing depth along the runs; 0 = run width
     "stair_waist_mm": 200.0,      # waist (structural depth) of runs + landings
+
+    # --- multi-storey (several floor plans in ONE dxf) ----------------------
+    "storey_height_mm": 3000.0,   # level spacing when the model has no level yet
+
+    # --- slab outline tolerances (exposed on the Tolerances tab) ------------
+    "slab_snap_mm": 50.0,         # two boundary points this close are one node
+    "slab_heal_mm": 350.0,        # close a junction gap up to this far
+    "slab_chain_mm": 150.0,       # loose slab-edge lines chain within this
+    "slab_min_width_mm": 500.0,   # a face slimmer than this (2A/P) is a member
+    "slab_min_step_mm": 20.0,     # a boundary jog below this is noise, not a step
+    "slab_note_min_area_m2": 1.0, # smallest bay recovered for a thickness note whose
+                                  # outline was never drawn (test10's roof)
+
+    # --- combined columns (Tolerances tab) ----------------------------------
+    "face_label_reach_mm": 900.0, # how far outside a member its size label may sit
+    "face_size_tol_mm": 60.0,     # drawn vs labelled dimension of a recovered face
+
+    # --- standard sizes (Tolerances tab; a drawn size within snap_tol_mm of one
+    # of these is rounded onto it, so a 298 wide beam reads as the 300 it is).
+    # Shipped with the common RC sizes; the tab remembers whatever is typed.
+    "standard_columns": ("230x230, 230x300, 230x450, 300x300, 300x450, "
+                         "300x600, 400x400, 400x600, 450x600, 600x600"),
+    "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
+
+    # --- footings (Structure tab) -------------------------------------------
+    "footing_projection_mm": 300.0,   # MINIMUM reach past the column, every side
+    "footing_thickness_mm": 600.0,    # depth at 1 m2; a pad scales from its area
+
+    # --- view filters (Materials & Graphics tab) ----------------------------
+    "filter_transparency": 0,     # 0 = solid fill; the fill is what identifies
+
+    # --- staircase tolerances (exposed on the Tolerances tab) ---------------
+    "stair_cluster_mm": 2000.0,   # drawn stair lines closer than this = one stair
+    "stair_tread_min_mm": 150.0,  # a drawn riser spacing below this is not a tread
+    "stair_tread_max_mm": 500.0,  # ... and above this it is a landing, not a tread
+    "stair_arrival_merge_mm": 800.0,  # parallel flights this close share the top slab
 }
 
 

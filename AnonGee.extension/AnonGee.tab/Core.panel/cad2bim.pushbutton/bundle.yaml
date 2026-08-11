@@ -1,0 +1,27 @@
+title: cad2bim
+tooltip: |
+  cad2bim -- pick a DXF, link it, and build Revit structure from it.
+  Workflow (CAD-free model is the normal case):
+  1. Pick a .dxf, choose its drawing unit and positioning (Link DXF dialog).
+  2. Link it programmatically (like Revit's Link CAD dialog).
+  3. Hybrid extraction: read the Revit link's geometry (internal feet) AND read the
+     same DXF with ezdxf for geometry + TEXT; align them with the link transform.
+  4. Compare the two to find problem geometry (Revit clips/merges at junctions) and
+     build from the cleaner ezdxf geometry.
+  5. Classify layers, refine sizes from text marks ("C1 400x400"), and create grids,
+     columns and beams in a TransactionGroup with warning suppression.
+
+  CPython3 engine compliance (AnonGee Brand Guidelines 12.1 / 12.8.4 / 12.9):
+  * `#! python3` shebang on line 1; explicit imports only.
+  * NO pyRevit IronPython modules (pyrevit.forms / pyrevit.revit) -- they crash the
+    CPython3 engine. Windows load via XamlReader.Load from a .xaml file; the active
+    document comes from `__revit__`; dialogs use System.Windows.MessageBox and
+    System.Windows.Forms file dialogs (mirrors the shipping BIM Generation tool).
+  * Model writes happen after the modal window closes, on the Revit API thread.
+  
+  * The cad2bim package lives in lib/py3/anongee_toolkit; path_resolver puts lib/py3
+    on sys.path. If the banner's version/path is not what you expect, a stale shadow
+    copy is on sys.path.
+
+author: AnonGee
+min_revit_version: 2022

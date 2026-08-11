@@ -48,3 +48,51 @@ def runtime_summary():
     2.7.12 loader situation visible in the log if anything misbehaves.
     """
     return "Runtime: {0}".format(sys.version.replace("\n", " "))
+
+
+# --- element naming --------------------------------------------------------
+# Which parameter carries the CAD mark. "Mark" is the Revit default, but a
+# practice may keep its element names in Comments, Type Mark, or a shared
+# parameter of its own, so the dialog can point this anywhere.
+_NAME_PARAMETER = None
+
+
+def set_name_parameter(name):
+    """Choose the instance parameter the CAD mark is written into (None = Mark)."""
+    global _NAME_PARAMETER
+    _NAME_PARAMETER = (name or "").strip() or None
+
+
+def name_parameter():
+    """The configured name parameter, or None when the Mark default applies."""
+    return _NAME_PARAMETER
+
+
+def set_element_mark(element, mark):
+    """Write `mark` onto `element`'s name parameter. True when it landed.
+
+    The configured parameter is tried first and Mark is the fallback, so a
+    typo or a parameter that is missing on this family still names the element
+    instead of losing the mark. Naming is best-effort: never raises.
+    """
+    if element is None or mark is None:
+        return False
+    text = str(mark)
+    wanted = _NAME_PARAMETER
+    if wanted:
+        try:
+            parameter = element.LookupParameter(wanted)
+            if parameter is not None and not parameter.IsReadOnly:
+                parameter.Set(text)
+                return True
+        except Exception:
+            pass
+    try:
+        from Autodesk.Revit.DB import BuiltInParameter
+        parameter = element.get_Parameter(BuiltInParameter.ALL_MODEL_MARK)
+        if parameter is not None and not parameter.IsReadOnly:
+            parameter.Set(text)
+            return True
+    except Exception:
+        pass
+    return False

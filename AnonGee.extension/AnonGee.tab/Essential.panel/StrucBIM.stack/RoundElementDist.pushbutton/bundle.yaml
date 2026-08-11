@@ -1,0 +1,10 @@
+title: RoundElementDist
+tooltip: |
+  Check element distances against one correct datum element or point and round
+  them to a design value. Reports every deviation first; you approve each fix
+  before anything moves. Skips pinned, grouped and linked elements.
+author: AnonGee
+min_revit_version: 2025
+context:
+  - zero-doc: false
+highlight: new

@@ -9,7 +9,11 @@ ordered bottom-to-top and numbered 1, 2, 3... The namer is structured so a real
 text-derived mapping can be injected later if a text-reading route is added.
 """
 
+import math
+
 from Autodesk.Revit.DB import Line, Arc, XYZ, Grid, FilteredElementCollector
+
+from .. import naming
 
 _MIN_LENGTH_FT = 1.0e-3   # ignore degenerate/zero-length curves
 
@@ -130,22 +134,72 @@ def _to_letters(index):
             return text
 
 
+_DUPLICATE_TOL_FT = 50.0 / 304.8   # a grid this close to an existing one is the same
+
+
+def _grid_fingerprints(doc):
+    """{(rounded direction, rounded offset)} of the grids already in the model.
+
+    A grid is a DATUM: it spans every level, so a multi-storey run whose floors
+    share one grid must not create the same line once per storey. Matching on
+    direction + perpendicular offset (not endpoints) also catches a grid drawn
+    to a different length on another floor.
+    """
+    seen = set()
+    for grid in FilteredElementCollector(doc).OfClass(Grid).ToElements():
+        try:
+            fingerprint = _line_fingerprint(grid.Curve)
+        except Exception:
+            continue
+        if fingerprint is not None:
+            seen.add(fingerprint)
+    return seen
+
+
+def _line_fingerprint(curve):
+    """(direction, perpendicular offset) rounded to the duplicate tolerance."""
+    try:
+        start, end = curve.GetEndPoint(0), curve.GetEndPoint(1)
+    except Exception:
+        return None
+    dx, dy = end.X - start.X, end.Y - start.Y
+    length = math.hypot(dx, dy)
+    if length <= 1e-9:
+        return None
+    ux, uy = dx / length, dy / length
+    if (ux, uy) < (-ux, -uy):          # direction is unsigned: A->B == B->A
+        ux, uy = -ux, -uy
+    offset = -uy * start.X + ux * start.Y      # signed distance from the origin
+    step = _DUPLICATE_TOL_FT
+    return (round(ux / 0.01), round(uy / 0.01), round(offset / step))
+
+
 def create_grids(doc, grid_records, namer):
     """Create grids inside an already-open transaction. Returns a result dict.
 
     Caller owns the Transaction/TransactionGroup; this function only creates and
     names, accumulating per-record outcomes so nothing fails the whole batch.
+    A line that coincides with a grid ALREADY in the model is skipped -- grids
+    are datums shared by every storey, so a multi-storey run creates each one
+    once instead of stacking a copy per floor.
     """
     result = {"created": [], "skipped": [], "errors": []}
     used_names = existing_grid_names(doc)
+    placed = _grid_fingerprints(doc)
     for record in grid_records:
         try:
             curve = _curve_from_record(record)
             if curve is None:
                 result["skipped"].append("unsupported or zero-length grid curve")
                 continue
+            fingerprint = _line_fingerprint(curve)
+            if fingerprint is not None and fingerprint in placed:
+                result["skipped"].append("grid already in the model")
+                continue
             grid = Grid.Create(doc, curve)
-            name = namer.name_for(record)
+            if fingerprint is not None:
+                placed.add(fingerprint)
+            name = naming.grid_name(namer.name_for(record))
             if name and name not in used_names:
                 try:
                     grid.Name = name

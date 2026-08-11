@@ -19,6 +19,30 @@ _SIZE_RE = re.compile(r"(\d+(?:\.\d+)?)\s*[x×X*]\s*(\d+(?:\.\d+)?)")
 # lost. A negative lookahead instead just forbids the token running on into another
 # letter/digit, so "_", a space, or end-of-string all close it.
 _MARK_RE = re.compile(r"\b([A-Za-z]{1,3}\d+[A-Za-z]?)(?![A-Za-z0-9])")
+# "B20(c)" -- the mark carries a parenthesised SCHEDULE KEY instead of a size;
+# the size lives in a MARK/SIZE table whose mark column reads "(a)", "(b)"...
+_SIZE_KEY_RE = re.compile(r"\(\s*([A-Za-z0-9]{1,3})\s*\)")
+
+
+def size_key(text):
+    """The parenthesised SCHEDULE KEY in a label, normalised, or None.
+
+    Some drawings write the size as a key into a beam-size table instead of
+    spelling it out: "B20(c)" means beam B20 of size (c), and a MARK/SIZE
+    schedule elsewhere on the sheet says (c) = 400x600. The key is returned in
+    the same "(C)" form the schedule reader stores, so one lookup serves both.
+    """
+    if not text:
+        return None
+    flat = text.replace("\n", " ")
+    found = _SIZE_KEY_RE.search(flat)
+    if not found:
+        return None
+    key = found.group(1).strip().upper()
+    # a bare number in brackets is a quantity/callout, not a size key
+    if key.isdigit():
+        return None
+    return "({0})".format(key)
 
 
 def parse_mark(text):
@@ -50,12 +74,13 @@ def parse_mark(text):
 
 
 def parse_texts(texts):
-    """Stamp .mark/.b_mm/.h_mm on every TextRecord in place; return the list."""
+    """Stamp .mark/.b_mm/.h_mm/.size_key on every TextRecord; return the list."""
     for record in texts:
         name, b_mm, h_mm = parse_mark(record.text)
         record.mark = name
         record.b_mm = b_mm
         record.h_mm = h_mm
+        record.size_key = size_key(record.text)
     return texts
 
 
@@ -132,7 +157,10 @@ def parse_schedule(texts, allow_split=True):
 # Schedule header keywords -> column role. Plan size is W x L; H is the column's
 # vertical height (ignored for the footprint). Single letters cover terse CAD
 # headers ("W L H"); full words cover verbose ones.
-_HDR_MARK = ("mark", "ref", "col", "column", "type", "no", "id")
+# "comments": a schedule exported FROM Revit keeps the element name in the
+# Comments column (StaircasePlan-Test2), so that column heads the table there
+_HDR_MARK = ("mark", "ref", "col", "column", "type", "no", "id",
+             "comments", "comment", "name")
 _HDR_W = ("w", "b", "width", "breadth")
 _HDR_L = ("l", "d", "depth", "length")
 _HDR_H = ("h", "ht", "height", "lvl", "level")
@@ -249,7 +277,13 @@ def _read_table(header, data_rows, out):
 
     for cells in data_rows:
         for block in blocks:
-            name, _b, _h = parse_mark(_cell_at(cells, block["mark"], tol) or "")
+            mark_cell = _cell_at(cells, block["mark"], tol) or ""
+            name, _b, _h = parse_mark(mark_cell)
+            if not name:
+                # a KEYED table ("SCHEDULE OF BEAM SIZE": MARK (a) | SIZE
+                # 200x600). The key is the mark here, and plan labels reach it
+                # through the "(a)" written after their own mark: "B20(c)".
+                name = size_key(mark_cell)
             if not name:
                 continue
             if "size" in block:

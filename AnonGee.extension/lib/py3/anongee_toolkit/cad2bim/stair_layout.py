@@ -28,95 +28,32 @@ import re
 from collections import defaultdict
 
 from . import config
+from . import stair_tolerances as tol
+from .stair_landings import (_arrival_landing, _bridge_landings,
+                             _spiral_top_landing, notch_landings)  # noqa: F401
+from .stair_runs import (_riser_runs, _spiral_run, _winder_corners,
+                         _fan_runs, _RISER_MIN_LINES)   # noqa: F401
+from .stair_text import (find_stair_texts, stair_label, find_direction_texts,
+                        direction_label, stair_areas_from_texts)  # noqa: F401
 from . import slab_outlines
 from .classify.layers import CATEGORY_STAIR
 
 _MM = config.MM_PER_FT
 _dist = slab_outlines._dist
 
-# "STAIRCASE" / "STAIR" / "STAIRS" / "ST-1" / "ST1" / "ST 2" -- the note that sits
-# inside the stair bay on the plan (any text layer; content decides, like slabs).
-_STAIR_TEXT = re.compile(r"^\s*(?:STAIRS?CASE|STAIRS?|ST[-_ ]?(\d+))\s*$", re.IGNORECASE)
-# "DN" / "DN." / "UP" -- the run direction note; DN sits at the TOP of the flight.
-_DIR_TEXT = re.compile(r"^\s*(DN|UP)\.?\s*$", re.IGNORECASE)
-
-_MIN_STAIR_AREA_M2 = 4.0     # a bay smaller than this cannot hold a real stair
-_MAX_STAIR_AREA_M2 = 60.0    # bigger than this is a floor plate, not a stair bay
 
 
-def stair_label(text):
-    """The stair mark for a stair note ("ST-1" -> "ST-1", "STAIRCASE" -> "ST"),
-    or None when the text is not a stair note."""
-    match = _STAIR_TEXT.match(text or "")
-    if not match:
-        return None
-    number = match.group(1)
-    return "ST-{0}".format(number) if number else "ST"
 
 
-def direction_label(text):
-    """"DN" / "UP" for a run-direction note, or None."""
-    match = _DIR_TEXT.match(text or "")
-    return match.group(1).upper() if match else None
 
 
-def find_stair_texts(texts):
-    """[(x_ft, y_ft, mark)] for every stair note with an internal point."""
-    out = []
-    for t in texts:
-        mark = stair_label(getattr(t, "text", None))
-        p = getattr(t, "point_internal", None)
-        if mark and p is not None:
-            out.append((p[0], p[1], mark))
-    return out
 
 
-def find_direction_texts(texts):
-    """[(x_ft, y_ft, "DN"|"UP")] for every run-direction note."""
-    out = []
-    for t in texts:
-        label = direction_label(getattr(t, "text", None))
-        p = getattr(t, "point_internal", None)
-        if label and p is not None:
-            out.append((p[0], p[1], label))
-    return out
 
 
-def stair_areas_from_texts(records, beam_segments, column_rects, texts):
-    """[(ring, z, mark)] -- the bounded face under each stair note.
 
-    The faces come from the placed-members machinery with `keep_points` so the
-    wall-bounded stair bay is not discarded as a shaft. A note whose face cannot
-    be found (or is implausibly small/large) is reported in `notes` instead of
-    silently dropped: returns (areas, notes).
-    """
-    stair_pts = find_stair_texts(texts)
-    if not stair_pts:
-        return [], ["no STAIRCASE/ST-n text on the plan"]
-    loops = slab_outlines.slab_loops_from_placed_members(
-        records, beam_segments, column_rects=column_rects,
-        keep_points=[(x, y) for x, y, _m in stair_pts])
-    areas = []
-    notes = []
-    min_ft2 = _MIN_STAIR_AREA_M2 * (1000.0 / _MM) ** 2
-    max_ft2 = _MAX_STAIR_AREA_M2 * (1000.0 / _MM) ** 2
-    for x, y, mark in stair_pts:
-        hit = None
-        for ring, z, _arcs in loops:
-            if slab_outlines._point_in_ring((x, y), ring):
-                hit = (ring, z)
-                break
-        if hit is None:
-            notes.append("{0}: no closed bay found around the text".format(mark))
-            continue
-        area = abs(slab_outlines._signed_area(hit[0]))
-        if area < min_ft2 or area > max_ft2:
-            notes.append("{0}: bay area {1:.1f} m2 outside {2}-{3} m2".format(
-                mark, area * (_MM / 1000.0) ** 2,
-                int(_MIN_STAIR_AREA_M2), int(_MAX_STAIR_AREA_M2)))
-            continue
-        areas.append((hit[0], hit[1], mark))
-    return areas, notes
+
+
 
 
 def _oriented_extents(ring):
@@ -147,7 +84,148 @@ def _oriented_extents(ring):
     return (cx, cy), (-uy, ux), (v1 - v0), (u1 - u0)
 
 
-def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
+# The generic shapes the dialog offers when the CAD has no stair linework.
+SHAPE_U = "u"                 # two parallel flights, half landing (dog-leg)
+SHAPE_STRAIGHT = "straight"   # one flight end to end
+SHAPE_L = "l"                 # two flights at 90 degrees, corner landing
+SHAPE_C = "c"                 # three flights around three sides of the bay
+SHAPE_CIRCULAR = "circular"   # one spiral flight around the bay's centre
+STAIR_SHAPES = (SHAPE_U, SHAPE_STRAIGHT, SHAPE_L, SHAPE_C, SHAPE_CIRCULAR)
+
+
+def plan_shaped_stair(ring, z, mark, params, storey_mm, direction_texts=None,
+                      shape=SHAPE_U):
+    """A generic stair of the requested SHAPE inside `ring` -> (plan, note).
+
+    `shape` is one of STAIR_SHAPES; it is what the Staircase tab's shape picker
+    sends when the drawing carries no stair linework to measure. Every shape
+    shares the dialog numbers (riser height/count, tread, run width, landing,
+    waist) and differs only in how the flights are laid inside the bay.
+    """
+    if shape == SHAPE_CIRCULAR:
+        return _plan_circular_stair(ring, z, mark, params, storey_mm)
+    if shape in (SHAPE_L, SHAPE_C):
+        return _plan_cornered_stair(ring, z, mark, params, storey_mm, shape,
+                                    direction_texts=direction_texts)
+    return plan_dogleg_stair(ring, z, mark, params, storey_mm,
+                             direction_texts=direction_texts,
+                             single_flight=(shape == SHAPE_STRAIGHT))
+
+
+def _riser_split(params, storey_mm, flights):
+    """(risers_total, riser_mm, [per-flight riser counts]) for the dialog numbers."""
+    riser_target = float(params.get("riser_mm") or 150.0)
+    riser_count = int(params.get("riser_count") or 0)
+    if riser_count > 0:
+        total = riser_count
+    else:
+        total = int(math.ceil(storey_mm / riser_target - 1e-9))
+    total = max(total, flights)
+    base = total // flights
+    extra = total - base * flights
+    counts = [base + (1 if i < extra else 0) for i in range(flights)]
+    return total, storey_mm / total, counts
+
+
+def _plan_circular_stair(ring, z, mark, params, storey_mm):
+    """One spiral flight around the bay's centre, sized by the dialog numbers."""
+    tread = float(params.get("tread_mm") or 300.0)
+    width = float(params.get("run_width_mm") or 1250.0)
+    if storey_mm <= 0 or tread <= 0 or width <= 0:
+        return None, "{0}: invalid inputs for a circular stair".format(mark)
+    (cx, cy), _axis, long_mm, short_mm = _oriented_extents(ring)
+    outer_mm = min(long_mm, short_mm) * _MM / 2.0
+    if outer_mm <= width:
+        return None, ("{0}: bay {1} mm across cannot hold a {2} mm wide spiral"
+                      .format(mark, int(min(long_mm, short_mm) * _MM),
+                              int(width)))
+    risers_total, riser_mm, _counts = _riser_split(params, storey_mm, 1)
+    inner_mm = outer_mm - width
+    walk_mm = inner_mm + 300.0                    # tread measured on the walk line
+    included = (risers_total * tread) / walk_mm   # radians
+    if included > 2.0 * math.pi * 0.95:
+        included = 2.0 * math.pi * 0.95
+    spiral = {"center": (cx, cy), "radius": config.mm_to_ft(inner_mm + width / 2.0),
+              "width_mm": width, "start_angle": 0.0,
+              "included_angle": included, "clockwise": False,
+              "risers": risers_total, "tread_mm": tread}
+    plan = {"mark": mark, "z": z, "runs": [], "spiral": spiral,
+            "landing": None, "top_landing": None,
+            "risers_total": risers_total, "riser_mm": riser_mm,
+            "tread_mm": tread, "run_width_mm": width,
+            "landing_mm": float(params.get("landing_mm") or 0.0) or width,
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": SHAPE_CIRCULAR}
+    return plan, None
+
+
+def _plan_cornered_stair(ring, z, mark, params, storey_mm, shape,
+                         direction_texts=None):
+    """An L (two flights, one corner) or C (three flights, two corners) stair.
+
+    The flights hug the bay's sides counterclockwise from its lower-left
+    corner, each inset half a run width so the runs sit inside the boundary.
+    """
+    tread = float(params.get("tread_mm") or 300.0)
+    width = float(params.get("run_width_mm") or 1250.0)
+    landing = float(params.get("landing_mm") or 0.0) or width
+    if storey_mm <= 0 or tread <= 0 or width <= 0:
+        return None, "{0}: invalid inputs for an {1} stair".format(
+            mark, shape.upper())
+    flights = 2 if shape == SHAPE_L else 3
+    risers_total, riser_mm, counts = _riser_split(params, storey_mm, flights)
+    (cx, cy), (ux, uy), long_mm, short_mm = _oriented_extents(ring)
+    nx, ny = -uy, ux
+    half_long = long_mm / 2.0
+    half_short = short_mm / 2.0
+    inset = config.mm_to_ft(width / 2.0)
+
+    def at(along_ft, across_ft):
+        return (cx + ux * along_ft + nx * across_ft,
+                cy + uy * along_ft + ny * across_ft)
+
+    # flight 1 runs along the long axis on the near side, flight 2 up the far
+    # short side, flight 3 (C only) back along the long axis on the far side
+    corner_a = half_long - config.mm_to_ft(landing)
+    corner_b = half_short - config.mm_to_ft(landing)
+    legs = [
+        (at(-half_long + inset, -half_short + inset), at(corner_a, -half_short + inset)),
+        (at(half_long - inset, -half_short + inset), at(half_long - inset, corner_b)),
+        (at(half_long - inset, half_short - inset), at(-corner_a, half_short - inset)),
+    ][:flights]
+    runs = []
+    note = None
+    for (start, end), risers in zip(legs, counts):
+        span_mm = math.hypot(end[0] - start[0], end[1] - start[1]) * _MM
+        needed = risers * tread
+        if needed > span_mm + 1.0:
+            note = ("{0}: {1} stair needs {2} mm per flight but the bay gives "
+                    "{3} mm -- flights trimmed".format(mark, shape.upper(),
+                                                       int(needed),
+                                                       int(span_mm)))
+            scale = span_mm / needed if needed else 1.0
+            end = (start[0] + (end[0] - start[0]) * scale,
+                   start[1] + (end[1] - start[1]) * scale)
+        else:
+            length_ft = config.mm_to_ft(needed)
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            total = math.hypot(dx, dy)
+            if total > 0:
+                end = (start[0] + dx / total * length_ft,
+                       start[1] + dy / total * length_ft)
+        runs.append({"start": start, "end": end, "risers": risers,
+                     "width_mm": width})
+    plan = {"mark": mark, "z": z, "runs": runs, "landing": None,
+            "top_landing": _arrival_landing(runs, landing),
+            "risers_total": risers_total, "riser_mm": riser_mm,
+            "tread_mm": tread, "run_width_mm": width, "landing_mm": landing,
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": shape}
+    return plan, note
+
+
+def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None,
+                      single_flight=False):
     """One dog-leg stair plan inside `ring`, or (None, note) when it cannot fit.
 
     params (mm): riser_mm (target MAX riser height), tread_mm (tread depth),
@@ -178,8 +256,11 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
     if risers_total < 2:
         risers_total = 2
     riser_actual = storey_mm / risers_total
-    run1_risers = int(math.ceil(risers_total / 2.0))
-    run2_risers = risers_total - run1_risers
+    if single_flight:
+        run1_risers, run2_risers = risers_total, 0
+    else:
+        run1_risers = int(math.ceil(risers_total / 2.0))
+        run2_risers = risers_total - run1_risers
 
     (cx, cy), (ux, uy), long_mm, short_mm = _oriented_extents(ring)
     long_mm *= _MM
@@ -216,9 +297,13 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
     lu = landing / _MM                                # landing depth, ft
     wu = width / _MM                                  # run width, ft
     far_u = long_mm / _MM / 2.0                       # centre -> either end
-    # run centrelines sit half a width off the bay's centreline, each side
-    off1, off2 = wu / 2.0 + (short_mm / _MM - 2.0 * wu) / 2.0, -(
-        wu / 2.0 + (short_mm / _MM - 2.0 * wu) / 2.0)
+    # The two flights sit SIDE BY SIDE and centred across the bay, so both keep
+    # the run width the dialog asked for and the landing spans exactly the pair.
+    # (Pushing them out to the bay's edges instead stretched the stair to
+    # whatever the drawn outline happened to be and left the landing adrift.)
+    off1, off2 = wu / 2.0, -wu / 2.0
+    if single_flight:
+        off1 = off2 = 0.0
     # both runs anchor at the landing edge (axis coordinate far_u - lu from the
     # centre): run1 climbs INTO it, run2 leaves it climbing back -- a 180 turn
     def _at(s, off):
@@ -236,84 +321,44 @@ def plan_dogleg_stair(ring, z, mark, params, storey_mm, direction_texts=None):
             start, end = _at(turn_u, off), _at(turn_u - length_u, off)
         runs.append({"start": start, "end": end, "risers": risers,
                      "width_mm": width})
-    lc = (cx + ax * (far_u - lu / 2.0), cy + ay * (far_u - lu / 2.0))
-    landing_ring = [
-        (lc[0] - ax * lu / 2.0 + nx * short_mm / _MM / 2.0,
-         lc[1] - ay * lu / 2.0 + ny * short_mm / _MM / 2.0),
-        (lc[0] + ax * lu / 2.0 + nx * short_mm / _MM / 2.0,
-         lc[1] + ay * lu / 2.0 + ny * short_mm / _MM / 2.0),
-        (lc[0] + ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
-         lc[1] + ay * lu / 2.0 - ny * short_mm / _MM / 2.0),
-        (lc[0] - ax * lu / 2.0 - nx * short_mm / _MM / 2.0,
-         lc[1] - ay * lu / 2.0 - ny * short_mm / _MM / 2.0)]
+    # the HALF landing fills the turn: from the last riser to the bay end,
+    # spanning both flights (their outer edges), never the whole drawn bay
+    half_span = (wu if not single_flight else wu / 2.0)
+    landing_ring = None
+    if not single_flight:
+        landing_ring = [
+            (_at(turn_u, 0.0)[0] + nx * half_span,
+             _at(turn_u, 0.0)[1] + ny * half_span),
+            (_at(turn_u + lu, 0.0)[0] + nx * half_span,
+             _at(turn_u + lu, 0.0)[1] + ny * half_span),
+            (_at(turn_u + lu, 0.0)[0] - nx * half_span,
+             _at(turn_u + lu, 0.0)[1] - ny * half_span),
+            (_at(turn_u, 0.0)[0] - nx * half_span,
+             _at(turn_u, 0.0)[1] - ny * half_span)]
     plan = {"mark": mark, "z": z, "runs": runs, "landing": landing_ring,
             "top_landing": _arrival_landing(runs, landing),
             "risers_total": risers_total, "riser_mm": riser_actual,
             "tread_mm": tread, "run_width_mm": width, "landing_mm": landing,
-            "waist_mm": float(params.get("waist_mm") or 0.0)}
+            "waist_mm": float(params.get("waist_mm") or 0.0),
+            "shape": SHAPE_STRAIGHT if single_flight else SHAPE_U}
     return plan, note
 
 
-_ARRIVAL_MERGE_GAP_MM = 800.0   # runs this close across = one shared arrival slab
 
 
-def _arrival_landing(runs, depth_mm):
-    """The ARRIVAL landing: a rectangle continuing past the last run's top end
-    (the drawn plans show it; Revit's automatic landing only fills the turn).
-
-    Width: in a U stair the arrival platform spans BOTH flights like the half
-    landing does, so every run parallel to the last one and lying within
-    _ARRIVAL_MERGE_GAP_MM across joins the slab's width. A winding stair's
-    opposite flight sits across the WELL (a bigger gap), so there the slab
-    stays one run wide."""
-    if not runs:
-        return None
-    last = runs[-1]
-    (sx, sy), (ex, ey) = last["start"], last["end"]
-    length = math.hypot(ex - sx, ey - sy)
-    if length <= 0:
-        return None
-    ax, ay = (ex - sx) / length, (ey - sy) / length
-    nx, ny = -ay, ax
-    gap_ft = config.mm_to_ft(_ARRIVAL_MERGE_GAP_MM)
-    intervals = []
-    for run in runs:
-        (qsx, qsy), (qex, qey) = run["start"], run["end"]
-        qlen = math.hypot(qex - qsx, qey - qsy)
-        if qlen <= 0:
-            continue
-        qax, qay = (qex - qsx) / qlen, (qey - qsy) / qlen
-        if abs(qax * ay - qay * ax) > 0.17:
-            continue                    # not parallel to the last run
-        mid_off = ((qsx + qex) / 2.0) * nx + ((qsy + qey) / 2.0) * ny
-        hw = (run["width_mm"] / _MM) / 2.0
-        intervals.append((mid_off - hw, mid_off + hw))
-    last_off = ((sx + ex) / 2.0) * nx + ((sy + ey) / 2.0) * ny
-    hw_last = (last["width_mm"] / _MM) / 2.0
-    lo, hi = last_off - hw_last, last_off + hw_last
-    changed = True
-    while changed:
-        changed = False
-        for a, b in intervals:
-            if a - gap_ft <= hi and lo - gap_ft <= b and (a < lo or b > hi):
-                lo, hi = min(lo, a), max(hi, b)
-                changed = True
-    du = depth_mm / _MM
-    return [(ex + nx * (lo - last_off), ey + ny * (lo - last_off)),
-            (ex + ax * du + nx * (lo - last_off),
-             ey + ay * du + ny * (lo - last_off)),
-            (ex + ax * du + nx * (hi - last_off),
-             ey + ay * du + ny * (hi - last_off)),
-            (ex + nx * (hi - last_off), ey + ny * (hi - last_off))]
 
 
-# ------------------------------------------------------- option 2: stair linework
-_RISER_ANGLE_TOL = math.radians(3.0)
-_RISER_MIN_LINES = 3          # fewer parallel lines than this is not a flight
-_TREAD_MIN_MM = 150.0         # drawn riser spacing accepted as a tread
-_TREAD_MAX_MM = 500.0
-_CLUSTER_GAP_MM = 2000.0      # stair pieces closer than this belong together
-_POSITION_DEDUPE_MM = 10.0    # the same riser drawn per-run appears twice
+
+
+
+
+
+
+
+
+
+
+_MIN_STAIR_SPAN_MM = 1500.0   # a smaller cluster is an arrow/annotation glyph
 
 
 def _stair_lines(records):
@@ -359,92 +404,30 @@ def _cluster_lines(lines, gap_ft):
     return list(groups.values())
 
 
-def _riser_runs(lines):
-    """RUNS from one stair's linework, EVERY direction considered.
 
-    Riser lines bucket by direction; within a bucket, same-length lines whose
-    ACROSS spans overlap belong to the same run; each run's riser positions
-    (deduped -- the shared riser between adjacent panels is drawn once per
-    panel) must be >= 3 and equidistant within tread limits. A dog-leg keeps
-    one direction; a SQUARE stair (four flights around a well, Project1)
-    contributes runs from two perpendicular directions.
 
-    Returns [{"axis", "normal", "positions", "span_lo", "span_hi", "center"}]
-    -- axis is the unit vector positions are measured along, normal the riser
-    direction spans are measured along.
-    """
-    buckets = defaultdict(list)
-    for a, b in lines:
-        ang = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
-        key = int(round(ang / _RISER_ANGLE_TOL))
-        buckets[key].append((a, b))
-    runs = []
-    dedupe_ft = config.mm_to_ft(_POSITION_DEDUPE_MM)
-    for _key, bucket in sorted(buckets.items()):
-        if len(bucket) < _RISER_MIN_LINES:
-            continue
-        # risers are same-length; a boundary line in the same direction (the
-        # drawn landing edge, twice their length) would BRIDGE the run groups
-        lengths = sorted(_dist(a, b) for a, b in bucket)
-        median_len = lengths[len(lengths) // 2]
-        bucket = [(a, b) for a, b in bucket
-                  if 0.6 * median_len <= _dist(a, b) <= 1.4 * median_len]
-        if len(bucket) < _RISER_MIN_LINES:
-            continue
-        a0, b0 = bucket[0]
-        ang = math.atan2(b0[1] - a0[1], b0[0] - a0[0]) % math.pi
-        dx, dy = math.cos(ang), math.sin(ang)      # along a riser line
-        px, py = -dy, dx                           # the run axis
-        items = []
-        for a, b in bucket:
-            pos = ((a[0] + b[0]) / 2.0) * px + ((a[1] + b[1]) / 2.0) * py
-            lo = min(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
-            hi = max(a[0] * dx + a[1] * dy, b[0] * dx + b[1] * dy)
-            items.append((pos, lo, hi))
-        parent = list(range(len(items)))
 
-        def find(i):
-            while parent[i] != i:
-                parent[i] = parent[parent[i]]
-                i = parent[i]
-            return i
 
-        for i in range(len(items)):
-            for j in range(i + 1, len(items)):
-                lo = max(items[i][1], items[j][1])
-                hi = min(items[i][2], items[j][2])
-                shorter = min(items[i][2] - items[i][1],
-                              items[j][2] - items[j][1])
-                if shorter > 0 and (hi - lo) > 0.3 * shorter:
-                    parent[find(i)] = find(j)
-        grouped = defaultdict(list)
-        for i in range(len(items)):
-            grouped[find(i)].append(items[i])
-        stray_ft = config.mm_to_ft(_TREAD_MIN_MM * 0.9)
-        for group in grouped.values():
-            positions = []
-            for pos, _lo, _hi in sorted(group):
-                # closer than a tread = the per-panel duplicate of the same
-                # riser, or a stray near-parallel line -- one position only
-                if not positions or pos - positions[-1] > stray_ft:
-                    positions.append(pos)
-            if len(positions) < _RISER_MIN_LINES:
-                continue
-            gaps = [(positions[i + 1] - positions[i]) * _MM
-                    for i in range(len(positions) - 1)]
-            if min(gaps) < _TREAD_MIN_MM or max(gaps) > _TREAD_MAX_MM:
-                continue
-            if max(gaps) - min(gaps) > 60.0:
-                continue                # not equidistant: boundary, not risers
-            lo = min(g[1] for g in group)
-            hi = max(g[2] for g in group)
-            mid_pos = (positions[0] + positions[-1]) / 2.0
-            mid_off = (lo + hi) / 2.0
-            runs.append({"axis": (px, py), "normal": (dx, dy),
-                         "positions": positions, "span_lo": lo, "span_hi": hi,
-                         "center": (px * mid_pos + dx * mid_off,
-                                    py * mid_pos + dy * mid_off)})
-    return runs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def _dogleg_run_dicts(runs, cluster, params):
@@ -477,12 +460,43 @@ def _dogleg_run_dicts(runs, cluster, params):
             start_s, end_s = far_s, near_s      # climbs INTO the landing
         else:
             start_s, end_s = near_s, far_s      # climbs OUT of it
-        run_dicts.append({
+        run_dicts.append(_with_drawn_risers({
             "start": (px * start_s + dxn * off, py * start_s + dyn * off),
             "end": (px * end_s + dxn * off, py * end_s + dyn * off),
             "risers": len(run["positions"]),
-            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM}, run))
     return run_dicts, landing_mm
+
+
+def _with_drawn_risers(run_dict, run):
+    """Carry a FANNED run's drawn riser lines onto its run dict.
+
+    A winder's risers are not perpendicular to the walk line, so the builder
+    cannot rebuild them from start/end -- it sketches the run from these exact
+    lines instead. Ordered along the climb and oriented consistently (first
+    point on the same side of the walk line throughout) so the two boundary
+    chains come straight off them.
+    """
+    if not run.get("fanned") or not run.get("riser_lines"):
+        return run_dict
+    sx, sy = run_dict["start"]
+    ex, ey = run_dict["end"]
+    length = math.hypot(ex - sx, ey - sy)
+    if length <= 0:
+        return run_dict
+    ux, uy = (ex - sx) / length, (ey - sy) / length
+    ordered = []
+    for a, b in run["riser_lines"]:
+        # first point to the LEFT of the climb direction, always the same side
+        if (-(a[0] - sx) * uy + (a[1] - sy) * ux) < (-(b[0] - sx) * uy
+                                                     + (b[1] - sy) * ux):
+            a, b = b, a
+        mid = ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0)
+        ordered.append(((mid[0] - sx) * ux + (mid[1] - sy) * uy, a, b))
+    ordered.sort()
+    run_dict["riser_lines"] = [(a, b) for _t, a, b in ordered]
+    run_dict["fanned"] = True
+    return run_dict
 
 
 def _winding_run_dicts(runs, params):
@@ -512,169 +526,26 @@ def _winding_run_dicts(runs, params):
             start_s, end_s = s0, s1
         else:
             start_s, end_s = s1, s0
-        run_dicts.append({
+        run_dicts.append(_with_drawn_risers({
             "start": (apx * start_s + nx * off, apy * start_s + ny * off),
             "end": (apx * end_s + nx * off, apy * end_s + ny * off),
             "risers": len(run["positions"]),
-            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM})
+            "width_mm": (run["span_hi"] - run["span_lo"]) * _MM}, run))
     width_mm = min(r["width_mm"] for r in run_dicts)
     landing_mm = float(params.get("landing_mm") or 0.0) or width_mm
     return run_dicts, landing_mm
 
 
-_SPIRAL_MIN_LINES = 5          # radial risers needed to call a stair circular
-_SPIRAL_CENTER_TOL = 0.20      # extension must pass within 20% of riser length
-_WINDER_REACH = 1.6            # corner leftovers within reach x width join it
 
 
-def _spiral_run(cluster):
-    """A CIRCULAR stair: riser lines RADIATE from a common centre.
-
-    Every line's extension must pass near one point and the endpoint distances
-    must form a consistent radial band. Returns {"center", "radius" (mid),
-    "width_mm", "start_angle", "included_angle", "clockwise", "risers",
-    "tread_mm"} or None.
-    """
-    if len(cluster) < _SPIRAL_MIN_LINES:
-        return None
-    # candidate centre: intersect the first line with the most-perpendicular one
-    inter = []
-    n = len(cluster)
-    for i in range(n):
-        a1, b1 = cluster[i]
-        d1 = (b1[0] - a1[0], b1[1] - a1[1])
-        for j in range(i + 1, n):
-            a2, b2 = cluster[j]
-            d2 = (b2[0] - a2[0], b2[1] - a2[1])
-            den = d1[0] * d2[1] - d1[1] * d2[0]
-            L1 = math.hypot(*d1)
-            L2 = math.hypot(*d2)
-            if L1 <= 0 or L2 <= 0 or abs(den) < 0.3 * L1 * L2:
-                continue                     # near-parallel: unstable crossing
-            t = ((a2[0] - a1[0]) * d2[1] - (a2[1] - a1[1]) * d2[0]) / den
-            inter.append((a1[0] + d1[0] * t, a1[1] + d1[1] * t))
-    if len(inter) < 3:
-        return None
-    cx = sorted(p[0] for p in inter)[len(inter) // 2]
-    cy = sorted(p[1] for p in inter)[len(inter) // 2]
-    lengths = sorted(_dist(a, b) for a, b in cluster)
-    median_len = lengths[len(lengths) // 2]
-    angles = []
-    r_in = []
-    r_out = []
-    for a, b in cluster:
-        dxl, dyl = b[0] - a[0], b[1] - a[1]
-        L = math.hypot(dxl, dyl)
-        if L <= 0:
-            return None
-        # distance from the centre to the infinite line
-        off = abs((a[0] - cx) * dyl - (a[1] - cy) * dxl) / L
-        if off > _SPIRAL_CENTER_TOL * median_len:
-            return None                      # not radial: not a circular stair
-        ra = math.hypot(a[0] - cx, a[1] - cy)
-        rb = math.hypot(b[0] - cx, b[1] - cy)
-        r_in.append(min(ra, rb))
-        r_out.append(max(ra, rb))
-        mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
-        angles.append(math.atan2(my - cy, mx - cx))
-    r_lo = sorted(r_in)[len(r_in) // 2]
-    r_hi = sorted(r_out)[len(r_out) // 2]
-    if (r_hi - r_lo) < 0.5 * median_len:
-        return None
-    # order angularly; the largest gap separates the flight from empty air
-    order = sorted(range(len(angles)), key=lambda i: angles[i])
-    sorted_angles = [angles[i] for i in order]
-    gaps = [(sorted_angles[(i + 1) % len(sorted_angles)] - sorted_angles[i])
-            % (2.0 * math.pi) for i in range(len(sorted_angles))]
-    cut = max(range(len(gaps)), key=lambda i: gaps[i])
-    seq = [sorted_angles[(cut + 1 + i) % len(sorted_angles)]
-           for i in range(len(sorted_angles))]
-    unwrapped = [seq[0]]
-    for ang in seq[1:]:
-        step = (ang - unwrapped[-1]) % (2.0 * math.pi)
-        unwrapped.append(unwrapped[-1] + step)
-    included = unwrapped[-1] - unwrapped[0]
-    if included <= 0 or included > 2.0 * math.pi * 0.999:
-        return None
-    mid_r = (r_lo + r_hi) / 2.0
-    # tread depth convention for a spiral: measured on the WALK LINE, 300mm
-    # off the inner edge -- the mid radius over-reads wide flights
-    walk_r = r_lo + config.mm_to_ft(300.0)
-    tread_mm = (included / max(1, len(unwrapped) - 1)) * walk_r * _MM
-    if tread_mm < _TREAD_MIN_MM or tread_mm > _TREAD_MAX_MM:
-        return None
-    return {"center": (cx, cy), "radius": mid_r,
-            "width_mm": (r_hi - r_lo) * _MM,
-            "start_angle": unwrapped[0], "included_angle": included,
-            "clockwise": False, "risers": len(unwrapped),
-            "tread_mm": tread_mm}
 
 
-def _winder_corners(cluster, runs, run_dicts):
-    """ANGLED risers in a turn (a winder corner instead of a flat landing).
 
-    Leftover riser-length lines that sit in the corner between two consecutive
-    flights and point BETWEEN their riser directions are the drawn winders.
-    Returns [{"after_run": i, "riser_lines": [((x1,y1),(x2,y2)), ...]}].
-    """
-    if len(run_dicts) < 2 or not runs:
-        return []
-    lengths = sorted((r["span_hi"] - r["span_lo"]) for r in runs)
-    median_w = lengths[len(lengths) // 2]
-    used = []
-    for run in runs:
-        px, py = run["axis"]
-        for pos in run["positions"]:
-            used.append((run, pos))
 
-    def in_a_run(a, b):
-        mx, my = (a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0
-        ang_line = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
-        for run in runs:
-            nx, ny = run["normal"]
-            ang_norm = math.atan2(ny, nx) % math.pi
-            dang = abs(ang_line - ang_norm) % math.pi
-            if min(dang, math.pi - dang) > 0.1:
-                continue
-            px, py = run["axis"]
-            pos = mx * px + my * py
-            if any(abs(pos - q) * _MM < 15.0 for q in run["positions"]):
-                return True
-        return False
 
-    def angled(a, b):
-        # a WINDER riser points BETWEEN the flights: a leftover parallel to a
-        # flight's risers (a stray) or to its axis (a landing boundary) is not
-        ang_line = math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
-        for run in runs:
-            for vx, vy in (run["normal"], run["axis"]):
-                ang_v = math.atan2(vy, vx) % math.pi
-                dang = abs(ang_line - ang_v) % math.pi
-                if min(dang, math.pi - dang) < 0.12:
-                    return False
-        return True
 
-    leftovers = [(a, b) for a, b in cluster
-                 if 0.6 * median_w <= _dist(a, b) <= 1.4 * median_w
-                 and not in_a_run(a, b) and angled(a, b)]
-    if not leftovers:
-        return []
-    out = []
-    reach = median_w * _WINDER_REACH
-    inside = median_w * 1.1        # a winder stays IN the corner square; a
-    #                                break-line diagonal shoots past it
-    for i in range(len(run_dicts) - 1):
-        ex, ey = run_dicts[i]["end"]
-        sx, sy = run_dicts[i + 1]["start"]
-        cx, cy = (ex + sx) / 2.0, (ey + sy) / 2.0
-        fan = [(a, b) for a, b in leftovers
-               if math.hypot((a[0] + b[0]) / 2.0 - cx,
-                             (a[1] + b[1]) / 2.0 - cy) <= reach
-               and math.hypot(a[0] - cx, a[1] - cy) <= inside
-               and math.hypot(b[0] - cx, b[1] - cy) <= inside]
-        if fan:
-            out.append({"after_run": i, "riser_lines": fan})
-    return out
+
+
 
 
 def stair_plans_from_linework(records, params, storey_mm, texts=None):
@@ -693,13 +564,15 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
     plans = []
     notes = []
     for index, cluster in enumerate(
-            _cluster_lines(lines, config.mm_to_ft(_CLUSTER_GAP_MM)), start=1):
+            _cluster_lines(lines, config.mm_to_ft(tol._CLUSTER_GAP_MM)), start=1):
         spiral = _spiral_run(cluster)
         if spiral:
             risers_total = spiral["risers"]
             plans.append({
                 "mark": "ST-{0}".format(index), "z": z, "runs": [],
-                "spiral": spiral, "landing": None, "top_landing": None,
+                "spiral": spiral, "landing": None,
+                "top_landing": _spiral_top_landing(
+                    spiral, float(params.get("landing_mm") or 0.0)),
                 "risers_total": risers_total,
                 "riser_mm": (storey_mm / risers_total if storey_mm > 0
                              else 0.0),
@@ -712,9 +585,14 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
             continue
         runs = _riser_runs(cluster)
         if not runs:
-            notes.append("stair linework cluster {0}: no riser lines "
-                         "(need >= {1} parallel equidistant lines)".format(
-                             index, _RISER_MIN_LINES))
+            xs = [q[0] for a, b in cluster for q in (a, b)]
+            ys = [q[1] for a, b in cluster for q in (a, b)]
+            span_mm = max(max(xs) - min(xs), max(ys) - min(ys)) * _MM
+            if span_mm >= _MIN_STAIR_SPAN_MM:
+                notes.append("stair linework cluster {0} at ({1:.0f}, {2:.0f}) mm: "
+                             "no riser lines (need >= {3} parallel equidistant "
+                             "lines)".format(index, min(xs) * _MM, min(ys) * _MM,
+                                             _RISER_MIN_LINES))
             continue
         axes_differ = any(
             abs(r["axis"][0] * runs[0]["axis"][1] -
@@ -752,6 +630,7 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
                 best_d, mark = d, tmark
         plans.append({"mark": mark, "z": z, "runs": run_dicts,
                       "landing": None, "winders": winders,
+                      "bridge_landings": _bridge_landings(run_dicts),
                       "top_landing": _arrival_landing(run_dicts, landing_mm),
                       "risers_total": risers_total,
                       "riser_mm": riser_mm, "tread_mm": tread_mm,
@@ -762,35 +641,81 @@ def stair_plans_from_linework(records, params, storey_mm, texts=None):
 
 
 def plan_stairs(records, beam_segments, column_rects, texts, params, storey_mm,
-                source="auto"):
-    """The staircase chain (user's two options + explicit toggle):
+                source="auto", regions=None):
+    """The staircase chain (drawn linework, plan text, or a picked region):
 
     source="auto"     -- drawn stair LINEWORK when the plan has any, else the
-                         TEXT + dialog-numbers dog-leg (the default chain);
-    source="linework" -- option 2 only (drawn riser lines drive the layout);
-    source="text"     -- option 1 only (generic dog-leg in the bay holding a
-                         STAIRCASE / ST-n note, sized by the dialog numbers).
+                         TEXT + dialog-numbers layout (the default chain);
+    source="linework" -- drawn riser lines drive the layout, nothing else;
+    source="text"     -- the generic SHAPE from the dialog, laid inside the bay
+                         holding a STAIRCASE / ST-n note;
+    source="region"   -- the generic SHAPE laid inside `regions`, the
+                         rectangles the user drew in the Revit view.
 
-    Returns (plans, notes). Every skipped stair leaves a human-readable note so
-    the console says WHY a source produced no stair.
+    `params["shape"]` picks the generic shape (STAIR_SHAPES); it is ignored
+    when the layout comes from drawn linework. Returns (plans, notes) -- every
+    skipped stair leaves a human-readable note so the console says WHY.
     """
     plans = []
     notes = []
+    shape = (params.get("shape") or SHAPE_U).lower()
+    if shape not in STAIR_SHAPES:
+        notes.append("unknown stair shape '{0}' -- using U".format(shape))
+        shape = SHAPE_U
+    direction_texts = find_direction_texts(texts or [])
+
+    if source == "region":
+        if not regions:
+            return [], ["no region picked in the Revit view"]
+        for index, ring in enumerate(regions, start=1):
+            plan, note = plan_shaped_stair(ring, 0.0, "ST-{0}".format(index),
+                                           params, storey_mm,
+                                           direction_texts=direction_texts,
+                                           shape=shape)
+            if note:
+                notes.append(note)
+            if plan:
+                plan["source"] = "picked_region"
+                plans.append(plan)
+        return notch_landings(plans, column_rects), notes
+
     if source in ("auto", "linework"):
         plans, notes = stair_plans_from_linework(records, params, storey_mm,
                                                  texts=texts)
         if plans or source == "linework":
-            return plans, notes
+            return notch_landings(plans, column_rects), notes
     areas, area_notes = stair_areas_from_texts(records, beam_segments,
                                                column_rects, texts)
     notes += area_notes
-    direction_texts = find_direction_texts(texts)
     for ring, z, mark in areas:
-        plan, note = plan_dogleg_stair(ring, z, mark, params, storey_mm,
-                                       direction_texts=direction_texts)
+        plan, note = plan_shaped_stair(ring, z, mark, params, storey_mm,
+                                       direction_texts=direction_texts,
+                                       shape=shape)
         if note:
             notes.append(note)
         if plan:
             plan["source"] = "stair_text"
             plans.append(plan)
-    return plans, notes
+    return notch_landings(plans, column_rects), notes
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# The tunables live in stair_tolerances so every module that reads them sees the
+# same values; re-exported here because the pushbutton has always called
+# stair_layout.apply_tolerances().
+from .stair_tolerances import apply_tolerances          # noqa: E402,F401

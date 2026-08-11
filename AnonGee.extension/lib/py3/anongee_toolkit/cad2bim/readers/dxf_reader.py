@@ -124,6 +124,10 @@ def _geometry_record(entity, dxftype):
     if dxftype == "CIRCLE":
         # 3 points (0/120/240 deg) reconstruct the exact circle downstream.
         return CurveRecord("arc", _circle_points(entity), layer, None)
+    if dxftype == "POINT":
+        # A bare POINT carries no shape, but it IS the marker convention for a
+        # plan's origin in a multi-storey sheet -- keep it as a 1-point record.
+        return CurveRecord("point", [_xyz(entity.dxf.location)], layer, None)
     if dxftype == "LWPOLYLINE":
         return CurveRecord("polyline", _lwpolyline_points(entity), layer, None)
     if dxftype == "POLYLINE":

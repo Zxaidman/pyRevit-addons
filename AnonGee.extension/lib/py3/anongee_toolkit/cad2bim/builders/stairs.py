@@ -26,6 +26,7 @@ from Autodesk.Revit.DB.Architecture import (Railing, StairsLanding,
 
 from .. import config
 from ..compat import get_element_name
+from .. import naming
 from . import txn_failures
 
 _MM = config.MM_PER_FT
@@ -51,8 +52,8 @@ def _stairs_type_id(doc, plan, base_type_id=None):
     if base is None:
         return None
     waist_mm = float(plan.get("waist_mm") or 0.0)
-    name = "cad2bim {0:.0f}R x {1:.0f}T x {2:.0f}W x {3:.0f}wst".format(
-        plan["riser_mm"], plan["tread_mm"], plan["run_width_mm"], waist_mm)
+    name = naming.stair_type_name(plan["riser_mm"], plan["tread_mm"],
+                                  plan["run_width_mm"], waist_mm)
     for existing in FilteredElementCollector(doc).OfClass(type(base)):
         try:
             if existing.get_Parameter(
@@ -106,7 +107,7 @@ def _apply_waist(doc, stairs_type, waist_mm):
             member = doc.GetElement(member_param.AsElementId())
             if member is None:
                 continue
-            dup_name = "cad2bim waist {0:.0f}".format(waist_mm)
+            dup_name = naming.stair_waist_type_name(waist_mm)
             dup = None
             for existing in FilteredElementCollector(doc).OfClass(type(member)):
                 try:
@@ -215,9 +216,20 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                     continue
                 z = base_level.Elevation + storey_ft * (
                     float(risers_done) / risers_total)
-                line = Line.CreateBound(XYZ(sx, sy, z), XYZ(ex, ey, z))
-                stairs_run = StairsRun.CreateStraightRun(
-                    doc, stairs_id, line, StairsRunJustification.Center)
+                stairs_run = None
+                if run.get("fanned") and run.get("riser_lines"):
+                    # ANGLED risers: a straight run would square them off, so
+                    # the flight is SKETCHED from the lines the drawing carries
+                    try:
+                        stairs_run = _create_fanned_run(doc, stairs_id, z, run)
+                    except Exception as fan_error:
+                        result["skipped"].append(
+                            "{0}: angled risers fell back to a straight run "
+                            "({1})".format(mark, str(fan_error)[:120]))
+                if stairs_run is None:
+                    line = Line.CreateBound(XYZ(sx, sy, z), XYZ(ex, ey, z))
+                    stairs_run = StairsRun.CreateStraightRun(
+                        doc, stairs_id, line, StairsRunJustification.Center)
                 try:
                     stairs_run.ActualRunWidth = run["width_mm"] / _MM
                 except Exception:
@@ -230,8 +242,25 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             # the turn between consecutive flights: drawn WINDER risers become
             # a sketched run through the corner; otherwise Revit's automatic
             # landing fills it (dog-leg turn, winding-stair corners)
+            mid_ring = plan.get("landing")
+            bridges = plan.get("bridge_landings") or {}
             for number, (first, second) in enumerate(zip(run_ids,
                                                          run_ids[1:])):
+                # a landing that BRIDGES two drawn risers exactly: an automatic
+                # landing squares itself to the run ends and leaves a wedge of
+                # daylight against a fanned flight's angled outermost riser
+                bridge = bridges.get(number)
+                if bridge is not None and not spiral:
+                    risers_below = sum(r.get("risers") or 0
+                                       for r in runs[:number + 1])
+                    if _create_sketched_landing(
+                            doc, stairs_id, bridge,
+                            storey_ft * float(risers_below) / risers_total,
+                            base_level.Elevation):
+                        continue
+                    result["skipped"].append(
+                        "{0}: bridge landing did not sketch -- using Revit's "
+                        "automatic landing".format(mark))
                 winder = winders.get(number) if not spiral else None
                 if winder is not None:
                     try:
@@ -243,6 +272,17 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                         result["skipped"].append(
                             "{0}: winder corner fell back to a landing "
                             "({1})".format(mark, str(winder_error)[:120]))
+                if mid_ring and number == 0 and not spiral:
+                    risers_below = sum(r.get("risers") or 0
+                                       for r in runs[:number + 1])
+                    if _create_sketched_landing(
+                            doc, stairs_id, mid_ring,
+                            storey_ft * float(risers_below) / risers_total,
+                            base_level.Elevation):
+                        continue
+                    result["skipped"].append(
+                        "{0}: planned half landing did not sketch -- using "
+                        "Revit's automatic landing".format(mark))
                 try:
                     StairsLanding.CreateAutomaticLanding(doc, first, second)
                 except Exception as landing_error:
@@ -251,21 +291,11 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
                                                      str(landing_error)[:120]))
             top_ring = plan.get("top_landing")
             if top_ring and risers_done:
-                try:
-                    z_top = base_level.Elevation + storey_ft
-                    loop = CurveLoop()
-                    n = len(top_ring)
-                    for i in range(n):
-                        ax, ay = top_ring[i]
-                        bx, by = top_ring[(i + 1) % n]
-                        loop.Append(Line.CreateBound(XYZ(ax, ay, z_top),
-                                                     XYZ(bx, by, z_top)))
-                    StairsLanding.CreateSketchedLanding(doc, stairs_id, loop,
-                                                        storey_ft)
-                except Exception as landing_error:
+                if not _create_sketched_landing(doc, stairs_id, top_ring,
+                                                storey_ft,
+                                                base_level.Elevation):
                     result["skipped"].append(
-                        "{0}: top landing not created ({1})".format(
-                            mark, str(landing_error)[:120]))
+                        "{0}: top landing not created".format(mark))
             transaction.Commit()
             scope.Commit(txn_failures.WarningSwallower())
             created_stairs_ids.append(stairs_id)
@@ -285,6 +315,9 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             result["errors"].append("{0}: {1}".format(mark,
                                                       str(stair_error)[:220]))
     _delete_auto_railings(doc, created_stairs_ids, result)
+    # the Stairs elements themselves, so the caller can reach their types (the
+    # material pass writes onto types, not instances)
+    result["created_ids"] = list(created_stairs_ids)
     return result
 
 
@@ -314,6 +347,75 @@ def _delete_auto_railings(doc, stairs_ids, result):
                 transaction.RollBack()
         except Exception:
             pass
+
+
+def _create_sketched_landing(doc, stairs_id, ring, relative_elevation,
+                             base_elevation):
+    """Sketch one landing from a planned ring. True when Revit accepted it.
+
+    `relative_elevation` is measured from the stairs base, as the API requires
+    (it rounds the value to a riser multiple itself); the curve loop is drawn
+    at the matching absolute height.
+    """
+    if not ring or len(ring) < 3:
+        return False
+    try:
+        z = base_elevation + relative_elevation
+        loop = CurveLoop()
+        count = len(ring)
+        for index in range(count):
+            ax, ay = ring[index]
+            bx, by = ring[(index + 1) % count]
+            if math.hypot(bx - ax, by - ay) <= 1e-9:
+                continue
+            loop.Append(Line.CreateBound(XYZ(ax, ay, z), XYZ(bx, by, z)))
+        StairsLanding.CreateSketchedLanding(doc, stairs_id, loop,
+                                            relative_elevation)
+        return True
+    except Exception:
+        return False
+
+
+def _create_fanned_run(doc, stairs_id, bottom_elevation, run):
+    """A whole flight of ANGLED risers, sketched from the drawn lines.
+
+    A balanced winder's risers are not perpendicular to the walk line, so
+    CreateStraightRun would square them off and lose the turn. The drawn lines
+    ARE the sketch: they are the risers, the chains through their two ends are
+    the boundaries, and the chain through their midpoints is the stairs path.
+    """
+    from System.Collections.Generic import List
+    from Autodesk.Revit.DB import Curve
+    lines = run["riser_lines"]
+    if len(lines) < 2:
+        return None
+
+    def pt(p):
+        return XYZ(p[0], p[1], bottom_elevation)
+
+    def chain(points):
+        out = []
+        for first, second in zip(points, points[1:]):
+            if math.hypot(second[0] - first[0], second[1] - first[1]) > 1e-7:
+                out.append(Line.CreateBound(pt(first), pt(second)))
+        return out
+
+    left = [a for a, _b in lines]
+    right = [b for _a, b in lines]
+    mids = [((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0) for a, b in lines]
+    boundary = List[Curve]()
+    for curve in chain(left) + chain(right):
+        boundary.Add(curve)
+    risers = List[Curve]()
+    for a, b in lines:
+        risers.Add(Line.CreateBound(pt(a), pt(b)))
+    path = List[Curve]()
+    for curve in chain(mids):
+        path.Add(curve)
+    if boundary.Count < 2 or path.Count < 1:
+        return None
+    return StairsRun.CreateSketchedRun(doc, stairs_id, bottom_elevation,
+                                       boundary, risers, path)
 
 
 def _create_winder_run(doc, stairs_id, base_level, storey_ft, risers_total,

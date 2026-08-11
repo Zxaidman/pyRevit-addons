@@ -1114,8 +1114,17 @@ from Autodesk.Revit.DB import Transaction
 from Autodesk.Revit.UI import IExternalEventHandler, ExternalEvent
 
 class ApplyHandler(IExternalEventHandler):
-    def __init__(self):
-        self.data = {}          # shared state: set from WPF thread, read on Revit thread
+    # __namespace__ is REQUIRED by Python.NET 3 to build a real derived CLR
+    # type from a .NET interface (§12.8.7.1). Without it, ApplyHandler()
+    # routes to the interface's one-arg cast and raises
+    # "TypeError: interface takes exactly one argument".
+    __namespace__ = "AnonGee"
+
+    # Deliberately NO __init__ — a custom constructor on a .NET interface
+    # subclass trips the same pythonnet interface __new__ trap (§12.8.7.1).
+    # Use class-attribute defaults; per-instance state is set after
+    # construction in the entry point.
+    data = {}   # shared state: set from WPF thread, read on Revit thread
 
     def Execute(self, app):
         doc = app.ActiveUIDocument.Document
@@ -1132,7 +1141,8 @@ class ApplyHandler(IExternalEventHandler):
         return "AnonGee_ApplyHandler"
 
 # --- entry point ---
-handler   = ApplyHandler()
+handler = ApplyHandler()
+handler.data = {}   # per-instance state (no __init__ — see §12.8.7.1)
 ext_event = ExternalEvent.Create(handler)
 
 dialog = MyDialog(ext_event, handler)
@@ -1200,6 +1210,125 @@ Avoid complex locks for simple scalar/list assignments — Python's GIL protects
 ### 12.8.6 Validated rollout strategy
 
 > Test modeless on ONE tool first. If the `IExternalEventHandler` bridge works correctly in the target Revit + pyRevit version, port remaining tools. If it fails (e.g., `ExternalEvent.Create()` returns null or `Raise()` is silently dropped), fall back to modal (`ShowDialog()`).
+>
+> **Validated July 2026:** the pattern now ships in two reference implementations — `Dev.panel/Modeless.pushbutton` (trimmed reference) and `Advance.panel/FilterParameter.splitbutton/OneFilterParameter.pushbutton` (full modal→modeless conversion, feature-complete). Both require the §12.8.7 rules; a naive `ShowDialog()` → `Show()` swap that skips them will crash.
+
+### 12.8.7 Modal → modeless conversion — validated rules (July 2026)
+
+Rules distilled from converting **OneFilterParameter** (a full feature tool: category picker, parameter filter, live DataGrid preview, batch transaction edit) and the **Dev Modeless** reference from modal to modeless. Convert a modal tool by following these in order — the order matters (1 → 3 are launch blockers, 4–6 are lifecycle requirements that fail silently).
+
+#### 1. Python.NET 3 interface traps — the three launch blockers
+
+A Python class that subclasses .NET/Revit interfaces (`IExternalEventHandler`, `IFailuresPreprocessor`, …) fails **at instantiation** unless all three rules are met:
+
+| # | Rule | Failure without it |
+|---|---|---|
+| 1 | Add `__namespace__ = "AnonGee"` to the class | `TypeError: interface takes exactly one argument` — pythonnet routes `MyHandler()` to the interface's one-arg cast instead of building a real derived CLR type |
+| 2 | **No `__init__`** on the interface subclass | Same `TypeError` — a custom constructor trips pythonnet's interface `__new__` path even *with* `__namespace__` |
+| 3 | Define the class **exactly once per Revit session** | `Duplicate type name within an assembly` on the **2nd press** — pythonnet emits the `__namespace__` class as a real CLR type, and the persistent engine re-runs the `class` statement on the next press, re-emitting the same type name |
+
+Use class-attribute defaults (`data = {}`, `app = None`) and reset per-instance state after construction in `run()`:
+
+```python
+class MyHandler(IExternalEventHandler):
+    __namespace__ = "AnonGee"     # REQUIRED (rule 1)
+    data = {}                     # per-instance state dict (rebound in run())
+    app = None
+
+    def Execute(self, app):
+        ...
+    def GetName(self):
+        return "AnonGee_MyHandler"
+
+# in run():
+handler = MyHandler()
+handler.data = {}                 # per-instance state — no __init__ (rule 2)
+```
+
+**Rule 3 is enforced by a session-state module** — the persistent engine's `sys.modules` survives between button presses, so cache the class there:
+
+```python
+_STATE_MODULE = "AnonGee_MyToolState"
+_state = sys.modules.get(_STATE_MODULE)
+if _state is None:
+    _state = types.ModuleType(_STATE_MODULE)
+    _state.handler_cls = None
+    _state.window_ref = None
+    sys.modules[_STATE_MODULE] = _state
+
+if _state.handler_cls is None:
+    class MyHandler(IExternalEventHandler): ...
+    _state.handler_cls = MyHandler
+else:
+    MyHandler = _state.handler_cls    # reuse the already-emitted CLR type
+```
+
+The same module holds the live window ref: re-pressing the button while the window is open activates the existing instance instead of stacking a duplicate.
+
+#### 2. Data marshalling — plain data only, never Revit objects
+
+Revit API objects (`Element`, `Document`, `Parameter`, …) **cannot cross threads**. Every request and every result must carry plain, serializable data:
+
+| Do | Don't |
+|---|---|
+| Send element **int ids** (from `e.Id.Value` / `IntegerValue`) | Send `Element` references |
+| Receive **str / int / float / list / dict of scalars** in results | Receive `Parameter` / `Document` objects |
+| Keep an `id → Element` map **on the handler** (Revit thread) | Resolve ids from the WPF thread |
+
+The WPF-side bound object (e.g. `PreviewItem`) stores `IdInt`, never the `Element`:
+
+```python
+class PreviewItem:
+    __slots__ = ['ElementId', 'IdInt', 'FamilyName', 'TypeName',
+                 'FilterValue', 'EditPreview', 'IsSelected', 'InFilter']
+```
+
+The handler resolves ids back to elements inside `Execute()` via its map (built when elements are loaded).
+
+#### 3. Serialized request queue — replace the single-slot dict
+
+§12.8.5's single `handler.data["request"]` slot is fine for a button-only tool, but **swallows requests in a typing-driven tool**: a debounced realtime filter (`DispatcherTimer`) can overwrite `data["request"]` before `ExternalEvent.Raise()` queues it, silently dropping a press on Apply/Execute. Use a FIFO queue — one Revit-thread request at a time, in order:
+
+```python
+def _enqueue(self, req, data, callback=None):
+    self._queue.append((req, data, callback))
+    self._pump()
+
+def _pump(self):
+    if self._busy or not self._queue:
+        return
+    self._busy = True
+    req, data, callback = self._queue.pop(0)
+    self._current_callback = callback
+    self.handler.data["request"] = req
+    self.handler.data["data"] = data
+    self.ext_event.Raise()
+
+def _on_handler_done(self):   # marshalled from Revit thread via Dispatcher
+    self._busy = False
+    cb = self._current_callback
+    self._current_callback = None
+    if cb: cb(self.handler.data.get("result") or {})
+    self._pump()
+```
+
+#### 4. WPF lifecycle — these fail silently if wrong
+
+| Lifecycle rule | Failure without it |
+|---|---|
+| `window.Show()` **then** `WindowInteropHelper.Owner` (after Show, per §12.8.3) | Window opens behind Revit |
+| Run the **initial load** (category fetch, "Ready" status) via `window.Dispatcher.BeginInvoke(...)` **after** `Show()` | Event-handler callbacks marshal onto the wrong thread; first results never arrive |
+| Create `DispatcherTimer` / `DebounceTimer` **lazily from a WPF event handler** | A timer constructed in `run()` belongs to the wrong thread and its callbacks never fire (or crash) |
+| Keep the window ref on the session-state module (§12.8.7.1) | Window GC'd when `run()` returns; re-launch stacks duplicates |
+
+#### 5. Conversion checklist (modal tool → modeless)
+
+1. Wrap **all** Revit API work in handler `Execute()` — including the `Transaction` batch edit.
+2. Replace every Revit object in UI state with an int id; build the handler-side `id → Element` map.
+3. Apply the three interface rules (§12.8.7.1) + session-state module.
+4. Replace the single-slot data dict with the serialized request queue (§12.8.7.3).
+5. Lazy-create `DispatcherTimer` on the WPF thread; queue initial load after `Show()`.
+6. Keep `ui.xaml` untouched — the modeless conversion is script-side only.
 
 ---
 
@@ -1225,6 +1354,7 @@ The CPython 3 engine is **reused across every button click in a session.** Modul
 | **Delegate / window GC** | If the only reference to a window or `+=` delegate is a local that falls out of scope, Python GCs it while .NET still calls it → callback into freed memory → crash | Keep window + handlers on `self`; **for modeless windows hold a module-level reference** or it dies the instant `run()` returns (see §12.8) |
 | **Stale module cache** | `sys.modules` persists — edited `lib\` modules don't reload between runs | Reload the engine during dev; version-bump shared modules |
 | **Global state leak** | Module-level globals survive across runs | Put all state in `run()`/`main()` — for correctness, not just style |
+| **Duplicate CLR type name** | A `__namespace__` interface subclass is emitted as a real CLR type; the persistent engine re-runs the `class` statement on the next press → `Duplicate type name within an assembly` (2nd-run crash) | Define .NET-derived classes once per session; cache the class on a session-state module held in `sys.modules` (§12.8.7.1) |
 
 ### 12.9.3 Stripped stdlib
 
@@ -1238,6 +1368,7 @@ This engine ships a **partial stdlib path** — confirmed *missing*: `csv`, `re`
 - **All logic inside `main()`/`run()`** — never heavy work at module scope (it runs at load and leaks into the persistent engine).
 - **Module-level guard** at the entry point so a logic error reports cleanly instead of leaving the engine in a half-state.
 - **Do not import pyRevit IronPython modules** (`pyrevit.revit`, `pyrevit.forms`, …) in CPython 3 (see §12.8.4).
+- **Python.NET 3 interface subclasses** (`IExternalEventHandler`, `IFailuresPreprocessor`, …) need `__namespace__`, **no `__init__`**, and a once-per-session definition cached in `sys.modules` — skipping any of the three raises `TypeError: interface takes exactly one argument` or `Duplicate type name within an assembly` (§12.8.7.1).
 
 ### 12.9.5 Engine health-check tool
 

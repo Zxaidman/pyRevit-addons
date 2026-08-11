@@ -3,6 +3,7 @@
 
 __title__ = "Join\nPriority"
 __author__ = "AnonGee"
+__version__ = "1.2.0"
 __doc__ = """Reorders joins so higher-priority categories cut lower-priority
 ones. Highest category in the list cuts everything; lowest only gets cut.
 
@@ -11,8 +12,14 @@ ones. Highest category in the list cuts everything; lowest only gets cut.
 3. Optional: auto-join model elements that overlap the selection but
    aren't joined yet. Their categories join the list while the box is
    checked.
+4. Optional: refresh edge-to-edge joins (unjoin + rejoin) so the dashed
+   joined-edge linework displays again on stale joins.
 
-Same-category joins are left untouched in this version."""
+Same-category joins are left untouched in this version.
+
+v1.2.0 -- edge-met join refresh | v1.1.0 -- whole-model auto-join,
+dynamic category list | v1.0.0 -- category priority + in-selection
+auto-join"""
 
 import time
 
@@ -29,7 +36,7 @@ config = script.get_config()
 PROGRESS_MIN = 50    # show the progress window only for bigger runs
 MAX_FAIL_LINES = 10  # max failed pairs listed in the result dialog
 
-timings = {'detect': 0.0}
+timings = {'detect': 0.0, 'edge': 0.0}
 
 PRIORITY_XAML = """
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -53,6 +60,8 @@ PRIORITY_XAML = """
         </DockPanel>
         <CheckBox x:Name="autojoin_cb" Margin="0,12,0,0"
                   Content="Auto-join elements overlapping the selection"/>
+        <CheckBox x:Name="refresh_cb" Margin="0,8,0,0"
+                  Content="Refresh edge-to-edge joins (unjoin + rejoin)"/>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
                     Margin="0,14,0,0">
             <Button x:Name="apply_btn" Content="Apply" IsDefault="True"
@@ -84,13 +93,14 @@ RESULT_XAML = """
 
 
 class PriorityDialog(forms.WPFWindow):
-    """Reorderable category list + auto-join checkbox.
+    """Reorderable category list + auto-join / refresh checkboxes.
 
-    Checking the box runs overlap detection (once, cached) and appends
+    Checking auto-join runs overlap detection (once, cached) and appends
     the overlapping elements' categories to the list; unchecking removes
     the ones that only came from overlaps."""
 
-    def __init__(self, ordered_names, autojoin_default, detect_func):
+    def __init__(self, ordered_names, autojoin_default, refresh_default,
+                 detect_func):
         forms.WPFWindow.__init__(self, PRIORITY_XAML, literal_string=True)
         self._detect_func = detect_func
         self._detect_cache = None    # (candidates, overlap cat names)
@@ -107,6 +117,7 @@ class PriorityDialog(forms.WPFWindow):
         self.cancel_btn.Click += self._cancel
         self.autojoin_cb.Checked += self._on_check
         self.autojoin_cb.Unchecked += self._on_uncheck
+        self.refresh_cb.IsChecked = refresh_default
         # set LAST so the Checked handler fires and pulls overlap cats in
         self.autojoin_cb.IsChecked = autojoin_default
 
@@ -148,7 +159,10 @@ class PriorityDialog(forms.WPFWindow):
             candidates = self._detect_cache[0]
         else:
             candidates = []
-        self.result = ([name for name in self.items], checked, candidates)
+        self.result = ([name for name in self.items],
+                       checked,
+                       candidates,
+                       self.refresh_cb.IsChecked == True)
         self.Close()
 
     def _cancel(self, sender, args):
@@ -283,6 +297,19 @@ def _detect_overlaps():
     return candidates, cats
 
 
+def _pair_overlaps(elem_a, elem_b):
+    """True if the two solids actually intersect (not just edge-touch)."""
+    ids = List[DB.ElementId]()
+    ids.Add(elem_b.Id)
+    try:
+        count = DB.FilteredElementCollector(doc, ids)\
+                  .WherePasses(DB.ElementIntersectsElementFilter(elem_a))\
+                  .GetElementCount()
+        return count > 0
+    except Exception:
+        return True   # can't test -> treat as overlapping, don't refresh
+
+
 # --------------------------------- priority dialog (saved order remembered)
 saved_order = config.get_option('cat_order', [])
 if not isinstance(saved_order, list):
@@ -292,20 +319,33 @@ for n in sorted(present_cats):
     if n not in ordered:
         ordered.append(n)   # never-seen categories land at the bottom
 autojoin_default = config.get_option('autojoin', False) == True
+refresh_default = config.get_option('refresh_edges', False) == True
 
-dlg = PriorityDialog(ordered, autojoin_default, _detect_overlaps)
+dlg = PriorityDialog(ordered, autojoin_default, refresh_default,
+                     _detect_overlaps)
 dlg.ShowDialog()
 if dlg.result is None:
     script.exit()
-order, do_autojoin, join_candidates = dlg.result
+order, do_autojoin, join_candidates, do_refresh = dlg.result
 
 config.cat_order = order
 config.autojoin = do_autojoin
+config.refresh_edges = do_refresh
 script.save_config()
 
 rank = {}
 for i, name in enumerate(order):
     rank[name] = i
+
+# ---------------------- find edge-met joined pairs to refresh (if requested)
+refresh_pairs = []
+if do_refresh:
+    t1 = time.time()
+    for key in pair_elems:
+        a, b = pair_elems[key]
+        if not _pair_overlaps(a, b):
+            refresh_pairs.append((a, b))
+    timings['edge'] = time.time() - t1
 
 # ------------------------------------------- build the reorder work list
 order_pairs = []
@@ -321,15 +361,18 @@ for key in pair_elems:
     else:
         order_pairs.append((a, b))
 
-# ------------------------------------------------------- apply in one txn
+# --------------------------------------- apply (one undo entry via a group)
 joined_new = 0
+refreshed = 0
 switched = 0
 correct = 0
+refresh_failed = []
 join_failed = []
 switch_failed = []
+lost = set()   # pair keys whose refresh rejoin failed -> skip ordering
 
-# worst case: every new join also needs its order checked
-total_ops = len(join_candidates) * 2 + len(order_pairs)
+total_ops = (len(refresh_pairs) * 2 + len(join_candidates) * 2
+             + len(order_pairs))
 step = max(1, total_ops // 100)
 if total_ops >= PROGRESS_MIN:
     progress = forms.ProgressBar(
@@ -339,44 +382,85 @@ else:
 
 n = 0
 t2 = time.time()
-# swallow_errors resolves Revit warning popups (e.g. "joined but do not
-# intersect") so the commit runs straight through.
-with progress as pb:
-    with revit.Transaction("Join Priority", swallow_errors=True):
-        for a, b in join_candidates:
-            n += 1
-            try:
-                DB.JoinGeometryUtils.JoinGeometry(doc, a, b)
-                joined_new += 1
-                if _cat_name(a) != _cat_name(b):
-                    order_pairs.append((a, b))
-                else:
-                    same_cat += 1
-            except Exception as err:
-                join_failed.append((a, b, "{}".format(err)))
-            if n % step == 0:
-                pb.update_progress(n, total_ops)
+# The refresh needs a real regeneration BETWEEN unjoin and rejoin (that is
+# what fixes the stale dashed linework), so the unjoin runs in its own
+# transaction whose commit regenerates, then the rejoin + priority pass runs
+# in a second one. The TransactionGroup assimilates both into ONE undo entry.
+tgroup = DB.TransactionGroup(doc, "Join Priority")
+tgroup.Start()
+try:
+    with progress as pb:
+        to_rejoin = []
+        if refresh_pairs:
+            with revit.Transaction("Unjoin (refresh)", swallow_errors=True):
+                for a, b in refresh_pairs:
+                    n += 1
+                    try:
+                        DB.JoinGeometryUtils.UnjoinGeometry(doc, a, b)
+                        to_rejoin.append((a, b))
+                    except Exception as err:
+                        refresh_failed.append(
+                            (a, b, "refresh unjoin failed: {}".format(err)))
+                    if n % step == 0:
+                        pb.update_progress(n, total_ops)
 
-        for a, b in order_pairs:
-            n += 1
-            try:
-                if rank[_cat_name(a)] < rank[_cat_name(b)]:
-                    cutter, cut = a, b
-                else:
-                    cutter, cut = b, a
-                if DB.JoinGeometryUtils.IsCuttingElementInJoin(
-                        doc, cutter, cut):
-                    correct += 1
-                else:
-                    DB.JoinGeometryUtils.SwitchJoinOrder(doc, cutter, cut)
-                    switched += 1
-            except Exception as err:
-                switch_failed.append((a, b, "{}".format(err)))
-            if n % step == 0:
-                pb.update_progress(n, total_ops)
+        # swallow_errors resolves Revit warning popups (e.g. "joined but do
+        # not intersect") so the commit runs straight through.
+        with revit.Transaction("Join Priority", swallow_errors=True):
+            for a, b in to_rejoin:
+                n += 1
+                try:
+                    DB.JoinGeometryUtils.JoinGeometry(doc, a, b)
+                    refreshed += 1
+                except Exception as err:
+                    lost.add(frozenset((a.Id.IntegerValue,
+                                        b.Id.IntegerValue)))
+                    refresh_failed.append(
+                        (a, b, "REJOIN FAILED, join lost: {}".format(err)))
+                if n % step == 0:
+                    pb.update_progress(n, total_ops)
 
-        pb.update_progress(total_ops, total_ops)
+            for a, b in join_candidates:
+                n += 1
+                try:
+                    DB.JoinGeometryUtils.JoinGeometry(doc, a, b)
+                    joined_new += 1
+                    if _cat_name(a) != _cat_name(b):
+                        order_pairs.append((a, b))
+                    else:
+                        same_cat += 1
+                except Exception as err:
+                    join_failed.append((a, b, "{}".format(err)))
+                if n % step == 0:
+                    pb.update_progress(n, total_ops)
 
+            for a, b in order_pairs:
+                n += 1
+                if lost and frozenset((a.Id.IntegerValue,
+                                       b.Id.IntegerValue)) in lost:
+                    continue
+                try:
+                    if rank[_cat_name(a)] < rank[_cat_name(b)]:
+                        cutter, cut = a, b
+                    else:
+                        cutter, cut = b, a
+                    if DB.JoinGeometryUtils.IsCuttingElementInJoin(
+                            doc, cutter, cut):
+                        correct += 1
+                    else:
+                        DB.JoinGeometryUtils.SwitchJoinOrder(doc, cutter, cut)
+                        switched += 1
+                except Exception as err:
+                    switch_failed.append((a, b, "{}".format(err)))
+                if n % step == 0:
+                    pb.update_progress(n, total_ops)
+
+            pb.update_progress(total_ops, total_ops)
+    tgroup.Assimilate()
+except Exception:
+    if tgroup.GetStatus() == DB.TransactionStatus.Started:
+        tgroup.RollBack()
+    raise
 apply_secs = time.time() - t2
 
 # ----------------------------------------------------------- result dialog
@@ -391,14 +475,19 @@ if unranked:
 if do_autojoin:
     lines.append("Auto-joined: {} of {} overlapping pair(s)".format(
         joined_new, len(join_candidates)))
-    lines.append(
-        "Scan {:.1f}s   |   Detect {:.1f}s   |   Apply {:.1f}s".format(
-            scan_secs, timings['detect'], apply_secs))
-else:
-    lines.append("Scan {:.1f}s   |   Apply {:.1f}s".format(
-        scan_secs, apply_secs))
+if do_refresh:
+    lines.append("Refreshed (unjoin+rejoin): {} of {} edge-met join(s)".format(
+        refreshed, len(refresh_pairs)))
 
-failures = join_failed + switch_failed
+segments = ["Scan {:.1f}s".format(scan_secs)]
+if do_autojoin:
+    segments.append("Detect {:.1f}s".format(timings['detect']))
+if do_refresh:
+    segments.append("Check {:.1f}s".format(timings['edge']))
+segments.append("Apply {:.1f}s".format(apply_secs))
+lines.append("   |   ".join(segments))
+
+failures = refresh_failed + join_failed + switch_failed
 if failures:
     lines.append("")
     lines.append("Failed on {} pair(s):".format(len(failures)))

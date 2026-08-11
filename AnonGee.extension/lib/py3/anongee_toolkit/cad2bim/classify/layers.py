@@ -25,6 +25,12 @@ CATEGORY_SLAB_EDGE = "slab_edge"
 CATEGORY_STRUCT_WALL = "structural wall"
 CATEGORY_ARCH_WALL = "arch wall"
 CATEGORY_STAIR = "stair"
+# MULTI-STOREY from ONE dxf (user convention): each floor plan is enclosed by a
+# rectangle on a BOUNDARY layer, and carries a single marker on an ORIGIN layer
+# that fixes where that plan sits in the model. Names differ per drawing, so the
+# convention below is only a proposal -- the dialog's layer table overrides it.
+CATEGORY_FLOOR_BOUNDARY = "floor boundary"
+CATEGORY_FLOOR_ORIGIN = "floor origin"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -51,6 +57,8 @@ DEFAULT_CONVENTION = (
     (r"beam|girder|joist", CATEGORY_BEAM),
     (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
     (r"stair|strs|step", CATEGORY_STAIR),
+    (r"boundar|bound|extent|sheet.?box", CATEGORY_FLOOR_BOUNDARY),
+    (r"origin|basept|base.?point|datum", CATEGORY_FLOOR_ORIGIN),
     (r"shear|retain", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
     (r"wall|parapet", CATEGORY_ARCH_WALL),
 )
@@ -58,7 +66,8 @@ DEFAULT_CONVENTION = (
 ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
     CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
-    CATEGORY_STAIR, CATEGORY_UNMAPPED,
+    CATEGORY_STAIR, CATEGORY_FLOOR_BOUNDARY, CATEGORY_FLOOR_ORIGIN,
+    CATEGORY_UNMAPPED,
 )
 
 # Text/label layers carry the size marks (e.g. "S-COLS-IDEN", "S-BEAM-IDEN").
@@ -72,10 +81,15 @@ CATEGORY_GRID_TEXT = "grid text"
 # (e.g. "C9" on the plan, "C9 400x600" in the table). Routed apart from plan
 # column text because the table is a block of cells, not member-adjacent labels.
 CATEGORY_COLUMN_SCHEDULE = "schedule (column/beam/slab)"
+# Slab notes ("S1 150 THK", "150 THK.") name and size a floor. They are found by
+# CONTENT wherever they sit, so routing a layer here is a way to say "the slab
+# notes are on THIS layer" -- which narrows the search on a drawing whose other
+# text happens to read like a thickness.
+CATEGORY_SLAB_TEXT = "slab text"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
-                   CATEGORY_GRID_TEXT, CATEGORY_COLUMN_SCHEDULE,
-                   CATEGORY_TEXT_IGNORE)
+                   CATEGORY_GRID_TEXT, CATEGORY_SLAB_TEXT,
+                   CATEGORY_COLUMN_SCHEDULE, CATEGORY_TEXT_IGNORE)
 
 
 def classify_text_layer(layer_name):
@@ -93,6 +107,8 @@ def classify_text_layer(layer_name):
         return CATEGORY_COLUMN_TEXT
     if "beam" in text or "girder" in text or "joist" in text:
         return CATEGORY_BEAM_TEXT
+    if "slab" in text or "flor" in text or "floor" in text or "thk" in text:
+        return CATEGORY_SLAB_TEXT
     return CATEGORY_TEXT_IGNORE
 
 
