@@ -18,6 +18,8 @@ _BUTTON = os.path.normpath(os.path.join(
     _HERE, "..", "..", "..", "..", "..",
     "AnonGee.tab", "Core.panel", "cad2bim.pushbutton"))
 _SCRIPT = os.path.join(_BUTTON, "script.py")
+# the dialogs moved into the library; the button keeps the run pipeline
+_WINDOW = os.path.normpath(os.path.join(_HERE, "..", "ui_window.py"))
 _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")
 
@@ -34,13 +36,25 @@ def _xaml_names(*paths):
 
 
 def _script_source():
+    """The pushbutton itself -- the run pipeline and its entry point."""
     with open(_SCRIPT, "rb") as handle:
         return handle.read().decode("utf-8")
 
 
+def _window_source():
+    """The dialog: every control binding lives here now."""
+    with open(_WINDOW, "rb") as handle:
+        return handle.read().decode("utf-8")
+
+
+def _all_source():
+    """Both, for checks that span the dialog and the run it starts."""
+    return _script_source() + "\n" + _window_source()
+
+
 class DialogControlNames(unittest.TestCase):
     def test_every_bound_control_exists_in_the_xaml(self):
-        missing = sorted(set(_FIND.findall(_script_source())) - _xaml_names())
+        missing = sorted(set(_FIND.findall(_window_source())) - _xaml_names())
         self.assertEqual(missing, [], "bound but absent from ui.xaml: %s" % missing)
 
     def test_every_control_the_dialog_uses_is_bound(self):
@@ -49,7 +63,7 @@ class DialogControlNames(unittest.TestCase):
         Catches the reverse slip: a new textbox read by _init_tolerances or
         _read_tolerances that nobody ever assigned.
         """
-        source = _script_source()
+        source = _window_source()
         bound = set(_FIND.findall(source))
         prefixes = ("tb_", "cb_", "chk_", "rb_", "btn_", "lbl_")
         assigned = set()
@@ -86,7 +100,7 @@ class SlabToleranceRow(unittest.TestCase):
         Every key _read_tolerances returns has to come from a control, not from
         a constant buried in a module.
         """
-        source = _script_source()
+        source = _window_source()
         block = source.split("def _read_tolerances(", 1)[1].split(
             "def ", 1)[0]
         keys = re.findall(r'"([a-z0-9_]+)":\s*self\._read_(?:float|int)\(',
@@ -139,7 +153,7 @@ class NamingTabControls(unittest.TestCase):
         all existed, and the box came up blank because the binding loop had
         nine keys in it instead of ten.
         """
-        source = _script_source()
+        source = _window_source()
         block = source.split("self.name_boxes = {}", 1)[1].split(
             "self.naming_saved_text", 1)[0]
         bound = set(re.findall(r'\("([a-z_]+)",\s*"[a-z_]+"\)', block))
@@ -248,12 +262,12 @@ class StoreyTableIsSelectable(unittest.TestCase):
 
     def test_the_row_click_is_a_preview_handler(self):
         # a bubbling handler never sees the click: the child controls take it
-        source = _script_source()
+        source = _window_source()
         self.assertIn("PreviewMouseLeftButtonDown", source)
         self.assertNotIn("grid.MouseLeftButtonDown", source)
 
     def test_selection_drives_the_move_buttons(self):
-        source = _script_source()
+        source = _window_source()
         self.assertIn("self.storey_rows.SelectedIndex", source)
         self.assertIn("storey_selection_text", source)
         names = _xaml_names(_XAML)
@@ -279,7 +293,8 @@ class LevelNamesReachTheBuilder(unittest.TestCase):
         self.assertNotIn('"CAD Level {0}".format', source)
 
     def test_following_the_model_is_a_choice_the_dialog_offers(self):
-        source = _script_source()
+        # the tick is on the dialog, the decision is read in the run pipeline
+        source = _all_source()
         self.assertIn('"level_follow_existing"', source)
         self.assertIn("self.chk_level_follow", source)
 
@@ -331,21 +346,21 @@ class SettingsSaveAndLoad(unittest.TestCase):
             self.assertIn(control, names)
 
     def test_the_buttons_are_wired(self):
-        source = _script_source()
+        source = _all_source()
         self.assertIn("self.btn_settings_save.Click += self.on_settings_save",
                       source)
         self.assertIn("self.btn_settings_load.Click += self.on_settings_load",
                       source)
 
     def test_the_run_remembers_the_whole_dialog(self):
-        source = _script_source()
+        source = _all_source()
         self.assertIn('"dialog": self._capture_settings()', source)
         self.assertIn('_saved_prefs.get("dialog")', source)
         self.assertIn("saved_settings=saved_settings", source)
 
     def test_capture_is_driven_by_the_xaml_names(self):
         """Listing controls by hand is how a new one gets forgotten."""
-        source = _script_source()
+        source = _all_source()
         self.assertIn("for name in _control_names():", source)
         self.assertIn("settings.saveable(name)", source)
         self.assertIn("settings.restorable(name)", source)
