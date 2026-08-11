@@ -38,6 +38,21 @@
   2540x450 inside 2800x450, 2380x200 inside 2610x200, a literal 300x1400 twice).
 - Suite 416 green. Sweep: test12 -9, Project1 -6, test9 -3, test8 -2, others 0.
 
+### Phase 2 — modular refactor (in progress)
+- Defaults taken (user did not answer the scope question): all four files, library
+  first, `script.py` last, nothing merged until they confirm a clean Revit run.
+- Baseline captured before any move: 22 slab fingerprints + the 17-DXF sweep.
+- Move 1: `export.py` (console + JSON). Move 2: `columns_recovery.py`. Move 3:
+  `column_geom.py` + `limits.py`. report.py 3039 -> 1931 lines.
+- `tests/_loader.py` replaces twenty hand-rolled loaders: the dependency graph is in
+  one place, so the next split touches one file instead of thirteen.
+- After EVERY move: 416 tests green, 22 fingerprints identical, fixture sweep
+  identical line for line. Two commits pushed.
+
+### Next
+- Split the beam half out of report.py, then slab_outlines.py, stair_layout.py, and
+  script.py last.
+
 ### Waiting on
 - User to run v0.67.5 twice in ONE Revit session and confirm the crash is gone, then
   push the JSON export. Phase 2 (refactor) does not start until that lands.

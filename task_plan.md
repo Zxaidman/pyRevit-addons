@@ -56,7 +56,7 @@ created type; every site asks the registry first and only builds the class on a 
 
 ## Phase 2 — Refactor: smaller, focused modules
 
-**Status:** pending (starts only after Phase 1 is confirmed in Revit)
+**Status:** in_progress — library splits under way while the user tests v0.67.5
 
 Current sizes (the four the user is reacting to):
 
@@ -77,9 +77,17 @@ Current sizes (the four the user is reacting to):
 5. `script.py` last — it is the riskiest and cannot be unit-tested outside Revit beyond
    the static wiring checks.
 
-- [ ] 2.1 Agree the target layout with the user (this file, before any code moves)
-- [ ] 2.2 Baseline capture: fingerprints + sweep + suite, stored in the scratchpad
-- [ ] 2.3 `report.py` → columns/ + beams/ + export.py
+- [x] 2.1 Target layout agreed by default (user did not pick; all four files, library
+      first, script.py last). Merge style still open, decided at merge time.
+- [x] 2.2 Baseline captured: `scratchpad/refactor_base_fingerprints.json` (22 exports)
+      and `scratchpad/refactor_base_sweep.txt` (17 DXFs)
+- [x] 2.3a `export.py` — console summary + JSON export (400 lines)
+- [x] 2.3b `columns_recovery.py` — the five recovery passes (747 lines)
+- [x] 2.3c `column_geom.py` (188) + `limits.py` (67) — the shared primitives
+- [x] 2.3d `tests/_loader.py` — one dependency graph instead of twenty hand-rolled
+      loaders; the scratchpad harnesses use it too
+- [ ] 2.3e `report.py` (1931) → split the BEAM half (build_beam_segments, splitting,
+      dedupe, snapping) from column SECTIONS
 - [ ] 2.4 `slab_outlines.py` → slabs/
 - [ ] 2.5 `stair_layout.py` → stairs/
 - [ ] 2.6 `script.py` → dialog/ + run/ (+ keep the static wiring tests passing)
