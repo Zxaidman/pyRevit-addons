@@ -26,15 +26,22 @@ _MM = config.MM_PER_FT
 
 # The console summary and the JSON export moved to export.py; they are re-exported
 # here so every caller (and every test) keeps the import it has always used.
+from .limits import (DEFAULT_LIMITS, parse_standard_sizes,
+                     parse_standard_widths, _standard_dims_mm)  # noqa: E402,F401
+from .column_geom import (_ring_closed, _inside_rectangles, _bbox_half,
+                          _column_footprints, _distinct_ring_corners, _label_size,
+                          column_outline_footprints, column_trim_footprints,
+                          _OBSTACLE_SHORT_MIN_MM, _OBSTACLE_SHORT_MAX_MM,
+                          _OBSTACLE_LONG_MAX_MM)          # noqa: E402,F401
+from .columns_recovery import (recover_core_walls_from_labels,
+                               recover_unplaced_labeled_columns,
+                               recover_outline_columns, recover_face_columns,
+                               drop_nested_columns)        # noqa: E402,F401
 from .export import (build_layer_counts, build_category_counts, format_summary,
                      format_column_sections, format_beam_segments,
                      format_console, build_export_payload, export_json,
                      export_storeys_json)          # noqa: E402,F401
 
-# Acceptance limits (mm) -- the subset of config used as the UI's defaults.
-DEFAULT_LIMITS = dict((key, config.DEFAULTS[key]) for key in (
-    "beam_width_min_mm", "beam_width_max_mm",
-    "col_b_min_mm", "col_b_max_mm", "col_h_min_mm", "col_h_max_mm"))
 
 _FRAG_MAX_LINE_MM = 2000.0   # column-layer lines shorter than this are junction bits
 _FRAG_GAP_MM = 600.0         # fragments within this gap belong to the same column
@@ -44,71 +51,16 @@ _FRAG_GAP_MM = 600.0         # fragments within this gap belong to the same colu
 _FRAG_CLOSE_GAP_MM = 900.0   # a LONE outline left open this wide at a junction cut is
 #                              still one column (rotated corner columns clip to ~600-800);
 #                              recovered rects are deduped so this cannot double a column
-_CLOSE_TOL_FT = 1.0e-3       # ~0.3 mm: ring is closed when its ends meet this close
 
 
-def _ring_closed(points):
-    """True if a polyline's first and last vertices coincide (a closed ring).
-
-    Both readers mark closure this way: the DXF reader appends the start point to
-    a closed LWPOLYLINE/POLYLINE, and Revit's PolyLine repeats the start for a
-    closed loop. A polyline whose ends do NOT meet is an open path -- at a
-    beam-column junction that means a partial outline (an L/U/-shaped fragment),
-    NOT a column to be auto-closed into a (wrong, undersized) rectangle.
-    """
-    if len(points) < 4:
-        return False
-    a, b = points[0], points[-1]
-    return abs(a[0] - b[0]) <= _CLOSE_TOL_FT and abs(a[1] - b[1]) <= _CLOSE_TOL_FT
 
 
-def _inside_rectangles(cx, cy, rectangles):
-    """True if (cx, cy) falls within any rectangle's axis-aligned bbox."""
-    for rect in rectangles:
-        if rect.x_min <= cx <= rect.x_max and rect.y_min <= cy <= rect.y_max:
-            return True
-    return False
 
 
-def parse_standard_sizes(text):
-    """Parse '300x600, 300x750' -> [(300.0, 600.0), ...] (b<=h). Tolerant of junk."""
-    pairs = []
-    if not text:
-        return pairs
-    for token in text.replace(";", ",").split(","):
-        token = token.strip().lower().replace("X", "x")
-        if "x" not in token:
-            continue
-        a, _, b = token.partition("x")
-        try:
-            va, vb = float(a.strip()), float(b.strip())
-        except ValueError:
-            continue
-        pairs.append((min(va, vb), max(va, vb)))
-    return pairs
 
 
-def parse_standard_widths(text):
-    """Parse '300, 450, 600' -> [300.0, 450.0, 600.0]. Tolerant of junk."""
-    widths = []
-    if not text:
-        return widths
-    for token in text.replace(";", ",").split(","):
-        token = token.strip()
-        try:
-            widths.append(float(token))
-        except ValueError:
-            continue
-    return widths
 
 
-def _standard_dims_mm(pairs):
-    """Flatten standard (b, h) pairs into the set of distinct dimensions."""
-    dims = set()
-    for b, h in pairs:
-        dims.add(b)
-        dims.add(h)
-    return sorted(dims)
 
 
 _CORE_MIN_BBOX_MM = 1800.0     # smaller side of the outline's bbox; thin strips fall out
@@ -407,224 +359,24 @@ _SPLIT_CENTRE_SLACK_MM = 80.0      # split fragments' centres lie within (long s
 _SPLIT_NO_SIZE_MAX_CENTRE_MM = 800.0   # no label size: only fuse pieces this close
 
 # --- label-guided core-wall placement --------------------------------------
-_CORE_LABEL_MARGIN_MM = 1100.0  # a wall's label may sit this far outside the blob
-#                                 (bottom-row columns carry their text well below them)
-_CORE_DIM_TOL_MM = 80.0         # a cell-rectangle must match the label size this closely
-_CORE_EDGE_EPS_MM = 2.0         # merge cell grid edges closer than this (float noise)
 
 
-def recover_core_walls_from_labels(sections, column_texts, schedule=None):
-    """Re-place fused-outline columns from their size labels, before text-correction.
-
-    When abutting members share an outline -- a lift/stair core drawn as loose wall
-    lines, or one column cast hard against another (Test19's C16 under C15) -- the
-    pieces are assembled into one blob and decomposed greedily. The greedy cut
-    mis-assigns the shared corners/edges, so each member keeps its THICKNESS but is
-    clipped/extended along its length and offset by the stolen cell (a 5300 wall
-    placed as 4700, 600 mm low; or C16's whole footprint swallowed into C15).
-    text-correction would then resize/merge to the labels but keep that wrong split.
-
-    Here each fused blob is re-tiled from the labels instead: the blob's exact-cover
-    pieces define a cell grid, and members are carved LONGEST first, each claiming
-    the label-sized run of still-unclaimed cells nearest its label. Applied only to a
-    blob that holds at least one MARKED label (so a working markless-only core is never
-    touched) and only when the labels -- marked and markless alike -- tile the WHOLE
-    blob cleanly; otherwise the blob is left exactly as decomposed. A markless-but-sized
-    stub packed into such a blob (Test19's "300x600" under C17) is placed unnamed.
-    Returns the number of blobs re-tiled.
-    """
-    entries = sections.get("entries", [])
-    # Every sized label (inline size or schedule[mark]) is a tiling candidate, INCLUDING
-    # markless ones -- a fused outline can pack a marked column over an unlabelled-but-
-    # sized stub (Test19's C17 over a "300x600"), and both need a cell. Each label is
-    # paired with its (small, big) mm size; a blob is only re-tiled when it holds at
-    # least one MARKED label (below), so a working markless-only core is never touched.
-    labels = []
-    for text in (column_texts or []):
-        if not text.point_internal:
-            continue
-        size = _label_size(text, schedule or {})
-        if size is not None:
-            labels.append((text, size))
-    if not labels:
-        return 0
-    # Only the greedy decompositions that can mis-cut a fused outline are candidates.
-    cand_status = ("composite", "recovered_strip")
-    pieces = [rect for entry in entries if entry.get("status") in cand_status
-              for rect in entry["rectangles"]]
-    if not pieces:
-        return 0
-    consumed = set()
-    carved = []
-    retiled = 0
-    for comp in _connected_blobs(pieces):
-        if len(comp) < 2:
-            continue                       # a lone strip: nothing fused to re-cut
-        blob_labels = _labels_for_blob(comp, labels)
-        if not any(lbl[0] for lbl in blob_labels):
-            continue                       # only markless labels here: a working core
-        walls = _carve_blob_from_labels(comp, blob_labels)
-        if walls is None:
-            continue                       # not a clean label tiling: leave as-is
-        for rect in comp:
-            consumed.add(id(rect))
-        carved.extend(walls)
-        retiled += 1
-    if not retiled:
-        return 0
-    for entry in entries:
-        if entry.get("status") in cand_status:
-            entry["rectangles"] = [r for r in entry["rectangles"]
-                                   if id(r) not in consumed]
-    entries.append({"layer": "(label core)", "status": "label_core_wall",
-                    "approx": True, "rectangles": carved})
-    sections["entries"] = [e for e in entries if e["rectangles"]]
-    counts = sections.setdefault("status_counts", {})
-    counts["label_core_wall"] = counts.get("label_core_wall", 0) + len(carved)
-    return retiled
 
 
-def _rect_bounds_mm(rect):
-    """(x_min, y_min, x_max, y_max) of an axis-aligned rect dict, in mm."""
-    cx, cy = rect["center"][0] * _MM, rect["center"][1] * _MM
-    return (cx - rect["width_mm"] / 2.0, cy - rect["height_mm"] / 2.0,
-            cx + rect["width_mm"] / 2.0, cy + rect["height_mm"] / 2.0)
 
 
-def _connected_blobs(rects):
-    """Group rectangles into edge-adjacent components (a fused outline = one blob)."""
-    n = len(rects)
-    bounds = [_rect_bounds_mm(r) for r in rects]
-    parent = list(range(n))
-
-    def find(i):
-        while parent[i] != i:
-            parent[i] = parent[parent[i]]
-            i = parent[i]
-        return i
-
-    eps = 1.0
-    for i in range(n):
-        ax0, ay0, ax1, ay1 = bounds[i]
-        for j in range(i + 1, n):
-            bx0, by0, bx1, by1 = bounds[j]
-            if (ax0 - eps <= bx1 and bx0 - eps <= ax1 and
-                    ay0 - eps <= by1 and by0 - eps <= ay1):
-                parent[find(i)] = find(j)
-    groups = {}
-    for i in range(n):
-        groups.setdefault(find(i), []).append(rects[i])
-    return list(groups.values())
 
 
-def _labels_for_blob(comp, labels):
-    """(mark, small, big, lx, ly) for each sized label inside the blob's grown bbox.
-
-    `labels` are (TextRecord, (small, big) mm) pairs; the bbox is grown by
-    _CORE_LABEL_MARGIN_MM so a wall's label that sits just outside the outline counts.
-    """
-    bounds = [_rect_bounds_mm(r) for r in comp]
-    x0 = min(b[0] for b in bounds) - _CORE_LABEL_MARGIN_MM
-    y0 = min(b[1] for b in bounds) - _CORE_LABEL_MARGIN_MM
-    x1 = max(b[2] for b in bounds) + _CORE_LABEL_MARGIN_MM
-    y1 = max(b[3] for b in bounds) + _CORE_LABEL_MARGIN_MM
-    out = []
-    for text, (small, big) in labels:
-        lx, ly = text.point_internal[0] * _MM, text.point_internal[1] * _MM
-        if x0 <= lx <= x1 and y0 <= ly <= y1:
-            out.append((text.mark, small, big, lx, ly))
-    return out
 
 
-def _unique_edges(values):
-    """Sorted grid edges with near-duplicates (float noise) merged."""
-    out = []
-    for v in sorted(values):
-        if not out or v - out[-1] > _CORE_EDGE_EPS_MM:
-            out.append(v)
-    return out
 
 
-def _dims_match(w, h, b_mm, h_mm):
-    """True when a w x h cell-rectangle matches the (b, h) label in either orientation."""
-    t = _CORE_DIM_TOL_MM
-    return ((abs(w - b_mm) <= t and abs(h - h_mm) <= t) or
-            (abs(w - h_mm) <= t and abs(h - b_mm) <= t))
 
 
-def _carve_blob_from_labels(comp, comp_labels):
-    """Re-tile one fused blob into label-sized walls, or None if labels can't tile it.
-
-    The blob's exact-cover pieces give a cell grid; each label carves the nearest
-    matching run of unclaimed inside-cells, longest wall first. Returns the carved
-    wall rects only when EVERY inside cell is claimed (a clean tiling), so an
-    ambiguous or partially labelled blob falls back to the original decomposition.
-    """
-    if not comp_labels:
-        return None
-    bounds = [_rect_bounds_mm(r) for r in comp]
-    xs = _unique_edges([b[0] for b in bounds] + [b[2] for b in bounds])
-    ys = _unique_edges([b[1] for b in bounds] + [b[3] for b in bounds])
-    nc, nr = len(xs) - 1, len(ys) - 1
-    if nc < 1 or nr < 1:
-        return None
-    inside = [[False] * nc for _ in range(nr)]
-    for r in range(nr):
-        cy = (ys[r] + ys[r + 1]) / 2.0
-        for c in range(nc):
-            cx = (xs[c] + xs[c + 1]) / 2.0
-            inside[r][c] = any(b[0] < cx < b[2] and b[1] < cy < b[3] for b in bounds)
-    claimed = [[False] * nc for _ in range(nr)]
-    z = comp[0]["center"][2]
-    walls = []
-    for mark, b_mm, h_mm, lx, ly in sorted(comp_labels,
-                                           key=lambda L: -max(L[1], L[2])):
-        best, best_d = None, None
-        for c0 in range(nc):
-            for c1 in range(c0, nc):
-                w = xs[c1 + 1] - xs[c0]
-                for r0 in range(nr):
-                    for r1 in range(r0, nr):
-                        ht = ys[r1 + 1] - ys[r0]
-                        if not _dims_match(w, ht, b_mm, h_mm):
-                            continue
-                        if not _cells_free(inside, claimed, r0, r1, c0, c1):
-                            continue
-                        mx = (xs[c0] + xs[c1 + 1]) / 2.0
-                        my = (ys[r0] + ys[r1 + 1]) / 2.0
-                        d = (mx - lx) ** 2 + (my - ly) ** 2
-                        if best_d is None or d < best_d:
-                            best, best_d = (r0, r1, c0, c1), d
-        if best is None:
-            return None
-        r0, r1, c0, c1 = best
-        for r in range(r0, r1 + 1):
-            for c in range(c0, c1 + 1):
-                claimed[r][c] = True
-        walls.append(_wall_rect(xs[c0], ys[r0], xs[c1 + 1], ys[r1 + 1], z, mark))
-    for r in range(nr):
-        for c in range(nc):
-            if inside[r][c] and not claimed[r][c]:
-                return None                # an unlabelled cell left over: not confident
-    return walls
 
 
-def _cells_free(inside, claimed, r0, r1, c0, c1):
-    """True when every cell in the range is inside the blob and not yet claimed."""
-    for r in range(r0, r1 + 1):
-        for c in range(c0, c1 + 1):
-            if not inside[r][c] or claimed[r][c]:
-                return False
-    return True
 
 
-def _wall_rect(x0, y0, x1, y1, z, mark):
-    """A wall rect dict (mm bounds -> internal-feet centre + mm size), long axis set."""
-    w_mm, h_mm = x1 - x0, y1 - y0
-    return {"center": [((x0 + x1) / 2.0) / _MM, ((y0 + y1) / 2.0) / _MM, z],
-            "width_mm": w_mm, "height_mm": h_mm,
-            "width_ft": w_mm / _MM, "height_ft": h_mm / _MM,
-            "long_axis_deg": 90.0 if h_mm >= w_mm else 0.0, "mark": mark}
 
 
 def correct_columns_with_text(sections, column_texts, radius_ft, schedule=None,
@@ -765,134 +517,12 @@ def apply_circle_marks(sections, column_texts, radius_ft):
 
 # A small column cast hard against a bigger one fragments so badly that recovery
 # folds its pieces into the neighbour; these tune recovering it from its label.
-_ABSORB_RADIUS_MM = 2000.0   # the orphaned label and its leftover pieces lie within this
-_ABSORB_PAD_MM = 60.0        # a fragment point this far inside a placed column is "its"
-_ABSORB_MIN_PTS = 3          # need at least this much leftover geometry as evidence
 
 
-def _bbox_half(rect):
-    """Axis-aligned half-extents (hx, hy) in feet of a possibly-rotated column rect."""
-    theta = math.radians(rect.get("long_axis_deg", 90.0))
-    long_ft, short_ft = rect["height_ft"], rect["width_ft"]
-    hx = (abs(math.cos(theta)) * long_ft + abs(math.sin(theta)) * short_ft) / 2.0
-    hy = (abs(math.sin(theta)) * long_ft + abs(math.cos(theta)) * short_ft) / 2.0
-    return hx, hy
 
 
-def _aabb_overlaps(cx, cy, hx, hy, rects, margin_ft):
-    """True if the box with half-extents (hx, hy) at (cx, cy) overlaps any rect."""
-    for r in rects:
-        rhx, rhy = _bbox_half(r)
-        if (abs(cx - r["center"][0]) < hx + rhx - margin_ft and
-                abs(cy - r["center"][1]) < hy + rhy - margin_ft):
-            return True
-    return False
 
 
-def recover_unplaced_labeled_columns(sections, column_texts, schedule, limits=None):
-    """Place a labelled column that geometry recovery ABSORBED into a larger neighbour.
-
-    A small column cast against a bigger one (e.g. a 300x600 beside a 600x900) can
-    fragment so badly that recovery merges its pieces into the neighbour and drops
-    the rest, orphaning its plan label. For a mark that has a schedule size but no
-    placed column, the leftover fragments NOT already inside a placed column are
-    clustered; the schedule-sized column is then placed ABUTTING its nearest placed
-    neighbour edge-to-edge -- the side, and the centre on the shared face, come from
-    the leftover bits. The abutment fixes the coordinate across the shared face
-    exactly; the other coordinate comes from the leftover centroid, clamped so the
-    column still meets the neighbour. These columns sit deliberately off-axis against
-    their partner, so they are NOT snapped to the structural grid.
-
-    Conservative by construction, so a stray label can never fabricate a column:
-      * the mark must be unplaced AND carry a schedule size,
-      * a placed neighbour must sit within _ABSORB_RADIUS (a real column region),
-      * >= _ABSORB_MIN_PTS leftover points outside every placed footprint must remain
-        (hard geometry evidence the column was really drawn there),
-      * the result must land in range and overlap nothing already placed.
-    Returns the count placed.
-    """
-    entries = sections.get("entries", [])
-    placed = [r for e in entries for r in e["rectangles"]]
-    if not placed:
-        return 0
-    placed_marks = set(r.get("mark") for r in placed if r.get("mark"))
-    placed_marks |= set(c.get("mark") for c in (sections.get("circles") or [])
-                        if c.get("mark"))
-    limits = limits or DEFAULT_LIMITS
-    absorb = config.mm_to_ft(_ABSORB_RADIUS_MM)
-    pad = config.mm_to_ft(_ABSORB_PAD_MM)
-    frag_pts = [(config.mm_to_ft(p[0]), config.mm_to_ft(p[1]))
-                for g in (sections.get("dropped_raw") or []) for p in g.get("pts", [])]
-
-    def inside_placed(px, py):
-        for r in placed:
-            rhx, rhy = _bbox_half(r)
-            if abs(px - r["center"][0]) <= rhx + pad and abs(py - r["center"][1]) <= rhy + pad:
-                return True
-        return False
-
-    new_rects = []
-    for text in column_texts or []:
-        if not text.mark or text.mark in placed_marks:
-            continue
-        if text.mark not in schedule or not text.point_internal:
-            continue
-        lx, ly = text.point_internal[0], text.point_internal[1]
-        if not any((r["center"][0] - lx) ** 2 + (r["center"][1] - ly) ** 2 <= absorb * absorb
-                   for r in placed):
-            continue   # no placed neighbour: not a known column region, skip
-        iso = [(px, py) for (px, py) in frag_pts
-               if (px - lx) ** 2 + (py - ly) ** 2 <= absorb * absorb
-               and not inside_placed(px, py)]
-        if len(iso) < _ABSORB_MIN_PTS:
-            continue   # no leftover geometry as evidence -> never fabricate a column
-        b_mm, h_mm = schedule[text.mark]
-        small, big = min(b_mm, h_mm), max(b_mm, h_mm)
-        if not (limits["col_b_min_mm"] <= small <= limits["col_b_max_mm"] and
-                limits["col_h_min_mm"] <= big <= limits["col_h_max_mm"]):
-            continue
-        big_ft, small_ft = big / _MM, small / _MM
-        ccx = sum(p[0] for p in iso) / len(iso)
-        ccy = sum(p[1] for p in iso) / len(iso)
-        # The neighbour these leftover bits abut: the placed column nearest the cluster.
-        nb = min(placed, key=lambda r: (r["center"][0] - ccx) ** 2
-                 + (r["center"][1] - ccy) ** 2)
-        nbx, nby, nbz = nb["center"]
-        nb_hx, nb_hy = _bbox_half(nb)
-        if abs(ccy - nby) >= abs(ccx - nbx):
-            # abut below/above: long side spans away from the shared horizontal face.
-            # y is fixed by the abutment (edge-to-edge); x is the leftover centroid,
-            # clamped so the column still meets the neighbour's face.
-            sgn = 1.0 if ccy >= nby else -1.0
-            cy = nby + sgn * (nb_hy + big_ft / 2.0)
-            lim = nb_hx + small_ft / 2.0
-            cx = min(max(ccx, nbx - lim), nbx + lim)
-            hx, hy, deg = small_ft / 2.0, big_ft / 2.0, 90.0
-        else:
-            # abut left/right: long side spans away from the shared vertical face.
-            sgn = 1.0 if ccx >= nbx else -1.0
-            cx = nbx + sgn * (nb_hx + big_ft / 2.0)
-            lim = nb_hy + small_ft / 2.0
-            cy = min(max(ccy, nby - lim), nby + lim)
-            hx, hy, deg = big_ft / 2.0, small_ft / 2.0, 0.0
-        if _aabb_overlaps(cx, cy, hx, hy, placed, config.mm_to_ft(_ABSORB_PAD_MM)):
-            continue   # would sit on top of an existing column -> skip, never duplicate
-        rect = {"center": [cx, cy, nbz],
-                "width_ft": small_ft, "height_ft": big_ft,
-                "width_mm": small, "height_mm": big,
-                "long_axis_deg": deg, "mark": text.mark}
-        new_rects.append(rect)
-        placed.append(rect)
-        placed_marks.add(text.mark)
-
-    if not new_rects:
-        return 0
-    entries.append({"layer": "(label-recovered)", "status": "label_recovered",
-                    "approx": True, "rectangles": new_rects})
-    counts = sections.setdefault("status_counts", {})
-    counts["label_recovered"] = counts.get("label_recovered", 0) + len(new_rects)
-    sections["total_rectangles"] = sections.get("total_rectangles", 0) + len(new_rects)
-    return len(new_rects)
 
 
 def _is_split_pair(rects, size):
@@ -936,24 +566,6 @@ def _is_clipped(rect, size):
     return (small_g < size[0] - _CLIP_TOL_MM or big_g < size[1] - _CLIP_TOL_MM)
 
 
-def _label_size(text, schedule):
-    """(small, big) mm for a label, or None.
-
-    Precedence: the inline size ("B1 300x600") first, then schedule[mark], then
-    the label's parenthesised SCHEDULE KEY -- "B20(c)" is sized by the (c) row
-    of a MARK/SIZE table. Every element type resolves through here, so columns,
-    beams and slabs all understand the keyed convention.
-    """
-    if text.b_mm is not None and text.h_mm is not None:
-        return (min(text.b_mm, text.h_mm), max(text.b_mm, text.h_mm))
-    if text.mark and text.mark in schedule:
-        b, h = schedule[text.mark]
-        return (min(b, h), max(b, h))
-    key = getattr(text, "size_key", None)
-    if key and key in schedule:
-        b, h = schedule[key]
-        return (min(b, h), max(b, h))
-    return None
 
 
 def _union_size(rects):
@@ -1195,370 +807,26 @@ def _ring_keeps_all_points(xy, ring, tol_ft):
     return True
 
 
-def recover_outline_columns(sections, records, column_texts=None,
-                            mark_reach_mm=700.0):
-    """Place columns from CLOSED rectangular column-layer outlines the size
-    limits rejected.
-
-    Blade / wall-columns (test8's 250x3250 slanted strips, labelled AC19..BC28)
-    exceed the schedule-plausible size band, so detection drops them -- yet their
-    outlines are drawn CLOSED and unambiguous, and the beam layer even re-traces
-    them. Every closed 4-corner column-layer outline that does not overlap an
-    already placed column becomes a column at its drawn size, position and angle;
-    the nearest unclaimed column mark within reach names it. These columns are
-    NOT grid-snapped or size-snapped -- the drawn outline is the authority.
-    Returns the count placed.
-    """
-    candidates = column_outline_footprints(records)
-    if not candidates:
-        return 0
-    reach_ft = config.mm_to_ft(mark_reach_mm)
-    placed = _column_footprints(sections, sections.get("circles"))
-    new_rects = []
-    for fp in candidates:
-        _kind, cx, cy, ca, sa, hl, hs = fp
-        dup = False
-        for pfp in placed:
-            if pfp[0] == "circle":
-                _k, px, py, pr = pfp
-                if (cx - px) ** 2 + (cy - py) ** 2 <= (pr + hs) ** 2:
-                    dup = True
-                    break
-            else:
-                _k, px, py, pca, psa, phl, phs = pfp
-                dx, dy = cx - px, cy - py
-                u = dx * pca + dy * psa
-                v = dy * pca - dx * psa
-                if abs(u) <= phl + hs and abs(v) <= phs + hs:
-                    dup = True
-                    break
-        if dup:
-            continue
-        small = hs * 2.0 * _MM
-        big = hl * 2.0 * _MM
-        new_rects.append({"center": [cx, cy, 0.0],
-                          "width_mm": small, "height_mm": big,
-                          "width_ft": small / _MM, "height_ft": big / _MM,
-                          "long_axis_deg": math.degrees(math.atan2(sa, ca)) % 180.0,
-                          "mark": None, "_fp": fp})
-        placed.append(fp)             # two outlines can never stack
-    if not new_rects:
-        return 0
-    entries = sections.get("entries", [])
-    claimed = set(r.get("mark") for e in entries for r in e.get("rectangles", [])
-                  if r.get("mark"))
-    claimed |= set(c.get("mark") for c in (sections.get("circles") or [])
-                   if c.get("mark"))
-    for text in (column_texts or []):
-        mark = getattr(text, "mark", None)
-        point = getattr(text, "point_internal", None)
-        if not mark or mark in claimed or point is None:
-            continue
-        best = None
-        for rect in new_rects:
-            if rect["mark"]:
-                continue
-            _kind, cx, cy, ca, sa, hl, hs = rect["_fp"]
-            dx, dy = point[0] - cx, point[1] - cy
-            u = dx * ca + dy * sa
-            v = dy * ca - dx * sa
-            outside = (max(abs(u) - hl, 0.0) ** 2 + max(abs(v) - hs, 0.0) ** 2) ** 0.5
-            if outside <= reach_ft and (best is None or outside < best[0]):
-                best = (outside, rect)
-        if best is not None:
-            best[1]["mark"] = mark
-            claimed.add(mark)
-    for rect in new_rects:
-        del rect["_fp"]
-    entries.append({"layer": "COLUMN (closed outline)", "status": "outline_recovered",
-                    "rectangles": new_rects})
-    sections["entries"] = entries
-    counts = sections.setdefault("status_counts", {})
-    counts["outline_recovered"] = counts.get("outline_recovered", 0) + len(new_rects)
-    sections["total_rectangles"] = sections.get("total_rectangles", 0) + len(new_rects)
-    return len(new_rects)
 
 
-_FACE_LABEL_REACH_MM = 900.0      # a size label sits just off the member it names
-_FACE_SIZE_TOL_MM = 60.0          # drawn vs labelled dimension
-_FACE_LIKENESS = 0.6              # a guess this much of the face is the same member
 
 
-def recover_face_columns(sections, records, column_texts=None,
-                         mark_reach_mm=_FACE_LABEL_REACH_MM,
-                         size_tol_mm=_FACE_SIZE_TOL_MM):
-    """Place COMBINED columns whose outline exists only as a graph face.
-
-    A merged member -- test10's roof: a 12300x300 perimeter wall carrying four
-    300x3300 columns, every piece exploded to bare lines -- closes into no ring
-    at all, because the wall's own edge runs THROUGH each column root. Walking
-    the faces of that line soup recovers each drawn member exactly (see
-    shapes.recover_face_columns).
-
-    Deliberately gated, because a face is otherwise easy to invent: a recovered
-    rectangle is kept only when the plan's own SIZE LABEL agrees with it -- a
-    "300 X 12300" text within reach whose dimensions match what was walked. No
-    label, no column; a rectangle already covered by a placed column is a
-    duplicate and is dropped. In exchange the size limits do not apply: the
-    drawing and its label agree, which is better evidence than a size band.
-
-    Any earlier APPROXIMATE rectangle (the leftover-fragment passes) that falls
-    inside a recovered face is removed: the same member, guessed badly.
-
-    Returns the count placed.
-    """
-    labels = [text for text in (column_texts or [])
-              if getattr(text, "b_mm", None) and getattr(text, "h_mm", None)]
-    if not labels:
-        return 0
-    paths = _open_column_paths(records)
-    if not paths:
-        return 0
-    z = next((p[0][2] for p in paths if p and len(p[0]) > 2), 0.0)
-    candidates = shapes.recover_face_columns(paths, z=z)
-    if not candidates:
-        return 0
-    # A placed column blocks a face only while it is a fair LIKENESS of it: a
-    # 212x424 blob standing in for a 300x2000 column, or a 2700-long piece of a
-    # 12300 wall read as an outline of its own, is part of the member rather
-    # than the member, and must not veto the one the label agrees with.
-    placed = _column_footprints(sections, sections.get("circles"))
-    reach_ft = config.mm_to_ft(mark_reach_mm)
-    new_rects = []
-    kept_fps = []
-    for rect in candidates:
-        cx, cy, _cz = rect.center
-        width_mm = rect.width_ft * _MM
-        height_mm = rect.height_ft * _MM
-        small, big = min(width_mm, height_mm), max(width_mm, height_mm)
-        likeness = _FACE_LIKENESS * rect.width_ft * rect.height_ft
-        if _covered_by(cx, cy, kept_fps):
-            continue
-        if _covered_by(cx, cy, placed, min_area_ft2=likeness):
-            continue
-        label = _matching_size_label(labels, rect, reach_ft, size_tol_mm)
-        if label is None:
-            continue
-        deg = 0.0 if width_mm >= height_mm else 90.0
-        new_rects.append({"center": [cx, cy, z],
-                          "width_mm": small, "height_mm": big,
-                          "width_ft": small / _MM, "height_ft": big / _MM,
-                          "long_axis_deg": deg,
-                          "mark": getattr(label, "mark", None)})
-        kept_fps.append(("rect", cx, cy, math.cos(math.radians(deg)),
-                         math.sin(math.radians(deg)),
-                         big / _MM / 2.0, small / _MM / 2.0))
-    if not new_rects:
-        return 0
-    dropped = _drop_approximate_inside(sections, new_rects)
-    entries = sections.get("entries", [])
-    entries.append({"layer": "COLUMN (graph face)", "status": "face_recovered",
-                    "approx": False, "rectangles": new_rects})
-    sections["entries"] = entries
-    counts = sections.setdefault("status_counts", {})
-    counts["face_recovered"] = counts.get("face_recovered", 0) + len(new_rects)
-    sections["total_rectangles"] = (sections.get("total_rectangles", 0)
-                                    + len(new_rects) - dropped)
-    return len(new_rects)
 
 
-def _open_column_paths(records):
-    """Column-layer geometry that closes into no ring of its own."""
-    paths = []
-    for record in (records or []):
-        if record.category != CATEGORY_COLUMN:
-            continue
-        points = record.points or []
-        if len(points) < 2:
-            continue
-        if len(points) > 3 and _ring_closed(points):
-            continue                      # a closed outline is already a column
-        paths.append(points)
-    return paths
 
 
-def _covered_by(cx, cy, footprints, min_area_ft2=0.0):
-    """True when (cx, cy) lies inside any footprint of at least `min_area_ft2`."""
-    for fp in footprints or []:
-        if fp[0] == "circle":
-            _k, px, py, pr = fp
-            if math.pi * pr * pr < min_area_ft2:
-                continue
-            if (cx - px) ** 2 + (cy - py) ** 2 <= pr ** 2:
-                return True
-            continue
-        _k, px, py, ca, sa, hl, hs = fp
-        if 4.0 * hl * hs < min_area_ft2:
-            continue
-        dx, dy = cx - px, cy - py
-        u = dx * ca + dy * sa
-        v = dy * ca - dx * sa
-        if abs(u) <= hl and abs(v) <= hs:
-            return True
-    return False
 
 
-def _matching_size_label(labels, rect, reach_ft, size_tol_mm):
-    """The nearest size label that AGREES with this rectangle, or None."""
-    cx, cy, _cz = rect.center
-    half_w = rect.width_ft / 2.0
-    half_h = rect.height_ft / 2.0
-    width_mm = rect.width_ft * _MM
-    height_mm = rect.height_ft * _MM
-    best = None
-    for text in labels:
-        point = getattr(text, "point_internal", None)
-        if point is None:
-            continue
-        outside = ((max(abs(point[0] - cx) - half_w, 0.0) ** 2
-                    + max(abs(point[1] - cy) - half_h, 0.0) ** 2) ** 0.5)
-        if outside > reach_ft:
-            continue
-        if not _dims_match_tol(width_mm, height_mm, text.b_mm, text.h_mm,
-                               size_tol_mm):
-            continue
-        if best is None or outside < best[0]:
-            best = (outside, text)
-    return best[1] if best else None
 
 
-def _dims_match_tol(width_mm, height_mm, b_mm, h_mm, tol_mm):
-    small, big = min(width_mm, height_mm), max(width_mm, height_mm)
-    label_small, label_big = min(b_mm, h_mm), max(b_mm, h_mm)
-    return (abs(small - label_small) <= tol_mm
-            and abs(big - label_big) <= tol_mm)
 
 
-def drop_nested_columns(sections, pad_mm=2.0, thickness_tol_mm=20.0):
-    """Remove a column that is a LENGTH of another column, read twice.
-
-    Test10's roof placed its 12300x300 perimeter wall AND two 2700x300 lengths
-    of that same wall, which arrived as closed outlines of their own and so
-    passed every earlier check. Two solids cannot share ground.
-
-    Kept deliberately narrow, because "inside a bigger rectangle" alone is not
-    evidence of a duplicate: a 400x660 column can sit inside the bounding box of
-    a 5630x400 wall it merely abuts, and dropping that would lose a real member.
-    All three must hold:
-
-      * the small one lies WHOLLY inside the big one;
-      * they are the same THICKNESS (short side), within `thickness_tol_mm`;
-      * their long axes are PARALLEL.
-
-    which is the signature of one wall drawn as a whole and again in pieces.
-    Returns the count removed.
-    """
-    boxes = []
-    for entry in sections.get("entries", []):
-        for rect in entry.get("rectangles", []):
-            half_w, half_h = _rect_half_box(rect)
-            cx, cy, _cz = rect["center"]
-            width = rect["width_mm"]
-            height = rect["height_mm"]
-            boxes.append({"entry": entry, "rect": rect, "cx": cx, "cy": cy,
-                          "hw": half_w, "hh": half_h,
-                          "thickness": min(width, height),
-                          "axis": _long_axis_deg(rect),
-                          "area": 4.0 * half_w * half_h})
-    if len(boxes) < 2:
-        return 0
-    pad = config.mm_to_ft(pad_mm)
-    boxes.sort(key=lambda box: box["area"])          # smallest first
-    doomed = []
-    for index, small in enumerate(boxes):
-        for big in boxes[index + 1:]:                # only larger ones
-            if abs(small["cx"] - big["cx"]) + small["hw"] > big["hw"] + pad:
-                continue
-            if abs(small["cy"] - big["cy"]) + small["hh"] > big["hh"] + pad:
-                continue
-            if abs(small["thickness"] - big["thickness"]) > thickness_tol_mm:
-                continue                             # a different member
-            turn = abs(small["axis"] - big["axis"]) % 180.0
-            if min(turn, 180.0 - turn) > 3.0:
-                continue                             # crossing, not colinear
-            doomed.append(small)
-            break
-    if not doomed:
-        return 0
-    for box in doomed:
-        try:
-            box["entry"]["rectangles"].remove(box["rect"])
-        except ValueError:
-            continue
-    sections["entries"] = [entry for entry in sections.get("entries", [])
-                           if entry.get("rectangles")]
-    sections["total_rectangles"] = max(
-        sections.get("total_rectangles", 0) - len(doomed), 0)
-    counts = sections.setdefault("status_counts", {})
-    counts["nested_dropped"] = counts.get("nested_dropped", 0) + len(doomed)
-    return len(doomed)
 
 
-def _long_axis_deg(rect):
-    """The angle the rectangle's LONG side runs at, in degrees."""
-    deg = rect.get("long_axis_deg")
-    if deg is not None:
-        return float(deg)
-    return 0.0 if rect["width_mm"] >= rect["height_mm"] else 90.0
 
 
-def _rect_half_box(rect):
-    """A rectangle's AXIS-ALIGNED half extents (half width, half height).
-
-    Two conventions live in these dicts: a plain rect has no `long_axis_deg`
-    and its width/height are the x/y extents as drawn, while an oriented one
-    carries its SMALL side as the width and its long side along the angle.
-    Both come out right here, and a rotated rect gives its true bounding box.
-    """
-    w = rect["width_mm"] / _MM
-    h = rect["height_mm"] / _MM
-    deg = rect.get("long_axis_deg")
-    if deg is None:
-        return w / 2.0, h / 2.0
-    long_half, short_half = max(w, h) / 2.0, min(w, h) / 2.0
-    theta = math.radians(deg)
-    cos, sin = abs(math.cos(theta)), abs(math.sin(theta))
-    return (long_half * cos + short_half * sin,
-            long_half * sin + short_half * cos)
 
 
-def _drop_approximate_inside(sections, new_rects):
-    """Remove the rectangles a recovered face now covers properly.
-
-    Two kinds go: a GUESS whose centre the face contains (the 45-degree blob a
-    comb corner leaves behind), and ANY rectangle -- however it was found --
-    that lies WHOLLY inside the face. Test10's roof placed its 12300 wall as
-    well as two 2700-long pieces of that same wall, read as closed outlines of
-    their own: two solids in one place is always wrong, and the face, agreeing
-    with the plan's own label, is the one to keep.
-    """
-    boxes = [(rect["center"][0], rect["center"][1]) + _rect_half_box(rect)
-             for rect in new_rects]
-    pad = config.mm_to_ft(2.0)
-    dropped = 0
-    for entry in sections.get("entries", []):
-        approx = bool(entry.get("approx"))
-        kept = []
-        for rect in entry.get("rectangles", []):
-            cx, cy, _cz = rect["center"]
-            own_w, own_h = _rect_half_box(rect)
-            covered = False
-            for bx, by, hw, hh in boxes:
-                if approx and abs(cx - bx) <= hw and abs(cy - by) <= hh:
-                    covered = True                  # a guess at this member
-                    break
-                if (abs(cx - bx) + own_w <= hw + pad
-                        and abs(cy - by) + own_h <= hh + pad):
-                    covered = True                  # a piece of this member
-                    break
-            if covered:
-                dropped += 1
-            else:
-                kept.append(rect)
-        entry["rectangles"] = kept
-    sections["entries"] = [e for e in sections.get("entries", [])
-                           if e.get("rectangles")]
-    return dropped
 
 
 def snap_beam_ends_to_columns(beam_segments, sections, circles=None,
@@ -1629,12 +897,6 @@ _SPLIT_MIN_PIECE_MM = 100.0        # a leftover piece shorter than this is draft
 _SPLIT_MIN_PENETRATION_MM = 10.0   # centreline must reach this far inside; grazing a face is not a crossing
 _SPLIT_JUNCTION_MARGIN_MM = 100.0  # an end at most this far past the column CENTRE is a junction
 
-# Column-LAYER outline rectangles used as obstacles even when no column got placed
-# (blade columns like test8's 250x3250 slanted rects exceed the column limits and are
-# dropped -- but a beam still must not be drawn over them).
-_OBSTACLE_SHORT_MIN_MM = 100.0     # a closed rect thinner than this is stray linework
-_OBSTACLE_SHORT_MAX_MM = 1000.0    # ...wider than this is a room/void outline, not a column
-_OBSTACLE_LONG_MAX_MM = 6000.0     # ...longer than this is a core wall, not a blade column
 
 
 def dedupe_beam_segments(beam_segments, tol_mm=10.0):
@@ -1704,102 +966,12 @@ def dedupe_beam_segments(beam_segments, tol_mm=10.0):
     return dropped
 
 
-def _distinct_ring_corners(points, tol_ft):
-    """First-visit distinct vertices of a (possibly retraced) closed polyline."""
-    corners = []
-    for p in points:
-        for q in corners:
-            if abs(p[0] - q[0]) <= tol_ft and abs(p[1] - q[1]) <= tol_ft:
-                break
-        else:
-            corners.append((p[0], p[1]))
-    return corners
 
 
-def column_outline_footprints(records, placed_footprints=None):
-    """Obstacle footprints from CLOSED RECTANGULAR column-layer outlines.
-
-    Column detection enforces schedule-plausible size limits, so a blade column
-    (test8: 250x3250, slanted, drawn with a diagonal marker stroke) is dropped and
-    never placed -- yet the beam layer re-traces its outline and the derived beams
-    would be DRAWN ON TOP of the (real, just unplaced) column. Every column-layer
-    polyline whose distinct vertices form one clean rectangle (opposite sides equal,
-    corners square) within blade-column bounds becomes a ("rect", ...) footprint for
-    split_beams_at_columns, whether or not a column got placed there. Fragmented or
-    L/C-shaped core outlines never qualify -- deliberately conservative.
-    """
-    tol_ft = config.mm_to_ft(1.0)
-    short_min = config.mm_to_ft(_OBSTACLE_SHORT_MIN_MM)
-    short_max = config.mm_to_ft(_OBSTACLE_SHORT_MAX_MM)
-    long_max = config.mm_to_ft(_OBSTACLE_LONG_MAX_MM)
-    side_tol = config.mm_to_ft(20.0)
-    out = []
-    for record in records:
-        if record.category != CATEGORY_COLUMN or record.kind != "polyline":
-            continue
-        if len(record.points) < 4:
-            continue
-        corners = _distinct_ring_corners(record.points, tol_ft)
-        if len(corners) != 4:
-            continue
-        (ax, ay), (bx, by), (cx2, cy2), (dx2, dy2) = corners
-        e1 = (bx - ax, by - ay)
-        e2 = (cx2 - bx, cy2 - by)
-        e3 = (dx2 - cx2, dy2 - cy2)
-        e4 = (ax - dx2, ay - dy2)
-        l1 = (e1[0] ** 2 + e1[1] ** 2) ** 0.5
-        l2 = (e2[0] ** 2 + e2[1] ** 2) ** 0.5
-        l3 = (e3[0] ** 2 + e3[1] ** 2) ** 0.5
-        l4 = (e4[0] ** 2 + e4[1] ** 2) ** 0.5
-        if min(l1, l2, l3, l4) <= 0:
-            continue
-        if abs(l1 - l3) > side_tol or abs(l2 - l4) > side_tol:
-            continue
-        if abs(e1[0] * e2[0] + e1[1] * e2[1]) / (l1 * l2) > 0.035:   # ~2 deg off square
-            continue
-        short, long_ = min(l1, l2), max(l1, l2)
-        if not (short_min <= short <= short_max) or long_ > long_max:
-            continue
-        cx = (ax + cx2) / 2.0
-        cy = (ay + cy2) / 2.0
-        if l1 >= l2:
-            ca, sa = e1[0] / l1, e1[1] / l1
-        else:
-            ca, sa = e2[0] / l2, e2[1] / l2
-        out.append(("rect", cx, cy, ca, sa, long_ / 2.0, short / 2.0))
-    return out
 
 
-def _column_footprints(sections, circles):
-    """Every column footprint, as ("circle", cx, cy, r) or
-    ("rect", cx, cy, cos, sin, half_long, half_short) with the LONG half-extent
-    along `long_axis_deg` -- the same convention the column builder places by
-    (small side b across, big side h along the long axis)."""
-    out = []
-    for circle in (circles or []):
-        cx, cy, _cz = circle["center"]
-        out.append(("circle", cx, cy, circle["diameter_ft"] / 2.0))
-    for entry in sections.get("entries", []):
-        for rect in entry["rectangles"]:
-            w = rect["width_mm"] / _MM
-            h = rect["height_mm"] / _MM
-            deg = rect.get("long_axis_deg")
-            if deg is None:
-                deg = 0.0 if w >= h else 90.0   # placement default (builders/columns)
-            cx, cy, _cz = rect["center"]
-            theta = math.radians(deg)
-            out.append(("rect", cx, cy, math.cos(theta), math.sin(theta),
-                        max(w, h) / 2.0, min(w, h) / 2.0))
-    return out
 
 
-def column_trim_footprints(sections):
-    """PLACED columns -- rects AND round -- as footprint tuples.
-
-    The slab member-edge source uses these to replace raw column-layer linework
-    with exact rings (columns become TRIM geometry for the beam-outline graph);
-    round columns especially arrive as dozens of tiny drawn arc fragments."""
-    return _column_footprints(sections, sections.get("circles"))
 
 
 def _clip_slab(t0, t1, f0, df, half):
