@@ -13,41 +13,50 @@ A professional suite of structural and architectural BIM automation tools for **
 The extension adds an **AnonGee** tab inside Revit with four panels:
 
 ### 🟢 Essential Panel
-| Tool | Description |
-|------|-------------|
-| **Obscured Rebar** | Set rebars as unobscured and solid across selected views. Adjusts view detail level (Fine for 3D, Medium for plan/section). |
-| **Copy Rebar Visibility** | Copy rebar visibility / graphic settings from one view to others. |
-| **Export Schedule** | Export Revit schedules to Excel / CSV format. |
-| **Bulk Rename** | Rename multiple elements (views, sheets, families, etc.) with naming patterns. |
-| **Bulk Delete** | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more. |
+
+
+| Tool                      | Description                                                                                                                 |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Obscured Rebar**        | Set rebars as unobscured and solid across selected views. Adjusts view detail level (Fine for 3D, Medium for plan/section). |
+| **Copy Rebar Visibility** | Copy rebar visibility / graphic settings from one view to others.                                                           |
+| **Export Schedule**       | Export Revit schedules to Excel / CSV format.                                                                               |
+| **Bulk Rename**           | Rename multiple elements (views, sheets, families, etc.) with naming patterns.                                              |
+| **Bulk Delete**           | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more.                                         |
 
 ### 🔵 Advance Panel
-| Tool | Description |
-|------|-------------|
-| **One Filter Parameter** | Filter Revit elements by a single parameter condition, preview matches in a table, then batch-edit a parameter (Set / Prefix / Suffix / Replace / Delete). |
-| **Multi Filter Parameter** | Filter Revit elements by multiple parameter conditions (All/Any logic), then batch-edit parameters in one transaction. |
-| **Parameter Combine** | Combine or split parameter values across multiple elements. |
+
+
+| Tool                       | Description                                                                                                                                                |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **One Filter Parameter**   | Filter Revit elements by a single parameter condition, preview matches in a table, then batch-edit a parameter (Set / Prefix / Suffix / Replace / Delete). |
+| **Multi Filter Parameter** | Filter Revit elements by multiple parameter conditions (All/Any logic), then batch-edit parameters in one transaction.                                     |
+| **Parameter Combine**      | Combine or split parameter values across multiple elements.                                                                                                |
 
 ### 🔴 Core Panel
-| Tool | Description |
-|------|-------------|
-| **BIM Generation** | Build a structural Revit model from a PLANWIN / FRAMEWIN **INP** file. Creates levels, columns, beams, and floors with auto-sized type duplicates. |
-| **CAD to BIM** | Import a **DXF** file, link it with unit + positioning settings, then auto-generate Revit grids, columns, and beams from the DXF geometry and text marks. Uses hybrid extraction (Revit link + ezdxf). |
-| **FramewinToBIM** | Convert FRAMEWIN structural data directly into Revit elements. |
+
+
+| Tool               | Description                                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BIM Generation** | Build a structural Revit model from a PLANWIN / FRAMEWIN**INP** file. Creates levels, columns, beams, and floors with auto-sized type duplicates.                                                     |
+| **CAD2BIM**        | Import a**DXF** file, link it with unit + positioning settings, then auto-generate Revit grids, columns, and beams from the DXF geometry and text marks. Uses hybrid extraction (Revit link + ezdxf). |
+| **FramewinToBIM**  | Convert FRAMEWIN structural data directly into Revit elements.                                                                                                                                        |
 
 ### 🟠 Dev Panel
-| Tool | Description |
-|------|-------------|
-| **BBS Generator** | **Bar Bending Schedule** generator. Reads native `DB.Rebar` elements and exports formatted Excel workbooks (BBS, Calculation, Summary sheets). Supports **IS 2502:2019**, **BS 8666:2020**, and **ACI 318-19 / CRSI** standards. Includes revision tracking. |
-| **Brand Guidelines** | Live component gallery showing the AnonGee design system — brand colors, typography, buttons, inputs, toggles, and status badges. |
-| **CPython3 engine** | Check / test the CPython 3 engine configuration. |
-| **Create Button** | Quick scaffolding utility for creating new pyRevit buttons. |
+
+
+| Tool                 | Description                                                                                                                                                                                                                                                  |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BBS Generator**    | **Bar Bending Schedule** generator. Reads native `DB.Rebar` elements and exports formatted Excel workbooks (BBS, Calculation, Summary sheets). Supports **IS 2502:2019**, **BS 8666:2020**, and **ACI 318-19 / CRSI** standards. Includes revision tracking. |
+| **Brand Guidelines** | Live component gallery showing the AnonGee design system — brand colors, typography, buttons, inputs, toggles, and status badges.                                                                                                                           |
+| **CPython3 engine**  | Check / test the CPython 3 engine configuration.                                                                                                                                                                                                             |
+| **Create Button**    | Quick scaffolding utility for creating new pyRevit buttons.                                                                                                                                                                                                  |
 
 ---
 
 ## 🎨 Design System
 
 All tools use a **custom WPF design system** with:
+
 - Brand color palette & theming (`Colors.xaml`, `AnonGeeTheme.xaml`)
 - Reusable WPF controls (`Controls.xaml`)
 - SVG/vector icons (`Icons.xaml`)
@@ -61,25 +70,26 @@ Preview the full system in Revit via **AnonGee > Dev > Brand Guidelines**.
 ## 📦 Installation (End User)
 
 ### Prerequisites
+
 - **Autodesk Revit** 2022 or newer
 - **pyRevit** 6.10.0 or newer ([Download pyRevit](https://github.com/eirannejad/pyRevit/releases))
 
 ### Step-by-Step
 
 1. **Clone or download** this repository:
+
    ```bash
    git clone https://github.com/Zxaidman/pyRevit-addons.git
    ```
-
 2. **Add the extension to pyRevit:**
+
    - Open Revit → click the **pyRevit** tab → **pyRevit** → **Extensions** → **Add Extension**.
    - Browse to the cloned folder (`pyRevit-addons`) and select it.
    - *Alternatively*, use the CLI:
      ```bash
      pyrevit extend add pyRevit-addons
      ```
-
-3. **Restart Revit.**  
+3. **Restart Revit.**
    The **AnonGee** tab will now appear in the Revit ribbon with all tools ready to use.
 
 > ✅ **No additional Python packages or dependency setup required.** All libraries are pre-bundled in the extension.
@@ -100,6 +110,7 @@ python auto_provision.py
 This installs `numpy`, `openpyxl`, `pythonnet`, and `ezdxf` into the extension's bundled library folders (`lib/py3/` and `lib/py2/`).
 
 ### Project Structure
+
 ```
 AnonGee.extension/
 ├── AnonGee.tab/           # Revit ribbon tab definition
