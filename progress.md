@@ -49,10 +49,24 @@
 - After EVERY move: 416 tests green, 22 fingerprints identical, fixture sweep
   identical line for line. Two commits pushed.
 
-### Next
-- Split the beam half out of report.py, then slab_outlines.py, stair_layout.py, and
-  script.py last.
+### Phase 2 complete — 8 refactor commits, every one a pure move
+| Was | Now |
+|-----|-----|
+| report.py 3039 | report.py 888 + beam_segments 850 + columns_recovery 747 + export 400 + column_geom 188 + beam_cleanup 328 + limits 67 |
+| script.py 2956 | script.py 962 + ui_window 1211 + run_builders 528 + run_picking 199 + run_console 184 + ui_dialogs 180 |
+| stair_layout 1683 | stair_layout 721 + stair_runs 630 + stair_landings 403 + stair_text 111 + stair_tolerances 31 |
+| slab_outlines 1550 | slab_graph 1077 + slab_outlines 445 + slab_labels 145 |
 
-### Waiting on
-- User to run v0.67.5 twice in ONE Revit session and confirm the crash is gone, then
-  push the JSON export. Phase 2 (refactor) does not start until that lands.
+Verified after EVERY commit, and again at the end:
+- 416 unit tests green
+- 22 stored slab fingerprints byte-identical
+- stair replay over every fixture DXF identical (plans, runs, treads, widths)
+- fixture sweep over 17 DXFs identical line for line
+
+The v0.67.5 exports the user pushed confirm all three Phase 1 fixes in Revit:
+test10 roof 12 -> 10 columns and 6 slabs, test12's five storeys named and ordered,
+test13 43-44 slabs per storey via "slab_edges + beam graph".
+
+### Next
+- Phase 3: `/code-review` over the branch, fix what it finds, then the user runs the
+  refactored build in Revit before anything merges to main.

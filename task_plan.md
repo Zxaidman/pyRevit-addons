@@ -56,7 +56,7 @@ created type; every site asks the registry first and only builds the class on a 
 
 ## Phase 2 — Refactor: smaller, focused modules
 
-**Status:** in_progress — library splits under way while the user tests v0.67.5
+**Status:** complete — every split verified as a no-op three ways
 
 Current sizes (the four the user is reacting to):
 
@@ -86,18 +86,20 @@ Current sizes (the four the user is reacting to):
 - [x] 2.3c `column_geom.py` (188) + `limits.py` (67) — the shared primitives
 - [x] 2.3d `tests/_loader.py` — one dependency graph instead of twenty hand-rolled
       loaders; the scratchpad harnesses use it too
-- [ ] 2.3e `report.py` (1931) → split the BEAM half (build_beam_segments, splitting,
-      dedupe, snapping) from column SECTIONS
-- [ ] 2.4 `slab_outlines.py` → slabs/
-- [ ] 2.5 `stair_layout.py` → stairs/
-- [ ] 2.6 `script.py` → dialog/ + run/ (+ keep the static wiring tests passing)
+- [x] 2.3e `beam_segments.py` (850) + `beam_cleanup.py` (328) — report.py now 888
+- [x] 2.4 `slab_graph.py` (1077) + `slab_labels.py` (145) — slab_outlines.py now 445
+- [x] 2.5 `stair_runs.py` (630) + `stair_landings.py` (403) + `stair_text.py` (111)
+      + `stair_tolerances.py` (31) — stair_layout.py now 721
+- [x] 2.6 `script.py` 2956 → 962: `run_console.py` (184), `ui_dialogs.py` (180),
+      `ui_window.py` (1211), `run_builders.py` (528), `run_picking.py` (199)
 - [ ] 2.7 Delete the facades if (and only if) every call site has moved cleanly
+      (deferred: the facades are one line each and keep every commit revertable)
 
 ---
 
 ## Phase 3 — Review pass
 
-**Status:** pending
+**Status:** next
 
 - [ ] 3.1 `/code-review` over the whole branch diff vs main
 - [ ] 3.2 Fix what the review turns up (correctness first, then simplification)
