@@ -25,10 +25,6 @@ except Exception:
     _CpyProgressBar = None
 
 
-# --- deferred console: the whole run is buffered and only REVEALED when something
-# goes wrong (user request: a clean run should not open the pyRevit console at all).
-# Printing is what opens that window, so a successful run prints nothing; a failure
-# flushes the entire log -- progress bar, per-phase counts, notes -- for diagnosis.
 _REAL_PRINT = print   # the genuine print; only the buffer uses it
 
 
@@ -101,11 +97,6 @@ class _NullProgress(object):
 _BAR = _NullProgress()
 
 
-# Two bars, not one. Linking and reading the CAD happens BEFORE the dialog
-# opens, so a single bar sat at whatever percent the read had reached while the
-# user filled the dialog in, then looked like it RESET when the build started.
-# Each phase gets its own: the read bar closes when the dialog opens, the build
-# bar opens when Run is pressed.
 _READ_STEPS = 2
 
 

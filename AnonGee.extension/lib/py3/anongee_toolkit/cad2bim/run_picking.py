@@ -24,14 +24,21 @@ from .ui_dialogs import _alert
 
 
 def _uidoc():
-    """The active UIDocument. `__revit__` is injected into the pushbutton's own
-    namespace by pyRevit, so it is read from the builtins the host set up rather
-    than closed over at import time."""
+    """The active UIDocument, or None when there is no Revit host.
+
+    `__revit__` is injected by pyRevit into the SCRIPT's namespace, which this
+    module is not -- so it is resolved the way the rest of the toolkit resolves
+    it (revit/application.py): `__main__` first, since that is where pyRevit
+    puts it, then builtins. None rather than an exception, because both callers
+    treat a missing document as "nothing to pick" and skip; raising here would
+    turn a skip into an aborted run.
+    """
     import builtins
-    revit = getattr(builtins, "__revit__", None)
+    import __main__
+    revit = getattr(__main__, "__revit__", None) or getattr(builtins, "__revit__", None)
     if revit is None:
-        raise RuntimeError("no Revit host: __revit__ is not available")
-    return revit.ActiveUIDocument
+        return None
+    return getattr(revit, "ActiveUIDocument", None)
 
 
 # Picked stair detail lines chain into an outline when their ends are this close.

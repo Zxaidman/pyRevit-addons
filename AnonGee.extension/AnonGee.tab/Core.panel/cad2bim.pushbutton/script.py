@@ -41,13 +41,9 @@ clr.AddReference("WindowsBase")
 clr.AddReference("System.Xml")
 clr.AddReference("System.Windows.Forms")
 
-# The window/message/file-dialog plumbing moved to cad2bim.ui_dialogs; what is
-# left here is what the dialog BUILDS: the storey and layer rows it lays out.
-from System.Windows import (Thickness, GridLength, GridUnitType,
-                            VerticalAlignment)
-from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox, TextBox, CheckBox, ListBoxItem)
-import xml.etree.ElementTree as ElementTree
+# The dialogs and their WPF plumbing live in the library now (cad2bim.ui_window,
+# cad2bim.ui_dialogs); the CLR references stay because pyRevit resolves them per
+# script and the library modules are imported through this one.
 
 
 def _bootstrap_lib_path():
@@ -117,7 +113,7 @@ _drop_stale_modules()
 # NOT purged above, and deliberately: it holds the CLR types Python.NET emitted
 # for this Revit session. Rebuilding one of those raises "Duplicate type name
 # within an assembly", so the registry has to outlive the reload.
-import anongee_clr
+import anongee_clr                      # noqa: F401  (imported for its lifetime)
 
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
@@ -128,30 +124,71 @@ from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
 # The console and the progress bars moved to the library; the names keep their
 # underscores so every call site here reads exactly as it did.
-from anongee_toolkit.cad2bim import ui_window
-from anongee_toolkit.cad2bim.run_builders import (   # noqa: F401
-    _create_grids, _create_columns, _create_beams, _create_footings,
-    _create_slabs, _create_stairs, _apply_materials, _colour_open_views,
-    _strip_ids)
-from anongee_toolkit.cad2bim.run_picking import _draw_stair_outlines
-from anongee_toolkit.cad2bim.ui_window import (CadToBimWindow,
-                                               LinkOptionsDialog)
-from anongee_toolkit.cad2bim.ui_dialogs import (       # noqa: F401
-    _alert, _error, _load_window, _open_dxf, _save_json,
-    _open_settings_file, _save_settings_file, _select_containing,
-    _control_value, _set_control_value, _persisted, _rollback_alert)
-from anongee_toolkit.cad2bim.run_console import (      # noqa: F401
-    _OUT, _say, _progress, _open_progress, _close_progress, _storey_span,
-    _READ_STEPS, _BUILD_STEPS)
-from anongee_toolkit.cad2bim.builders import (columns, beams, footings, grids,
+# The modules this button was split into. A library OLDER than the button will
+# not have them at all, and an ImportError here -- at module level, before main()
+# can catch anything -- is a raw traceback instead of the explanation
+# _library_mismatch exists to give. So the failure is caught and DEFERRED: the
+# names are stubbed, and main() reports it properly on the first line it runs.
+_MISSING_MODULE = None
+try:
+    from anongee_toolkit.cad2bim import ui_window
+    from anongee_toolkit.cad2bim.run_builders import (   # noqa: F401
+        _create_grids, _create_columns, _create_beams, _create_footings,
+        _create_slabs, _create_stairs, _apply_materials, _colour_open_views,
+        _strip_ids)
+    from anongee_toolkit.cad2bim.run_picking import _draw_stair_outlines
+    from anongee_toolkit.cad2bim.ui_window import (CadToBimWindow,
+                                                   LinkOptionsDialog)
+    from anongee_toolkit.cad2bim.ui_dialogs import _alert, _error, _save_json
+    from anongee_toolkit.cad2bim.run_console import (      # noqa: F401
+        _OUT, _say, _progress, _open_progress, _close_progress, _storey_span,
+        _READ_STEPS, _BUILD_STEPS)
+except ImportError as import_error:
+    _MISSING_MODULE = str(import_error)
+
+    # Fallbacks, so the run can still SAY what went wrong: every one of these
+    # names is used before -- and by -- the mismatch report itself.
+    def _say(message=""):
+        print(message)
+
+    def _alert(title, message):
+        from System.Windows import MessageBox
+        MessageBox.Show(message, title)
+
+    def _error(title, message, detail=None):
+        from System.Windows import MessageBox
+        MessageBox.Show("{0}\n\n{1}".format(message, detail or ""), title)
+
+    def _close_progress():
+        pass
+
+    class _StubOut(object):
+        """Enough of the deferred console for the failure path to report."""
+        live = True
+
+        def say(self, message=""):
+            print(message)
+
+        def fail(self):
+            pass
+
+        def flush(self):
+            pass
+
+        def finish(self, outcomes=None):
+            pass
+
+    _OUT = _StubOut()
+from anongee_toolkit.cad2bim.builders import (beams, columns, footings,
                                               materials, slabs, stairs,
-                                              txn_failures, view_filters)
+                                              txn_failures)
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
 # the windows live in the library; their .xaml lives here, beside the button
-ui_window.use_xaml(_XAML, _LINK_XAML)
+if _MISSING_MODULE is None:
+    ui_window.use_xaml(_XAML, _LINK_XAML)
 
 # What this button needs the library to have. Checked once, up front, so a
 # library older than the button says so plainly instead of failing an hour into
@@ -168,6 +205,8 @@ def _library_mismatch():
     missing = ["{0}.{1}".format(module.__name__.rsplit(".", 1)[-1], attribute)
                for module, attributes in _REQUIRED for attribute in attributes
                if not hasattr(module, attribute)]
+    if _MISSING_MODULE:
+        missing.insert(0, _MISSING_MODULE)   # a module that is not there at all
     if not missing:
         return None
     return ("This button needs a newer cad2bim library.\n\nMissing: {0}\n\n"

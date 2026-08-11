@@ -346,6 +346,56 @@ class TheEngineKeepsModulesBetweenRuns(unittest.TestCase):
             self.assertIn(attribute, source)
 
 
+class AnOldLibraryIsReportedNotCrashed(unittest.TestCase):
+    """The button imports five modules that a stale library will not have.
+
+    Those imports run at MODULE level, before main() can catch anything, so an
+    ImportError there would surface as a raw traceback instead of the sentence
+    _library_mismatch exists to give. The import is therefore deferred into a
+    reported failure -- and the report itself needs names the failed import was
+    supposed to provide.
+    """
+
+    def test_the_new_module_imports_are_guarded(self):
+        source = _script_source()
+        block = source.split("_MISSING_MODULE = None", 1)[1].split(
+            "_HERE = ", 1)[0]
+        self.assertIn("try:", block)
+        self.assertIn("except ImportError", block)
+        for module in ("run_builders", "run_picking", "ui_window", "ui_dialogs",
+                       "run_console"):
+            self.assertIn(module, block, "%s imported outside the guard" % module)
+
+    def test_the_failure_path_can_still_talk(self):
+        """Every name main() uses to REPORT the failure must have a fallback."""
+        source = _script_source()
+        tree = ast.parse(source)
+        handler = None
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            for candidate in node.handlers:
+                if any(isinstance(inner, ast.Assign)
+                       and getattr(inner.targets[0], "id", "") == "_MISSING_MODULE"
+                       for inner in ast.walk(candidate)):
+                    handler = candidate
+        self.assertIsNotNone(handler, "the guarded import has no handler")
+        defined = set()
+        for node in ast.walk(handler):
+            if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+                defined.add(node.name)
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                defined.add(node.id)
+        for name in ("_say", "_alert", "_error", "_OUT", "_close_progress"):
+            self.assertIn(name, defined,
+                          "%s has no fallback: the report would raise" % name)
+
+    def test_the_missing_module_reaches_the_report(self):
+        source = _script_source()
+        block = source.split("def _library_mismatch(", 1)[1].split("\n\n\n", 1)[0]
+        self.assertIn("_MISSING_MODULE", block)
+
+
 class SettingsSaveAndLoad(unittest.TestCase):
     """The whole dialog has to survive a Revit session, not just two boxes."""
 
