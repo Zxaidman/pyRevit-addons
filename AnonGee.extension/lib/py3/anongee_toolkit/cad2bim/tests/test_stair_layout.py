@@ -22,7 +22,8 @@ _MM = 304.8
 _FT = 1.0 / _MM
 
 
-stair_layout, slab_outlines, layers = _loader.load("stair_layout", "slab_outlines", "classify.layers")
+stair_layout, stair_runs, slab_outlines, layers = _loader.load(
+    "stair_layout", "stair_runs", "slab_outlines", "classify.layers")
 
 
 class _Rec(object):
@@ -294,14 +295,14 @@ class LineworkStairs(unittest.TestCase):
             line(x, 0.0, x, 1600.0)
         line(1000.0 + 10 * 300.0 + 800.0, 0.0, 1000.0 + 10 * 300.0 + 800.0, 1600.0)
         line(1000.0 + 10 * 300.0 + 1600.0, 0.0, 1000.0 + 10 * 300.0 + 1600.0, 1600.0)
-        runs = stair_layout._riser_runs([(a, b) for a, b in
+        runs = stair_runs._riser_runs([(a, b) for a, b in
                                          ((tuple(r.points[0][:2]),
                                            tuple(r.points[1][:2])) for r in recs)])
         self.assertEqual(len(runs), 1)
         self.assertEqual(len(runs[0]["positions"]), 11)
 
     def test_equidistant_chains_segment_at_odd_gaps(self):
-        chains = stair_layout._equidistant_chains
+        chains = stair_runs._equidistant_chains
         step = 300.0 * _FT
         pos = [(i * step, 0.0, 1.0) for i in range(11)]
         pos += [(10 * step + 800.0 * _FT, 0.0, 1.0),
@@ -556,7 +557,7 @@ class RiserRecovery(unittest.TestCase):
     def test_direction_buckets_wrap(self):
         """Lines drawn end-for-end are the same direction, not two."""
         positions = [1000.0 + 300.0 * i for i in range(11)]
-        runs = stair_layout._riser_runs(
+        runs = stair_runs._riser_runs(
             [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
              for r in self._flight(positions, reverse_every=3)])
         self.assertEqual(len(runs), 1)
@@ -565,7 +566,7 @@ class RiserRecovery(unittest.TestCase):
     def test_missing_riser_lines_are_rebuilt(self):
         """A 600mm gap in a 300mm flight is ONE undrawn riser, not the end."""
         positions = [0.0, 300.0, 600.0, 1200.0, 1500.0, 1800.0]   # 900 absent
-        runs = stair_layout._riser_runs(
+        runs = stair_runs._riser_runs(
             [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
              for r in self._flight(positions)])
         self.assertEqual(len(runs), 1)
@@ -575,18 +576,18 @@ class RiserRecovery(unittest.TestCase):
         """A jump far beyond a few treads is a landing: two separate flights."""
         positions = ([0.0, 300.0, 600.0, 900.0]
                      + [4000.0, 4300.0, 4600.0, 4900.0])
-        runs = stair_layout._riser_runs(
+        runs = stair_runs._riser_runs(
             [(tuple(r.points[0][:2]), tuple(r.points[1][:2]))
              for r in self._flight(positions)])
         self.assertEqual(sorted(len(r["positions"]) for r in runs), [4, 4])
 
     def test_tread_multiple_rules(self):
-        self.assertEqual(stair_layout._tread_multiple(300.0, 300.0), 1)
-        self.assertEqual(stair_layout._tread_multiple(600.0, 300.0), 2)
-        self.assertEqual(stair_layout._tread_multiple(900.0, 300.0), 3)
-        self.assertEqual(stair_layout._tread_multiple(1200.0, 300.0), 0)  # landing
-        self.assertEqual(stair_layout._tread_multiple(450.0, 300.0), 0)   # not a multiple
-        self.assertEqual(stair_layout._tread_multiple(300.0, None), 0)
+        self.assertEqual(stair_runs._tread_multiple(300.0, 300.0), 1)
+        self.assertEqual(stair_runs._tread_multiple(600.0, 300.0), 2)
+        self.assertEqual(stair_runs._tread_multiple(900.0, 300.0), 3)
+        self.assertEqual(stair_runs._tread_multiple(1200.0, 300.0), 0)  # landing
+        self.assertEqual(stair_runs._tread_multiple(450.0, 300.0), 0)   # not a multiple
+        self.assertEqual(stair_runs._tread_multiple(300.0, None), 0)
 
 
 class FlightWidthFromTypicalRiser(unittest.TestCase):
@@ -607,7 +608,7 @@ class FlightWidthFromTypicalRiser(unittest.TestCase):
     def test_overrunning_line_does_not_widen_the_flight(self):
         ys = [2600.0 + 300.0 * i for i in range(10)]
         spans = [(11200.0, 14300.0)] + [(11200.0, 13700.0)] * 9   # first overruns
-        runs = stair_layout._riser_runs(self._flight(spans, ys))
+        runs = stair_runs._riser_runs(self._flight(spans, ys))
         self.assertEqual(len(runs), 1)
         width_mm = (runs[0]["span_hi"] - runs[0]["span_lo"]) * _MM
         self.assertAlmostEqual(width_mm, 2500.0, places=3)
@@ -616,7 +617,7 @@ class FlightWidthFromTypicalRiser(unittest.TestCase):
 
     def test_modal_span_is_a_real_drawn_extent(self):
         chain = [(0.0, 10.0, 20.0), (1.0, 10.0, 20.0), (2.0, 10.0, 30.0)]
-        lo, hi = stair_layout._modal_span(chain)
+        lo, hi = stair_runs._modal_span(chain)
         self.assertAlmostEqual(lo, 10.0)
         self.assertAlmostEqual(hi, 20.0)      # the pair two of the three share
 
@@ -668,16 +669,16 @@ class WinderFlights(unittest.TestCase):
         # zero turn: the ordinary detector's job, and _fan_runs must not add it
         lines = [(a, b) for a, b in
                  stair_layout._stair_lines(self._fan(turn_deg=0.0))[0]]
-        self.assertEqual(stair_layout._fan_runs(lines, []), [])
+        self.assertEqual(stair_runs._fan_runs(lines, []), [])
 
     def test_risers_that_wobble_both_ways_are_not_a_fan(self):
         recs = self._fan(turn_deg=30.0)
         lines, _z = stair_layout._stair_lines(recs)
         angles = [math.atan2(b[1] - a[1], b[0] - a[0]) % math.pi
                   for a, b in lines]
-        self.assertIsNotNone(stair_layout._monotone_turn(angles))
+        self.assertIsNotNone(stair_runs._monotone_turn(angles))
         angles[3], angles[4] = angles[4], angles[3]      # turn back on itself
-        self.assertIsNone(stair_layout._monotone_turn(angles))
+        self.assertIsNone(stair_runs._monotone_turn(angles))
 
     def test_fan_and_straight_flight_both_survive(self):
         recs = self._fan(count=6, x0=3000.0)
@@ -755,7 +756,7 @@ class SpiralFromDrawnLinework(unittest.TestCase):
                                       (200.0 * _FT, (i * 60.0) * _FT)],
                              layers.CATEGORY_STAIR))
         lines, _z = stair_layout._stair_lines(recs)
-        self.assertIsNone(stair_layout._spiral_run(lines))
+        self.assertIsNone(stair_runs._spiral_run(lines))
 
 
 

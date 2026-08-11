@@ -18,9 +18,11 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _PKG = os.path.dirname(_HERE)
 
 
-report, export, config, slab_outlines, slab_graph, stair_layout = (
-    _loader.load("report", "export", "config", "slab_outlines",
-                 "slab_graph", "stair_layout"))
+# ONE load call: each call gets its own namespace, and apply_tolerances has to
+# write the very module the assertions read
+(report, export, config, slab_outlines, slab_graph, stair_layout,
+ stair_tol) = _loader.load("report", "export", "config", "slab_outlines",
+                           "slab_graph", "stair_layout", "stair_tolerances")
 
 
 class _Result(object):
@@ -87,11 +89,11 @@ class ToleranceOverrides(unittest.TestCase):
         self.assertEqual(d["slab_min_width_mm"],
                          slab_graph._MIN_PANEL_WIDTH_MM)
         self.assertEqual(d["slab_min_step_mm"], slab_graph._MIN_STEP_MM)
-        self.assertEqual(d["stair_cluster_mm"], stair_layout._CLUSTER_GAP_MM)
-        self.assertEqual(d["stair_tread_min_mm"], stair_layout._TREAD_MIN_MM)
-        self.assertEqual(d["stair_tread_max_mm"], stair_layout._TREAD_MAX_MM)
+        self.assertEqual(d["stair_cluster_mm"], stair_tol._CLUSTER_GAP_MM)
+        self.assertEqual(d["stair_tread_min_mm"], stair_tol._TREAD_MIN_MM)
+        self.assertEqual(d["stair_tread_max_mm"], stair_tol._TREAD_MAX_MM)
         self.assertEqual(d["stair_arrival_merge_mm"],
-                         stair_layout._ARRIVAL_MERGE_GAP_MM)
+                         stair_tol._ARRIVAL_MERGE_GAP_MM)
 
     def test_dialog_values_reach_the_modules(self):
         slab_outlines.apply_tolerances({"slab_snap_mm": 75.0,
@@ -108,16 +110,16 @@ class ToleranceOverrides(unittest.TestCase):
                                        "stair_tread_min_mm": 120.0,
                                        "stair_tread_max_mm": 600.0,
                                        "stair_arrival_merge_mm": 900.0})
-        self.assertEqual(stair_layout._CLUSTER_GAP_MM, 2500.0)
-        self.assertEqual(stair_layout._TREAD_MIN_MM, 120.0)
-        self.assertEqual(stair_layout._TREAD_MAX_MM, 600.0)
-        self.assertEqual(stair_layout._ARRIVAL_MERGE_GAP_MM, 900.0)
+        self.assertEqual(stair_tol._CLUSTER_GAP_MM, 2500.0)
+        self.assertEqual(stair_tol._TREAD_MIN_MM, 120.0)
+        self.assertEqual(stair_tol._TREAD_MAX_MM, 600.0)
+        self.assertEqual(stair_tol._ARRIVAL_MERGE_GAP_MM, 900.0)
 
     def test_empty_tolerances_change_nothing(self):
         slab_outlines.apply_tolerances(None)
         stair_layout.apply_tolerances({})
         self.assertEqual(slab_graph._SNAP_MM, config.DEFAULTS["slab_snap_mm"])
-        self.assertEqual(stair_layout._TREAD_MAX_MM,
+        self.assertEqual(stair_tol._TREAD_MAX_MM,
                          config.DEFAULTS["stair_tread_max_mm"])
 
 
