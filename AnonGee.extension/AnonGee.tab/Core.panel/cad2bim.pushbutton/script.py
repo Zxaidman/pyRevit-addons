@@ -41,15 +41,12 @@ clr.AddReference("WindowsBase")
 clr.AddReference("System.Xml")
 clr.AddReference("System.Windows.Forms")
 
-from System.Windows.Markup import XamlReader
-from System.IO import FileStream, FileMode, FileAccess
-from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
-                            Thickness, GridLength, GridUnitType, VerticalAlignment,
-                            TextTrimming)
+# The window/message/file-dialog plumbing moved to cad2bim.ui_dialogs; what is
+# left here is what the dialog BUILDS: the storey and layer rows it lays out.
+from System.Windows import (Thickness, GridLength, GridUnitType,
+                            VerticalAlignment)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
-                                     ComboBox, TextBox, CheckBox, ListBoxItem,
-                                     RadioButton, Slider)
-import System.Windows.Forms
+                                     ComboBox, TextBox, CheckBox, ListBoxItem)
 import xml.etree.ElementTree as ElementTree
 
 
@@ -131,6 +128,10 @@ from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
 # The console and the progress bars moved to the library; the names keep their
 # underscores so every call site here reads exactly as it did.
+from anongee_toolkit.cad2bim.ui_dialogs import (       # noqa: F401
+    _alert, _error, _load_window, _open_dxf, _save_json,
+    _open_settings_file, _save_settings_file, _select_containing,
+    _control_value, _set_control_value, _persisted, _rollback_alert)
 from anongee_toolkit.cad2bim.run_console import (      # noqa: F401
     _OUT, _say, _progress, _open_progress, _close_progress, _storey_span,
     _READ_STEPS, _BUILD_STEPS)
@@ -240,45 +241,14 @@ _STAIR_LINE_CHAIN_MM = 50.0
 
 # --- dialogs / messaging (System.Windows only -- no pyRevit) -----------------
 
-def _alert(title, message):
-    MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning)
 
 
-def _error(title, message, detail=None):
-    _OUT.fail()
-    body = message
-    if detail:
-        body += "\n\n--- technical detail ---\n{0}".format(detail)
-    MessageBox.Show(body, title, MessageBoxButton.OK, MessageBoxImage.Error)
 
 
-def _persisted(tstatus, gstatus):
-    """True only if both the inner transaction and the group actually committed."""
-    from Autodesk.Revit.DB import TransactionStatus
-    return (tstatus == TransactionStatus.Committed
-            and gstatus == TransactionStatus.Committed)
 
 
-def _rollback_alert(label, tstatus, gstatus):
-    """Report a silent commit rollback truthfully instead of faking success."""
-    message = (
-        "{0} were computed but the Revit transaction did NOT persist (commit "
-        "status: {1}, group: {2}).\n\nThis usually means error-severity failures "
-        "at commit -- most often running into a project that already contains "
-        "these elements. Try a fresh/empty project (or undo the previous run), "
-        "then run again.".format(label, tstatus, gstatus))
-    _OUT.fail()
-    _say(message)
-    _error("{0} not saved".format(label), message)
 
 
-def _load_window(xaml_path):
-    """Load a WPF Window from a .xaml file via XamlReader (CPython3-safe)."""
-    stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
-    try:
-        return XamlReader.Load(stream)
-    finally:
-        stream.Close()
 
 
 _XAML_NAME_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
@@ -304,109 +274,18 @@ def _control_names():
     return _CONTROL_NAMES
 
 
-def _control_value(control):
-    """A control's value as plain JSON, or None when it holds nothing to save."""
-    if control is None:
-        return None
-    if isinstance(control, ComboBox):
-        item = control.SelectedItem
-        return str(item) if item is not None else (control.Text or "")
-    if isinstance(control, (CheckBox, RadioButton)):
-        return bool(control.IsChecked)
-    if isinstance(control, Slider):
-        return float(control.Value)
-    if isinstance(control, TextBox):
-        return control.Text or ""
-    return None
 
 
-def _set_control_value(control, value):
-    """Put a saved value back on a control. True when it landed.
-
-    A DISABLED control is left alone: the dialog turns those off because this
-    model cannot do the thing (no beam family loaded, say), and a saved tick
-    must not talk it back into trying.
-    """
-    if control is None or value is None:
-        return False
-    try:
-        if not control.IsEnabled:
-            return False
-    except Exception:
-        pass
-    try:
-        if isinstance(control, ComboBox):
-            index = settings.pick_index(control.Items, value)
-            if index >= 0:
-                control.SelectedIndex = index
-                return True
-            if control.IsEditable:
-                control.Text = str(value)
-                return True
-            return False
-        if isinstance(control, (CheckBox, RadioButton)):
-            control.IsChecked = bool(value)
-            return True
-        if isinstance(control, Slider):
-            control.Value = float(value)
-            return True
-        if isinstance(control, TextBox):
-            control.Text = str(value)
-            return True
-    except Exception:
-        return False
-    return False
 
 
-def _open_settings_file():
-    dialog = System.Windows.Forms.OpenFileDialog()
-    dialog.Title = "Load cad2bim settings"
-    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
-    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
-        return dialog.FileName
-    return None
 
 
-def _save_settings_file():
-    dialog = System.Windows.Forms.SaveFileDialog()
-    dialog.Title = "Save cad2bim settings"
-    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
-    dialog.FileName = "cad2bim_settings.json"
-    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
-        return dialog.FileName
-    return None
 
 
-def _open_dxf():
-    dialog = System.Windows.Forms.OpenFileDialog()
-    dialog.Title = "Pick a DXF to link and convert"
-    dialog.Filter = "DXF files (*.dxf)|*.dxf|All files (*.*)|*.*"
-    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
-        return dialog.FileName
-    return None
 
 
-def _save_json(default_name):
-    dialog = System.Windows.Forms.SaveFileDialog()
-    dialog.Title = "Export parsed curves to JSON"
-    dialog.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"
-    dialog.FileName = default_name
-    if dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK:
-        return dialog.FileName
-    return None
 
 
-def _select_containing(combo, keywords):
-    """Select the first combo item whose label contains any keyword (lowercased).
-
-    Returns True if a match was selected, leaving the prior selection otherwise.
-    """
-    for index in range(combo.Items.Count):
-        label = str(combo.Items[index]).lower()
-        if any(keyword in label for keyword in keywords):
-            combo.SelectedIndex = index
-            return True
-    return False
 
 
 # --- Link DXF dialog (file + unit + positioning) -----------------------------
