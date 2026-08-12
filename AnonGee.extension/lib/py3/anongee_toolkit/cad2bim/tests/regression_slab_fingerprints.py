@@ -88,10 +88,27 @@ class _Text(object):
                                else (x * _FT, y * _FT, 0.0))
 
 
-def _storey(document, index=0):
-    """One storey's payload, or the document itself for a single-storey export."""
+def _main_storey(document):
+    """The one storey a per-drawing fingerprint measures.
+
+    NOT storey 0, which is what this used to do and what the v0.68.1 test10
+    export immediately broke: that re-export gained a `Foundation Level` at the
+    BOTTOM of the stack, so an index-based choice quietly started measuring the
+    foundation plan (101 records, no slabs) instead of Ground Floor (378
+    records, 46 slab loops) -- and reported it as 46 -> 0, a catastrophic
+    regression that had not happened.
+
+    The richest storey by raw geometry survives a level being added at either
+    end, and the chosen label is stored as a metric, so if this ever does pick a
+    different plan the diff says which one instead of hiding it inside the
+    numbers. Per-storey coverage is regression_storeys' job, not this leg's.
+    """
     storeys = document.get("storeys")
-    return storeys[index] if storeys else document
+    if not storeys:
+        return document
+    return max(storeys, key=lambda s: (
+        len((s.get("beams") or {}).get("raw_geometry") or []),
+        -storeys.index(s)))
 
 
 def _records(payload):
@@ -152,7 +169,7 @@ def _loop_stats(loops, prefix):
 
 def _measure(path):
     with open(path, encoding="utf-8") as handle:
-        payload = _storey(json.load(handle))
+        payload = _main_storey(json.load(handle))
     records = _records(payload)
     sections = _sections(payload)
     footprints = report.column_trim_footprints(sections)
@@ -168,6 +185,8 @@ def _measure(path):
                                           schedule=None)
     beams = segments.get("segments") or []
     measured = {
+        # which plan these numbers describe -- see _main_storey
+        "storey": " ".join(str(payload.get("storey") or "single").split()),
         "records": len(records),
         "column_rectangles": len(
             (sections["entries"][0]["rectangles"]) if sections["entries"] else []),

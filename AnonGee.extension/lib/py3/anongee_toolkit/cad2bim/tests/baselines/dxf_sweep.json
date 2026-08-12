@@ -100,16 +100,16 @@
     "texts": 242
   },
   "StructuralPlan-Test10.dxf": {
-    "beams": 429,
-    "beams_split_at_columns": 148,
-    "column_circles": 12,
-    "column_entries": 4,
-    "column_footprints": 261,
-    "column_rectangles": 249,
+    "beams": 430,
+    "beams_split_at_columns": 147,
+    "column_circles": 16,
+    "column_entries": 5,
+    "column_footprints": 325,
+    "column_rectangles": 309,
     "marked_beams": 0,
     "marked_rectangles": 0,
-    "records": 5509,
-    "sized_beams": 429,
+    "records": 6025,
+    "sized_beams": 312,
     "slab_loops_from_beam_graph": 114,
     "slab_loops_from_edges": 160,
     "slab_loops_marked": 0,
@@ -117,7 +117,7 @@
     "slab_loops_sized": 166,
     "slab_loops_total": 166,
     "slab_source": "slab_edges",
-    "texts": 1035
+    "texts": 1024
   },
   "StructuralPlan-Test11.dxf": {
     "beams": 424,

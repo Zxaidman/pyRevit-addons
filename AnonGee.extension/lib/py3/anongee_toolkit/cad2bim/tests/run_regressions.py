@@ -39,6 +39,7 @@ def main(argv):
 
     loader = unittest.TestLoader()
     failed = []
+    written = []
     for title, module in LEGS:
         started = time.time()
         suite = loader.loadTestsFromName(module)
@@ -48,6 +49,7 @@ def main(argv):
         if result.wasSuccessful() and not result.skipped:
             print("  ok       {0}   {1:.0f}s".format(title, elapsed))
         elif result.wasSuccessful():
+            written.append(title)
             print("  written  {0}   {1:.0f}s".format(title, elapsed))
             for _test, reason in result.skipped:
                 print("           {0}".format(reason))
@@ -63,6 +65,14 @@ def main(argv):
               "change was intended, then --bless if it was."
               .format(len(failed), len(LEGS)))
         return 1
+    if written:
+        # A leg that WROTE its baseline checked nothing. Saying "all legs match"
+        # here would be the exact failure this harness exists to prevent: a
+        # green line that means "not measured".
+        print("{0} of {1} legs wrote a baseline and checked nothing. Run again "
+              "with no flags to check against them."
+              .format(len(written), len(LEGS)))
+        return 0
     print("all {0} legs match their baselines.".format(len(LEGS)))
     return 0
 

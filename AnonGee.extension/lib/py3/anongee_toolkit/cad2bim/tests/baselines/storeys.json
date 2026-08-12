@@ -1,6 +1,7 @@
 {
   "test10": {
     "beams_per_storey": [
+      63,
       215,
       175,
       175,
@@ -13,6 +14,7 @@
       18
     ],
     "labels": [
+      "Foundation Level",
       "Ground Floor Level",
       "1st Floor Level",
       "2nd Floor Level",
@@ -25,6 +27,7 @@
       "Roof Floor Level"
     ],
     "loops_from_beam_graph_per_storey": [
+      0,
       23,
       16,
       16,
@@ -37,6 +40,7 @@
       6
     ],
     "loops_from_edges_per_storey": [
+      0,
       46,
       33,
       33,
@@ -49,6 +53,7 @@
       0
     ],
     "loops_from_placed_members_per_storey": [
+      0,
       56,
       41,
       41,
@@ -61,6 +66,7 @@
       7
     ],
     "placed_area_m2_per_storey": [
+      0,
       653.6,
       499.4,
       499.4,
@@ -74,7 +80,7 @@
     ],
     "roof_loops_from_edges": 0,
     "roof_loops_from_placed_members": 7,
-    "storeys": 10
+    "storeys": 11
   },
   "test12": {
     "beams_per_storey": [
