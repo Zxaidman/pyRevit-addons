@@ -22,6 +22,7 @@ The extension adds an **AnonGee** tab inside Revit with four panels:
 | **Export Schedule**       | Export Revit schedules to Excel / CSV format.                                                                               |
 | **Bulk Rename**           | Rename multiple elements (views, sheets, families, etc.) with naming patterns.                                              |
 | **Bulk Delete**           | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more.                                         |
+| **Auto Level Manager**    | Modeless level manager with smart text detection. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; works out the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels — with the stack drawn to scale — and commits as one undo step. |
 
 ### 🔵 Advance Panel
 
@@ -108,6 +109,16 @@ python auto_provision.py
 ```
 
 This installs `numpy`, `openpyxl`, `pythonnet`, and `ezdxf` into the extension's bundled library folders (`lib/py3/` and `lib/py2/`).
+
+### Tests
+
+Some tools keep their Revit-free logic in plain Python modules so it can be exercised without opening Revit. Run them from the repository root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+`tests/test_autolevel.py` covers the Auto Level Manager's text detection, naming and plan model; `tests/test_autolevel_ui.py` is a static check of its XAML against the delivery rules in §12.7–§12.9 of the brand guidelines (every `FindName` lookup resolves, every `{Binding}` path has a matching slot, no `re`, no pyRevit imports, no `StaticResource` on the root `Window`).
 
 ### Project Structure
 

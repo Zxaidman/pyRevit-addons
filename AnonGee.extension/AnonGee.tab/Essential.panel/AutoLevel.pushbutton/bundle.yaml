@@ -1,0 +1,34 @@
+title: Auto Level Manager
+author: AnonGee
+tooltip: |
+  Manage every level in the model from one modeless window — Revit stays
+  interactive while it is open. The stack is drawn to scale beside the table,
+  so a level typed as 35000 instead of 3500 is visible, not buried in a column.
+
+  Smart text detection
+    • Reads level marks out of drawing text — "FFL +3.500", "LVL. +3500",
+      "TOS -1.200", "± 0.00", "EL. 3.50 M", "TERRACE +14'-6"".
+    • Sources: the active view's text notes and spot elevations, the current
+      Revit selection, every text note in the model, a DXF on disk, or a DXF
+      already linked into the model. There is also a paste box.
+    • Works out mm / cm / m / feet for the whole set from the storey heights,
+      and cross-checks each text against where it sits on the drawing — a
+      value that disagrees with its position is flagged, not created.
+    • A detected level that lands on one you already have is matched, not
+      duplicated.
+
+  Also does
+    • Add levels by count × storey height, named by continuing the model's own
+      convention ("02 2ND FLOOR LVL." -> "03 3RD FLOOR LVL.") or from a
+      template ({n} {nn} {ORDINAL} {Word} {roman} {elev_m}).
+    • Inline edit of name and elevation, batch rename, re-space the stack,
+      and delete with a count of what is hosted on each level first.
+    • Optional floor / ceiling / structural plan views for every new level,
+      with a view template.
+
+  Notes
+    • Nothing touches the model until Apply changes, which lands as one
+      undo step.
+    • Runs on the CPython 3 engine. Reading a DXF uses the bundled ezdxf.
+
+  Version: 1.0.0
