@@ -28,6 +28,7 @@ Revit-free, so the templates can be unit-tested outside Revit.
 """
 
 import re
+import string
 
 from . import prefs
 
@@ -88,6 +89,30 @@ def problems():
 # fields that are TEXT, not a size, so validation feeds them something readable
 _TEXT_FIELDS = ("label", "name")
 
+# Templates whose fields TOGETHER identify the type. Drop one and two different
+# members render the same name -- the second one Revit is asked for raises "The
+# name is already in use for this element type" and that member is lost. The
+# templates left out are unique on the field they do use ({t} thickness, {n}
+# level number) or name something the drawing already made unique ({name}).
+_MUST_USE = {
+    "column_rect": ("b", "h"),
+    "beam_sized": ("w", "d"),
+    "stair": ("r", "t", "w", "k"),
+}
+
+
+def _fields_used(template):
+    """The field names a template refers to, format specs and all ({b:04d} -> b)."""
+    used = set()
+    try:
+        parsed = list(string.Formatter().parse(template))
+    except ValueError:
+        return used                 # malformed; the format() check reports it
+    for _literal, field, _spec, _conversion in parsed:
+        if field:
+            used.add(field.split(".")[0].split("[")[0])
+    return used
+
 
 def validate(key, template):
     """None when `template` is a usable name for `key`, else why it is not."""
@@ -102,6 +127,12 @@ def validate(key, template):
         return "{0} (use {1})".format(error, allowed)
     if not text.strip():
         return "gives an empty name"
+    used = _fields_used(template)
+    missing = [field for field in _MUST_USE.get(key, ()) if field not in used]
+    if missing:
+        return ("drops {0}, so two different sizes would get the same type "
+                "name -- Revit refuses the second one".format(
+                    ", ".join("{" + field + "}" for field in missing)))
     return None
 
 

@@ -27,6 +27,7 @@ except Exception:                        # pragma: no cover - host-version guard
 from System.Collections.Generic import List
 
 from ..compat import get_element_name
+from .. import type_names
 
 # kind -> (filter name, category, RGB). LIGHT tints: the fill is what identifies
 # an element, and a saturated fill over a whole floor plate is unreadable. Each
@@ -50,14 +51,20 @@ _LINE_WEIGHT = 5          # thick enough to read without hiding the geometry
 
 
 def _existing(doc, name):
+    """The project's filter of this name, matched the way REVIT matches names.
+
+    A project that already carries "CAD2BIM COLUMNS" holds the name as far as
+    ParameterFilterElement.Create is concerned, so an exact-case search would
+    miss it and the Create below would fail.
+    """
+    rows = []
     for element in (FilteredElementCollector(doc)
                     .OfClass(ParameterFilterElement).ToElements()):
         try:
-            if get_element_name(element) == name:
-                return element
+            rows.append((get_element_name(element), element))
         except Exception:
             continue
-    return None
+    return type_names.find(rows, name)
 
 
 def _solid_fill(doc):

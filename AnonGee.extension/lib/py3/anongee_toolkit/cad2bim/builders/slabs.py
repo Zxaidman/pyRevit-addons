@@ -16,6 +16,7 @@ from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
 from ..geom.shapes import circle_from_three_points
 from .. import naming
+from .. import type_names
 
 
 def floor_types(doc):
@@ -44,7 +45,7 @@ def place_slabs(doc, slabs, base_type_id, level_id):
 
     outers, openings = _nest_openings(slabs)
     cache = {}
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
     for index, slab in enumerate(outers):
         try:
             ring = slab["ring"]
@@ -58,7 +59,13 @@ def place_slabs(doc, slabs, base_type_id, level_id):
             loops.Add(_curve_loop(ring, slab.get("arcs")))
             for hole in openings.get(index, []):
                 loops.Add(_curve_loop(hole["ring"], hole.get("arcs")))
-            floor_type = _resolve_type(doc, base_type, slab.get("thickness_mm"), cache)
+            floor_type, note = _resolve_type(doc, base_type,
+                                             slab.get("thickness_mm"), cache)
+            type_names.record(result, note)
+            if floor_type is None:
+                result["skipped"].append("no floor type for {0} mm".format(
+                    slab.get("thickness_mm")))
+                continue
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
             _set_structural(instance)
             _set_mark(instance, slab.get("mark"))
@@ -328,28 +335,51 @@ def _set_structural(instance):
 
 
 def _resolve_type(doc, base_type, thickness_mm, cache):
-    """Floor type of the given thickness, duplicating + caching off the base type."""
+    """(FloorType, note) of the given thickness, duplicating + caching.
+
+    The thickness is written ONLY onto a type this run created; a type already in
+    the model is reused as it stands. A None type means the name could not be
+    had -- the caller skips the slab rather than casting it at the base type's
+    thickness.
+    """
     if thickness_mm is None:
-        return base_type
+        return base_type, None
     key = int(round(thickness_mm))
     if key in cache:
         return cache[key]
     name = naming.floor_type_name(key)
-    existing = _find_type(doc, base_type, name)
-    if existing is not None:
-        cache[key] = existing
-        return existing
-    new_type = base_type.Duplicate(name)
-    _set_thickness(new_type, thickness_mm)
-    cache[key] = new_type
-    return new_type
+    floor_type, created, note = type_names.resolve_type(
+        base_type, name, lambda: _sibling_types(doc, base_type))
+    if created:
+        _set_thickness(floor_type, thickness_mm)
+    cache[key] = (floor_type, note)
+    return floor_type, note
 
 
-def _find_type(doc, base_type, name):
-    for ft in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
-        if get_element_name(ft) == name:
-            return ft
-    return None
+def _sibling_types(doc, base_type):
+    """(name, FloorType) for the types in the SAME system family as base_type.
+
+    Floors and Structural Foundations are both FloorType but they are different
+    system families, and Revit scopes a type name's uniqueness to the family.
+    Searching every FloorType in the document was therefore too wide in one
+    direction -- a Floor type named "PAD 600 THK" could be handed back for a
+    foundation pad, putting the pad in the wrong category.
+    """
+    wanted = _system_family(base_type)
+    rows = []
+    for floor_type in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
+        if _system_family(floor_type) != wanted:
+            continue
+        rows.append((get_element_name(floor_type), floor_type))
+    return rows
+
+
+def _system_family(floor_type):
+    """The system family a floor type belongs to ("Floor", "Foundation Slab")."""
+    try:
+        return floor_type.FamilyName
+    except Exception:
+        return None
 
 
 def _set_thickness(floor_type, thickness_mm):

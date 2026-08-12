@@ -32,6 +32,7 @@ from ..compat import get_element_name, set_element_mark
 from .. import config
 from .. import footing_plan
 from .. import naming
+from .. import type_names
 
 _MM = config.MM_PER_FT
 
@@ -82,28 +83,50 @@ def _set_thickness(floor_type, thickness_mm):
 
 
 def _resolve_type(doc, base_type, thickness_mm, cache):
-    """A foundation type of this thickness, duplicated off the base and cached."""
+    """(FloorType, note) of this thickness, duplicated off the base and cached.
+
+    A None type means the name could not be had. That used to fall back to the
+    BASE type and say nothing, which cast the pad at whatever depth the picked
+    type happened to carry -- a wrong foundation, silently. The caller now skips
+    the pad and reports instead.
+    """
     if not thickness_mm:
-        return base_type
+        return base_type, None
     key = int(round(thickness_mm))
     if key in cache:
         return cache[key]
     name = naming.footing_type_name(key)
-    for existing in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
-        try:
-            if get_element_name(existing) == name:
-                cache[key] = existing
-                return existing
-        except Exception:
+    floor_type, created, note = type_names.resolve_type(
+        base_type, name, lambda: _sibling_types(doc, base_type))
+    if created:
+        _set_thickness(floor_type, thickness_mm)
+    cache[key] = (floor_type, note)
+    return floor_type, note
+
+
+def _sibling_types(doc, base_type):
+    """(name, FloorType) for the types in the SAME system family as base_type.
+
+    Foundation Slabs and Floors are both FloorType but different system
+    families, and Revit scopes type-name uniqueness to the family. Scanning
+    every FloorType could hand a plain FLOOR type back for a pad, filing the
+    foundation under the wrong category.
+    """
+    wanted = _system_family(base_type)
+    rows = []
+    for floor_type in FilteredElementCollector(doc).OfClass(FloorType).ToElements():
+        if _system_family(floor_type) != wanted:
             continue
+        rows.append((get_element_name(floor_type), floor_type))
+    return rows
+
+
+def _system_family(floor_type):
+    """The system family a floor type belongs to ("Floor", "Foundation Slab")."""
     try:
-        new_type = base_type.Duplicate(name)
+        return floor_type.FamilyName
     except Exception:
-        cache[key] = base_type
-        return base_type
-    _set_thickness(new_type, thickness_mm)
-    cache[key] = new_type
-    return new_type
+        return None
 
 
 def _curve_loop(ring):
@@ -145,7 +168,8 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
     """
     base_type = doc.GetElement(base_type_id)
     level = doc.GetElement(level_id)
-    result = {"created": [], "skipped": [], "errors": [], "merged": 0}
+    result = {"created": [], "skipped": [], "errors": [], "notes": [],
+              "merged": 0}
     if base_type is None or level is None:
         raise ValueError("foundation type or level could not be resolved")
 
@@ -158,7 +182,12 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
     cache = {}
     for ring, pad_thickness, mark in plans:
         try:
-            floor_type = _resolve_type(doc, base_type, pad_thickness, cache)
+            floor_type, note = _resolve_type(doc, base_type, pad_thickness, cache)
+            type_names.record(result, note)
+            if floor_type is None:
+                result["skipped"].append(
+                    "no foundation type for a {0} mm pad".format(pad_thickness))
+                continue
             loops = List[CurveLoop]()
             loops.Add(_curve_loop(ring))
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)

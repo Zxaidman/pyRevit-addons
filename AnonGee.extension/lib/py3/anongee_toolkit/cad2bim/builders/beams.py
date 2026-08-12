@@ -20,6 +20,7 @@ from Autodesk.Revit.DB.Structure import StructuralType, StructuralFramingUtils
 from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
 from .. import naming
+from .. import type_names
 
 
 def _disallow_joins(instance):
@@ -72,7 +73,7 @@ def place_beams(doc, segments, base_symbol_id, level_id):
 
     elevation = level.Elevation
     cache = {}
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
 
     for segment in segments:
         try:
@@ -90,7 +91,13 @@ def place_beams(doc, segments, base_symbol_id, level_id):
             depth_mm = segment.get("depth_mm")
             if depth_mm is not None:
                 depth_mm = int(round(depth_mm))
-            symbol = _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache)
+            symbol, note = _resolve_beam_symbol(doc, base_symbol, width_mm,
+                                                depth_mm, cache)
+            type_names.record(result, note)
+            if symbol is None:
+                result["skipped"].append(
+                    "no beam type for {0} wide".format(width_mm))
+                continue
             if not symbol.IsActive:
                 symbol.Activate()
                 doc.Regenerate()
@@ -120,7 +127,7 @@ def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
 
     elevation = level.Elevation
     cache = {}
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
 
     for segment in curved_segments or []:
         try:
@@ -132,7 +139,13 @@ def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
             depth_mm = segment.get("depth_mm")
             if depth_mm is not None:
                 depth_mm = int(round(depth_mm))
-            symbol = _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache)
+            symbol, note = _resolve_beam_symbol(doc, base_symbol, width_mm,
+                                                depth_mm, cache)
+            type_names.record(result, note)
+            if symbol is None:
+                result["skipped"].append(
+                    "no beam type for {0} wide".format(width_mm))
+                continue
             if not symbol.IsActive:
                 symbol.Activate()
                 doc.Regenerate()
@@ -154,37 +167,40 @@ def place_curved_beams(doc, curved_segments, base_symbol_id, level_id):
 
 
 def _resolve_beam_symbol(doc, base_symbol, width_mm, depth_mm, cache):
-    """Return a framing FamilySymbol of the given size, duplicating+caching.
+    """(FamilySymbol, note) of the given size, duplicating + caching.
 
     With a text-derived depth the type is sized "{w} x {h}" and BOTH width and
     depth are set; without one it stays "{w} wide" and depth is inherited from the
-    base type (a 2D outline carries no depth).
+    base type (a 2D outline carries no depth). Sizes are written ONLY onto a type
+    this run created; a type already in the model is reused as it stands. A None
+    symbol means no type of that name could be had -- the caller skips the beam.
     """
-    key = (width_mm, depth_mm)
-    if key in cache:
-        return cache[key]
+    cache_key = (width_mm, depth_mm)
+    if cache_key in cache:
+        return cache[cache_key]
     type_name = naming.beam_type_name(width_mm, depth_mm)
-    existing = _find_type_in_family(base_symbol.Family, type_name)
-    if existing is not None:
-        cache[key] = existing
-        return existing
-    new_symbol = base_symbol.Duplicate(type_name)
-    _set_dimension(new_symbol, _WIDTH_PARAM_NAMES, width_mm)
-    if depth_mm is not None:
-        _set_dimension(new_symbol, _DEPTH_PARAM_NAMES, depth_mm)
-    cache[key] = new_symbol
-    return new_symbol
+    symbol, created, note = type_names.resolve_type(
+        base_symbol, type_name, lambda: _family_types(base_symbol.Family))
+    if created:
+        _set_dimension(symbol, _WIDTH_PARAM_NAMES, width_mm)
+        if depth_mm is not None:
+            _set_dimension(symbol, _DEPTH_PARAM_NAMES, depth_mm)
+    cache[cache_key] = (symbol, note)
+    return symbol, note
 
 
-def _find_type_in_family(family, type_name):
+def _family_types(family):
+    """(name, symbol) for every type in `family` -- the scope Revit enforces a
+    family type name's uniqueness over."""
     if family is None:
-        return None
+        return []
     document = family.Document
+    rows = []
     for symbol_id in family.GetFamilySymbolIds():
         symbol = document.GetElement(symbol_id)
-        if symbol is not None and get_element_name(symbol) == type_name:
-            return symbol
-    return None
+        if symbol is not None:
+            rows.append((get_element_name(symbol), symbol))
+    return rows
 
 
 def _set_dimension(symbol, param_names, value_mm):

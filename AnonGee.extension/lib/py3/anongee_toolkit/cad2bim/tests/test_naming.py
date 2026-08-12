@@ -80,6 +80,26 @@ class CustomTemplates(unittest.TestCase):
         self.assertIsNotNone(naming.validate("floor", "   "))
         self.assertIsNotNone(naming.validate("no_such_key", "{b}"))
 
+    def test_a_template_that_drops_a_SIZE_is_refused(self):
+        # "{b}" names a 300x900 and a 300x450 alike. The second one Revit sees
+        # raises "The name is already in use for this element type", so the
+        # template is caught on the Naming tab instead of mid-build.
+        problem = naming.validate("column_rect", "{b}")
+        self.assertIsNotNone(problem)
+        self.assertIn("{h}", problem)
+        self.assertIn("{d}", naming.validate("beam_sized", "{w}"))
+        self.assertIn("{k}", naming.validate("stair", "{r} {t} {w}"))
+
+    def test_a_size_written_with_a_format_spec_still_counts_as_used(self):
+        self.assertIsNone(naming.validate("column_rect", "{b:04d} X {h:04d}"))
+
+    def test_decoration_fields_are_not_required(self):
+        # a level is unique by its number alone; {o}/{e}/{label} are trimmings,
+        # and the SHIPPED template uses only {n}
+        self.assertIsNone(naming.validate("level", "CAD Level {n}"))
+        self.assertIsNone(naming.validate("beam_width", "{w}"))
+        self.assertIsNone(naming.validate("floor", "{t} THK"))
+
     def test_levels_and_grids_take_a_convention_too(self):
         naming.apply({"level": "{label} (L{n} @{e})", "grid": "G-{name}"})
         self.assertEqual(naming.level_name(2, 3000, "First Floor"),

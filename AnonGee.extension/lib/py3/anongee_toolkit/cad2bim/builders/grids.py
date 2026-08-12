@@ -14,6 +14,7 @@ import math
 from Autodesk.Revit.DB import Line, Arc, XYZ, Grid, FilteredElementCollector
 
 from .. import naming
+from .. import type_names
 
 _MIN_LENGTH_FT = 1.0e-3   # ignore degenerate/zero-length curves
 
@@ -184,7 +185,8 @@ def create_grids(doc, grid_records, namer):
     once instead of stacking a copy per floor.
     """
     result = {"created": [], "skipped": [], "errors": []}
-    used_names = existing_grid_names(doc)
+    # keyed the way Revit compares grid names: a model holding "a" refuses "A"
+    used_names = set(type_names.key(name) for name in existing_grid_names(doc))
     placed = _grid_fingerprints(doc)
     for record in grid_records:
         try:
@@ -200,10 +202,10 @@ def create_grids(doc, grid_records, namer):
             if fingerprint is not None:
                 placed.add(fingerprint)
             name = naming.grid_name(namer.name_for(record))
-            if name and name not in used_names:
+            if name and type_names.key(name) not in used_names:
                 try:
                     grid.Name = name
-                    used_names.add(name)
+                    used_names.add(type_names.key(name))
                 except Exception:
                     pass  # name clash/invalid: keep Revit's auto name
             result["created"].append(grid.Id)

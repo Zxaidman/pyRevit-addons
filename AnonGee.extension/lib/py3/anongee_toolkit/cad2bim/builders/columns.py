@@ -28,6 +28,7 @@ from ..unit_convert import mm_to_internal
 from ..compat import get_element_name, set_element_mark
 from .. import config
 from .. import naming
+from .. import type_names
 
 _B_PARAM_NAMES = ("b", "width", "w", "Width", "B", "W")
 _H_PARAM_NAMES = ("h", "depth", "d", "Depth", "H", "D")
@@ -80,7 +81,7 @@ def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id,
                   else region_max_side_mm)
     base_elevation = base_level.Elevation
     cache = {}
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
 
     for entry in sections.get("entries", []):
         for rectangle in entry.get("rectangles", []):
@@ -95,7 +96,13 @@ def place_columns(doc, sections, base_symbol_id, base_level_id, top_level_id,
                             width_mm, height_mm, region_max))
                     continue
 
-                symbol = _resolve_symbol(doc, base_symbol, small, big, cache)
+                symbol, note = _resolve_symbol(doc, base_symbol, small, big,
+                                               cache)
+                type_names.record(result, note)
+                if symbol is None:
+                    result["skipped"].append(
+                        "no column type for {0}x{1} mm".format(small, big))
+                    continue
                 if not symbol.IsActive:
                     symbol.Activate()
                     doc.Regenerate()
@@ -139,12 +146,18 @@ def place_circular_columns(doc, circles, base_symbol_id, base_level_id, top_leve
 
     base_elevation = base_level.Elevation
     cache = {}
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
 
     for circle in circles:
         try:
             diameter_mm = int(round(circle["diameter_mm"]))
-            symbol = _resolve_circular_symbol(doc, base_symbol, diameter_mm, cache)
+            symbol, note = _resolve_circular_symbol(doc, base_symbol,
+                                                    diameter_mm, cache)
+            type_names.record(result, note)
+            if symbol is None:
+                result["skipped"].append(
+                    "no column type for {0} dia".format(diameter_mm))
+                continue
             if not symbol.IsActive:
                 symbol.Activate()
                 doc.Regenerate()
@@ -161,46 +174,56 @@ def place_circular_columns(doc, circles, base_symbol_id, base_level_id, top_leve
 
 
 def _resolve_symbol(doc, base_symbol, b_mm, h_mm, cache):
-    """Return a FamilySymbol sized b_mm x h_mm, duplicating+caching as needed."""
-    key = (b_mm, h_mm)
-    if key in cache:
-        return cache[key]
+    """(FamilySymbol, note) sized b_mm x h_mm, duplicating + caching as needed.
+
+    A None symbol means no type of that name could be had; the note says why and
+    the caller skips the column rather than placing it at the base type's size.
+    Dimensions are written ONLY onto a type this run created -- a type already in
+    the model is reused as it stands.
+    """
+    cache_key = (b_mm, h_mm)
+    if cache_key in cache:
+        return cache[cache_key]
     type_name = naming.column_type_name(b_mm, h_mm)
-    existing = _find_type_in_family(base_symbol.Family, type_name)
-    if existing is not None:
-        cache[key] = existing
-        return existing
-    new_symbol = base_symbol.Duplicate(type_name)
-    _set_dimension(new_symbol, _B_PARAM_NAMES, b_mm)
-    _set_dimension(new_symbol, _H_PARAM_NAMES, h_mm)
-    cache[key] = new_symbol
-    return new_symbol
+    symbol, created, note = type_names.resolve_type(
+        base_symbol, type_name, lambda: _family_types(base_symbol.Family))
+    if created:
+        _set_dimension(symbol, _B_PARAM_NAMES, b_mm)
+        _set_dimension(symbol, _H_PARAM_NAMES, h_mm)
+    cache[cache_key] = (symbol, note)
+    return symbol, note
 
 
 def _resolve_circular_symbol(doc, base_symbol, diameter_mm, cache):
-    """Return a FamilySymbol of the given diameter, duplicating+caching as needed."""
+    """(FamilySymbol, note) of the given diameter, duplicating + caching."""
     if diameter_mm in cache:
         return cache[diameter_mm]
     type_name = naming.circular_column_type_name(diameter_mm)
-    existing = _find_type_in_family(base_symbol.Family, type_name)
-    if existing is not None:
-        cache[diameter_mm] = existing
-        return existing
-    new_symbol = base_symbol.Duplicate(type_name)
-    _set_dimension(new_symbol, _DIA_PARAM_NAMES, diameter_mm)
-    cache[diameter_mm] = new_symbol
-    return new_symbol
+    symbol, created, note = type_names.resolve_type(
+        base_symbol, type_name, lambda: _family_types(base_symbol.Family))
+    if created:
+        _set_dimension(symbol, _DIA_PARAM_NAMES, diameter_mm)
+    cache[diameter_mm] = (symbol, note)
+    return symbol, note
 
 
-def _find_type_in_family(family, type_name):
+def _family_types(family):
+    """(name, symbol) for every type in `family`.
+
+    A family is exactly the scope Revit enforces type-name uniqueness over, so
+    this is the set the name has to be matched against -- with type_names.key,
+    because Revit's match is case- and whitespace-insensitive and ours used not
+    to be.
+    """
     if family is None:
-        return None
+        return []
     document = family.Document
+    rows = []
     for symbol_id in family.GetFamilySymbolIds():
         symbol = document.GetElement(symbol_id)
-        if symbol is not None and get_element_name(symbol) == type_name:
-            return symbol
-    return None
+        if symbol is not None:
+            rows.append((get_element_name(symbol), symbol))
+    return rows
 
 
 def _set_dimension(symbol, param_names, value_mm):

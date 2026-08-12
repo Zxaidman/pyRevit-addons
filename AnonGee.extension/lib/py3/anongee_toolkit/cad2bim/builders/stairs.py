@@ -27,6 +27,7 @@ from Autodesk.Revit.DB.Architecture import (Railing, StairsLanding,
 from .. import config
 from ..compat import get_element_name
 from .. import naming
+from .. import type_names
 from . import txn_failures
 
 _MM = config.MM_PER_FT
@@ -39,44 +40,57 @@ def stairs_types(doc):
     return sorted(rows, key=lambda pair: pair[0])
 
 
+def _types_like(doc, element):
+    """(name, type) for the types a new type's name must be unique among."""
+    rows = []
+    for existing in FilteredElementCollector(doc).OfClass(type(element)):
+        rows.append((get_element_name(existing), existing))
+    return rows
+
+
 def _stairs_type_id(doc, plan, base_type_id=None):
-    """A stairs type carrying the user's numbers: duplicate of the PICKED type
-    (dialog combo; model default when none), named by the numbers and reused
-    across stairs of the same run (idempotent)."""
+    """(ElementId, notes) -- a stairs type carrying the user's numbers.
+
+    A duplicate of the PICKED type (dialog combo; model default when none),
+    named by the numbers and reused across stairs of the same run (idempotent).
+
+    When the name cannot be resolved the PICKED type is still used, so a stair
+    is built rather than lost -- but with the picked type's riser, tread and
+    width, not the drawing's. That used to happen in silence; it is reported now.
+    """
     base_id = base_type_id
     if base_id is None or base_id == ElementId.InvalidElementId:
         base_id = doc.GetDefaultElementTypeId(ElementTypeGroup.StairsType)
     if base_id is None or base_id == ElementId.InvalidElementId:
-        return None
+        return None, []
     base = doc.GetElement(base_id)
     if base is None:
-        return None
+        return None, []
     waist_mm = float(plan.get("waist_mm") or 0.0)
     name = naming.stair_type_name(plan["riser_mm"], plan["tread_mm"],
                                   plan["run_width_mm"], waist_mm)
-    for existing in FilteredElementCollector(doc).OfClass(type(base)):
-        try:
-            if existing.get_Parameter(
-                    BuiltInParameter.ALL_MODEL_TYPE_NAME).AsString() == name:
-                return existing.Id
-        except Exception:
-            continue
-    try:
-        dup = base.Duplicate(name)
-    except Exception:
-        return base_id                     # name clash / read-only: default type
-    _set_length_param(dup, ("STAIRSTYPE_MAX_RISER_HEIGHT",
-                            "STAIRS_ATTR_MAX_RISER_HEIGHT"),
+    stairs_type, created, note = type_names.resolve_type(
+        base, name, lambda: _types_like(doc, base))
+    notes = [note] if note else []
+    if stairs_type is None:
+        notes.append("stair built with the picked type's riser/tread/width")
+        return base_id, notes
+    if not created:
+        return stairs_type.Id, notes
+    _set_length_param(stairs_type, ("STAIRSTYPE_MAX_RISER_HEIGHT",
+                                    "STAIRS_ATTR_MAX_RISER_HEIGHT"),
                       plan["riser_mm"] + 0.5)
-    _set_length_param(dup, ("STAIRSTYPE_MINIMUM_TREAD_DEPTH",
-                            "STAIRS_ATTR_MINIMUM_TREAD_DEPTH",
-                            "STAIRSTYPE_MIN_TREAD_DEPTH"), plan["tread_mm"])
-    _set_length_param(dup, ("STAIRSTYPE_MINIMUM_RUN_WIDTH",
-                            "STAIRS_ATTR_MINIMUM_RUN_WIDTH",
-                            "STAIRSTYPE_MIN_RUN_WIDTH"), plan["run_width_mm"])
+    _set_length_param(stairs_type, ("STAIRSTYPE_MINIMUM_TREAD_DEPTH",
+                                    "STAIRS_ATTR_MINIMUM_TREAD_DEPTH",
+                                    "STAIRSTYPE_MIN_TREAD_DEPTH"),
+                      plan["tread_mm"])
+    _set_length_param(stairs_type, ("STAIRSTYPE_MINIMUM_RUN_WIDTH",
+                                    "STAIRS_ATTR_MINIMUM_RUN_WIDTH",
+                                    "STAIRSTYPE_MIN_RUN_WIDTH"),
+                      plan["run_width_mm"])
     if waist_mm > 0:
-        _apply_waist(doc, dup, waist_mm)
-    return dup.Id
+        notes.extend(_apply_waist(doc, stairs_type, waist_mm))
+    return stairs_type.Id, notes
 
 
 def _apply_waist(doc, stairs_type, waist_mm):
@@ -86,7 +100,10 @@ def _apply_waist(doc, stairs_type, waist_mm):
     counterpart on the LANDING type; both hang off the stairs type. Each is
     duplicated (idempotent by name) so the model's stock types stay untouched.
     Best effort -- a family-based stair type without these parameters is left
-    as it is."""
+    as it is. Returns the notes worth printing: a waist that could NOT be
+    applied used to be swallowed, so a stair came out at the stock structural
+    depth with nothing said."""
+    notes = []
     for member_names, depth_names in (
             (("STAIRSTYPE_RUN_TYPE",),
              ("STAIRS_RUNTYPE_STRUCTURAL_DEPTH",
@@ -108,18 +125,14 @@ def _apply_waist(doc, stairs_type, waist_mm):
             if member is None:
                 continue
             dup_name = naming.stair_waist_type_name(waist_mm)
-            dup = None
-            for existing in FilteredElementCollector(doc).OfClass(type(member)):
-                try:
-                    if existing.get_Parameter(
-                            BuiltInParameter.ALL_MODEL_TYPE_NAME
-                            ).AsString() == dup_name:
-                        dup = existing
-                        break
-                except Exception:
-                    continue
+            dup, created, note = type_names.resolve_type(
+                member, dup_name, lambda: _types_like(doc, member))
+            if note:
+                notes.append(note)
             if dup is None:
-                dup = member.Duplicate(dup_name)
+                notes.append("{0} mm waist not applied".format(int(waist_mm)))
+                continue
+            if created:
                 if not _set_length_param(dup, depth_names, waist_mm):
                     lookup = dup.LookupParameter("Structural Depth")
                     if lookup is not None and not lookup.IsReadOnly:
@@ -128,6 +141,7 @@ def _apply_waist(doc, stairs_type, waist_mm):
                 member_param.Set(dup.Id)
         except Exception:
             continue
+    return notes
 
 
 def _set_length_param(element, builtin_names, value_mm):
@@ -165,7 +179,7 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
     BEFORE the runs are created: Revit derives each run's riser/tread counts
     from the type at creation time.
     """
-    result = {"created": [], "skipped": [], "errors": []}
+    result = {"created": [], "skipped": [], "errors": [], "notes": []}
     base_level = doc.GetElement(base_level_id)
     top_level = doc.GetElement(top_level_id)
     storey_ft = top_level.Elevation - base_level.Elevation
@@ -188,7 +202,9 @@ def place_stairs(doc, plans, base_level_id, top_level_id, base_type_id=None):
             transaction = Transaction(doc, "Stair runs {0}".format(mark))
             transaction.Start()
             txn_failures.attach_warning_swallower(transaction)
-            type_id = _stairs_type_id(doc, plan, base_type_id)
+            type_id, type_notes = _stairs_type_id(doc, plan, base_type_id)
+            for message in type_notes:
+                type_names.record(result, "{0}: {1}".format(mark, message))
             if type_id is not None:
                 stairs_element = doc.GetElement(stairs_id)
                 if stairs_element is not None:
