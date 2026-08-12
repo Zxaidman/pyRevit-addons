@@ -65,7 +65,7 @@
     "tb_name_beam": "{w} X {d}",
     "tb_name_beam_width": "{w}",
     "tb_name_column": "{b} X {h}",
-    "tb_name_column_round": "{d} Dia",
+    "tb_name_column_round": "{d} DIA",
     "tb_name_floor": "{t} THK RCC SLAB",
     "tb_name_footing": "{t} THK RCC FOOTING",
     "tb_name_grid": "{name}",
@@ -96,23 +96,31 @@
     "tb_tread_min": "150"
   },
   "layers": {
-    "0": "unmapped",
-    "A-ANNO-Cutline n Arrow": "unmapped",
-    "A-STAIR-Steps": "stair",
-    "A-WALL-CUT-Brick": "arch wall",
-    "ARCH BEAM": "beam",
+    "A-ANNO-DIMS": "unmapped",
+    "A-DETL": "unmapped",
+    "A-FLOR": "slab_edge",
     "Boundary": "floor boundary",
-    "COLUMN": "column",
     "Origin": "floor origin",
-    "PARAPET WALL": "arch wall",
-    "RAILING- 1": "unmapped",
-    "S-RCC-COL": "column",
-    "wall": "arch wall"
+    "S-BEAM": "beam",
+    "S-BEAM-HDLN": "unmapped",
+    "S-COLS": "column",
+    "S-COLS-HDLN": "unmapped",
+    "S-FND": "unmapped",
+    "S-FND-FOLD": "unmapped",
+    "S-GRID": "grid",
+    "S-GRID-IDEN": "unmapped",
+    "S-STRS": "stair",
+    "S-STRS-ANNO": "unmapped"
   },
   "schema": 1,
   "texts": {
-    "COLUMN NO._ASC": "column text",
-    "COLUMN SIZE_ASC": "column text"
+    "A-FLOR-IDEN": "slab text",
+    "G-ANNO-TEXT": "ignore",
+    "S-BEAM-IDEN": "beam text",
+    "S-COLS-IDEN": "column text",
+    "S-FND-IDEN": "ignore",
+    "S-GRID-IDEN": "grid text",
+    "S-STRS-IDEN": "ignore"
   },
-  "version": "0.68.0"
+  "version": "0.68.1"
 }
