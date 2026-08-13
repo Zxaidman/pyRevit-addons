@@ -690,13 +690,14 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- LEFT: the level stack, drawn to scale -->
+            <!-- LEFT: the level stack, drawn to scale — and editable in place -->
             <Border Grid.Column="0" Style="{StaticResource CardBorder}" Padding="12">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>   <!-- title + span badge -->
+                        <RowDefinition Height="*"/>      <!-- the drawing -->
+                        <RowDefinition Height="Auto"/>   <!-- zoom + snap -->
+                        <RowDefinition Height="Auto"/>   <!-- legend + hint -->
                     </Grid.RowDefinitions>
 
                     <Grid Grid.Row="0" Margin="0,0,0,8">
@@ -708,7 +709,8 @@
                                    VerticalAlignment="Center"/>
                         <Border Grid.Column="1"
                                 Background="{StaticResource BrushOffWhite}" CornerRadius="3"
-                                Padding="7,2" VerticalAlignment="Center">
+                                Padding="7,2" VerticalAlignment="Center"
+                                ToolTip="The height on screen, and the zoom factor when you are zoomed in.">
                             <TextBlock x:Name="HeightBadgeText" Text="—"
                                        FontFamily="{StaticResource FontMono}"
                                        FontSize="{StaticResource FontSizeCaption}"
@@ -719,10 +721,44 @@
 
                     <Border Grid.Row="1" Background="{StaticResource BrushOffWhite}" CornerRadius="6"
                             ClipToBounds="True">
-                        <Canvas x:Name="StackCanvas" Background="Transparent"/>
+                        <Canvas x:Name="StackCanvas" Background="Transparent" Cursor="Hand">
+                            <Canvas.ToolTip>
+                                <TextBlock>
+                                    Click a level to select it.<LineBreak/>
+                                    Drag a level up or down to change its elevation.<LineBreak/>
+                                    Double-click a level to rename it in the grid.<LineBreak/>
+                                    Wheel zooms · Shift+wheel pans · drag empty space to pan.
+                                </TextBlock>
+                            </Canvas.ToolTip>
+                        </Canvas>
                     </Border>
 
-                    <StackPanel Grid.Row="2" Margin="0,8,0,0">
+                    <Grid Grid.Row="2" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <Button x:Name="ZoomOutBtn" Content="–" Width="26"
+                                    Style="{StaticResource ButtonSmall}"
+                                    ToolTip="Zoom out. The mouse wheel does this too."/>
+                            <Button x:Name="ZoomInBtn" Content="+" Width="26"
+                                    Style="{StaticResource ButtonSmall}"
+                                    ToolTip="Zoom in on the middle of the view, so levels drawn on top of each other separate."/>
+                            <Button x:Name="ZoomFitBtn" Content="Fit" Width="42"
+                                    Style="{StaticResource ButtonSmall}"
+                                    ToolTip="Back to the whole stack in one screen."/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="Snap" Style="{StaticResource FieldLabel}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"
+                                   Margin="0,0,6,0"/>
+                        <ComboBox Grid.Column="2" x:Name="SnapCombo" Width="76"
+                                  Style="{StaticResource ComboSmall}"
+                                  ToolTip="Dragging a level rounds it to this. Hold Shift while dragging for no rounding."/>
+                    </Grid>
+
+                    <StackPanel Grid.Row="3" Margin="0,8,0,0">
                         <WrapPanel>
                             <Border Width="9" Height="9" CornerRadius="2" Margin="0,0,5,0"
                                     Background="{StaticResource BrushCharcoalBlack}" VerticalAlignment="Center"/>
@@ -739,7 +775,7 @@
                         </WrapPanel>
                         <TextBlock x:Name="StackHint" Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                    Margin="0,8,0,0"
-                                   Text="Click a level in the grid to highlight it here."/>
+                                   Text="Drag a level to move it · double-click to rename · wheel to zoom."/>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -753,19 +789,51 @@
                     <RowDefinition Height="*"/>      <!-- grid -->
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,10">
-                    <RadioButton x:Name="TabDetect"   Content="Detect"   GroupName="AutoLevelTabs"
-                                 Style="{StaticResource TabRadio}" IsChecked="True"/>
-                    <RadioButton x:Name="TabGenerate" Content="Generate" GroupName="AutoLevelTabs"
-                                 Style="{StaticResource TabRadio}"/>
-                    <RadioButton x:Name="TabRename"   Content="Rename"   GroupName="AutoLevelTabs"
-                                 Style="{StaticResource TabRadio}"/>
-                    <RadioButton x:Name="TabViews"    Content="Views"    GroupName="AutoLevelTabs"
-                                 Style="{StaticResource TabRadio}"/>
-                </StackPanel>
+                <Grid Grid.Row="0" Margin="2,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- Numbered because the tabs are a sequence, not a menu:
+                         find the levels, add what's missing, name them, give
+                         them views, apply. -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <RadioButton x:Name="TabDetect"   Content="1 · Detect"   GroupName="AutoLevelTabs"
+                                     Style="{StaticResource TabRadio}" IsChecked="True"
+                                     ToolTip="Read levels out of drawing text, a DXF, or pasted lines."/>
+                        <RadioButton x:Name="TabGenerate" Content="2 · Generate" GroupName="AutoLevelTabs"
+                                     Style="{StaticResource TabRadio}"
+                                     ToolTip="Add levels by count and storey height, named to match the model."/>
+                        <RadioButton x:Name="TabRename"   Content="3 · Rename"   GroupName="AutoLevelTabs"
+                                     Style="{StaticResource TabRadio}"
+                                     ToolTip="Batch rename or renumber the levels you have ticked."/>
+                        <RadioButton x:Name="TabViews"    Content="4 · Views"    GroupName="AutoLevelTabs"
+                                     Style="{StaticResource TabRadio}"
+                                     ToolTip="Plan views for new levels, and the summary of what Apply will do."/>
+                    </StackPanel>
+                    <RadioButton Grid.Column="1" x:Name="TabGuide" Content="Guide"
+                                 GroupName="AutoLevelTabs" Style="{StaticResource TabRadio}"
+                                 Margin="18,0,0,0"
+                                 ToolTip="What this tool does and how to drive it. Start here."/>
+                </Grid>
 
                 <Border Grid.Row="1" Style="{StaticResource CardBorder}" Padding="14" Margin="0,0,0,10">
                     <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- One line saying what this tab is for, swapped in script.py. -->
+                        <Border Grid.Row="0" Background="#FEF2F2" CornerRadius="5" Padding="10,6"
+                                Margin="0,0,0,12">
+                            <TextBlock x:Name="TabHint" Style="{StaticResource TextCaption}"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource BrushCharcoalBlack}"
+                                       Text="Pick where the levels are written, then press Scan for levels."/>
+                        </Border>
+
+                        <Grid Grid.Row="1">
 
                         <!-- ══ DETECT ══ -->
                         <Grid x:Name="PanelDetect">
@@ -783,8 +851,8 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
-                                    <ComboBox Grid.Column="0" x:Name="SourceCombo" Style="{StaticResource ComboSmall}"/>
-                                    <Button Grid.Column="1" x:Name="BrowseBtn" Content="Browse…"
+                                    <ComboBox Grid.Column="0" x:Name="SourceCombo" ToolTip="Where the level text lives. Active view reads the text notes and spot elevations you can see; Selection reads only what you pick in Revit; DXF reads the file itself." Style="{StaticResource ComboSmall}"/>
+                                    <Button Grid.Column="1" x:Name="BrowseBtn" ToolTip="Pick a .dxf on disk. DWG cannot be read directly - save it as DXF, or scan the model's own text instead." Content="Browse…"
                                             Style="{StaticResource ButtonSmall}" Margin="6,0,0,0"
                                             Visibility="Collapsed"/>
                                 </Grid>
@@ -810,27 +878,27 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="4" Text="Match ± (mm)"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="0" x:Name="UnitCombo"
+                                    <ComboBox Grid.Row="1" Grid.Column="0" x:Name="UnitCombo" ToolTip="Leave on Auto-detect: the tool works out mm / cm / m / feet from the storey heights the numbers imply. Set it by hand only when Auto gets it wrong."
                                               Style="{StaticResource ComboSmall}"/>
-                                    <TextBox  Grid.Row="1" Grid.Column="2" x:Name="DatumInput"
+                                    <TextBox  Grid.Row="1" Grid.Column="2" x:Name="DatumInput" ToolTip="Subtracted from every detected value. Use it when the drawing is on a site datum - enter 100000 to turn RL 100.000 into 0."
                                               Style="{StaticResource InputSmall}" Text="0"/>
-                                    <TextBox  Grid.Row="1" Grid.Column="4" x:Name="ToleranceInput"
+                                    <TextBox  Grid.Row="1" Grid.Column="4" x:Name="ToleranceInput" ToolTip="How close a detected level has to be to an existing one to count as the same level rather than a new one."
                                               Style="{StaticResource InputSmall}" Text="25"/>
                                 </Grid>
 
                                 <TextBlock Text="DXF layers (optional, comma separated)"
                                            Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                <TextBox x:Name="LayerInput" Style="{StaticResource InputSmall}"
+                                <TextBox x:Name="LayerInput" ToolTip="DXF only. Leave empty to read every layer, or name the text layers to read, separated by commas." Style="{StaticResource InputSmall}"
                                          Margin="0,0,0,8"/>
 
                                 <WrapPanel>
-                                    <CheckBox x:Name="EvidenceToggle" Style="{StaticResource ToggleSmall}"
+                                    <CheckBox x:Name="EvidenceToggle" ToolTip="On, a number only counts as a level if it has a level word (FFL, LVL, TOS) or a sign. Turn it off for a bare list of numbers - and expect more noise." Style="{StaticResource ToggleSmall}"
                                               IsChecked="True" Margin="0,0,16,6"
                                               Content="Need a level word or a sign"/>
-                                    <CheckBox x:Name="PositionToggle" Style="{StaticResource ToggleSmall}"
+                                    <CheckBox x:Name="PositionToggle" ToolTip="Checks each text against where it sits on the sheet. A value that contradicts its own position is flagged instead of quietly creating a level in the wrong place." Style="{StaticResource ToggleSmall}"
                                               IsChecked="True" Margin="0,0,16,6"
                                               Content="Cross-check text positions"/>
-                                    <CheckBox x:Name="AdoptToggle" Style="{StaticResource ToggleSmall}"
+                                    <CheckBox x:Name="AdoptToggle" ToolTip="When a detected level matches one already in the model, take the drawing's name for it. Turn off to keep the model's names." Style="{StaticResource ToggleSmall}"
                                               IsChecked="True" Margin="0,0,16,6"
                                               Content="Rename matching levels"/>
                                 </WrapPanel>
@@ -850,7 +918,7 @@
                                 <Border Grid.Row="1" Background="{StaticResource BrushPureWhite}"
                                         BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1"
                                         CornerRadius="5" MinHeight="86" Margin="0,0,0,8">
-                                    <TextBox x:Name="PasteInput" AcceptsReturn="True" TextWrapping="NoWrap"
+                                    <TextBox x:Name="PasteInput" ToolTip="Paste level text here, one per line, then press Read pasted text. Anything the detector understands works." AcceptsReturn="True" TextWrapping="NoWrap"
                                              BorderThickness="0" Background="Transparent" Padding="8,6"
                                              FontFamily="{StaticResource FontMono}"
                                              FontSize="{StaticResource FontSizeCaption}"
@@ -860,9 +928,9 @@
                                 </Border>
 
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,0,0,8">
-                                    <Button x:Name="ScanBtn" Content="Scan for levels"
+                                    <Button x:Name="ScanBtn" ToolTip="Read the source above and stage what it finds in the table. Nothing is written to the model." Content="Scan for levels"
                                             Style="{StaticResource ButtonPrimary}" Width="150" Margin="0,0,8,0"/>
-                                    <Button x:Name="ParsePasteBtn" Content="Read pasted text"
+                                    <Button x:Name="ParsePasteBtn" ToolTip="Read the paste box instead of the source above." Content="Read pasted text"
                                             Style="{StaticResource ButtonSecondary}" Width="150"/>
                                 </StackPanel>
 
@@ -902,20 +970,20 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="4" Text="Start above"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox  Grid.Row="1" Grid.Column="0" x:Name="CountInput"
+                                    <TextBox  Grid.Row="1" Grid.Column="0" x:Name="CountInput" ToolTip="How many levels to add above the starting point."
                                               Style="{StaticResource InputSmall}" Text="4"/>
-                                    <TextBox  Grid.Row="1" Grid.Column="2" x:Name="HeightInput"
+                                    <TextBox  Grid.Row="1" Grid.Column="2" x:Name="HeightInput" ToolTip="Floor-to-floor height for the levels being added. Re-space also uses this."
                                               Style="{StaticResource InputSmall}" Text="3000"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="4" x:Name="BaseCombo"
+                                    <ComboBox Grid.Row="1" Grid.Column="4" x:Name="BaseCombo" ToolTip="The level the new ones stack on top of. Top of the stack means the highest level there is."
                                               Style="{StaticResource ComboSmall}"/>
                                 </Grid>
 
                                 <TextBlock Text="Name them" Style="{StaticResource FieldLabel}" Margin="0,0,0,4"/>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <RadioButton x:Name="FollowRadio" Content="Follow the model"
+                                    <RadioButton x:Name="FollowRadio" ToolTip="Continue the model's own naming - 02 2ND FLOOR LVL. becomes 03 3RD FLOOR LVL. Falls back to the template if there is no pattern to follow." Content="Follow the model"
                                                  GroupName="AutoLevelNaming" Style="{StaticResource RadioInline}"
                                                  IsChecked="True"/>
-                                    <RadioButton x:Name="TemplateRadio" Content="Use a template"
+                                    <RadioButton x:Name="TemplateRadio" ToolTip="Name them from the template instead of copying the model." Content="Use a template"
                                                  GroupName="AutoLevelNaming" Style="{StaticResource RadioInline}"/>
                                 </StackPanel>
 
@@ -933,9 +1001,9 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2" Text="Start at"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput"
+                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput" ToolTip="{n} 1 - {nn} 01 - {nnn} 001 - {ordinal} 1st - {ORDINAL} 1ST - {Word} First - {roman} I - {elev_m} 3.500 - {elev_mm} 3500"
                                              Style="{StaticResource InputSmall}" Text="Level {n}"/>
-                                    <TextBox Grid.Row="1" Grid.Column="2" x:Name="StartInput"
+                                    <TextBox Grid.Row="1" Grid.Column="2" x:Name="StartInput" ToolTip="First number to use. Leave empty to carry on from the highest number already in use."
                                              Style="{StaticResource InputSmall}"/>
                                 </Grid>
                             </StackPanel>
@@ -958,12 +1026,12 @@
 
                                 <StackPanel Grid.Row="2">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                        <Button x:Name="GenerateBtn" Content="Add levels"
+                                        <Button x:Name="GenerateBtn" ToolTip="Stage the new levels in the table. Nothing is written to the model." Content="Add levels"
                                                 Style="{StaticResource ButtonPrimary}" Width="130" Margin="0,0,8,0"/>
-                                        <Button x:Name="RespaceBtn" Content="Re-space stack"
+                                        <Button x:Name="RespaceBtn" ToolTip="Re-space every level above the starting point to the storey height, evenly." Content="Re-space stack"
                                                 Style="{StaticResource ButtonSecondary}" Width="150"/>
                                     </StackPanel>
-                                    <CheckBox x:Name="PushAboveToggle" Style="{StaticResource ToggleSmall}"
+                                    <CheckBox x:Name="PushAboveToggle" ToolTip="On, changing one level's elevation moves everything above it by the same amount, keeping the storey heights. Off, only that level moves." Style="{StaticResource ToggleSmall}"
                                               Content="Editing an elevation pushes the levels above it"/>
                                 </StackPanel>
                             </Grid>
@@ -995,17 +1063,17 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2" Text="Suffix"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="PrefixInput"
+                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="PrefixInput" ToolTip="Put this in front of each name."
                                              Style="{StaticResource InputSmall}"/>
-                                    <TextBox Grid.Row="1" Grid.Column="2" x:Name="SuffixInput"
+                                    <TextBox Grid.Row="1" Grid.Column="2" x:Name="SuffixInput" ToolTip="Put this after each name."
                                              Style="{StaticResource InputSmall}"/>
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Find"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="3" Grid.Column="2" Text="Replace with"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox Grid.Row="4" Grid.Column="0" x:Name="FindInput"
+                                    <TextBox Grid.Row="4" Grid.Column="0" x:Name="FindInput" ToolTip="Text to look for in each name."
                                              Style="{StaticResource InputSmall}"/>
-                                    <TextBox Grid.Row="4" Grid.Column="2" x:Name="ReplaceInput"
+                                    <TextBox Grid.Row="4" Grid.Column="2" x:Name="ReplaceInput" ToolTip="What to put in its place. Leave empty to delete the found text."
                                              Style="{StaticResource InputSmall}"/>
                                 </Grid>
 
@@ -1023,14 +1091,14 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2" Text="Apply to"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <ComboBox Grid.Row="1" Grid.Column="0" x:Name="CaseCombo"
+                                    <ComboBox Grid.Row="1" Grid.Column="0" x:Name="CaseCombo" ToolTip="Force the whole name to a case, or leave it as typed."
                                               Style="{StaticResource ComboSmall}"/>
                                     <StackPanel Grid.Row="1" Grid.Column="2" Orientation="Horizontal"
                                                 VerticalAlignment="Center">
-                                        <RadioButton x:Name="ScopeSelectedRadio" Content="Ticked rows"
+                                        <RadioButton x:Name="ScopeSelectedRadio" ToolTip="Rename only the rows ticked in the table." Content="Ticked rows"
                                                      GroupName="AutoLevelScope"
                                                      Style="{StaticResource RadioInline}" IsChecked="True"/>
-                                        <RadioButton x:Name="ScopeAllRadio" Content="Every level"
+                                        <RadioButton x:Name="ScopeAllRadio" ToolTip="Rename every level, ticked or not." Content="Every level"
                                                      GroupName="AutoLevelScope"
                                                      Style="{StaticResource RadioInline}"/>
                                     </StackPanel>
@@ -1045,7 +1113,7 @@
                                     <RowDefinition Height="Auto"/>
                                 </Grid.RowDefinitions>
 
-                                <CheckBox Grid.Row="0" x:Name="RenameTemplateToggle"
+                                <CheckBox Grid.Row="0" x:Name="RenameTemplateToggle" ToolTip="Renumber from scratch with a template instead of editing the names you have."
                                           Style="{StaticResource ToggleSmall}" Margin="0,0,0,6"
                                           Content="Renumber with a template instead"/>
                                 <Grid Grid.Row="1" Margin="0,0,0,8">
@@ -1054,10 +1122,10 @@
                                         <ColumnDefinition Width="8"/>
                                         <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" x:Name="RenameTemplateInput"
+                                    <TextBox Grid.Column="0" x:Name="RenameTemplateInput" ToolTip="Same tokens as the Generate tab: {n} {nn} {ORDINAL} {Word} {roman} {elev_m} {elev_mm}"
                                              Style="{StaticResource InputSmall}" Text="{}{nn} {ORDINAL} FLOOR"
                                              IsEnabled="False"/>
-                                    <TextBox Grid.Column="2" x:Name="RenameStartInput"
+                                    <TextBox Grid.Column="2" x:Name="RenameStartInput" ToolTip="Number to give the lowest renamed level."
                                              Style="{StaticResource InputSmall}" Text="1" IsEnabled="False"/>
                                 </Grid>
 
@@ -1068,7 +1136,7 @@
                                                Text="Tick the rows to rename, then fill in a rule."/>
                                 </Border>
 
-                                <Button Grid.Row="3" x:Name="ApplyRenameBtn" Content="Rename in the plan"
+                                <Button Grid.Row="3" x:Name="ApplyRenameBtn" ToolTip="Stage the renames in the table. A name that would clash is skipped and reported, not forced." Content="Rename in the plan"
                                         Style="{StaticResource ButtonPrimary}" Width="180"
                                         HorizontalAlignment="Left"/>
                             </Grid>
@@ -1088,7 +1156,7 @@
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
-                                <CheckBox Grid.Row="0" x:Name="CreateViewsToggle"
+                                <CheckBox Grid.Row="0" x:Name="CreateViewsToggle" ToolTip="On, every level created by Apply also gets the plan views ticked below."
                                           Style="{StaticResource ToggleSmall}" Margin="0,0,0,8"
                                           Content="Create plan views for new levels"/>
                                 <TextBlock Grid.Row="1" Text="View types" Style="{StaticResource FieldLabel}"
@@ -1111,7 +1179,7 @@
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Text="View template for the new views"
                                            Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                <ComboBox Grid.Row="1" x:Name="ViewTemplateCombo"
+                                <ComboBox Grid.Row="1" x:Name="ViewTemplateCombo" ToolTip="Applied to each view this tool creates. Optional."
                                           Style="{StaticResource ComboSmall}" Margin="0,0,0,8"/>
                                 <Border Grid.Row="2" Background="{StaticResource BrushOffWhite}" CornerRadius="5"
                                         Padding="10,8" MinHeight="60" Margin="0,0,0,8">
@@ -1120,11 +1188,89 @@
                                 </Border>
                                 <StackPanel Grid.Row="3" Orientation="Horizontal">
                                     <Button x:Name="ResetBtn" Content="Discard changes"
-                                            Style="{StaticResource ButtonSecondary}" Width="160"/>
+                                            Style="{StaticResource ButtonSecondary}" Width="160"
+                                            ToolTip="Throw away everything staged and go back to the model's own levels."/>
                                 </StackPanel>
                             </Grid>
                         </Grid>
 
+                        <!-- ══ GUIDE ══ -->
+                        <Grid x:Name="PanelGuide" Visibility="Collapsed">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="16"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Style="{StaticResource TextH3}" Margin="0,0,0,6"
+                                           Text="The short version"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="Everything you do here is staged in the table first. The model is not touched until you press Apply changes, and that lands as a single undo step. Revit stays usable the whole time — go and look at a view, come back, the window is still here."/>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="THE FOUR TABS, IN ORDER"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="1 · Detect — open a section or elevation, pick &quot;Active view&quot;, press Scan for levels. Every &quot;FFL +3.500&quot; on the sheet becomes a row."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="2 · Generate — no drawing to read? Say how many levels and how tall, and they are named to match what the model already calls its levels."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="3 · Rename — tick rows in the table, then add a prefix, find-and-replace, or renumber from a template."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="4 · Views — optionally give every new level its floor / ceiling / structural plan, then read the summary of what Apply will do."/>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="WHAT THE DETECTOR READS"/>
+                                <Border Background="{StaticResource BrushOffWhite}" CornerRadius="5"
+                                        Padding="10,8">
+                                    <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                               FontFamily="{StaticResource FontMono}"
+                                               Text="FFL +3.500    LVL. +3500    TOS -1.200&#x0a;± 0.00        EL. 3.50 M    RL 100.500&#x0a;2ND FLOOR (+7.000)          TERRACE +14'-6&quot;"/>
+                                </Border>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="THE TABLE"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Double-click Level name or Elevation to edit it. An elevation takes any of 3500, 3.5 m, +3.500 or 11'-6&quot;."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Tick rows with the checkbox column; Ctrl+click and Shift+click work as usual. The buttons above the table act on what is ticked."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="State says what will happen: In model, New, Rename, Move, Delete. Confidence is how sure the detector was — green is safe, red wants a look."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="Elements counts what is hosted on a level, so you know what a delete would take with it."/>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="THE STACK DRAWING"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Click a level to select it. Drag it up or down to change its elevation, rounded to the Snap value — hold Shift for no rounding."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Double-click a level to rename it. Wheel zooms, Shift+wheel pans, dragging empty space pans, Fit shows everything."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="Zoom in when levels sit on top of each other — names are hidden rather than overprinted, and the footer says how many."/>
+
+                                <Border Background="#FEF2F2" CornerRadius="5" Padding="10,8">
+                                    <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                               Foreground="{StaticResource BrushCharcoalBlack}"
+                                               Text="Stuck? The line under the tabs always says what this tab is for, and the line above the table always says what to do next."/>
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+
+                        </Grid>
                     </Grid>
                 </Border>
 
@@ -1135,12 +1281,12 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button x:Name="SelectAllBtn"  Content="Tick all"        Style="{StaticResource ButtonSmall}"/>
-                        <Button x:Name="ClearBtn"      Content="Clear"           Style="{StaticResource ButtonSmall}"/>
-                        <Button x:Name="SelectRevitBtn" Content="Select in Revit" Style="{StaticResource ButtonSmall}"/>
-                        <Button x:Name="OpenPlanBtn"   Content="Open plan"       Style="{StaticResource ButtonSmall}"/>
-                        <Button x:Name="RestoreBtn"    Content="Restore"         Style="{StaticResource ButtonSmall}"/>
-                        <Button x:Name="DeleteBtn"     Content="Mark for delete" Style="{StaticResource ButtonSmallDanger}"/>
+                        <Button x:Name="SelectAllBtn" ToolTip="Tick every row."  Content="Tick all"        Style="{StaticResource ButtonSmall}"/>
+                        <Button x:Name="ClearBtn" ToolTip="Untick everything."      Content="Clear"           Style="{StaticResource ButtonSmall}"/>
+                        <Button x:Name="SelectRevitBtn" ToolTip="Select the ticked levels in Revit itself, so you can see them in a view." Content="Select in Revit" Style="{StaticResource ButtonSmall}"/>
+                        <Button x:Name="OpenPlanBtn" ToolTip="Open a plan view of the first ticked level. This is why the window is modeless - it stays open while Revit changes view."   Content="Open plan"       Style="{StaticResource ButtonSmall}"/>
+                        <Button x:Name="RestoreBtn" ToolTip="Undo a Mark for delete on the ticked rows."    Content="Restore"         Style="{StaticResource ButtonSmall}"/>
+                        <Button x:Name="DeleteBtn" ToolTip="Stage the ticked levels for deletion. It tells you first how many elements are hosted on them. Nothing is deleted until Apply."     Content="Mark for delete" Style="{StaticResource ButtonSmallDanger}"/>
                     </StackPanel>
                     <TextBlock Grid.Column="1" x:Name="GridHint" Style="{StaticResource TextCaption}"
                                HorizontalAlignment="Right" VerticalAlignment="Center"
@@ -1149,7 +1295,7 @@
 
                 <!-- the levels themselves -->
                 <Border Grid.Row="3" Style="{StaticResource CardBorder}" Padding="0">
-                    <DataGrid x:Name="LevelGrid"
+                    <DataGrid x:Name="LevelGrid" ToolTip="Double-click Level name or Elevation to edit. Tick rows to act on them with the buttons above."
                               AutoGenerateColumns="False"
                               CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserReorderColumns="False" CanUserSortColumns="False"
@@ -1424,11 +1570,11 @@
                            VerticalAlignment="Center"/>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <Button x:Name="RefreshBtn" Content="Refresh" Width="100"
+                    <Button x:Name="RefreshBtn" ToolTip="Re-read the model's levels, throwing away anything staged." Content="Refresh" Width="100"
                             Style="{StaticResource ButtonNeutral}" Margin="0,0,8,0"/>
-                    <Button x:Name="ApplyBtn" Content="Apply changes" Width="150"
+                    <Button x:Name="ApplyBtn" ToolTip="Write everything staged to the model, as one undo step." Content="Apply changes" Width="150"
                             Style="{StaticResource ButtonPrimary}" Margin="0,0,8,0"/>
-                    <Button x:Name="CloseBtn" Content="Close" Width="90"
+                    <Button x:Name="CloseBtn" ToolTip="Close the window. Anything staged and not applied is discarded." Content="Close" Width="90"
                             Style="{StaticResource ButtonGhost}"/>
                 </StackPanel>
             </Grid>

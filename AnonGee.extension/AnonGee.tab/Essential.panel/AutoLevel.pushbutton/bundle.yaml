@@ -26,9 +26,19 @@ tooltip: |
     • Optional floor / ceiling / structural plan views for every new level,
       with a view template.
 
+  Working in the drawing
+    • Click a level to select it, drag it to change its elevation (rounded to
+      the snap step; hold Shift for none), double-click it to rename.
+    • Wheel zooms, Shift+wheel pans, dragging empty space pans, Fit resets.
+      Zoom in when levels crowd together — names are hidden rather than
+      overprinted, and the hint says how many.
+
   Notes
+    • Every control has a tooltip, the line under the tabs says what the tab
+      is for, and the line above the table says what to do next. The Guide tab
+      has the whole thing on one page.
     • Nothing touches the model until Apply changes, which lands as one
       undo step.
     • Runs on the CPython 3 engine. Reading a DXF uses the bundled ezdxf.
 
-  Version: 1.0.0
+  Version: 1.1.0

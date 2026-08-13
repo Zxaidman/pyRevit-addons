@@ -20,7 +20,7 @@ _BUTTON = os.path.join(
 if _BUTTON not in sys.path:
     sys.path.insert(0, _BUTTON)
 
-from anongee_autolevel import naming, planner, textparse   # noqa: E402
+from anongee_autolevel import naming, planner, stackview, textparse   # noqa: E402
 
 
 def entry(text, y=None, source="test"):
@@ -566,6 +566,125 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual([round(c["elev_mm"]) for c in operations["creates"]],
                          [3500, 7000, 10500])
         self.assertFalse(plan.has_blocking_issues())
+
+
+# ── the stack drawing's camera ─────────────────────────────────────────────
+
+STOREYS = [0.0, 3000.0, 6000.0, 9000.0, 12000.0, 15000.0]
+USABLE = 300.0
+HEIGHT = USABLE + stackview.TOP_PAD + stackview.BOTTOM_PAD
+
+
+class StackViewTests(unittest.TestCase):
+
+    def setUp(self):
+        self.view = stackview.StackView()
+
+    def test_it_starts_fitted_to_the_whole_stack(self):
+        self.assertEqual(self.view.zoom, stackview.ZOOM_MIN)
+        low, high = self.view.window(STOREYS)
+        self.assertAlmostEqual(low, 0.0)
+        self.assertAlmostEqual(high, 15000.0)
+
+    def test_a_lone_level_still_gets_something_to_span(self):
+        low, high = self.view.window([4200.0])
+        self.assertLess(low, 4200.0)
+        self.assertGreater(high, 4200.0)
+
+    def test_an_empty_stack_has_no_window(self):
+        self.assertIsNone(self.view.window([]))
+        self.assertIsNone(self.view.bounds([]))
+
+    def test_pixels_and_elevations_are_inverses(self):
+        window = self.view.window(STOREYS)
+        for elevation in STOREYS + [4321.0, -500.0]:
+            y = self.view.y_at(elevation, window, USABLE)
+            self.assertAlmostEqual(
+                self.view.elevation_at(y, window, USABLE), elevation, 6)
+
+    def test_higher_levels_are_drawn_further_up(self):
+        window = self.view.window(STOREYS)
+        ys = [self.view.y_at(e, window, USABLE) for e in STOREYS]
+        self.assertEqual(ys, sorted(ys, reverse=True))
+
+    def test_zooming_pins_the_elevation_under_the_cursor(self):
+        """The whole reason this module exists."""
+        for cursor in (stackview.TOP_PAD, 80.0, 160.0, USABLE):
+            for factor in (stackview.ZOOM_STEP, 1.0 / stackview.ZOOM_STEP):
+                view = stackview.StackView()
+                view.zoom = 3.0
+                view.window(STOREYS)                    # settle the centre
+                before = view.elevation_at(cursor, view.window(STOREYS), USABLE)
+                view.zoom_about(cursor, factor, STOREYS, USABLE)
+                after = view.elevation_at(cursor, view.window(STOREYS), USABLE)
+                self.assertAlmostEqual(before, after, 5,
+                                       msg="cursor {0} factor {1}".format(
+                                           cursor, factor))
+
+    def test_zoom_is_bounded_both_ways(self):
+        for _ in range(40):
+            self.view.zoom_about(100.0, stackview.ZOOM_STEP, STOREYS, USABLE)
+        self.assertEqual(self.view.zoom, stackview.ZOOM_MAX)
+        self.assertFalse(self.view.zoom_about(100.0, stackview.ZOOM_STEP,
+                                              STOREYS, USABLE))
+        for _ in range(40):
+            self.view.zoom_about(100.0, 1.0 / stackview.ZOOM_STEP, STOREYS, USABLE)
+        self.assertEqual(self.view.zoom, stackview.ZOOM_MIN)
+        self.assertFalse(self.view.zoom_about(100.0, 1.0 / stackview.ZOOM_STEP,
+                                              STOREYS, USABLE))
+
+    def test_zoomed_in_you_see_less_of_the_building(self):
+        low, high = self.view.window(STOREYS)
+        self.view.zoom = 3.0
+        zoomed_low, zoomed_high = self.view.window(STOREYS)
+        self.assertAlmostEqual(zoomed_high - zoomed_low, (high - low) / 3.0)
+
+    def test_panning_follows_the_hand(self):
+        """Drag down, and the drawing moves down with the cursor."""
+        self.view.zoom = 4.0
+        window = self.view.window(STOREYS)
+        before = self.view.y_at(6000.0, window, USABLE)
+        self.view.pan_pixels(30.0, window, USABLE)
+        after = self.view.y_at(6000.0, self.view.window(STOREYS), USABLE)
+        self.assertGreater(after, before)
+
+    def test_panning_cannot_leave_the_building(self):
+        self.view.zoom = 4.0
+        window = self.view.window(STOREYS)
+        self.view.pan_pixels(100000.0, window, USABLE)
+        low, high = self.view.window(STOREYS)
+        self.assertGreaterEqual(low, -0.001)
+        self.assertLessEqual(high, 15000.001)
+
+    def test_there_is_nothing_to_pan_when_everything_fits(self):
+        window = self.view.window(STOREYS)
+        self.view.pan_pixels(200.0, window, USABLE)
+        self.assertEqual(self.view.window(STOREYS), (0.0, 15000.0))
+
+    def test_fit_undoes_zoom_and_pan(self):
+        self.view.zoom = 6.0
+        self.view.center_mm = 12000.0
+        self.view.fit()
+        self.assertEqual(self.view.zoom, stackview.ZOOM_MIN)
+        self.assertEqual(self.view.window(STOREYS), (0.0, 15000.0))
+
+    def test_offscreen_levels_are_not_drawn(self):
+        self.assertTrue(self.view.visible(50.0, HEIGHT))
+        self.assertFalse(self.view.visible(-500.0, HEIGHT))
+        self.assertFalse(self.view.visible(HEIGHT + 500.0, HEIGHT))
+
+    def test_hit_testing_picks_the_nearest_level_in_range(self):
+        hits = [("a", 20.0), ("b", 40.0), ("c", 200.0)]
+        self.assertEqual(stackview.nearest(hits, 41.0), "b")
+        self.assertEqual(stackview.nearest(hits, 23.0), "a")
+        self.assertIsNone(stackview.nearest(hits, 120.0))
+        self.assertIsNone(stackview.nearest([], 40.0))
+
+    def test_snapping_rounds_a_dragged_elevation(self):
+        self.assertAlmostEqual(stackview.snap(3487.0, 25.0), 3475.0)
+        self.assertAlmostEqual(stackview.snap(3487.0, 100.0), 3500.0)
+        self.assertAlmostEqual(stackview.snap(3487.0, 0), 3487.0)
+        self.assertAlmostEqual(stackview.snap(-1204.0, 10.0), -1200.0)
 
 
 if __name__ == "__main__":                                    # pragma: no cover

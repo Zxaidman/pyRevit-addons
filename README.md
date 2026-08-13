@@ -22,7 +22,7 @@ The extension adds an **AnonGee** tab inside Revit with four panels:
 | **Export Schedule**       | Export Revit schedules to Excel / CSV format.                                                                               |
 | **Bulk Rename**           | Rename multiple elements (views, sheets, families, etc.) with naming patterns.                                              |
 | **Bulk Delete**           | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more.                                         |
-| **Auto Level Manager**    | Modeless level manager with smart text detection. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; works out the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels — with the stack drawn to scale — and commits as one undo step. |
+| **Auto Level Manager**    | Modeless level manager with smart text detection. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; works out the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels, and commits as one undo step. The stack is drawn to scale and is editable in place — click to select, drag to move, double-click to rename, wheel to zoom. |
 
 ### 🔵 Advance Panel
 

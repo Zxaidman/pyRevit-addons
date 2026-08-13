@@ -167,6 +167,49 @@ class XamlTests(unittest.TestCase):
         self.assertIn('<Trigger Property="Orientation" Value="Vertical">', text)
         self.assertIn('<Trigger Property="Orientation" Value="Horizontal">', text)
 
+    def test_every_interactive_control_carries_a_tooltip(self):
+        """The tool has a lot of switches; each one has to say what it does.
+
+        Added after the first round of testing, where the report was "I don't
+        know how to use this — too much is going on". A control the user has
+        to guess at is a defect, so this is enforced rather than hoped for.
+        """
+        root = load_xaml()
+        needs_tooltip = ("Button", "TextBox", "ComboBox", "CheckBox",
+                         "RadioButton", "DataGrid", "Canvas")
+        missing = []
+
+        def has_tooltip(element):
+            if element.get("ToolTip"):
+                return True
+            tag = element.tag.replace(PRESENTATION_NS, "")
+            # <Canvas.ToolTip> element syntax, for multi-line tips
+            for child in element:
+                if child.tag.replace(PRESENTATION_NS, "") == tag + ".ToolTip":
+                    return True
+            return False
+
+        def walk(element):
+            for child in element:
+                if child.tag in TEMPLATE_TAGS:
+                    continue
+                name = child.get(XAML_NS + "Name")
+                tag = child.tag.replace(PRESENTATION_NS, "")
+                if name and tag in needs_tooltip and not has_tooltip(child):
+                    missing.append("{0} ({1})".format(name, tag))
+                walk(child)
+
+        walk(root)
+        self.assertEqual(missing, [],
+                         "no ToolTip on: {0}".format(", ".join(missing)))
+
+    def test_the_guide_tab_exists(self):
+        """The one place that explains the whole tool in prose."""
+        names = named_elements(load_xaml())
+        self.assertIn("TabGuide", names)
+        self.assertIn("PanelGuide", names)
+        self.assertIn("TabHint", names)
+
     def test_the_editable_combobox_part_is_present(self):
         """§12.7.C — without PART_EditableTextBox, editable mode dies quietly."""
         text = _read(_XAML)
@@ -207,6 +250,38 @@ class ScriptWiringTests(unittest.TestCase):
         unbound = sorted(name for name in self.names if name not in looked_up)
         self.assertEqual(unbound, [],
                          "named but never used by the script: {0}".format(unbound))
+
+    def test_every_tab_has_a_hint_line(self):
+        """The strip under the tabs always says what the current tab is for."""
+        tabs = [name for name in self.names if name.startswith("Tab")
+                and name != "TabHint"]
+        for tab in tabs:
+            self.assertIn('("{0}",'.format(tab), self.source,
+                          "{0} has no entry in TAB_HINTS".format(tab))
+
+    def test_the_stack_drawing_is_interactive(self):
+        """Click, drag, double-click and wheel are all wired to the canvas."""
+        for handler in ("self.StackCanvas.MouseLeftButtonDown",
+                        "self.StackCanvas.MouseMove",
+                        "self.StackCanvas.MouseLeftButtonUp",
+                        "self.StackCanvas.MouseWheel"):
+            self.assertIn(handler, self.source)
+        # A drag must release the capture it took, or the canvas eats the mouse.
+        self.assertIn("CaptureMouse()", self.source)
+        self.assertIn("ReleaseMouseCapture()", self.source)
+
+    def _method_source(self, name):
+        for node in ast.walk(self.tree):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return ast.get_source_segment(self.source, node) or ""
+        self.fail("no method named {0}".format(name))
+
+    def test_the_grid_is_only_rebuilt_at_the_end_of_a_drag(self):
+        """Rebuilding ItemsSource per mouse-move would make dragging crawl."""
+        moving = self._method_source("_on_canvas_move")
+        self.assertNotIn("refresh_grid", moving)
+        self.assertIn("draw_stack", moving)
+        self.assertIn("refresh_grid", self._method_source("_on_canvas_up"))
 
     def test_no_pyrevit_imports(self):
         """§12.8.4 — pyRevit's IronPython modules crash the CPython 3 engine."""

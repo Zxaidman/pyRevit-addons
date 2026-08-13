@@ -65,6 +65,7 @@ from System.Windows import (MessageBox, MessageBoxButton,         # noqa: E402
                             MessageBoxImage, MessageBoxResult,
                             Thickness, Visibility)
 from System.Windows.Controls import (Canvas, CheckBox,            # noqa: E402
+                                     DataGridCellInfo,
                                      DataGridEditAction, TextBlock)
 from System.Windows.Interop import WindowInteropHelper            # noqa: E402
 from System.Windows.Markup import XamlReader                      # noqa: E402
@@ -121,7 +122,7 @@ _bootstrap_package()
 _bootstrap_lib_path()
 
 from anongee_autolevel import (compat, dxf_text, naming,          # noqa: E402
-                               planner, revit_ops, textparse)
+                               planner, revit_ops, stackview, textparse)
 
 
 # ── brushes for the runtime-drawn stack ────────────────────────────────────
@@ -160,6 +161,25 @@ SOURCE_FIRST_CAD = 4
 
 UNIT_CHOICES = (None, "mm", "cm", "m", "ft")
 CASE_CHOICES = ("keep", "upper", "lower", "title")
+SNAP_CHOICES = ("1 mm", "5 mm", "10 mm", "25 mm", "50 mm", "100 mm")
+SNAP_DEFAULT_INDEX = 2
+
+TAB_HINTS = (
+    ("TabDetect",
+     "Pick where the levels are written, then press Scan for levels. Nothing "
+     "reaches the model — everything lands in the table first."),
+    ("TabGenerate",
+     "No drawing to read? Say how many levels and how tall they are; they get "
+     "named to match what this model already calls its levels."),
+    ("TabRename",
+     "Tick rows in the table, then set a rule. The preview shows what every "
+     "name becomes before anything is staged."),
+    ("TabViews",
+     "Optionally give each new level its plan views, then read the summary of "
+     "what Apply changes is about to do."),
+    ("TabGuide",
+     "The whole tool on one page. Come back here whenever something is unclear."),
+)
 
 
 # ── persistent session state ───────────────────────────────────────────────
@@ -299,14 +319,23 @@ class AutoLevelApp(object):
         self.cad_links = []
         self.source_paths = {}
         self.dxf_path = ""
-        self.detected_note = ""
         self.project_format = {}
 
         self._queue = []
         self._busy = False
         self._callback = None
         self._refreshing = False
-        self._last_click_index = -1
+        self._scanned_once = False
+
+        # the stack drawing's camera — zoom, pan and the elevation-to-pixel
+        # mapping all live in stackview so they can be tested without WPF
+        self.stack = stackview.StackView()
+        self._stack_hits = []
+        self._drag_row = None
+        self._drag_start_y = 0.0
+        self._drag_start_mm = 0.0
+        self._pan_start_y = None
+        self._pan_start_center = None
 
         self._bind_controls()
         self._fill_static_lists()
@@ -317,8 +346,11 @@ class AutoLevelApp(object):
         find = self.window.FindName
         names = (
             "StackCanvas", "StackHint", "HeightBadgeText",
-            "TabDetect", "TabGenerate", "TabRename", "TabViews",
+            "ZoomInBtn", "ZoomOutBtn", "ZoomFitBtn", "SnapCombo",
+            "TabDetect", "TabGenerate", "TabRename", "TabViews", "TabGuide",
+            "TabHint",
             "PanelDetect", "PanelGenerate", "PanelRename", "PanelViews",
+            "PanelGuide",
             "SourceCombo", "BrowseBtn", "SourcePathText", "UnitCombo",
             "DatumInput", "ToleranceInput", "LayerInput", "EvidenceToggle",
             "PositionToggle", "AdoptToggle", "PasteInput", "ScanBtn",
@@ -348,6 +380,10 @@ class AutoLevelApp(object):
         for label in ("Keep the case", "UPPERCASE", "lowercase", "Title Case"):
             self.CaseCombo.Items.Add(label)
         self.CaseCombo.SelectedIndex = 0
+
+        for label in SNAP_CHOICES:
+            self.SnapCombo.Items.Add(label)
+        self.SnapCombo.SelectedIndex = SNAP_DEFAULT_INDEX
 
         self._fill_source_combo()
 
@@ -388,7 +424,7 @@ class AutoLevelApp(object):
     # ── event wiring ──────────────────────────────────────────────────
     def _wire_events(self):
         for tab in (self.TabDetect, self.TabGenerate, self.TabRename,
-                    self.TabViews):
+                    self.TabViews, self.TabGuide):
             tab.Checked += self._on_tab_changed
 
         self.SourceCombo.SelectionChanged += self._on_source_changed
@@ -426,7 +462,15 @@ class AutoLevelApp(object):
 
         self.LevelGrid.SelectionChanged += self._on_grid_selection_changed
         self.LevelGrid.CellEditEnding += self._on_cell_edit_ending
+
         self.StackCanvas.SizeChanged += self._on_canvas_resized
+        self.StackCanvas.MouseLeftButtonDown += self._on_canvas_down
+        self.StackCanvas.MouseMove += self._on_canvas_move
+        self.StackCanvas.MouseLeftButtonUp += self._on_canvas_up
+        self.StackCanvas.MouseWheel += self._on_canvas_wheel
+        self.ZoomInBtn.Click += self._on_zoom_in
+        self.ZoomOutBtn.Click += self._on_zoom_out
+        self.ZoomFitBtn.Click += self._on_zoom_fit
 
         self.RefreshBtn.Click += self._on_refresh
         self.ApplyBtn.Click += self._on_apply
@@ -490,6 +534,7 @@ class AutoLevelApp(object):
         self.plan = planner.LevelPlan()
         self.plan.project_formatter = self._format_project
         self.plan.load_existing(result.get("levels") or [])
+        self.stack.fit()                    # a new stack starts fitted
         self._fill_source_combo()
         self._fill_base_combo()
         self._fill_view_lists()
@@ -660,55 +705,77 @@ class AutoLevelApp(object):
     def _on_canvas_resized(self, sender, args):
         self.draw_stack()
 
+    def _elevations(self):
+        return [row.ElevMm for row in self.plan.rows]
+
+    def _stack_window(self):
+        """The (lo, hi) elevation band currently on screen, in millimetres."""
+        return self.stack.window(self._elevations())
+
+    def _canvas_metrics(self):
+        """(width, height, usable) or None when the canvas is too small."""
+        width = self.StackCanvas.ActualWidth or 0.0
+        height = self.StackCanvas.ActualHeight or 0.0
+        usable = height - stackview.TOP_PAD - stackview.BOTTOM_PAD
+        if width < 20 or usable < 10:
+            return None
+        return width, height, usable
+
     def draw_stack(self):
         """Draw the level stack to scale — the reason this window is wide.
 
         A table tells you the numbers; the drawing tells you the shape of the
         building, which is how you spot the level someone typed as 35000
         instead of 3500.
+
+        Names are dropped rather than overprinted when levels crowd together,
+        and the count of what was dropped goes in the hint — the fix is to
+        zoom, and the user should be told that is what is happening.
         """
         canvas = self.StackCanvas
         canvas.Children.Clear()
+        self._stack_hits = []
 
-        width = canvas.ActualWidth or 220.0
-        height = canvas.ActualHeight or 320.0
-        if width < 20 or height < 20:
+        metrics = self._canvas_metrics()
+        if metrics is None:
             return
+        width, height, usable = metrics
 
         rows = list(self.plan.rows)
         if not rows:
             self._canvas_message(canvas, width, height, "No levels yet.")
             self.HeightBadgeText.Text = "—"
+            self.StackHint.Text = ("Nothing to draw. Add levels on the Generate "
+                                   "tab, or detect them from a drawing.")
             return
 
-        elevations = [row.ElevMm for row in rows]
-        low, high = min(elevations), max(elevations)
-        span = high - low
-        top_pad, bottom_pad = 16.0, 20.0
-        usable = height - top_pad - bottom_pad
-        if usable < 10:
-            return
+        window = self._stack_window()
+        lo, hi = window
+        bounds = self.stack.bounds(self._elevations())
 
-        def y_of(elevation):
-            if span <= 0:
-                return top_pad + usable / 2.0
-            return top_pad + (high - elevation) / span * usable
-
-        # ground line, if the stack straddles zero
-        if low <= 0.0 <= high and span > 0:
+        # ground line, when zero is in view
+        if lo <= 0.0 <= hi:
             ground = Line()
             ground.X1, ground.X2 = 4.0, width - 4.0
-            ground.Y1 = ground.Y2 = y_of(0.0)
+            ground.Y1 = ground.Y2 = self.stack.y_at(0.0, window, usable)
             ground.Stroke = BRUSH_RULE
             ground.StrokeThickness = 6.0
             canvas.Children.Add(ground)
 
         previous_y = None
-        previous_elevation = low
+        previous_elevation = None
+        last_label_y = None
+        hidden = 0
+
         for row in rows:
-            y = y_of(row.ElevMm)
+            y = self.stack.y_at(row.ElevMm, window, usable)
+            if not self.stack.visible(y, height):
+                previous_y, previous_elevation = y, row.ElevMm
+                continue
+
             brush = STATE_BRUSHES.get(row.State, BRUSH_TEXT)
             selected = bool(row.IsSelected)
+            self._stack_hits.append((row, y))
 
             line = Line()
             line.X1, line.X2 = 8.0, width - 8.0
@@ -728,27 +795,33 @@ class AutoLevelApp(object):
                 Canvas.SetLeft(marker, 0.0)
                 Canvas.SetTop(marker, y - 6.0)
 
-            label = TextBlock()
-            label.Text = row.Name or "(unnamed)"
-            label.FontSize = 8.5
-            label.FontFamily = FONT_MONO
-            label.Foreground = brush
-            label.MaxWidth = max(60.0, width - 78.0)
-            canvas.Children.Add(label)
-            Canvas.SetLeft(label, 10.0)
-            Canvas.SetTop(label, y - 11.0)
+            room = last_label_y is None or (last_label_y - y) >= stackview.LABEL_GAP
+            if room or selected:
+                label = TextBlock()
+                label.Text = row.Name or "(unnamed)"
+                label.FontSize = 8.5
+                label.FontFamily = FONT_MONO
+                label.Foreground = brush
+                label.MaxWidth = max(60.0, width - 78.0)
+                canvas.Children.Add(label)
+                Canvas.SetLeft(label, 10.0)
+                Canvas.SetTop(label, y - 11.0)
 
-            value = TextBlock()
-            value.Text = textparse.format_metres(row.ElevMm)
-            value.FontSize = 8.5
-            value.FontFamily = FONT_MONO
-            value.Foreground = BRUSH_MUTED
-            canvas.Children.Add(value)
-            Canvas.SetLeft(value, max(10.0, width - 56.0))
-            Canvas.SetTop(value, y - 11.0)
+                value = TextBlock()
+                value.Text = textparse.format_metres(row.ElevMm)
+                value.FontSize = 8.5
+                value.FontFamily = FONT_MONO
+                value.Foreground = BRUSH_MUTED
+                canvas.Children.Add(value)
+                Canvas.SetLeft(value, max(10.0, width - 56.0))
+                Canvas.SetTop(value, y - 11.0)
+                last_label_y = y
+            else:
+                hidden += 1
 
             # the gap to the level below, written in the middle of it
-            if previous_y is not None and previous_y - y > 16.0:
+            if (previous_y is not None and previous_elevation is not None
+                    and previous_y - y > 16.0):
                 gap = TextBlock()
                 gap.Text = "{0:.0f}".format(row.ElevMm - previous_elevation)
                 gap.FontSize = 7.5
@@ -757,10 +830,188 @@ class AutoLevelApp(object):
                 canvas.Children.Add(gap)
                 Canvas.SetLeft(gap, 12.0)
                 Canvas.SetTop(gap, (y + previous_y) / 2.0 - 5.0)
-            previous_y = y
-            previous_elevation = row.ElevMm
+            previous_y, previous_elevation = y, row.ElevMm
 
-        self.HeightBadgeText.Text = "{0:.3f} m".format(span / 1000.0)
+        if self.stack.zoom > stackview.ZOOM_MIN + 0.001:
+            self.HeightBadgeText.Text = "{0:.3f} m · {1:.1f}×".format(
+                (hi - lo) / 1000.0, self.stack.zoom)
+        else:
+            self.HeightBadgeText.Text = "{0:.3f} m".format(
+                (bounds[1] - bounds[0]) / 1000.0)
+
+        hint = "Drag a level to move it · double-click to rename · wheel to zoom."
+        if hidden:
+            hint += "  {0} name{1} hidden — zoom in to separate them.".format(
+                hidden, "" if hidden == 1 else "s")
+        self.StackHint.Text = hint
+
+    # ── zoom ──────────────────────────────────────────────────────────
+    def _zoom_about(self, y, factor):
+        """Zoom keeping the elevation under *y* pinned where it is."""
+        metrics = self._canvas_metrics()
+        usable = metrics[2] if metrics else 0.0
+        if self.stack.zoom_about(y, factor, self._elevations(), usable):
+            self.draw_stack()
+
+    def _on_zoom_in(self, sender, args):
+        metrics = self._canvas_metrics()
+        middle = (metrics[1] / 2.0) if metrics else 0.0
+        self._zoom_about(middle, stackview.ZOOM_STEP)
+
+    def _on_zoom_out(self, sender, args):
+        metrics = self._canvas_metrics()
+        middle = (metrics[1] / 2.0) if metrics else 0.0
+        self._zoom_about(middle, 1.0 / stackview.ZOOM_STEP)
+
+    def _on_zoom_fit(self, sender, args):
+        self.stack.fit()
+        self.draw_stack()
+        self.set_status("Showing the whole stack.")
+
+    def _on_canvas_wheel(self, sender, args):
+        from System.Windows.Input import Keyboard, ModifierKeys
+        window = self._stack_window()
+        if window is None:
+            return
+        if bool(Keyboard.Modifiers & ModifierKeys.Shift):
+            self.stack.nudge(0.15 if args.Delta > 0 else -0.15, window)
+            self.draw_stack()
+        else:
+            point = args.GetPosition(self.StackCanvas)
+            self._zoom_about(point.Y, stackview.ZOOM_STEP if args.Delta > 0
+                             else 1.0 / stackview.ZOOM_STEP)
+        args.Handled = True
+
+    # ── clicking and dragging levels ──────────────────────────────────
+    def _snap_mm(self):
+        return _as_float(str(self.SnapCombo.SelectedItem or "10 mm"), 10.0)
+
+    def _row_at(self, y):
+        """The level drawn nearest *y*, if the click is close enough to it."""
+        return stackview.nearest(self._stack_hits, y)
+
+    def _select_only(self, row):
+        self._refreshing = True
+        try:
+            self.LevelGrid.SelectedItems.Clear()
+            self.LevelGrid.SelectedItems.Add(row)
+        except Exception:
+            pass
+        finally:
+            self._refreshing = False
+        self._sync_selection_flags()
+        try:
+            self.LevelGrid.ScrollIntoView(row)
+        except Exception:
+            pass
+        self.update_counts()
+        self.update_previews()
+
+    def _begin_name_edit(self, row):
+        """Put the grid into edit mode on this level's name.
+
+        Double-clicking the drawing edits in the table rather than floating an
+        editor over the canvas: one editing path, one set of validation rules.
+        """
+        try:
+            column = None
+            for candidate in self.LevelGrid.Columns:
+                if str(candidate.Header or "").startswith("Level name"):
+                    column = candidate
+                    break
+            if column is None:
+                return
+            self.LevelGrid.ScrollIntoView(row)
+            self.LevelGrid.CurrentCell = DataGridCellInfo(row, column)
+            self.LevelGrid.Focus()
+            self.LevelGrid.BeginEdit()
+            self.set_status("Editing \"{0}\" — press Enter to keep it.".format(
+                row.Name))
+        except Exception:
+            self.set_status("Edit that one in the table on the right.", True)
+
+    def _on_canvas_down(self, sender, args):
+        point = args.GetPosition(self.StackCanvas)
+        row = self._row_at(point.Y)
+
+        if args.ClickCount >= 2:
+            if row is not None:
+                self._select_only(row)
+                self.draw_stack()
+                self._begin_name_edit(row)
+            args.Handled = True
+            return
+
+        if row is not None:
+            self._select_only(row)
+            if row.State != planner.STATE_DELETE:
+                self._drag_row = row
+                self._drag_start_y = point.Y
+                self._drag_start_mm = row.ElevMm
+                self.StackCanvas.CaptureMouse()
+            self.draw_stack()
+        else:
+            window = self._stack_window()
+            if window is not None:
+                self._pan_start_y = point.Y
+                self._pan_start_center = self.stack.center_mm
+                self.StackCanvas.CaptureMouse()
+        args.Handled = True
+
+    def _on_canvas_move(self, sender, args):
+        if self._drag_row is None and self._pan_start_y is None:
+            return
+        metrics = self._canvas_metrics()
+        window = self._stack_window()
+        if metrics is None or window is None:
+            return
+        _width, _height, usable = metrics
+        mm_per_px = self.stack.mm_per_pixel(window, usable)
+        point = args.GetPosition(self.StackCanvas)
+
+        if self._drag_row is not None:
+            from System.Windows.Input import Keyboard, ModifierKeys
+            value = self._drag_start_mm - (point.Y - self._drag_start_y) * mm_per_px
+            if not bool(Keyboard.Modifiers & ModifierKeys.Shift):
+                value = stackview.snap(value, self._snap_mm())
+            push = bool(self.PushAboveToggle.IsChecked)
+            ok, message = self.plan.set_elevation(self._drag_row, float(value),
+                                                  push_above=push)
+            if ok:
+                moved = self._drag_row.ElevMm - self._drag_start_mm
+                self.set_status("{0} → {1} mm ({2}{3:.0f}){4}".format(
+                    self._drag_row.Name,
+                    textparse.format_mm(self._drag_row.ElevMm),
+                    "+" if moved >= 0 else "", moved,
+                    ", pushing the levels above" if push else ""))
+            else:
+                self.set_status(message, True)
+            self.draw_stack()
+        else:
+            self.stack.pan_pixels(point.Y - self._pan_start_y, window, usable,
+                                  start_center=self._pan_start_center)
+            self.draw_stack()
+
+    def _on_canvas_up(self, sender, args):
+        dragged = self._drag_row
+        self._drag_row = None
+        self._pan_start_y = None
+        self._pan_start_center = None
+        try:
+            self.StackCanvas.ReleaseMouseCapture()
+        except Exception:
+            pass
+        if dragged is not None:
+            # The grid only catches up at the end of the drag — rebuilding
+            # ItemsSource on every mouse move would make it crawl.
+            self.refresh_grid()
+            if abs(dragged.ElevMm - self._drag_start_mm) < 0.5:
+                self.set_status("\"{0}\" selected.".format(dragged.Name))
+            else:
+                self.set_status("Moved \"{0}\" to {1} mm — staged, not applied."
+                                .format(dragged.Name,
+                                        textparse.format_mm(dragged.ElevMm)))
+        args.Handled = True
 
     def _canvas_message(self, canvas, width, height, message):
         label = TextBlock()
@@ -778,6 +1029,7 @@ class AutoLevelApp(object):
         self.LiveCount.Text = "{0} level(s) · {1} change(s) · {2} ticked".format(
             counts["total"], counts["changes"], ticked)
         self.ApplyBtn.IsEnabled = counts["changes"] > 0
+        self.GridHint.Text = self._next_step(counts)
 
         if counts["changes"]:
             parts = []
@@ -794,6 +1046,29 @@ class AutoLevelApp(object):
             self.ChangeSummary.Text = summary
         else:
             self.ChangeSummary.Text = "No changes pending."
+
+    def _next_step(self, counts):
+        """One line above the table saying what to do next.
+
+        The tool has four tabs and a dozen options; without this the first
+        question is always "so what do I press". It answers that from the
+        state of the plan rather than making the user work it out.
+        """
+        if not self.plan.rows:
+            return ("Next — this model has no levels. Add some on 2 · Generate, "
+                    "or read the Guide tab.")
+        blocking = [message for severity, _row, message in self.plan.issues
+                    if severity == "error"]
+        if blocking:
+            return "Next — fix this, then Apply: {0}".format(blocking[0])
+        if counts["changes"]:
+            return ("Next — press Apply changes to write {0} staged change(s) "
+                    "to the model.".format(counts["changes"]))
+        if not self._scanned_once:
+            return ("Next — on 1 · Detect pick a source and press Scan for "
+                    "levels. Nothing reaches the model until you Apply.")
+        return ("Nothing staged. Detect, Generate or Rename to stage a change "
+                "— or drag a level in the drawing.")
 
     def update_previews(self):
         self._update_generate_preview()
@@ -882,10 +1157,15 @@ class AutoLevelApp(object):
         panels = ((self.TabDetect, self.PanelDetect),
                   (self.TabGenerate, self.PanelGenerate),
                   (self.TabRename, self.PanelRename),
-                  (self.TabViews, self.PanelViews))
+                  (self.TabViews, self.PanelViews),
+                  (self.TabGuide, self.PanelGuide))
         for tab, panel in panels:
             panel.Visibility = (Visibility.Visible if bool(tab.IsChecked)
                                 else Visibility.Collapsed)
+        for name, hint in TAB_HINTS:
+            if bool(getattr(self, name).IsChecked):
+                self.TabHint.Text = hint
+                break
         self.update_previews()
 
     # ── detect ────────────────────────────────────────────────────────
@@ -1008,6 +1288,7 @@ class AutoLevelApp(object):
             candidates,
             tolerance_mm=options["tolerance_mm"],
             adopt_names=options["adopt_names"])
+        self._scanned_once = True
         self.refresh_grid()
 
         lines = ["{0}".format(origin),
