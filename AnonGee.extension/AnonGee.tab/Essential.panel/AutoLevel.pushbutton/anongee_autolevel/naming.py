@@ -15,6 +15,12 @@ No ``re``: the CPython 3 engine ships without it (§12.9.3).
 
 DIGITS = "0123456789"
 
+# Revit refuses these in any element name — Element.set_Name throws
+# "Name cannot include prohibited characters". Worth knowing before Apply
+# rather than after: a name that reaches Revit and bounces has already cost
+# the user a transaction.
+PROHIBITED = "\\:{}[]|;<>?`~"
+
 ORDINAL_WORDS = (
     "ZEROTH", "FIRST", "SECOND", "THIRD", "FOURTH", "FIFTH", "SIXTH",
     "SEVENTH", "EIGHTH", "NINTH", "TENTH", "ELEVENTH", "TWELFTH",
@@ -329,8 +335,27 @@ TEMPLATE_TOKENS = (
 
 TEMPLATE_HELP = (
     "{n} 1 · {nn} 01 · {nnn} 001 · {ordinal} 1st · {ORDINAL} 1ST · "
-    "{Word} First · {roman} I · {elev_m} 3.500 · {elev_mm} 3500 · {label}"
+    "{Word} First · {roman} I · {elev_m} 3.500 · {elev_mm} 3500 · {label} · "
+    "offset any index token: {n+1} {nn-1} {ORDINAL+2}"
 )
+
+# Index tokens accept an offset, so one template can number two things that
+# run out of step — "{nn} {ORDINAL+1} FLOOR" gives "01 2ND FLOOR" when the
+# ground floor is 00. Written as +K / -K because that is how people say it.
+OFFSET_SIGNS = "+-"
+
+
+def _split_offset(body):
+    """``"n+1"`` -> ``("n", 1)``. ``None`` when the offset is malformed."""
+    for position, ch in enumerate(body):
+        if ch not in OFFSET_SIGNS or position == 0:
+            continue
+        base = body[:position].strip()
+        digits = body[position + 1:].strip()
+        if not digits.isdigit():
+            return None
+        return base, int(digits) * (1 if ch == "+" else -1)
+    return body.strip(), 0
 
 
 def render_template(template, index, elevation_mm=None, label=""):
@@ -351,7 +376,12 @@ def render_template(template, index, elevation_mm=None, label=""):
             out.append(template[i:])
             break
         token = template[i:close + 1]
-        replacement = _template_value(token, index, elevation_mm, label)
+        split = _split_offset(token[1:-1])
+        replacement = None
+        if split is not None:
+            base, offset = split
+            replacement = _template_value("{" + base + "}", index + offset,
+                                          elevation_mm, label)
         out.append(token if replacement is None else replacement)
         i = close + 1
     return "".join(out).strip()
@@ -391,6 +421,39 @@ def _template_value(token, index, elevation_mm, label):
 
 
 # ── uniqueness ─────────────────────────────────────────────────────────────
+
+def bad_characters(name):
+    """The prohibited characters in *name*, in the order they appear, once each."""
+    found = []
+    for ch in name or "":
+        if ch in PROHIBITED and ch not in found:
+            found.append(ch)
+    return found
+
+
+def is_valid_name(name):
+    """(ok, message) — would Revit accept this as an element name?"""
+    text = (name or "").strip()
+    if not text:
+        return False, "A level needs a name."
+    bad = bad_characters(text)
+    if bad:
+        return False, "Revit won't accept {0} in a name.".format(
+            " ".join('"{0}"'.format(ch) for ch in bad))
+    return True, ""
+
+
+def sanitize_name(name, replacement=""):
+    """Strip the characters Revit refuses, and tidy what is left.
+
+    Used where names arrive from outside — drawing text, a DXF, a paste box —
+    so a stray brace on a sheet cannot become a name that fails at Apply.
+    Names the user types are validated instead of silently rewritten.
+    """
+    text = name or ""
+    cleaned = "".join(replacement if ch in PROHIBITED else ch for ch in text)
+    return " ".join(cleaned.split())
+
 
 def unique_name(base, taken, separator=" "):
     """A name Revit will accept — level names must be unique in a document."""

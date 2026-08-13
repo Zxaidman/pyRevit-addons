@@ -33,6 +33,10 @@ MIN_SEPARATION_MM = 100.0
 DEFAULT_MATCH_TOLERANCE_MM = 25.0
 DEFAULT_STOREY_MM = 3000.0
 
+# How many staged edits you can walk back. Each step is a shallow copy of the
+# row list, so this costs a few kilobytes for a stack of any realistic size.
+HISTORY_DEPTH = 60
+
 
 def _confidence_band(confidence):
     """Bucket a confidence into the four looks the grid draws.
@@ -139,6 +143,78 @@ class LevelPlan(object):
         self.unit_hint = unit_hint
         self.project_formatter = None    # set by the Revit side: mm -> str
         self.issues = []
+        self._undo = []                  # [(label, snapshot)]
+        self._redo = []
+
+    # ── undo / redo over the staged plan ──────────────────────────────
+    # This is the plan's history, not Revit's. Everything here happens before
+    # anything is written, so the user can drag a level, think better of it,
+    # and step back without the model ever having heard about it. Revit's own
+    # undo still covers the single transaction group that Apply commits.
+
+    def _snapshot(self):
+        return [(row.Name, row.ElevMm, row.IdInt, row.OrigName, row.OrigElevMm,
+                 row.State, row.Confidence, tuple(row.Reasons), row.Raw,
+                 tuple(row.Plans), row.Elements, row.Source, row.ProjectText)
+                for row in self.rows]
+
+    def _restore(self, snapshot):
+        self.rows = []
+        for state in snapshot:
+            (name, elevation, id_int, orig_name, orig_elevation, row_state,
+             confidence, reasons, raw, plans, elements, source,
+             project_text) = state
+            row = LevelRow(name, elevation, id_int=id_int, source=source)
+            row.OrigName = orig_name
+            row.OrigElevMm = orig_elevation
+            row.State = row_state
+            row.Confidence = confidence
+            row.Reasons = list(reasons)
+            row.Raw = raw
+            row.Plans = list(plans)
+            row.Elements = elements
+            row.ProjectText = project_text
+            self.rows.append(row)
+
+    def checkpoint(self, label):
+        """Remember the plan as it is, so *label* can be undone."""
+        self._undo.append((label, self._snapshot()))
+        if len(self._undo) > HISTORY_DEPTH:
+            self._undo.pop(0)
+        self._redo = []
+        return label
+
+    def drop_checkpoint(self):
+        """Forget the last checkpoint — for an action that changed nothing."""
+        if self._undo:
+            self._undo.pop()
+
+    def undo(self):
+        if not self._undo:
+            return None
+        label, snapshot = self._undo.pop()
+        self._redo.append((label, self._snapshot()))
+        self._restore(snapshot)
+        return label
+
+    def redo(self):
+        if not self._redo:
+            return None
+        label, snapshot = self._redo.pop()
+        self._undo.append((label, self._snapshot()))
+        self._restore(snapshot)
+        return label
+
+    def undo_label(self):
+        return self._undo[-1][0] if self._undo else None
+
+    def redo_label(self):
+        return self._redo[-1][0] if self._redo else None
+
+    def clear_history(self):
+        """After Apply the model has moved on; the old steps mean nothing."""
+        self._undo = []
+        self._redo = []
 
     # ── loading ───────────────────────────────────────────────────────
     def load_existing(self, levels):
@@ -174,13 +250,15 @@ class LevelPlan(object):
                 existing.Confidence = candidate.confidence
                 existing.Reasons = list(candidate.reasons)
                 existing.Raw = candidate.raw
-                if adopt_names and candidate.name and candidate.name != existing.Name:
+                detected = naming.sanitize_name(candidate.name)
+                if adopt_names and detected and detected != existing.Name:
                     existing.Name = naming.unique_name(
-                        candidate.name, self._names_except(existing))
+                        detected, self._names_except(existing))
                     renamed += 1
                 existing.refresh_state()
                 continue
-            row = LevelRow(candidate.name or "", candidate.elevation_mm,
+            row = LevelRow(naming.sanitize_name(candidate.name),
+                           candidate.elevation_mm,
                            source=candidate.source or source)
             row.Confidence = candidate.confidence
             row.Reasons = list(candidate.reasons)
@@ -234,8 +312,10 @@ class LevelPlan(object):
 
         for i in range(count):
             elevation = base_mm + height * (i + 1)
-            row = LevelRow(naming.unique_name(names[i], self._names_except(None)),
-                           elevation, source=source)
+            row = LevelRow(
+                naming.unique_name(naming.sanitize_name(names[i]),
+                                   self._names_except(None)),
+                elevation, source=source)
             row.Confidence = None
             self.rows.append(row)
         self.resort()
@@ -256,8 +336,9 @@ class LevelPlan(object):
     # ── editing ───────────────────────────────────────────────────────
     def rename(self, row, name):
         cleaned = (name or "").strip()
-        if not cleaned:
-            return False, "A level needs a name."
+        ok, message = naming.is_valid_name(cleaned)
+        if not ok:
+            return False, message
         clash = self._find_name(cleaned, skip=row)
         if clash is not None:
             return False, "\"{0}\" is already taken.".format(cleaned)
@@ -318,6 +399,9 @@ class LevelPlan(object):
                 proposed = naming.apply_affixes(row.Name, prefix, suffix,
                                                 find, replace, case_mode)
             if not proposed or proposed == row.Name:
+                continue
+            if naming.bad_characters(proposed):
+                collisions.append(proposed)
                 continue
             if self._find_name(proposed, skip=row) is not None:
                 collisions.append(proposed)
@@ -398,6 +482,11 @@ class LevelPlan(object):
             if not key:
                 issues.append(("error", row, "This level has no name."))
                 continue
+            bad = naming.bad_characters(row.Name)
+            if bad:
+                issues.append(("error", row,
+                               "Revit won't accept {0} in a name.".format(
+                                   " ".join('"{0}"'.format(ch) for ch in bad))))
             if key in seen:
                 issues.append(("error", row,
                                "Duplicate name — Revit needs unique level names."))

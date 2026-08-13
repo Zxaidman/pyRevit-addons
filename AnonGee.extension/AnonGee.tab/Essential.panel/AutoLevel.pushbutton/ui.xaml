@@ -1008,7 +1008,7 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2" Text="Start at"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput" ToolTip="{}{n} 1 - {nn} 01 - {nnn} 001 - {ordinal} 1st - {ORDINAL} 1ST - {Word} First - {roman} I - {elev_m} 3.500 - {elev_mm} 3500"
+                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput" ToolTip="{}{n} 1 - {nn} 01 - {nnn} 001 - {ordinal} 1st - {ORDINAL} 1ST - {Word} First - {roman} I - {elev_m} 3.500 - {elev_mm} 3500.  Any index token takes an offset: {n+1}, {nn-1}, {ORDINAL+2}."
                                              Style="{StaticResource InputSmall}" Text="Level {n}"/>
                                     <TextBox Grid.Row="1" Grid.Column="2" x:Name="StartInput" ToolTip="First number to use. Leave empty to carry on from the highest number already in use."
                                              Style="{StaticResource InputSmall}"/>
@@ -1129,7 +1129,7 @@
                                         <ColumnDefinition Width="8"/>
                                         <ColumnDefinition Width="70"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBox Grid.Column="0" x:Name="RenameTemplateInput" ToolTip="Same tokens as the Generate tab: {n} {nn} {ORDINAL} {Word} {roman} {elev_m} {elev_mm}"
+                                    <TextBox Grid.Column="0" x:Name="RenameTemplateInput" ToolTip="Same tokens as the Generate tab: {n} {nn} {ORDINAL} {Word} {roman} {elev_m} {elev_mm}.  Add an offset to shift the numbering: {n+1} starts one higher, {nn-1} one lower."
                                              Style="{StaticResource InputSmall}" Text="{}{nn} {ORDINAL} FLOOR"
                                              IsEnabled="False"/>
                                     <TextBox Grid.Column="2" x:Name="RenameStartInput" ToolTip="Number to give the lowest renamed level."
@@ -1193,10 +1193,22 @@
                                     <TextBlock x:Name="ChangeSummary" Style="{StaticResource TextCaption}"
                                                TextWrapping="Wrap" Text="No changes pending."/>
                                 </Border>
-                                <StackPanel Grid.Row="3" Orientation="Horizontal">
+                                <StackPanel Grid.Row="3">
                                     <Button x:Name="ResetBtn" Content="Discard changes"
                                             Style="{StaticResource ButtonSecondary}" Width="160"
+                                            HorizontalAlignment="Left" Margin="0,0,0,8"
                                             ToolTip="Throw away everything staged and go back to the model's own levels."/>
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="SaveSettingsBtn" Content="Save as my defaults"
+                                                Style="{StaticResource ButtonSmall}" Width="150"
+                                                ToolTip="Remember every option on all four tabs, so the window opens set up this way next time. Preferences only — nothing about this model is stored."/>
+                                        <Button x:Name="ForgetSettingsBtn" Content="Reset defaults"
+                                                Style="{StaticResource ButtonSmall}" Width="110"
+                                                ToolTip="Delete your saved settings and go back to the ones the tool ships with."/>
+                                    </StackPanel>
+                                    <TextBlock x:Name="SettingsHint" Style="{StaticResource TextCaption}"
+                                               TextWrapping="Wrap" Margin="0,6,0,0"
+                                               Text="Using the built-in defaults."/>
                                 </StackPanel>
                             </Grid>
                         </Grid>
@@ -1230,6 +1242,15 @@
                                 <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                            Margin="0,0,0,10"
                                            Text="4 · Views — optionally give every new level its floor / ceiling / structural plan, then read the summary of what Apply will do."/>
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="NAMING TEMPLATES"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="{}{n} 1 · {nn} 01 · {nnn} 001 · {ordinal} 1st · {ORDINAL} 1ST · {Word} First · {roman} I · {elev_m} 3.500 · {elev_mm} 3500"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="{}Any index token takes an offset, for numbering that runs out of step: {n+1}, {nn-1}, {ORDINAL+2}. So &quot;{nn} {ORDINAL+1} FLOOR&quot; starting at 0 gives 00 1ST FLOOR, 01 2ND FLOOR, 02 3RD FLOOR."/>
 
                                 <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
                                            Text="WHAT THE DETECTOR READS"/>
@@ -1269,6 +1290,18 @@
                                            Margin="0,0,0,10"
                                            Text="Zoom in when levels sit on top of each other — names are hidden rather than overprinted, and the footer says how many."/>
 
+                                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,0,0,4"
+                                           Text="UNDOING, AND KEEPING YOUR SETUP"/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Undo and Redo above the table step through the changes staged here — Ctrl+Z and Ctrl+Y. This is the tool's own history; nothing has reached the model, and each button says what it is about to undo."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Revit's own undo still covers what Apply writes — one step for the whole batch."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,10"
+                                           Text="Save as my defaults on the Views tab remembers every option on all four tabs for next time. Preferences only — view types are remembered by name, never by id, so they still make sense in the next project."/>
+
                                 <Border Background="#FEF2F2" CornerRadius="5" Padding="10,8">
                                     <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                                Foreground="{StaticResource BrushCharcoalBlack}"
@@ -1288,6 +1321,11 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button x:Name="UndoBtn" Content="Undo" Style="{StaticResource ButtonSmall}"
+                                ToolTip="Step back through the changes staged here. This is the tool's own history — nothing has reached the model yet. Ctrl+Z."/>
+                        <Button x:Name="RedoBtn" Content="Redo" Style="{StaticResource ButtonSmall}"
+                                ToolTip="Step forward again. Ctrl+Y. Making a new change clears the redo trail."/>
+                        <Border Width="1" Margin="2,3,8,3" Background="{StaticResource BrushLightBorder}"/>
                         <Button x:Name="SelectAllBtn" ToolTip="Tick every row."  Content="Tick all"        Style="{StaticResource ButtonSmall}"/>
                         <Button x:Name="ClearBtn" ToolTip="Untick everything."      Content="Clear"           Style="{StaticResource ButtonSmall}"/>
                         <Button x:Name="SelectRevitBtn" ToolTip="Select the ticked levels in Revit itself, so you can see them in a view." Content="Select in Revit" Style="{StaticResource ButtonSmall}"/>

@@ -123,7 +123,8 @@ _bootstrap_lib_path()
 
 from anongee_autolevel import VERSION                             # noqa: E402
 from anongee_autolevel import (compat, dxf_text, naming,          # noqa: E402
-                               planner, revit_ops, stackview, textparse)
+                               planner, revit_ops, settings, stackview,
+                               textparse)
 
 
 # ── brushes for the runtime-drawn stack ────────────────────────────────────
@@ -338,9 +339,13 @@ class AutoLevelApp(object):
         self._pan_start_y = None
         self._pan_start_center = None
 
+        self.settings, note = settings.load()
+
         self._bind_controls()
         self._fill_static_lists()
+        self._apply_settings(self.settings)
         self._wire_events()
+        self.SettingsHint.Text = note or "Using the built-in defaults."
 
     # ── control lookup ────────────────────────────────────────────────
     def _bind_controls(self):
@@ -366,6 +371,8 @@ class AutoLevelApp(object):
             "RenamePreview", "ApplyRenameBtn",
             "CreateViewsToggle", "ViewTypeList", "ViewTemplateCombo",
             "ChangeSummary", "ResetBtn",
+            "SaveSettingsBtn", "ForgetSettingsBtn", "SettingsHint",
+            "UndoBtn", "RedoBtn",
             "SelectAllBtn", "ClearBtn", "SelectRevitBtn", "OpenPlanBtn",
             "RestoreBtn", "DeleteBtn", "GridHint", "LevelGrid",
             "StatusBar", "LiveCount", "RefreshBtn", "ApplyBtn", "CloseBtn",
@@ -423,6 +430,13 @@ class AutoLevelApp(object):
                 if str(self.SourceCombo.Items[position]) == previous:
                     restored = position
                     break
+        if restored < 0:
+            # Only the fixed entries are safe to restore by index: a CAD slot
+            # holds a different file in the next model, and silently scanning
+            # the wrong drawing is worse than starting on the active view.
+            saved = self.settings.get("source_index", 0)
+            if 0 <= saved < min(SOURCE_FIRST_CAD, self.SourceCombo.Items.Count):
+                restored = saved
         self.SourceCombo.SelectedIndex = restored if restored >= 0 else 0
 
     # ── event wiring ──────────────────────────────────────────────────
@@ -456,6 +470,12 @@ class AutoLevelApp(object):
         self.ApplyRenameBtn.Click += self._on_apply_rename
 
         self.ResetBtn.Click += self._on_reset
+        self.SaveSettingsBtn.Click += self._on_save_settings
+        self.ForgetSettingsBtn.Click += self._on_forget_settings
+
+        self.UndoBtn.Click += self._on_undo
+        self.RedoBtn.Click += self._on_redo
+        self.window.PreviewKeyDown += self._on_key_down
 
         self.SelectAllBtn.Click += self._on_select_all
         self.ClearBtn.Click += self._on_clear_selection
@@ -582,10 +602,14 @@ class AutoLevelApp(object):
                                                view_type["family"])
             box.Tag = view_type["id"]
             box.Margin = Thickness(6, 3, 6, 3)
-            if first_fill:
-                box.IsChecked = view_type["family"] == "FloorPlan"
-            else:
+            if not first_fill:
                 box.IsChecked = view_type["id"] in previously_ticked
+            elif self.settings.get("view_type_names"):
+                # Remembered by NAME: a view family type id means nothing in
+                # the next project, but "Structural Plan" still does.
+                box.IsChecked = str(box.Content) in self.settings["view_type_names"]
+            else:
+                box.IsChecked = view_type["family"] == "FloorPlan"
             self.ViewTypeList.Children.Add(box)
 
         previous = None
@@ -595,10 +619,11 @@ class AutoLevelApp(object):
         self.ViewTemplateCombo.Items.Add("(no template)")
         for template in self.snapshot.get("view_templates") or []:
             self.ViewTemplateCombo.Items.Add(template["name"])
+        wanted = previous or self.settings.get("view_template_name") or None
         restored = 0
-        if previous is not None:
+        if wanted:
             for position in range(self.ViewTemplateCombo.Items.Count):
-                if str(self.ViewTemplateCombo.Items[position]) == previous:
+                if str(self.ViewTemplateCombo.Items[position]) == wanted:
                     restored = position
                     break
         self.ViewTemplateCombo.SelectedIndex = restored
@@ -683,9 +708,11 @@ class AutoLevelApp(object):
         header = str(args.Column.Header or "")
 
         if header.startswith("Level name"):
+            self._checkpoint("rename \"{0}\"".format(row.Name))
             ok, message = self.plan.rename(row, text)
         elif header.startswith("Elevation"):
             push = bool(self.PushAboveToggle.IsChecked)
+            self._checkpoint("move \"{0}\"".format(row.Name))
             ok, message = self.plan.set_elevation(row, text, push_above=push)
             if ok and push:
                 message = "Moved \"{0}\" and everything above it.".format(row.Name)
@@ -699,6 +726,7 @@ class AutoLevelApp(object):
                 self.set_status("Updated \"{0}\".".format(row.Name))
         else:
             args.Cancel = True          # keep the raw text out of the row
+            self.plan.drop_checkpoint() # a rejected edit is not a history step
             self.set_status(message, True)
 
         # The grid is mid-commit; rebuilding ItemsSource now would throw.
@@ -949,6 +977,8 @@ class AutoLevelApp(object):
         if row is not None:
             self._select_only(row)
             if row.State != planner.STATE_DELETE:
+                # One history step for the whole drag, not one per mouse-move.
+                self._checkpoint("move \"{0}\"".format(row.Name))
                 self._drag_row = row
                 self._drag_start_y = point.Y
                 self._drag_start_mm = row.ElevMm
@@ -1006,10 +1036,14 @@ class AutoLevelApp(object):
         except Exception:
             pass
         if dragged is not None:
+            moved = abs(dragged.ElevMm - self._drag_start_mm) >= 0.5
+            if not moved:
+                self.plan.drop_checkpoint()     # a click, not a move
             # The grid only catches up at the end of the drag — rebuilding
-            # ItemsSource on every mouse move would make it crawl.
+            # ItemsSource on every mouse move would make it crawl. It also
+            # redraws the history buttons, so the checkpoint is settled first.
             self.refresh_grid()
-            if abs(dragged.ElevMm - self._drag_start_mm) < 0.5:
+            if not moved:
                 self.set_status("\"{0}\" selected.".format(dragged.Name))
             else:
                 self.set_status("Moved \"{0}\" to {1} mm — staged, not applied."
@@ -1034,6 +1068,7 @@ class AutoLevelApp(object):
             counts["total"], counts["changes"], ticked)
         self.ApplyBtn.IsEnabled = counts["changes"] > 0
         self.GridHint.Text = self._next_step(counts)
+        self._refresh_history_buttons()
 
         if counts["changes"]:
             parts = []
@@ -1288,6 +1323,8 @@ class AutoLevelApp(object):
             self.set_status("No levels detected.", True)
             return
 
+        self._checkpoint("read {0} level(s) from {1}".format(
+            len(candidates), origin.split(" · ")[0]))
         created, matched, renamed = self.plan.add_candidates(
             candidates,
             tolerance_mm=options["tolerance_mm"],
@@ -1327,6 +1364,7 @@ class AutoLevelApp(object):
             self.set_status("A storey height has to be more than zero.", True)
             return
         mode = "follow" if bool(self.FollowRadio.IsChecked) else "template"
+        self._checkpoint("add {0} level(s)".format(count))
         added, note = self.plan.generate(
             count, height_mm=height, base_mm=self._base_elevation(),
             mode=mode, template=self.TemplateInput.Text or "Level {n}",
@@ -1342,7 +1380,10 @@ class AutoLevelApp(object):
         rows = self.plan.live_rows()
         index = self.BaseCombo.SelectedIndex
         base_row = rows[index - 1] if (index > 0 and index - 1 < len(rows)) else None
+        self._checkpoint("re-space the stack at {0:.0f} mm".format(height))
         changed = self.plan.respace(height, base_row)
+        if not changed:
+            self.plan.drop_checkpoint()
         self.refresh_grid()
         if changed:
             self.set_status("Re-spaced {0} level(s) at {1:.0f} mm.".format(
@@ -1368,6 +1409,7 @@ class AutoLevelApp(object):
         if not targets:
             self.set_status("Tick the rows to rename first.", True)
             return
+        self._checkpoint("rename {0} level(s)".format(len(targets)))
         changed, collisions = self.plan.batch_rename(
             targets,
             prefix=self.PrefixInput.Text, suffix=self.SuffixInput.Text,
@@ -1376,6 +1418,8 @@ class AutoLevelApp(object):
             template=self.RenameTemplateInput.Text,
             start_index=_as_int(self.RenameStartInput.Text, 1),
             use_template=bool(self.RenameTemplateToggle.IsChecked))
+        if not changed:
+            self.plan.drop_checkpoint()
         self.refresh_grid()
         if collisions:
             self.set_status(
@@ -1386,6 +1430,159 @@ class AutoLevelApp(object):
                             "Apply changes writes them to the model.".format(changed))
         else:
             self.set_status("Nothing to change with that rule.")
+
+    # ── undo / redo over the staged plan ──────────────────────────────
+    def _checkpoint(self, label):
+        """Take a history step before changing the plan."""
+        self.plan.checkpoint(label)
+
+    def _after_history_move(self, label, direction):
+        self.plan.project_formatter = self._format_project
+        self.refresh_grid()
+        if label:
+            self.set_status("{0}: {1}.".format(direction, label))
+        else:
+            self.set_status("Nothing to {0}.".format(direction.lower()))
+
+    def _on_undo(self, sender, args):
+        label = self.plan.undo()
+        self._after_history_move(label, "Undone")
+
+    def _on_redo(self, sender, args):
+        label = self.plan.redo()
+        self._after_history_move(label, "Redone")
+
+    def _on_key_down(self, sender, args):
+        """Ctrl+Z / Ctrl+Y — but not while a text box has the caret.
+
+        Inside an input the user means the TextBox's own undo, and taking that
+        away to rewind the whole plan would be a nasty surprise.
+        """
+        from System.Windows.Controls import TextBox
+        from System.Windows.Input import Key, Keyboard, ModifierKeys
+        if not bool(Keyboard.Modifiers & ModifierKeys.Control):
+            return
+        if isinstance(Keyboard.FocusedElement, TextBox):
+            return
+        if args.Key == Key.Z:
+            self._on_undo(sender, args)
+            args.Handled = True
+        elif args.Key == Key.Y:
+            self._on_redo(sender, args)
+            args.Handled = True
+
+    def _refresh_history_buttons(self):
+        undo_label = self.plan.undo_label()
+        redo_label = self.plan.redo_label()
+        self.UndoBtn.IsEnabled = undo_label is not None
+        self.RedoBtn.IsEnabled = redo_label is not None
+        self.UndoBtn.ToolTip = (
+            "Nothing staged to undo yet." if undo_label is None
+            else "Undo: {0}. Ctrl+Z. Nothing has reached the model yet."
+                 .format(undo_label))
+        self.RedoBtn.ToolTip = (
+            "Nothing to redo." if redo_label is None
+            else "Redo: {0}. Ctrl+Y.".format(redo_label))
+
+    # ── settings ──────────────────────────────────────────────────────
+    def _collect_settings(self):
+        """Every option on every tab, as plain data (§ no ids — see settings)."""
+        return {
+            "source_index": self.SourceCombo.SelectedIndex,
+            "unit_index": self.UnitCombo.SelectedIndex,
+            "datum_mm": self.DatumInput.Text,
+            "tolerance_mm": self.ToleranceInput.Text,
+            "layers": self.LayerInput.Text,
+            "require_evidence": bool(self.EvidenceToggle.IsChecked),
+            "cross_check_positions": bool(self.PositionToggle.IsChecked),
+            "adopt_names": bool(self.AdoptToggle.IsChecked),
+            "count": self.CountInput.Text,
+            "storey_height_mm": self.HeightInput.Text,
+            "naming_follow": bool(self.FollowRadio.IsChecked),
+            "template": self.TemplateInput.Text,
+            "start_index": self.StartInput.Text,
+            "push_above": bool(self.PushAboveToggle.IsChecked),
+            "snap_index": self.SnapCombo.SelectedIndex,
+            "prefix": self.PrefixInput.Text,
+            "suffix": self.SuffixInput.Text,
+            "find": self.FindInput.Text,
+            "replace": self.ReplaceInput.Text,
+            "case_index": self.CaseCombo.SelectedIndex,
+            "scope_selected": bool(self.ScopeSelectedRadio.IsChecked),
+            "rename_use_template": bool(self.RenameTemplateToggle.IsChecked),
+            "rename_template": self.RenameTemplateInput.Text,
+            "rename_start": self.RenameStartInput.Text,
+            "create_views": bool(self.CreateViewsToggle.IsChecked),
+            "view_type_names": self._checked_view_type_names(),
+            "view_template_name": (str(self.ViewTemplateCombo.SelectedItem)
+                                   if self.ViewTemplateCombo.SelectedIndex > 0
+                                   else ""),
+        }
+
+    def _apply_settings(self, data):
+        """Push saved preferences into the controls. Model-specific lists —
+        view types, view templates — are matched by name in _fill_view_lists."""
+        def combo(control, index):
+            if 0 <= index < control.Items.Count:
+                control.SelectedIndex = index
+
+        combo(self.UnitCombo, data.get("unit_index", 0))
+        combo(self.CaseCombo, data.get("case_index", 0))
+        combo(self.SnapCombo, data.get("snap_index", SNAP_DEFAULT_INDEX))
+        self.DatumInput.Text = data.get("datum_mm", "0")
+        self.ToleranceInput.Text = data.get("tolerance_mm", "25")
+        self.LayerInput.Text = data.get("layers", "")
+        self.EvidenceToggle.IsChecked = bool(data.get("require_evidence", True))
+        self.PositionToggle.IsChecked = bool(
+            data.get("cross_check_positions", True))
+        self.AdoptToggle.IsChecked = bool(data.get("adopt_names", True))
+        self.CountInput.Text = data.get("count", "4")
+        self.HeightInput.Text = data.get("storey_height_mm", "3000")
+        follow = bool(data.get("naming_follow", True))
+        self.FollowRadio.IsChecked = follow
+        self.TemplateRadio.IsChecked = not follow
+        self.TemplateInput.Text = data.get("template", "Level {n}")
+        self.StartInput.Text = data.get("start_index", "")
+        self.PushAboveToggle.IsChecked = bool(data.get("push_above", False))
+        self.PrefixInput.Text = data.get("prefix", "")
+        self.SuffixInput.Text = data.get("suffix", "")
+        self.FindInput.Text = data.get("find", "")
+        self.ReplaceInput.Text = data.get("replace", "")
+        selected_scope = bool(data.get("scope_selected", True))
+        self.ScopeSelectedRadio.IsChecked = selected_scope
+        self.ScopeAllRadio.IsChecked = not selected_scope
+        self.RenameTemplateToggle.IsChecked = bool(
+            data.get("rename_use_template", False))
+        self.RenameTemplateInput.Text = data.get("rename_template",
+                                                 "{nn} {ORDINAL} FLOOR")
+        self.RenameStartInput.Text = data.get("rename_start", "1")
+        self.CreateViewsToggle.IsChecked = bool(data.get("create_views", False))
+        self._on_rename_mode_changed(None, None)
+
+    def _checked_view_type_names(self):
+        names = []
+        for child in self.ViewTypeList.Children:
+            try:
+                if bool(child.IsChecked):
+                    names.append(str(child.Content))
+            except Exception:
+                continue
+        return names
+
+    def _on_save_settings(self, sender, args):
+        self.settings = self._collect_settings()
+        ok, message = settings.save(self.settings)
+        self.SettingsHint.Text = message
+        self.set_status(message, not ok)
+
+    def _on_forget_settings(self, sender, args):
+        ok, message = settings.forget()
+        if ok:
+            self.settings = settings.defaults()
+            self._apply_settings(self.settings)
+            self._fill_view_lists()
+        self.SettingsHint.Text = message
+        self.set_status(message, not ok)
 
     # ── grid toolbar ──────────────────────────────────────────────────
     def _on_select_all(self, sender, args):
@@ -1450,6 +1647,7 @@ class AutoLevelApp(object):
             if answer != MessageBoxResult.Yes:
                 self.set_status("Left alone.")
                 return
+        self._checkpoint("mark {0} level(s) for delete".format(len(rows)))
         count = self.plan.mark_delete(rows)
         self.refresh_grid()
         self.set_status("{0} level(s) marked — Apply changes carries it out."
@@ -1461,6 +1659,7 @@ class AutoLevelApp(object):
         if not rows:
             self.set_status("Nothing ticked that is marked for deletion.")
             return
+        self._checkpoint("restore {0} level(s)".format(len(rows)))
         self.plan.mark_delete(rows, deleted=False)
         self.refresh_grid()
         self.set_status("Restored {0} level(s).".format(len(rows)))
@@ -1477,6 +1676,7 @@ class AutoLevelApp(object):
             MessageBoxButton.YesNo, MessageBoxImage.Question)
         if answer != MessageBoxResult.Yes:
             return
+        self._checkpoint("discard {0} change(s)".format(counts["changes"]))
         self.plan.remove_proposed()
         self.refresh_grid()
         self.DetectSummary.Text = "Plan reset to the model."
@@ -1554,6 +1754,7 @@ class AutoLevelApp(object):
     def _on_applied(self, result):
         report = result.get("report") or {}
         self._on_snapshot(result)          # rebuild from what the model now has
+        self.plan.clear_history()          # those steps described the old model
         self.DetectSummary.Text = "Applied. Scan again to detect more levels."
 
         parts = []

@@ -11,7 +11,9 @@ revit_ops: the detection heuristics can be argued with on any machine.
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 _BUTTON = os.path.join(
@@ -20,7 +22,8 @@ _BUTTON = os.path.join(
 if _BUTTON not in sys.path:
     sys.path.insert(0, _BUTTON)
 
-from anongee_autolevel import naming, planner, stackview, textparse   # noqa: E402
+from anongee_autolevel import (naming, planner, settings,        # noqa: E402
+                               stackview, textparse)
 
 
 def entry(text, y=None, source="test"):
@@ -287,6 +290,35 @@ class TemplateTests(unittest.TestCase):
     def test_unknown_tokens_survive_untouched(self):
         self.assertEqual(naming.render_template("Level {nope}", 1),
                          "Level {nope}")
+
+    def test_index_tokens_take_an_offset(self):
+        """{n+1} / {nn-1} — for numbering that runs out of step."""
+        self.assertEqual(naming.render_template("Level {n+1}", 3), "Level 4")
+        self.assertEqual(naming.render_template("Level {n-1}", 3), "Level 2")
+        self.assertEqual(naming.render_template("L{nn+1}", 9), "L10")
+        self.assertEqual(naming.render_template("{nnn-2}", 5), "003")
+        self.assertEqual(naming.render_template("{ORDINAL+1} FLOOR", 1),
+                         "2ND FLOOR")
+        self.assertEqual(naming.render_template("{Word+2}", 1), "Third")
+        self.assertEqual(naming.render_template("{roman+1}", 3), "IV")
+
+    def test_two_tokens_can_run_at_different_offsets(self):
+        """The ground floor is 00 but the first FLOOR is 1ST."""
+        self.assertEqual(
+            naming.render_template("{nn} {ORDINAL+1} FLOOR", 0), "00 1ST FLOOR")
+        self.assertEqual(
+            naming.render_template("{nn} {ORDINAL+1} FLOOR", 1), "01 2ND FLOOR")
+
+    def test_an_offset_can_reach_zero_and_below(self):
+        self.assertEqual(naming.render_template("Level {n-1}", 1), "Level 0")
+        self.assertEqual(naming.render_template("Level {n-3}", 1), "Level -2")
+
+    def test_a_malformed_offset_is_left_as_typed(self):
+        for template in ("{n+}", "{n+x}", "{n+1.5}", "{+1}"):
+            self.assertEqual(naming.render_template(template, 3), template)
+
+    def test_offsets_work_in_the_elevation_tokens_too(self):
+        self.assertEqual(naming.render_template("{elev_m}", 1, 3500.0), "3.500")
 
     def test_unique_name_avoids_collisions(self):
         self.assertEqual(naming.unique_name("Level 1", ["Level 2"]), "Level 1")
@@ -566,6 +598,289 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual([round(c["elev_mm"]) for c in operations["creates"]],
                          [3500, 7000, 10500])
         self.assertFalse(plan.has_blocking_issues())
+
+
+# ── undo / redo over the staged plan ───────────────────────────────────────
+
+class HistoryTests(unittest.TestCase):
+    """The tool's own history, over changes that have not reached Revit."""
+
+    def test_a_fresh_plan_has_nothing_to_undo(self):
+        plan = sample_plan()
+        self.assertIsNone(plan.undo_label())
+        self.assertIsNone(plan.redo_label())
+        self.assertIsNone(plan.undo())
+        self.assertIsNone(plan.redo())
+
+    def test_undo_puts_a_rename_back(self):
+        plan = sample_plan()
+        plan.checkpoint("rename")
+        plan.rename(plan.rows[0], "Ground")
+        self.assertEqual(plan.rows[0].Name, "Ground")
+        self.assertEqual(plan.undo(), "rename")
+        self.assertEqual(plan.rows[0].Name, "Level 1")
+        self.assertEqual(plan.rows[0].State, planner.STATE_EXISTING)
+
+    def test_redo_puts_it_back_again(self):
+        plan = sample_plan()
+        plan.checkpoint("rename")
+        plan.rename(plan.rows[0], "Ground")
+        plan.undo()
+        self.assertEqual(plan.redo(), "rename")
+        self.assertEqual(plan.rows[0].Name, "Ground")
+        self.assertEqual(plan.rows[0].State, planner.STATE_RENAME)
+
+    def test_undo_removes_levels_that_were_added(self):
+        plan = sample_plan()
+        plan.checkpoint("add levels")
+        plan.generate(3)
+        self.assertEqual(len(plan.rows), 5)
+        plan.undo()
+        self.assertEqual(len(plan.rows), 2)
+        plan.redo()
+        self.assertEqual(len(plan.rows), 5)
+
+    def test_undo_restores_a_moved_elevation_and_its_state(self):
+        plan = sample_plan()
+        plan.checkpoint("move")
+        plan.set_elevation(plan.rows[1], 4000.0)
+        self.assertEqual(plan.rows[1].State, planner.STATE_MOVE)
+        plan.undo()
+        self.assertAlmostEqual(plan.rows[1].ElevMm, 3500.0)
+        self.assertEqual(plan.rows[1].State, planner.STATE_EXISTING)
+
+    def test_undo_brings_back_a_level_marked_for_delete(self):
+        plan = sample_plan()
+        plan.checkpoint("delete")
+        plan.mark_delete([plan.rows[1]])
+        self.assertEqual(plan.rows[1].State, planner.STATE_DELETE)
+        plan.undo()
+        self.assertEqual(plan.rows[1].State, planner.STATE_EXISTING)
+
+    def test_several_steps_unwind_in_order(self):
+        plan = sample_plan()
+        plan.checkpoint("first")
+        plan.rename(plan.rows[0], "A")
+        plan.checkpoint("second")
+        plan.rename(plan.rows[0], "B")
+        plan.checkpoint("third")
+        plan.rename(plan.rows[0], "C")
+        self.assertEqual(plan.undo(), "third")
+        self.assertEqual(plan.rows[0].Name, "B")
+        self.assertEqual(plan.undo(), "second")
+        self.assertEqual(plan.rows[0].Name, "A")
+        self.assertEqual(plan.undo(), "first")
+        self.assertEqual(plan.rows[0].Name, "Level 1")
+        self.assertIsNone(plan.undo())
+
+    def test_a_new_change_clears_the_redo_trail(self):
+        plan = sample_plan()
+        plan.checkpoint("one")
+        plan.rename(plan.rows[0], "A")
+        plan.undo()
+        self.assertIsNotNone(plan.redo_label())
+        plan.checkpoint("two")
+        plan.rename(plan.rows[0], "B")
+        self.assertIsNone(plan.redo_label())
+
+    def test_a_dropped_checkpoint_leaves_no_step(self):
+        """An action that changed nothing must not become an undo step."""
+        plan = sample_plan()
+        plan.checkpoint("nothing happened")
+        plan.drop_checkpoint()
+        self.assertIsNone(plan.undo_label())
+
+    def test_the_history_is_bounded(self):
+        plan = sample_plan()
+        for i in range(planner.HISTORY_DEPTH + 25):
+            plan.checkpoint("step {0}".format(i))
+        self.assertEqual(len(plan._undo), planner.HISTORY_DEPTH)
+        self.assertEqual(plan.undo_label(),
+                         "step {0}".format(planner.HISTORY_DEPTH + 24))
+
+    def test_applying_clears_the_history(self):
+        plan = sample_plan()
+        plan.checkpoint("rename")
+        plan.rename(plan.rows[0], "Ground")
+        plan.clear_history()
+        self.assertIsNone(plan.undo_label())
+        self.assertIsNone(plan.redo_label())
+
+    def test_undo_survives_a_round_trip_through_display(self):
+        plan = sample_plan()
+        plan.checkpoint("add")
+        plan.generate(2)
+        plan.refresh_display()
+        plan.undo()
+        plan.refresh_display()
+        self.assertEqual([row.Name for row in plan.rows], ["Level 1", "Level 2"])
+        self.assertEqual(plan.summary()["changes"], 0)
+
+
+# ── saved preferences ──────────────────────────────────────────────────────
+
+class SettingsTests(unittest.TestCase):
+
+    def setUp(self):
+        self._appdata = os.environ.get("APPDATA")
+        self._temp = tempfile.mkdtemp()
+        os.environ["APPDATA"] = self._temp
+
+    def tearDown(self):
+        if self._appdata is None:
+            os.environ.pop("APPDATA", None)
+        else:
+            os.environ["APPDATA"] = self._appdata
+        shutil.rmtree(self._temp, ignore_errors=True)
+
+    def test_defaults_come_back_when_nothing_is_saved(self):
+        loaded, note = settings.load()
+        self.assertEqual(loaded, settings.DEFAULTS)
+        self.assertEqual(note, "")
+
+    def test_defaults_are_copies_not_the_shared_dict(self):
+        first = settings.defaults()
+        first["template"] = "changed"
+        first["view_type_names"].append("x")
+        self.assertNotEqual(settings.DEFAULTS["template"], "changed")
+        self.assertEqual(settings.DEFAULTS["view_type_names"], [])
+
+    def test_a_round_trip_keeps_the_values(self):
+        wanted = settings.defaults()
+        wanted["template"] = "FL {nn}"
+        wanted["storey_height_mm"] = "3300"
+        wanted["push_above"] = True
+        wanted["view_type_names"] = ["Structural Plan  ·  StructuralPlan"]
+        ok, _message = settings.save(wanted)
+        self.assertTrue(ok)
+        loaded, note = settings.load()
+        self.assertEqual(loaded["template"], "FL {nn}")
+        self.assertEqual(loaded["storey_height_mm"], "3300")
+        self.assertTrue(loaded["push_above"])
+        self.assertEqual(loaded["view_type_names"],
+                         ["Structural Plan  ·  StructuralPlan"])
+        self.assertIn("loaded from", note)
+
+    def test_unknown_keys_are_never_written(self):
+        data = settings.defaults()
+        data["something_else"] = "nope"
+        settings.save(data)
+        with open(settings.path(), "r") as handle:
+            self.assertNotIn("something_else", handle.read())
+
+    def test_a_value_of_the_wrong_type_is_ignored(self):
+        settings.save(settings.defaults())
+        with open(settings.path(), "w") as handle:
+            handle.write('{"push_above": "yes please", "template": "OK {n}"}')
+        loaded, _note = settings.load()
+        self.assertEqual(loaded["push_above"], settings.DEFAULTS["push_above"])
+        self.assertEqual(loaded["template"], "OK {n}")
+
+    def test_a_corrupt_file_falls_back_instead_of_raising(self):
+        os.makedirs(settings.folder())
+        with open(settings.path(), "w") as handle:
+            handle.write("this is not json {{{")
+        loaded, note = settings.load()
+        self.assertEqual(loaded, settings.DEFAULTS)
+        self.assertIn("couldn't read", note)
+
+    def test_a_file_that_is_not_a_mapping_falls_back(self):
+        os.makedirs(settings.folder())
+        with open(settings.path(), "w") as handle:
+            handle.write("[1, 2, 3]")
+        loaded, note = settings.load()
+        self.assertEqual(loaded, settings.DEFAULTS)
+        self.assertIn("expected shape", note)
+
+    def test_forgetting_removes_the_file(self):
+        settings.save(settings.defaults())
+        self.assertTrue(os.path.isfile(settings.path()))
+        ok, _message = settings.forget()
+        self.assertTrue(ok)
+        self.assertFalse(os.path.isfile(settings.path()))
+
+    def test_forgetting_nothing_is_not_an_error(self):
+        ok, message = settings.forget()
+        self.assertTrue(ok)
+        self.assertIn("nothing saved", message)
+
+    def test_no_model_specific_identifier_is_stored(self):
+        """Ids mean nothing in the next project; names do."""
+        for key in settings.DEFAULTS:
+            self.assertFalse(key.endswith("_id"), key)
+            self.assertFalse(key.endswith("_ids"), key)
+
+
+# ── names Revit will actually accept ───────────────────────────────────────
+
+class ProhibitedCharacterTests(unittest.TestCase):
+    """Revit throws "Name cannot include prohibited characters" on these.
+
+    It shipped once, from the tool's own side: the two-phase rename parked
+    each level on "~AutoLevel~0~123", and "~" is on the forbidden list — so
+    every rename failed, and the error named the level's OLD name, which made
+    it look like the user's names were the problem.
+    """
+
+    def test_the_forbidden_set_is_the_one_revit_enforces(self):
+        for ch in "\\:{}[]|;<>?`~":
+            self.assertIn(ch, naming.PROHIBITED, ch)
+
+    def test_ordinary_level_names_are_fine(self):
+        for name in ("00 GROUND LVL.", "01 1ST FLOOR LVL.", "Level 1",
+                     "L03 - Third Floor", "Roof (main)", "T.O.S. +3.500",
+                     "Level 1 (2)", "B1 Basement"):
+            ok, message = naming.is_valid_name(name)
+            self.assertTrue(ok, "{0}: {1}".format(name, message))
+
+    def test_each_forbidden_character_is_caught(self):
+        for ch in naming.PROHIBITED:
+            ok, message = naming.is_valid_name("Level {0}1".format(ch))
+            self.assertFalse(ok, ch)
+            self.assertIn("won't accept", message)
+
+    def test_an_empty_name_is_caught(self):
+        for name in ("", "   ", None):
+            self.assertFalse(naming.is_valid_name(name)[0])
+
+    def test_bad_characters_are_listed_once_each_in_order(self):
+        self.assertEqual(naming.bad_characters("a{b}c{d}"), ["{", "}"])
+        self.assertEqual(naming.bad_characters("clean"), [])
+
+    def test_sanitize_strips_them_and_tidies_up(self):
+        self.assertEqual(naming.sanitize_name("Level {1}"), "Level 1")
+        self.assertEqual(naming.sanitize_name("A  ;  B"), "A B")
+        self.assertEqual(naming.sanitize_name("  GF  "), "GF")
+        self.assertEqual(naming.sanitize_name("~~~"), "")
+
+    def test_detected_names_are_sanitized_on_the_way_in(self):
+        """A stray brace on a drawing must not become a name that fails."""
+        plan = planner.LevelPlan()
+        plan.load_existing([{"id": 1, "name": "Level 1", "elev_mm": 0.0}])
+        result = textparse.detect([entry("{TERRACE} LVL +7.000")])
+        plan.add_candidates(result.candidates)
+        for row in plan.rows:
+            self.assertTrue(naming.is_valid_name(row.Name)[0], row.Name)
+        self.assertFalse(plan.has_blocking_issues())
+
+    def test_a_typed_name_with_a_forbidden_character_is_rejected(self):
+        plan = sample_plan()
+        ok, message = plan.rename(plan.rows[0], "Level {1}")
+        self.assertFalse(ok)
+        self.assertIn("won't accept", message)
+        self.assertEqual(plan.rows[0].Name, "Level 1")
+
+    def test_validation_blocks_apply_on_a_forbidden_character(self):
+        plan = sample_plan()
+        plan.rows[0].Name = "Level;1"          # smuggled past rename()
+        plan.validate()
+        self.assertTrue(plan.has_blocking_issues())
+
+    def test_batch_rename_will_not_stage_an_impossible_name(self):
+        plan = sample_plan()
+        changed, collisions = plan.batch_rename(plan.rows, prefix="{")
+        self.assertEqual(changed, 0)
+        self.assertEqual(len(collisions), 2)
 
 
 # ── the stack drawing's camera ─────────────────────────────────────────────

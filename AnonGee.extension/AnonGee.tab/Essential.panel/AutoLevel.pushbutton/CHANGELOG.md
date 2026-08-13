@@ -17,6 +17,46 @@ quote it when reporting anything.
 
 ---
 
+## 1.2.0
+
+**Fixed**
+
+- **Renaming a level never worked.** Apply reported
+  `Name cannot include prohibited characters` against names that were
+  perfectly legal — `00 GROUND LVL.`, `01 1ST FLOOR LVL.` — because the fault
+  was the tool's own. Renames run in two phases so that swapping two names
+  cannot collide, and the temporary parking name was built out of tildes:
+  `~AutoLevel~0~123`. `~` is on Revit's forbidden list
+  (`\ : { } [ ] | ; < > ? ` ~`), so the parking step failed and the error
+  named the level's *old* name, which read as if your names were at fault.
+  The placeholder is now built from underscores.
+- Names that arrive from outside — drawing text, a DXF, a paste box — are
+  stripped of characters Revit refuses before they become rows, and a name you
+  type that contains one is refused at the cell with the character named. Apply
+  is blocked while any row still holds one, so it fails in the grid rather than
+  mid-transaction.
+
+**Added**
+
+- **Undo and Redo** over the staged plan, above the table and on Ctrl+Z /
+  Ctrl+Y. Each button says what it is about to undo ("Undo: add 4 level(s)").
+  This is the tool's own history, covering changes that have not reached the
+  model; Revit's own undo still covers what **Apply** writes, as one step. A
+  drag is one step, not one per pixel, and an action that changed nothing does
+  not become a step. Inside a text box, Ctrl+Z stays the text box's own undo.
+- **Save as my defaults** on the Views tab remembers every option on all four
+  tabs — detection, generation, renaming, views, snap — so the window opens set
+  up your way next time. Preferences only: no ids are stored, so view types and
+  view templates are remembered by name and still mean something in the next
+  project. **Reset defaults** puts the shipped settings back. A missing or
+  corrupt settings file falls back to the defaults rather than stopping the
+  tool.
+- **Offsets in naming templates.** Any index token takes `+K` or `-K` —
+  `{n+1}`, `{nn-1}`, `{ORDINAL+2}` — for numbering that runs out of step. So
+  `{nn} {ORDINAL+1} FLOOR` starting at 0 gives `00 1ST FLOOR`,
+  `01 2ND FLOOR`, `02 3RD FLOOR`. A malformed offset is left on screen as
+  typed rather than guessed at.
+
 ## 1.1.1
 
 **Fixed**

@@ -7,6 +7,7 @@ Split so the thinking parts run without Revit:
   ``naming``     learn the model's level-naming convention, or render one
   ``planner``    the level plan: rows, edits, validation, the change set
   ``stackview``  the stack drawing's camera: zoom, pan, elevation <-> pixels
+  ``settings``   the dialog's options, remembered between Revit sessions
   ``dxf_text``   pull TEXT/MTEXT out of a DXF through ezdxf (optional)
   ``compat``     the Revit API version differences this tool touches
   ``revit_ops``  everything that must run on Revit's primary thread
@@ -25,7 +26,7 @@ plain Python and are covered by ``tests/test_autolevel.py``.
 #          Apply writes to the model changed shape.
 #   MINOR  a new capability, everything you already did still works.
 #   PATCH  a fix. No new capability, nothing to relearn.
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 
-__all__ = ["textparse", "naming", "planner", "stackview", "dxf_text",
-           "compat", "revit_ops"]
+__all__ = ["textparse", "naming", "planner", "stackview", "settings",
+           "dxf_text", "compat", "revit_ops"]

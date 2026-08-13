@@ -25,7 +25,8 @@ _PACKAGE = os.path.join(_BUTTON, "anongee_autolevel")
 if _BUTTON not in sys.path:
     sys.path.insert(0, _BUTTON)
 
-from anongee_autolevel import VERSION, planner                   # noqa: E402
+from anongee_autolevel import (VERSION, naming, planner,        # noqa: E402
+                               settings)
 
 XAML_NS = "{http://schemas.microsoft.com/winfx/2006/xaml}"
 PRESENTATION_NS = "{http://schemas.microsoft.com/winfx/2006/xaml/presentation}"
@@ -440,6 +441,74 @@ class ScriptWiringTests(unittest.TestCase):
         self.assertNotIn("refresh_grid", moving)
         self.assertIn("draw_stack", moving)
         self.assertIn("refresh_grid", self._method_source("_on_canvas_up"))
+
+    def test_the_rename_placeholder_is_a_name_revit_accepts(self):
+        """The two-phase rename parks each level on a temporary name.
+
+        The first version used tildes — "~AutoLevel~0~123" — and "~" is on
+        Revit's prohibited list, so every rename failed on the parking step
+        and reported the level's OLD name, which read as if the user's own
+        names were at fault. The placeholder is built from a format string, so
+        check the string itself rather than trusting it by eye.
+        """
+        source = _read(os.path.join(_PACKAGE, "revit_ops.py"))
+        start = source.index("def _placeholder")
+        body = source[start:source.index("\n\n\n", start)]
+        literals = [chunk for chunk in body.split('"') if "AutoLevel" in chunk]
+        self.assertTrue(literals, "no placeholder literal found")
+        for literal in literals:
+            rendered = literal.replace("{0}", "7").replace("{1}", "123456")
+            self.assertEqual(naming.bad_characters(rendered), [],
+                             "placeholder {0!r} uses a prohibited character"
+                             .format(rendered))
+
+    def test_every_staged_change_takes_a_history_step(self):
+        """Undo is only trustworthy if nothing mutates without a checkpoint."""
+        for handler in ("_absorb", "_on_generate", "_on_respace",
+                        "_on_apply_rename", "_on_mark_delete", "_on_restore",
+                        "_on_reset", "_on_cell_edit_ending", "_on_canvas_down"):
+            self.assertIn("_checkpoint(", self._method_source(handler),
+                          "{0} changes the plan without a history step"
+                          .format(handler))
+
+    def test_the_drag_takes_one_history_step_not_one_per_pixel(self):
+        self.assertIn("_checkpoint(", self._method_source("_on_canvas_down"))
+        self.assertNotIn("_checkpoint(", self._method_source("_on_canvas_move"))
+
+    def test_applying_clears_the_history(self):
+        """Those steps described a model that no longer exists."""
+        self.assertIn("clear_history()", self._method_source("_on_applied"))
+
+    def test_every_saved_setting_is_read_and_written(self):
+        """A key in DEFAULTS that one side forgets silently stops persisting."""
+        collect = self._method_source("_collect_settings")
+        apply_to_ui = self._method_source("_apply_settings")
+        for key in settings.DEFAULTS:
+            self.assertIn('"{0}"'.format(key), collect,
+                          "_collect_settings never writes {0}".format(key))
+        # source_index and the view lists are restored where the model's own
+        # contents are known, not in _apply_settings.
+        deferred = ("source_index", "view_type_names", "view_template_name")
+        for key in settings.DEFAULTS:
+            if key in deferred:
+                continue
+            self.assertIn('"{0}"'.format(key), apply_to_ui,
+                          "_apply_settings never reads {0}".format(key))
+        source = self.source
+        for key in deferred:
+            self.assertIn('"{0}"'.format(key), source,
+                          "{0} is saved but never restored".format(key))
+
+    def test_undo_and_redo_are_reachable_by_keyboard_and_button(self):
+        names = named_elements(load_xaml())
+        self.assertIn("UndoBtn", names)
+        self.assertIn("RedoBtn", names)
+        self.assertIn("PreviewKeyDown", self.source)
+        keys = self._method_source("_on_key_down")
+        self.assertIn("Key.Z", keys)
+        self.assertIn("Key.Y", keys)
+        # Ctrl+Z inside a text box belongs to the text box.
+        self.assertIn("TextBox", keys)
 
     def test_no_pyrevit_imports(self):
         """§12.8.4 — pyRevit's IronPython modules crash the CPython 3 engine."""

@@ -17,6 +17,7 @@ from Autodesk.Revit.DB import (ElementLevelFilter,
                                ViewFamilyType, ViewPlan, ViewType, XYZ)
 
 from . import compat
+from . import naming
 
 # A level tagged in a section is normally annotated once; a document-wide sweep
 # can hit thousands of notes, so it stops here and says that it did.
@@ -305,6 +306,20 @@ def _taken_names(doc):
     return names
 
 
+def _placeholder(index, element_id):
+    """A parking name for the two-phase rename that Revit will accept.
+
+    It must be unique, and it must survive ``Element.set_Name``. The first
+    version of this used tildes as brackets, which reads nicely and is exactly
+    what Revit forbids (``\\ : { } [ ] | ; < > ? ` ~``) — so every rename failed
+    on the parking step and reported the level's OLD name, which made it look
+    like the user's own names were at fault. Underscores are legal.
+    """
+    name = "__AutoLevel_parking_{0}_{1}__".format(index, element_id)
+    assert not naming.bad_characters(name)      # cheap, and it caught this once
+    return name
+
+
 def apply_operations(doc, operations, preprocessor=None):
     """Run the change set. One transaction group, one undo step for the user.
 
@@ -363,8 +378,8 @@ def _apply_renames(doc, renames, report, preprocessor):
                 report["errors"].append(
                     "Level {0} is no longer in the model.".format(item.get("was")))
                 continue
-            ok, message = compat.set_element_name(
-                level, "~AutoLevel~{0}~{1}".format(index, item["id"]))
+            ok, message = compat.set_element_name(level, _placeholder(index,
+                                                                      item["id"]))
             if ok:
                 parked.append((level, item))
             else:

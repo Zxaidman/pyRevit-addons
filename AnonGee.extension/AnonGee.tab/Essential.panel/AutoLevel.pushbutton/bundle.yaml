@@ -20,11 +20,20 @@ tooltip: |
   Also does
     • Add levels by count × storey height, named by continuing the model's own
       convention ("02 2ND FLOOR LVL." -> "03 3RD FLOOR LVL.") or from a
-      template ({n} {nn} {ORDINAL} {Word} {roman} {elev_m}).
+      template ({n} {nn} {ORDINAL} {Word} {roman} {elev_m}). Index tokens
+      take an offset for numbering that runs out of step: "{nn} {ORDINAL+1}
+      FLOOR" gives 00 1ST FLOOR, 01 2ND FLOOR, 02 3RD FLOOR.
     • Inline edit of name and elevation, batch rename, re-space the stack,
       and delete with a count of what is hosted on each level first.
     • Optional floor / ceiling / structural plan views for every new level,
       with a view template.
+
+  Undo, and keeping your setup
+    • Undo / Redo above the table step through the changes staged here
+      (Ctrl+Z / Ctrl+Y), before anything reaches the model. Revit's own undo
+      still covers what Apply writes, as one step.
+    • Save as my defaults remembers every option on all four tabs for next
+      time. Preferences only; view types are remembered by name, not by id.
 
   Working in the drawing
     • Click a level to select it, drag it to change its elevation (rounded to
@@ -43,4 +52,4 @@ tooltip: |
     • The version in the window header is the build you are running. See
       CHANGELOG.md beside this file for what changed and when.
 
-  Version: 1.1.1
+  Version: 1.2.0
