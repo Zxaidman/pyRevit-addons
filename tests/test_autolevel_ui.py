@@ -297,7 +297,7 @@ class XamlTests(unittest.TestCase):
     def test_editable_columns_bind_two_way(self):
         """WPF only offers a real editor for a binding it can write back."""
         text = _read(_XAML)
-        for path in ("Name", "ElevText"):
+        for path in ("Name", "ElevText", "DeltaText"):
             needle = "{{Binding {0}, Mode=TwoWay}}".format(path)
             self.assertIn(needle, text,
                           "{0} must bind TwoWay to be editable".format(path))
@@ -305,7 +305,7 @@ class XamlTests(unittest.TestCase):
     def test_display_only_columns_bind_one_way(self):
         """Nothing but the two editable columns may write back to a row."""
         text = _read(_XAML)
-        for path in ("ProjectText", "DeltaText", "SourceText", "ViewsText",
+        for path in ("ProjectText", "SourceText", "ViewsText",
                      "CountText", "NoteText"):
             needle = "{{Binding {0}, Mode=OneWay}}".format(path)
             self.assertIn(needle, text, "{0} must bind OneWay".format(path))
@@ -461,6 +461,23 @@ class ScriptWiringTests(unittest.TestCase):
             self.assertEqual(naming.bad_characters(rendered), [],
                              "placeholder {0!r} uses a prohibited character"
                              .format(rendered))
+
+    def test_respace_acts_on_the_ticked_rows_only(self):
+        """A button that moves every level because nothing was ticked is a trap."""
+        source = self._method_source("_on_respace")
+        self.assertIn("selected_rows()", source)
+        self.assertIn("len(targets) < 2", source)
+        self.assertIn("self.plan.respace(height, targets)", source)
+
+    def test_the_delta_column_is_editable_and_routed_to_the_gap_setter(self):
+        source = self._method_source("_on_cell_edit_ending")
+        self.assertIn("set_gap_below", source)
+        self.assertIn('header.startswith("Δ")', source)
+        # and the header the handler matches is the header the column carries
+        headers = [element.get("Header") for element in load_xaml().iter()
+                   if element.get("Header")]
+        self.assertTrue(any((header or "").startswith("Δ") for header in headers),
+                        "no column header starts with Δ: {0}".format(headers))
 
     def test_every_staged_change_takes_a_history_step(self):
         """Undo is only trustworthy if nothing mutates without a checkpoint."""

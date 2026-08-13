@@ -23,8 +23,12 @@ tooltip: |
       template ({n} {nn} {ORDINAL} {Word} {roman} {elev_m}). Index tokens
       take an offset for numbering that runs out of step: "{nn} {ORDINAL+1}
       FLOOR" gives 00 1ST FLOOR, 01 2ND FLOOR, 02 3RD FLOOR.
-    • Inline edit of name and elevation, batch rename, re-space the stack,
-      and delete with a count of what is hosted on each level first.
+    • Inline edit of name, elevation and Δ below — the storey height under a
+      row. Editing Δ moves that row and everything above it, so every other
+      storey stays exactly as tall as it was.
+    • Batch rename; re-space the TICKED levels evenly (the lowest ticked one
+      stays put, unticked levels do not move); delete with a count of what is
+      hosted on each level first.
     • Optional floor / ceiling / structural plan views for every new level,
       with a view template.
 
@@ -52,4 +56,4 @@ tooltip: |
     • The version in the window header is the build you are running. See
       CHANGELOG.md beside this file for what changed and when.
 
-  Version: 1.2.0
+  Version: 2.0.0

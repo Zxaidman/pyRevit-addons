@@ -189,6 +189,19 @@ class LevelPlan(object):
         if self._undo:
             self._undo.pop()
 
+    def drop_checkpoint_if_unchanged(self):
+        """Drop the last checkpoint when the action it guarded did nothing.
+
+        Typing a cell's own value straight back is a common thing to do — the
+        Δ column shows "+3000" and you press Enter — and it should not leave
+        an undo step that undoes nothing. The snapshot is tuples of primitives,
+        so comparing them by value is exactly the right test.
+        """
+        if self._undo and self._undo[-1][1] == self._snapshot():
+            self._undo.pop()
+            return True
+        return False
+
     def undo(self):
         if not self._undo:
             return None
@@ -365,21 +378,61 @@ class LevelPlan(object):
         self.resort()
         return True, ""
 
-    def respace(self, height_mm, base_row=None):
-        """Re-space the stack above *base_row* to a uniform storey height."""
+    def set_gap_below(self, row, text_or_mm):
+        """Set the storey height under *row* — the Δ column, typed into.
+
+        Editing a gap is not the same as editing an elevation. You are saying
+        "this storey is 4 m tall", which leaves every storey above it exactly
+        as tall as it was — so the row moves and everything above moves with
+        it. A level at 7000 with 3000 above it, given a gap of 4000, goes to
+        8000 and takes the 10000 up to 11000.
+        """
         rows = self.live_rows()
-        if len(rows) < 2:
+        if row not in rows:
+            return False, "That level isn't in the stack."
+        index = rows.index(row)
+        if index == 0:
+            return False, ("\"{0}\" is the lowest level — there is nothing "
+                           "below it to measure from.".format(row.Name))
+        if isinstance(text_or_mm, (int, float)):
+            gap = float(text_or_mm)
+        else:
+            gap = textparse.parse_elevation_input(text_or_mm, self.unit_hint)
+        if gap is None:
+            return False, "Couldn't read that as a gap."
+
+        target = rows[index - 1].ElevMm + gap
+        delta = target - row.ElevMm
+        if abs(delta) < 0.5:
+            return True, ""
+        for other in rows[index:]:
+            other.ElevMm += delta
+            other.refresh_state()
+        self.resort()
+        return True, ""
+
+    def respace(self, height_mm, rows=None):
+        """Space *rows* evenly, leaving the lowest of them where it is.
+
+        With no *rows* this is the whole stack. The dialog always passes the
+        ticked ones: a button that silently moved every level in the model
+        because nothing was selected is not a button anyone wants twice.
+        Levels that were not passed in do not move.
+        """
+        ordered = self.live_rows()
+        if rows is not None:
+            wanted = list(rows)
+            ordered = [row for row in ordered if row in wanted]
+        if len(ordered) < 2:
             return 0
-        start = 0
-        if base_row is not None and base_row in rows:
-            start = rows.index(base_row)
         height = float(height_mm or DEFAULT_STOREY_MM)
+        anchor = ordered[0]
         changed = 0
-        for i in range(start + 1, len(rows)):
-            target = rows[start].ElevMm + height * (i - start)
-            if abs(rows[i].ElevMm - target) > 0.5:
-                rows[i].ElevMm = target
-                rows[i].refresh_state()
+        for step, row in enumerate(ordered[1:], start=1):
+            target = anchor.ElevMm + height * step
+            if abs(row.ElevMm - target) > 0.5:
+                row.ElevMm = target
+                row.refresh_state()
                 changed += 1
         self.resort()
         return changed

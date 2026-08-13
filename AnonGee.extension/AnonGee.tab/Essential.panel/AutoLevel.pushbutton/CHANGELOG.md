@@ -17,6 +17,38 @@ quote it when reporting anything.
 
 ---
 
+## 2.0.0
+
+A major only because of one behaviour change — the diff is small. **Re-space
+stack** used to move every level in the model when nothing was ticked, and now
+it refuses and asks you to tick. Anyone who had learned to click it on a bare
+selection has to unlearn that, which is what MAJOR is for; the version reflects
+what it costs the person using the tool, not the size of the change.
+
+**Changed**
+
+- **Re-space stack works on the ticked levels only.** The lowest ticked level
+  stays where it is and the rest are spaced evenly above it. Levels you have
+  not ticked do not move. With fewer than two ticked it does nothing and says
+  so, rather than quietly re-spacing the whole building.
+
+**Added**
+
+- **The Δ column is editable** — renamed **Δ below**, because it is the storey
+  height *under* that row. Typing into it is not the same as editing an
+  elevation: you are saying how tall that storey is, so the row moves and
+  everything above moves with it, leaving every other storey exactly as tall
+  as it was.
+
+      Level 2 at 7000, with Level 3 at 10000 (Δ 3000)
+      type 4000 into Level 2's Δ
+      → Level 2 becomes 8000, Level 3 becomes 11000, Δ stays 3000
+
+  It takes anything the other cells take — `4000`, `4 m`, `+4000`, `13'-1"` —
+  and reads back exactly what the cell was showing, so `+3000` typed straight
+  back changes nothing. The lowest level has nothing beneath it, so its Δ
+  reads `base` and says so if you try. One undo step per edit.
+
 ## 1.2.0
 
 **Fixed**

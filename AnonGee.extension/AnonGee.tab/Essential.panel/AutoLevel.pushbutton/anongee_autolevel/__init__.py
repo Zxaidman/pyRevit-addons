@@ -26,7 +26,7 @@ plain Python and are covered by ``tests/test_autolevel.py``.
 #          Apply writes to the model changed shape.
 #   MINOR  a new capability, everything you already did still works.
 #   PATCH  a fix. No new capability, nothing to relearn.
-VERSION = "1.2.0"
+VERSION = "2.0.0"
 
 __all__ = ["textparse", "naming", "planner", "stackview", "settings",
            "dxf_text", "compat", "revit_ops"]

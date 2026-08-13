@@ -1035,7 +1035,7 @@
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                         <Button x:Name="GenerateBtn" ToolTip="Stage the new levels in the table. Nothing is written to the model." Content="Add levels"
                                                 Style="{StaticResource ButtonPrimary}" Width="130" Margin="0,0,8,0"/>
-                                        <Button x:Name="RespaceBtn" ToolTip="Re-space every level above the starting point to the storey height, evenly." Content="Re-space stack"
+                                        <Button x:Name="RespaceBtn" ToolTip="Space the TICKED levels evenly at the storey height above. The lowest ticked level stays where it is; levels you have not ticked do not move. Tick at least two." Content="Re-space stack"
                                                 Style="{StaticResource ButtonSecondary}" Width="150"/>
                                     </StackPanel>
                                     <CheckBox x:Name="PushAboveToggle" ToolTip="On, changing one level's elevation moves everything above it by the same amount, keeping the storey heights. Off, only that level moves." Style="{StaticResource ToggleSmall}"
@@ -1240,6 +1240,9 @@
                                            Margin="0,0,0,3"
                                            Text="3 · Rename — tick rows in the table, then add a prefix, find-and-replace, or renumber from a template."/>
                                 <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Re-space, on the Generate tab, works on the TICKED levels only. The lowest ticked one stays put and the rest are spaced evenly above it; anything you have not ticked does not move."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                            Margin="0,0,0,10"
                                            Text="4 · Views — optionally give every new level its floor / ceiling / structural plan, then read the summary of what Apply will do."/>
 
@@ -1267,7 +1270,10 @@
                                            Text="THE TABLE"/>
                                 <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                            Margin="0,0,0,3"
-                                           Text="Double-click Level name or Elevation to edit it. An elevation takes any of 3500, 3.5 m, +3.500 or 11'-6&quot;."/>
+                                           Text="Double-click Level name, Elevation or Δ below to edit it. An elevation takes any of 3500, 3.5 m, +3.500 or 11'-6&quot;."/>
+                                <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
+                                           Margin="0,0,0,3"
+                                           Text="Δ below is the storey height under that row, and editing it is not the same as editing an elevation: you are saying how tall that storey is, so the row moves and everything above moves with it, leaving every other storey exactly as tall as it was. A level at 7000 with 3000 above it, given a Δ of 4000, goes to 8000 and takes the 10000 up to 11000."/>
                                 <TextBlock Style="{StaticResource TextCaption}" TextWrapping="Wrap"
                                            Margin="0,0,0,3"
                                            Text="Tick rows with the checkbox column; Ctrl+click and Shift+click work as usual. The buttons above the table act on what is ticked."/>
@@ -1340,7 +1346,7 @@
 
                 <!-- the levels themselves -->
                 <Border Grid.Row="3" Style="{StaticResource CardBorder}" Padding="0">
-                    <DataGrid x:Name="LevelGrid" ToolTip="Double-click Level name or Elevation to edit. Tick rows to act on them with the buttons above."
+                    <DataGrid x:Name="LevelGrid" ToolTip="Double-click to edit Level name, Elevation, or Δ below.  Δ below is the storey height under that row: type 4000 and the row moves so it sits 4000 above the one beneath it, carrying everything above it with it so no other gap changes.  Tick rows to act on them with the buttons above."
                               AutoGenerateColumns="False"
                               CanUserAddRows="False" CanUserDeleteRows="False"
                               CanUserReorderColumns="False" CanUserSortColumns="False"
@@ -1441,8 +1447,11 @@
                                 </DataGridTextColumn.ElementStyle>
                             </DataGridTextColumn>
 
-                            <DataGridTextColumn Header="Δ" Width="74" IsReadOnly="True"
-                                                Binding="{Binding DeltaText, Mode=OneWay}">
+                            <!-- Editable: typing here sets the storey height under
+                                 the row, so the row and everything above it move
+                                 together and no other gap changes. -->
+                            <DataGridTextColumn Header="Δ below" Width="88"
+                                                Binding="{Binding DeltaText, Mode=TwoWay}">
                                 <DataGridTextColumn.ElementStyle>
                                     <Style TargetType="TextBlock" BasedOn="{StaticResource CellMono}">
                                         <Setter Property="Foreground" Value="{StaticResource BrushMidGrey}"/>

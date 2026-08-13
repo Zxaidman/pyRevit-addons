@@ -716,10 +716,22 @@ class AutoLevelApp(object):
             ok, message = self.plan.set_elevation(row, text, push_above=push)
             if ok and push:
                 message = "Moved \"{0}\" and everything above it.".format(row.Name)
+        elif header.startswith("Δ"):
+            # A gap is a storey height, so everything above always comes with
+            # it — otherwise this would just be a second elevation column.
+            self._checkpoint("set the gap under \"{0}\"".format(row.Name))
+            ok, message = self.plan.set_gap_below(row, text)
+            if ok:
+                message = ("\"{0}\" now sits {1} mm above the level below, "
+                           "and everything above it moved with it.".format(
+                               row.Name, textparse.format_mm(
+                                   row.ElevMm - self._elevation_below(row))))
         else:
             return
 
         if ok:
+            # Typing a cell's own value back is not a change worth undoing.
+            self.plan.drop_checkpoint_if_unchanged()
             if message:
                 self.set_status(message)
             else:
@@ -1147,6 +1159,15 @@ class AutoLevelApp(object):
             lines.append("… and {0} more".format(count - len(names)))
         self.NamePreview.Text = "\n".join(lines) + ("\n\n" + note if note else "")
 
+    def _elevation_below(self, row):
+        """The elevation of the level under *row* — for reporting a gap."""
+        rows = self.plan.live_rows()
+        if row in rows:
+            index = rows.index(row)
+            if index > 0:
+                return rows[index - 1].ElevMm
+        return row.ElevMm
+
     def _base_elevation(self):
         rows = self.plan.live_rows()
         index = self.BaseCombo.SelectedIndex
@@ -1377,19 +1398,25 @@ class AutoLevelApp(object):
         if height <= 0:
             self.set_status("A storey height has to be more than zero.", True)
             return
-        rows = self.plan.live_rows()
-        index = self.BaseCombo.SelectedIndex
-        base_row = rows[index - 1] if (index > 0 and index - 1 < len(rows)) else None
-        self._checkpoint("re-space the stack at {0:.0f} mm".format(height))
-        changed = self.plan.respace(height, base_row)
+        targets = [row for row in self.selected_rows()
+                   if row.State != planner.STATE_DELETE]
+        if len(targets) < 2:
+            self.set_status("Tick at least two levels to re-space — the lowest "
+                            "ticked one stays where it is.", True)
+            return
+        self._checkpoint("re-space {0} level(s) at {1:.0f} mm".format(
+            len(targets), height))
+        changed = self.plan.respace(height, targets)
         if not changed:
             self.plan.drop_checkpoint()
         self.refresh_grid()
         if changed:
-            self.set_status("Re-spaced {0} level(s) at {1:.0f} mm.".format(
-                changed, height))
+            self.set_status(
+                "Re-spaced {0} of the {1} ticked level(s) at {2:.0f} mm; "
+                "\"{3}\" stayed put.".format(changed, len(targets), height,
+                                             targets[0].Name))
         else:
-            self.set_status("The stack is already at that spacing.")
+            self.set_status("Those levels are already at that spacing.")
 
     # ── rename ────────────────────────────────────────────────────────
     def _on_rename_mode_changed(self, sender, args):

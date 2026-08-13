@@ -435,7 +435,7 @@ class PlanTests(unittest.TestCase):
         self.assertEqual([round(row.ElevMm) for row in plan.rows],
                          [0, 4000, 7500])
 
-    def test_respace_makes_the_stack_uniform(self):
+    def test_respace_makes_the_whole_stack_uniform(self):
         plan = planner.LevelPlan()
         plan.load_existing([
             {"id": 1, "name": "A", "elev_mm": 0.0},
@@ -445,6 +445,36 @@ class PlanTests(unittest.TestCase):
         self.assertEqual(changed, 2)
         self.assertEqual([round(row.ElevMm) for row in plan.rows],
                          [0, 3000, 6000])
+
+    def test_respace_only_touches_the_rows_it_is_given(self):
+        """The button passes the ticked rows; the rest must not move."""
+        plan = planner.LevelPlan()
+        plan.load_existing([
+            {"id": 1, "name": "A", "elev_mm": 0.0},
+            {"id": 2, "name": "B", "elev_mm": 3300.0},
+            {"id": 3, "name": "C", "elev_mm": 6100.0},
+            {"id": 4, "name": "D", "elev_mm": 9900.0}])
+        rows = plan.rows
+        changed = plan.respace(3000.0, [rows[1], rows[2]])
+        self.assertEqual(changed, 1)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [0, 3300, 6300, 9900])
+
+    def test_respace_leaves_the_lowest_ticked_row_where_it_is(self):
+        plan = planner.LevelPlan()
+        plan.load_existing([
+            {"id": 1, "name": "A", "elev_mm": 0.0},
+            {"id": 2, "name": "B", "elev_mm": 4000.0},
+            {"id": 3, "name": "C", "elev_mm": 6100.0}])
+        rows = plan.rows
+        plan.respace(2500.0, [rows[2], rows[1]])      # order given is ignored
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [0, 4000, 6500])
+
+    def test_respace_needs_two_rows_to_mean_anything(self):
+        plan = sample_plan()
+        self.assertEqual(plan.respace(3000.0, [plan.rows[0]]), 0)
+        self.assertEqual(plan.respace(3000.0, []), 0)
 
     def test_batch_rename_applies_and_reports_collisions(self):
         plan = sample_plan()
@@ -494,6 +524,99 @@ class PlanTests(unittest.TestCase):
         self.assertEqual([row.Name for row in plan.rows], ["Level 1", "Level 2"])
         self.assertTrue(all(row.State == planner.STATE_EXISTING
                             for row in plan.rows))
+
+
+class GapEditingTests(unittest.TestCase):
+    """The Δ column: typing a storey height, not an elevation."""
+
+    def storeys(self):
+        plan = planner.LevelPlan()
+        plan.load_existing([
+            {"id": 1, "name": "Level 1", "elev_mm": 4000.0},
+            {"id": 2, "name": "Level 2", "elev_mm": 7000.0},
+            {"id": 3, "name": "Level 3", "elev_mm": 10000.0},
+            {"id": 4, "name": "Level 4", "elev_mm": 13000.0}])
+        return plan
+
+    def test_the_reported_case(self):
+        """Level 2 7000 -> 8000 with 3000 above it takes Level 3 to 11000."""
+        plan = self.storeys()
+        ok, _message = plan.set_gap_below(plan.rows[1], 4000.0)
+        self.assertTrue(ok)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 8000, 11000, 14000])
+
+    def test_every_other_storey_height_is_preserved(self):
+        plan = self.storeys()
+        plan.set_gap_below(plan.rows[1], 5500.0)
+        elevations = [row.ElevMm for row in plan.rows]
+        gaps = [elevations[i + 1] - elevations[i]
+                for i in range(len(elevations) - 1)]
+        self.assertEqual([round(gap) for gap in gaps], [5500, 3000, 3000])
+
+    def test_shrinking_a_gap_pulls_the_stack_down(self):
+        plan = self.storeys()
+        plan.set_gap_below(plan.rows[1], 2000.0)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 6000, 9000, 12000])
+
+    def test_the_lowest_level_has_no_gap_to_edit(self):
+        plan = self.storeys()
+        ok, message = plan.set_gap_below(plan.rows[0], 1000.0)
+        self.assertFalse(ok)
+        self.assertIn("lowest level", message)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 7000, 10000, 13000])
+
+    def test_it_accepts_what_the_cell_shows_and_what_a_user_types(self):
+        for typed, expected in (("+3000", 3000), ("3000", 3000),
+                                ("3.5 m", 3500), ("4000", 4000)):
+            plan = self.storeys()
+            ok, _message = plan.set_gap_below(plan.rows[1], typed)
+            self.assertTrue(ok, typed)
+            self.assertEqual(round(plan.rows[1].ElevMm - plan.rows[0].ElevMm),
+                             expected, typed)
+
+    def test_nonsense_is_refused_and_nothing_moves(self):
+        plan = self.storeys()
+        ok, message = plan.set_gap_below(plan.rows[1], "base")
+        self.assertFalse(ok)
+        self.assertIn("Couldn't read", message)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 7000, 10000, 13000])
+
+    def test_the_same_gap_changes_nothing(self):
+        plan = self.storeys()
+        ok, _message = plan.set_gap_below(plan.rows[1], 3000.0)
+        self.assertTrue(ok)
+        self.assertTrue(all(row.State == planner.STATE_EXISTING
+                            for row in plan.rows))
+
+    def test_moved_rows_are_staged_as_moves(self):
+        plan = self.storeys()
+        plan.set_gap_below(plan.rows[1], 4000.0)
+        self.assertEqual(plan.rows[0].State, planner.STATE_EXISTING)
+        for row in plan.rows[1:]:
+            self.assertEqual(row.State, planner.STATE_MOVE)
+        operations = plan.to_operations()
+        self.assertEqual(len(operations["moves"]), 3)
+
+    def test_the_delta_column_shows_what_you_would_type_back(self):
+        plan = self.storeys()
+        plan.refresh_display()
+        self.assertEqual(plan.rows[0].DeltaText, "base")
+        self.assertEqual(plan.rows[1].DeltaText, "+3000")
+        plan.set_gap_below(plan.rows[1], plan.rows[1].DeltaText)
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 7000, 10000, 13000])
+
+    def test_a_gap_edit_can_be_undone_in_one_step(self):
+        plan = self.storeys()
+        plan.checkpoint("set the gap")
+        plan.set_gap_below(plan.rows[1], 4000.0)
+        plan.undo()
+        self.assertEqual([round(row.ElevMm) for row in plan.rows],
+                         [4000, 7000, 10000, 13000])
 
 
 class ValidationTests(unittest.TestCase):
@@ -689,6 +812,21 @@ class HistoryTests(unittest.TestCase):
         plan.checkpoint("nothing happened")
         plan.drop_checkpoint()
         self.assertIsNone(plan.undo_label())
+
+    def test_a_checkpoint_that_guarded_nothing_is_dropped(self):
+        """Typing a cell's own value back must not leave a dead undo step."""
+        plan = sample_plan()
+        plan.checkpoint("rename")
+        plan.rename(plan.rows[0], "Level 1")        # the name it already had
+        self.assertTrue(plan.drop_checkpoint_if_unchanged())
+        self.assertIsNone(plan.undo_label())
+
+    def test_a_checkpoint_that_guarded_a_real_change_is_kept(self):
+        plan = sample_plan()
+        plan.checkpoint("rename")
+        plan.rename(plan.rows[0], "Ground")
+        self.assertFalse(plan.drop_checkpoint_if_unchanged())
+        self.assertEqual(plan.undo_label(), "rename")
 
     def test_the_history_is_bounded(self):
         plan = sample_plan()
