@@ -1,16 +1,26 @@
 # -*- coding: utf-8 -*-
-"""Place an isolated FOOTING pad under every column, on the columns' base level.
+"""Place the FOUNDATIONS: what the drawing shows, else pads under the columns.
 
-Built the same way slabs are: a `Floor.Create` from the pad's outline against a
+Built the same way slabs are: a `Floor.Create` from the outline against a
 Structural Foundation floor type ("Foundation Slab"), NOT a family instance.
 That keeps footings in the same shape as everything else this tool places -- a
 sketched outline the user can edit -- and it sits ON the level with no offset,
 where a foundation FAMILY hangs its own depth below the level it is hosted on.
 
-The pad is the column footprint grown by a projection all round, turned with the
-column: a 400 x 600 column with a 300 projection gets a 1000 x 1200 pad. A round
-column gets a square pad, which is what an isolated pad under a round column
-normally is. A type is duplicated per distinct THICKNESS and cached, exactly as
+Two sources, in that order of preference:
+
+(1) THE DRAWING. `foundation_plan` reads the outlines off the foundation layer
+    and sizes each from the note inside it ("F3_1500MM THK"). This is the only
+    source that can produce a RAFT, and the only one that gets the thickness
+    from the engineer rather than from a formula.
+
+(2) THE COLUMNS, when the drawing carries no foundation layer. The pad is the
+    column footprint grown by a projection all round, turned with the column: a
+    400 x 600 column with a 300 projection gets a 1000 x 1200 pad. A round
+    column gets a square pad, which is what an isolated pad under a round column
+    normally is. Depth follows plan area, since nothing drawn says otherwise.
+
+A type is duplicated per distinct THICKNESS and cached in both cases, exactly as
 the slab builder does.
 
 Levels: footings go on the BASE level of the columns, with a zero height offset.
@@ -156,29 +166,42 @@ def _zero_offset(instance):
 
 
 def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
-                   thickness_mm=600.0, region_max_side_mm=None):
-    """One foundation pad per column GROUP, on `level_id` at zero offset.
+                   thickness_mm=600.0, region_max_side_mm=None, outlines=None):
+    """The foundations, on `level_id` at zero offset.
 
-    The layout comes from footing_plan: pads are the column footprints grown by
-    `projection_mm` on every side, OVERLAPPING pads are fused into one combined
-    footing, and each pad's thickness follows its plan area around
-    `thickness_mm` (the depth at one square metre).
+    `outlines` is what `foundation_plan.plan_foundations` read off the drawing.
+    When it holds anything, it IS the foundation layout: each ring placed as
+    drawn, at the thickness its own note gave, falling back to `thickness_mm`
+    for a ring the drawing left unlabelled.
 
-    Returns {"created": [ids], "skipped": [reasons], "errors": [reasons]}.
+    With no drawn outlines the layout comes from footing_plan as before: pads
+    are the column footprints grown by `projection_mm` on every side,
+    OVERLAPPING pads are fused into one combined footing, and each pad's
+    thickness follows its plan area around `thickness_mm` (the depth at one
+    square metre).
+
+    Returns {"created": [ids], "skipped": [reasons], "errors": [reasons],
+    "notes": [...], "merged": n, "source": "drawing"|"columns"}.
     """
     base_type = doc.GetElement(base_type_id)
     level = doc.GetElement(level_id)
     result = {"created": [], "skipped": [], "errors": [], "notes": [],
-              "merged": 0}
+              "merged": 0, "source": "columns"}
     if base_type is None or level is None:
         raise ValueError("foundation type or level could not be resolved")
 
-    region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
-                  else region_max_side_mm)
-    plans = footing_plan.plan_pads(sections, projection_mm, thickness_mm,
-                                   region_max)
-    singles = len(footing_plan.pads_for(sections, projection_mm, region_max))
-    result["merged"] = max(0, singles - len(plans))
+    if outlines:
+        result["source"] = "drawing"
+        plans = _plans_from_outlines(outlines, thickness_mm, result)
+    else:
+        region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
+                      else region_max_side_mm)
+        oversized = []
+        plans = footing_plan.plan_pads(sections, projection_mm, thickness_mm,
+                                       region_max, oversized)
+        singles = len(footing_plan.pads_for(sections, projection_mm, region_max))
+        result["merged"] = max(0, singles - len(plans))
+        result["skipped"].extend(oversized)
     cache = {}
     for ring, pad_thickness, mark in plans:
         try:
@@ -198,3 +221,35 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
         except Exception as creation_error:
             result["errors"].append(str(creation_error))
     return result
+
+
+def _plans_from_outlines(outlines, thickness_mm, result):
+    """[(ring, thickness_mm, mark)] from what the drawing showed.
+
+    A ring the drawing did not size falls back to the dialog's thickness and
+    says so, the way an unlabelled slab loop falls back to its floor type. The
+    fold and sunk regions a note carries are recorded, not built: the three
+    floors a fold is made of are P2's, and claiming them here would put a step
+    in the model that nothing has placed the concrete for.
+    """
+    plans = []
+    steps = 0
+    for plan in outlines:
+        ring = plan.get("ring")
+        if not ring or len(ring) < 3:
+            continue
+        thickness = plan.get("thickness_mm")
+        if not thickness:
+            thickness = thickness_mm
+            result["notes"].append(
+                "{0} outline has no thickness note: cast at {1:.0f} mm".format(
+                    plan.get("mark") or "an unnamed", thickness or 0.0))
+        steps += len(plan.get("steps") or [])
+        plans.append(([(p[0], p[1]) for p in ring], thickness, plan.get("mark")))
+    result["notes"].append(
+        "{0} foundation outline(s) read from the drawing".format(len(plans)))
+    if steps:
+        result["notes"].append(
+            "{0} fold/sunk region(s) noted; stepping them is not built "
+            "yet".format(steps))
+    return plans

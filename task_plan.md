@@ -3,7 +3,7 @@
 **Roadmap:** `docs/superpowers/specs/2026-08-13-cad2bim-post-v0.68-roadmap.md`
 (the sequencing decision and its reasoning; this file is the working checklist).
 
-**Branch:** `claude/cad2bim-roadmap-continuation-ynszsk`, off `main` at `12224b7`.
+**Branch:** `claude/cad2bim`, off `main` at `12224b7`.
 
 **Non-negotiable from here on:** `tests/run_regressions.py` green before every
 release. A number that moves is not automatically a bug, but it gets explained in
@@ -65,7 +65,7 @@ reproduced. Drift from here is what they defend.
 
 ## Phase 1 — hatch/region reader + foundations from CAD
 
-**Status:** starting
+**Status:** complete
 
 Two together, because the second cannot be verified without the first.
 
@@ -85,25 +85,52 @@ Fixture in the repo as of 2026-08-13 — test10 now carries its foundation level
 | `S-FND-FOLD` | 6 HATCH (ANSI37) + 6 LINE | fold regions |
 | `S-FND-SUNK` | 1 HATCH (ANSI37) | sunk region |
 
-- [ ] 1.1 HATCH in the DXF reader: boundary paths as rings, pattern name kept.
-      Reader-level, so P2 and P4 inherit it.
-- [ ] 1.2 Layer categories: foundation outline, foundation text, fold, sunk.
-      `S-FND` currently classifies as unmapped; `S-FND-IDEN` is excluded from
-      geometry by the `iden` rule (correct) and ignored as text (not correct).
-- [ ] 1.3 Parse `F<n>_<t>MM THK` and the `\P<d>MM FOLD|SUNK` continuation.
-      Marks F1–F6, thicknesses 800/1000/1200/1500/2000.
-- [ ] 1.4 Footings and rafts placed from the CAD outline, thickness from the
-      label. Column-offset derivation becomes the fallback for a drawing with no
-      foundation layer, not the only path.
-- [ ] 1.5 Quality, riding along: the `col_region_max_side_mm` discard that makes
-      rafts impossible.
-- [ ] 1.6 Regression: the sweep gains foundation counts; test10 is the case.
+- [x] 1.1 HATCH in the DXF reader: boundary paths as rings, pattern name kept.
+      Reader-level, so P2 and P4 inherit it. Only the EXTERNAL path is the
+      region — AutoCAD clips a hatch around any label drawn over it.
+- [x] 1.2 Layer categories: foundation outline, foundation text, fold, sunk.
+      Fold and sunk match BEFORE foundation, or `S-FND-FOLD` (which contains
+      "fnd") is swallowed. Found on the way: Test0's `S-FNDN`, 187 entities
+      ignored since the day it was added.
+- [x] 1.3 Parse `F<n>_<t>MM THK` and the `\P<d>MM FOLD|SUNK` continuation.
+      All 19 of test10's labels parse: F1–F6, 800/1000/1200/1500/2000.
+- [x] 1.4 Footings and rafts placed from the CAD outline, thickness from the
+      label. `foundation_plan.py` reads the outlines, `place_footings(outlines=)`
+      builds them, and the column-offset derivation is now the fallback for a
+      drawing with no foundation layer. The Revit-side wiring is pinned by AST
+      checks in `test_dialog_wiring.py` — every link in it degrades silently
+      back to invented pads, and no offline harness can reach `builders/`.
+- [x] 1.5 Quality, riding along: the size discard now REPORTS the region it
+      declined to invent a pad for instead of dropping it in silence; and
+      `col_region_max_side_mm` was read from `selections["limits"]`, where the
+      dialog never writes it, so the user's setting had never once reached the
+      footing pass.
+- [x] 1.6 Regression: the sweep gains ten foundation/region counts. test10
+      measures 13 outlines, 13 sized, 6 fold + 1 sunk regions.
+
+**How an outline is recovered.** Ten of test10's thirteen are closed polylines,
+taken exactly as drawn. The other three — two 5500x11900 pads with a 3500x5900
+sunk strip between them — share their long edges, each drawn once, so a chainer
+that consumes a segment as it goes closes none of them. A planar face walk reads
+a shared edge from both sides; that is why it is there.
+
+**A drawing has to prove it uses the convention.** `plan_foundations` returns
+nothing unless at least one outline carries a foundation note. Test0 is the
+reason: its `S-FNDN` linework closes into four accidental faces that no label
+names anywhere in the drawing, and placing those would be worse than the guess
+they replaced. Refusing costs nothing — the caller falls back.
 
 ---
 
 ## Phase 2 — folds and sunk
 
-**Status:** not started. Applies to slabs AND rafts.
+**Status:** next. Applies to slabs AND rafts.
+
+P1 leaves the evidence assembled: each foundation plan carries a `steps` list
+holding every FOLD/SUNK note inside its outline (test10: three folds in each of
+the two F3 rings, one sunk in the middle strip), and the fold and sunk hatch
+regions are read and counted. Nothing is stepped yet — the builder reports the
+regions it found and places flat concrete.
 
 **Representation, corrected 2026-08-13 by the user's own Revit detail.** The
 earlier plan was two floors — a dropped floor plus a hole in the parent. The

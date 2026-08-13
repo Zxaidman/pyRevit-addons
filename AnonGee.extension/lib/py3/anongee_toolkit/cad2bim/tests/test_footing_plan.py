@@ -57,6 +57,23 @@ class PadsFromColumns(unittest.TestCase):
             _sections([_rect(0, 0, 2700, 3300)]), 300.0, 1500.0)
         self.assertEqual(pads, [])
 
+    def test_the_region_it_declined_to_invent_a_pad_for_is_reported(self):
+        # the filter is right -- a lift shaft grown by a projection is not a
+        # pad -- but it used to decline in silence, so a raft-sized region
+        # produced no foundation and no explanation
+        declined = []
+        footing_plan.pads_for(_sections([_rect(0, 0, 2700, 3300)]), 300.0,
+                              1500.0, declined)
+        self.assertEqual(len(declined), 1)
+        self.assertIn("3300", declined[0])
+        self.assertIn("2700", declined[0])
+
+    def test_a_column_sized_footprint_is_reported_as_nothing(self):
+        declined = []
+        footing_plan.pads_for(_sections([_rect(0, 0, 400, 600)]), 300.0,
+                              1500.0, declined)
+        self.assertEqual(declined, [])
+
     def test_the_pad_follows_the_columns_own_angle(self):
         pads = footing_plan.pads_for(
             _sections([_rect(0, 0, 400, 800, 30.0)]), 100.0, 1500.0)

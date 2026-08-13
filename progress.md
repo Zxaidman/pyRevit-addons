@@ -85,9 +85,76 @@ hatch counts match their label counts exactly. P1's entry gate is met.
 `task_plan.md`, `findings.md` and `progress.md` closed out on v0.68 and rewritten
 onto the new roadmap. `modules_plan.md` left in place but recorded as superseded.
 
+### Phase 1 — the drawing's own foundations
+
+Branch note: the work continues on `claude/cad2bim`, which the session harness
+bound to the same commit the `...-ynszsk` and `...-y4s34n` branches held. Same
+history, one name from here.
+
+**P1.1 — HATCH in the reader.** Hatches go into a NEW `result.regions`, not into
+`records`: a hatch is a region, not a curve, and a curve pipeline handed a few
+hundred closed rings would try to make columns out of them. The practical value
+of that choice is that the P0 baselines, which count `records`, became a
+corpus-wide proof that the change moved nothing. Only the EXTERNAL boundary is
+the region — AutoCAD clips a hatch around any label drawn over it, so test10's
+folds arrive as three paths each, two of them textbox islands.
+
+**P1.2/P1.3 — layers and labels.** Fold and sunk are matched before foundation,
+or `S-FND-FOLD` (which contains "fnd") is swallowed by it. `foundation_labels`
+takes `on_foundation_layer` because a BARE thickness is a raft note there and a
+slab note anywhere else; the text cannot separate them and must not guess.
+
+**P1.4 — foundations placed from the outline.** `foundation_plan.py` reads the
+rings and sizes each from the note inside it; `place_footings(outlines=)` builds
+them; the column-offset derivation is now the fallback for a drawing that has no
+foundation layer.
+
+Two things drove the design, both discovered by measuring rather than assuming:
+
+- Three of test10's thirteen outlines SHARE their edges (two pads flanking a
+  sunk strip, inner edges drawn once). The slab chainer recovers 0 of the three
+  because it consumes each segment as it goes. A planar face walk reads a shared
+  edge from both sides and returns all three.
+- Test0's `S-FNDN` closes into four accidental faces and carries no label
+  anywhere in the drawing. So a drawing has to PROVE it uses the convention:
+  nothing is planned unless at least one outline carries a note. Test0 falls
+  back to the old path untouched.
+
+Cross-checked on the real fixture from two independent directions: 13 outlines,
+13 sized, 19 notes every one of them inside a ring, and 6 fold + 1 sunk notes
+matching 6 fold + 1 sunk hatch regions exactly.
+
+**P1.5 — the silent discard.** `pads_for` dropped any footprint wider than a
+column without a word. The filter is right for the column-derived path; the
+silence was not, and it now reports. Bigger find alongside it: the pass read
+`col_region_max_side_mm` from `selections["limits"]`, where the dialog never
+writes it — so the user's setting had never once reached the footings (findings
+#7). Read from `tolerances` now, the same dict the column pass uses.
+
+**P1.6 — the gate.** Ten foundation/region counts added to the DXF sweep. The
+baseline diff is **170 pure insertions and zero changed lines** across 17
+drawings: every pre-existing measurement is identical, which is the evidence
+that reading foundations altered nothing that already worked. Unit tests
+486 → 514.
+
+The last four of those are static wiring checks, because the Revit-side half of
+P1.4 fails QUIETLY: drop `records`/`texts` at the call and `plan_foundations`
+reads an empty drawing, drop `outlines=` and the builder falls back to invented
+pads — and either way the run still reports "footings created". `builders/`
+imports Revit at module level, so no offline harness can reach it; the check is
+an AST read of the call sites, the same way the dialog bindings are pinned.
+Proved to bite: breaking each of the four links fails its own test.
+
 ### Open
 
-- P1 starting: HATCH support in the DXF reader first, then the foundation layer
-  and text mapping, then footings/rafts placed from the CAD outline.
+- P2 next: folds and sunk, on slabs and rafts. P1 leaves each foundation plan
+  carrying its `steps` notes, and the fold/sunk hatch regions read and counted;
+  nothing is stepped yet. The open number is still the fold support's vertical
+  placement — slab thickness and sunk value are both 350 in the supplied detail,
+  so the image cannot say which drives it.
+- Foundation outlines that NEST (a pad drawn inside a raft) are placed as two
+  overlapping floors. Not present in this corpus; slabs solve it with
+  `_nest_openings`, which is the obvious source to borrow from if a drawing
+  turns one up.
 - `graphify-out/` is 18 versions stale (built at `56c2d6a`, v0.50.0) and contains
   none of the twenty post-refactor modules. Documentation, not a gate.

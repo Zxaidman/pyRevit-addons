@@ -25,7 +25,7 @@ from Autodesk.Revit.DB import Transaction, TransactionGroup
 
 import re
 
-from . import config, naming, report, slab_outlines
+from . import config, foundation_plan, naming, report, slab_outlines
 from .builders import (columns, beams, footings, grids, materials, slabs,
                        txn_failures, view_filters)
 from . import stair_layout
@@ -243,14 +243,25 @@ def _create_beams(doc, beam_segments, selections):
             "skip_details": _skip_details(result["skipped"])}
 
 
-def _create_footings(doc, sections, selections):
-    """Isolated foundations under the columns, on their BASE level."""
+def _create_footings(doc, sections, selections, records=None, texts=None):
+    """The foundations, on the columns' BASE level.
+
+    `records` and `texts` are this storey's geometry and its routed foundation
+    notes. When they carry the foundation convention the outlines come from the
+    drawing; when they do not, the pass derives pads from the columns exactly as
+    it always has.
+    """
     from Autodesk.Revit.DB import Transaction, TransactionGroup
     type_id = selections.get("footing_symbol_id")
     level_id = selections.get("base_level_id")
     if type_id is None or level_id is None:
         _say("Footings -- no foundation type or base level chosen.")
         return {"created": 0, "skipped": 0, "errors": 0}
+
+    outlines = foundation_plan.plan_foundations(records or [], texts or [])
+    if outlines:
+        _say("Footings -- {0} outline(s) read from the drawing; the "
+             "column-offset derivation is not used.".format(len(outlines)))
 
     group = TransactionGroup(doc, "CAD to BIM: Footings")
     transaction = Transaction(doc, "Create footings")
@@ -262,8 +273,12 @@ def _create_footings(doc, sections, selections):
             doc, sections, type_id, level_id,
             projection_mm=selections.get("footing_projection_mm") or 0.0,
             thickness_mm=selections.get("footing_thickness_mm") or 0.0,
-            region_max_side_mm=(selections.get("limits") or {}).get(
-                "col_region_max_side_mm"))
+            # The dialog files this under TOLERANCES, which is where the column
+            # pass reads it from; looking in "limits" always found nothing, so
+            # the user's setting never reached the footings.
+            region_max_side_mm=(selections.get("tolerances") or {}).get(
+                "col_region_max_side_mm"),
+            outlines=outlines)
         transaction.Commit()
         group.Assimilate()
     except Exception as creation_error:

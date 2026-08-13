@@ -730,6 +730,13 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
     else:
         _say("slabs: reading notes from {0} routed label(s)".format(
             len(slab_texts)))
+    # Foundation notes are NOT found by content the way slab notes are: a bare
+    # "1200MM THK" is a raft on the foundation layer and a slab note anywhere
+    # else, and only the routing says which. So no fall back to every text --
+    # an unrouted drawing simply has no drawn foundations.
+    foundation_texts = [t for t in dxf_texts
+                        if text_mapping.get(t.layer_key)
+                        == layers.CATEGORY_FOUNDATION_TEXT]
 
     # The schedule (mark -> size) sizes MARK-ONLY plan labels (columns AND beams). The
     # table is authoritative; any sized plan label supplements a mark the table omits.
@@ -887,12 +894,15 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
                                             slab_beam_segments, dxf_texts,
                                             selections,
                                             column_rects=column_footprints)
-    # FOOTINGS: one per column, on the columns' BASE level. In a multi-storey
-    # run only the lowest storey builds them -- a building has one set of
-    # foundations, not one per floor.
+    # FOOTINGS: the outlines the drawing carries, else one pad per column. Both
+    # go on the columns' BASE level, and in a multi-storey run only the lowest
+    # storey builds them -- a building has one set of foundations, not one per
+    # floor.
     _progress(8, _BUILD_STEPS, "create footings")
     if selections.get("create_footings") and selections.get("build_footings", True):
-        outcomes["footings"] = _create_footings(doc, sections, selections)
+        outcomes["footings"] = _create_footings(doc, sections, selections,
+                                                records=revit_result.records,
+                                                texts=foundation_texts)
     _progress(_BUILD_STEPS, _BUILD_STEPS, "materials")
     applied = _apply_materials(doc, outcomes, selections)
     if applied:

@@ -77,8 +77,16 @@ class Pad(object):
             self.cx * _MM, self.cy * _MM, self.mark() or "")
 
 
-def pads_for(sections, projection_mm, region_max_side_mm):
-    """One Pad per column footprint, before any merging."""
+def pads_for(sections, projection_mm, region_max_side_mm, oversized=None):
+    """One Pad per column footprint, before any merging.
+
+    `oversized` collects the footprints the size filter rejects. The filter
+    itself is right for this path -- a lift or stair region grown by a
+    projection is not a pad -- but it used to reject in silence, so a raft-sized
+    region drawn on the column layer produced no foundation and no explanation.
+    A drawing that carries its own foundation layer never reaches here at all;
+    one that does not now at least says what it declined to invent.
+    """
     projection_ft = float(projection_mm or 0.0) / _MM
     pads = []
     for entry in (sections.get("entries") or []):
@@ -86,6 +94,12 @@ def pads_for(sections, projection_mm, region_max_side_mm):
             width_mm = rectangle["width_mm"]
             height_mm = rectangle["height_mm"]
             if min(width_mm, height_mm) > region_max_side_mm:
+                if oversized is not None:
+                    oversized.append(
+                        "{0:.0f} x {1:.0f} mm region is wider than a column "
+                        "({2:.0f} mm): no pad invented for it".format(
+                            max(width_mm, height_mm), min(width_mm, height_mm),
+                            region_max_side_mm))
                 continue                 # a lift/stair region, not a column
             angle = rectangle.get("long_axis_deg")
             if angle is None:
@@ -200,10 +214,11 @@ def depth_for(area_m2, nominal_mm):
     return round(clamped / _DEPTH_STEP_MM) * _DEPTH_STEP_MM
 
 
-def plan_pads(sections, projection_mm, depth_mm, region_max_side_mm):
+def plan_pads(sections, projection_mm, depth_mm, region_max_side_mm,
+              oversized=None):
     """[(ring, thickness_mm, mark)] -- every pad, merged and sized, ready to place."""
     pads = merge_overlapping(pads_for(sections, projection_mm,
-                                      region_max_side_mm))
+                                      region_max_side_mm, oversized))
     out = []
     for pad in pads:
         out.append((pad.ring(), depth_for(pad.area_m2, depth_mm), pad.mark()))

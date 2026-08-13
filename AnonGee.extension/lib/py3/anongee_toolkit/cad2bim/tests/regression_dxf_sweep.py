@@ -32,9 +32,9 @@ import _golden
 import _loader
 
 
-report, layers, marks, dxf_reader, slab_outlines = _loader.load(
+report, layers, marks, dxf_reader, slab_outlines, foundation_plan = _loader.load(
     "report", "classify.layers", "classify.marks", "readers.dxf_reader",
-    "slab_outlines")
+    "slab_outlines", "foundation_plan")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CAD = os.path.join(_HERE, "fixtures", "cad")
@@ -101,6 +101,19 @@ def _measure(path):
         loops = list(loops) + list(recovered)
     labelled = slab_outlines.apply_slab_labels(loops, result.texts)
 
+    # FOUNDATIONS, read the way run_builders reads them: the outlines off the
+    # foundation layer, sized by the notes routed off the foundation TEXT layer.
+    # Two drawings reach this at all -- test10, which carries the convention,
+    # and Test0, whose S-FNDN linework closes into faces that nothing labels and
+    # which must therefore plan nothing.
+    foundation_texts = [t for t in result.texts
+                        if layers.classify_text_layer(t.layer_key)
+                        == layers.CATEGORY_FOUNDATION_TEXT]
+    foundation_outlines = foundation_plan.outlines(result.records)
+    foundation_plans = foundation_plan.plan_foundations(result.records,
+                                                        foundation_texts)
+    regions = _regions_by_category(result.regions)
+
     return {
         "records": len(result.records),
         "texts": len(result.texts),
@@ -124,7 +137,36 @@ def _measure(path):
         "slab_loops_marked": sum(1 for s in labelled if s.get("mark")),
         "slab_loops_sized": sum(1 for s in labelled
                                 if s.get("thickness_mm") is not None),
+        "foundation_records": sum(
+            1 for r in result.records
+            if r.category == layers.CATEGORY_FOUNDATION),
+        "foundation_outlines": len(foundation_outlines),
+        "foundation_outlines_drawn_closed": sum(
+            1 for _r, _z, source in foundation_outlines if source == "drawn"),
+        "foundation_texts": len(foundation_texts),
+        "foundation_planned": len(foundation_plans),
+        "foundation_planned_sized": sum(
+            1 for p in foundation_plans if p.get("thickness_mm") is not None),
+        "foundation_steps": sum(len(p.get("steps") or [])
+                                for p in foundation_plans),
+        "regions": len(result.regions),
+        "fold_regions": regions.get(layers.CATEGORY_FOLD, 0),
+        "sunk_regions": regions.get(layers.CATEGORY_SUNK, 0),
     }
+
+
+def _regions_by_category(regions):
+    """{category: count} for the hatches the reader kept out of `records`.
+
+    Regions are classified here rather than in the pipeline because nothing
+    downstream consumes them yet -- this is what pins the P1.1 reader against
+    drift until P2 places the folds.
+    """
+    counts = {}
+    for region in (regions or []):
+        category = layers.classify_layer(region.layer_key)
+        counts[category] = counts.get(category, 0) + 1
+    return counts
 
 
 class DxfSweep(unittest.TestCase):

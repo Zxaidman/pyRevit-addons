@@ -79,7 +79,7 @@ Two constraints discovered while rebuilding them:
   pipeline: the old findings recorded "test10 +6 noted bays", and the sweep
   measures `slab_loops_recovered_from_notes = 6` on test10.
 
-## 3. The DXF reader discards every hatch
+## 3. The DXF reader discards every hatch — fixed in P1.1
 
 `readers/dxf_reader.py::_geometry_record` handles LINE, ARC, CIRCLE, POINT,
 LWPOLYLINE, POLYLINE, ELLIPSE and SPLINE. There is no HATCH branch. Hatches per
@@ -88,7 +88,7 @@ fixture: test4 360, test5 360, test10 276, Project1 228, test9 147. All dropped.
 This is the shared prerequisite for foundations (P1), folds/sunk (P2) and
 openings (P4).
 
-## 4. Foundations are invented, and rafts are impossible
+## 4. Foundations are invented, and rafts are impossible — fixed in P1.4
 
 `footing_plan.pads_for(sections, projection_mm, region_max_side_mm)` reads only
 `sections["entries"][*]["rectangles"]` and `sections["circles"]` — column
@@ -99,6 +99,43 @@ the drawing.
 discards any footprint whose smaller side exceeds a column's, commented "a
 lift/stair region, not a column". A raft is larger than a column by definition,
 so it cannot be produced.
+
+### What the outline recovery has to survive
+
+Measured on test10 with the package's own reader. `S-FND` holds 20 records that
+resolve into **13 outlines**, and they do not all arrive the same way:
+
+| | Count | How it is drawn |
+|-|-------|-----------------|
+| Closed polylines | 10 | a rectangle each, taken exactly as drawn |
+| Open polylines + loose lines | 3 | two 5500x11900 pads flanking a 3500x5900 sunk strip |
+
+The three share edges. The strip's two long sides ARE the pads' inner sides,
+drawn once, so the assembly has four degree-3 nodes. **Anything that consumes a
+segment as it chains closes at most one of the three, and in practice closes
+none** — `slab_outlines._chain_into_rings` recovers 0 of them. A planar face
+walk reads a shared edge from both sides and returns all three. That is the
+whole reason `foundation_plan._faces` exists rather than reusing the slab
+chainer.
+
+Two consequences worth keeping:
+
+- The face walk stops wherever the linework was split, so a pad's inner edge
+  arrives as two collinear segments and the ring carries a corner the
+  foundation does not have. `shapes.simplify_ring` removes those and only those.
+- The same machinery covers the Revit-side import, which explodes closed
+  polylines into separate lines. The "drawn closed" path is an optimisation for
+  the DXF reader, not a dependency.
+
+### Test0 is why a drawing has to prove the convention
+
+Its `S-FNDN` layer holds 187 records of arcs and angled linework that happen to
+close into **four** faces, and the drawing carries no foundation note anywhere —
+no text layer in it even contains "FND". Placing those four as foundations would
+be a worse model than the column-derived guess they replaced. So
+`plan_foundations` returns nothing unless at least one outline carries a note,
+and Test0 falls back to the old path untouched. One labelled outline vouches for
+the rest of the layer, which is what a partially-annotated drawing needs.
 
 ## 5. The foundation convention (test10, supplied 2026-08-13)
 
@@ -145,7 +182,27 @@ silently.
 `+6250` is not a fold — it is a different storey. A magnitude threshold is
 required in P2 whatever the representation.
 
-## 7. Test environment
+## 7. The user's region-size setting had never reached the footings
+
+Found while wiring P1.4. `run_builders._create_footings` read
+`col_region_max_side_mm` from `selections["limits"]`; the dialog writes it to
+`selections["tolerances"]`, which is where the COLUMN pass correctly reads it
+from. So the lookup returned None on every run since the setting existed, and
+`place_footings` silently fell back to the module default of 1500 mm. Anyone who
+changed that number on the Tolerances tab changed their columns and not their
+footings, with nothing said either way.
+
+Now read from `tolerances`. Two notes on the consequence:
+
+- For a user who never touched the field the behaviour is identical — the
+  dialog seeds it with the same 1500 mm default the fallback used.
+- The discard it controls is still right for the column-derived path (a lift
+  shaft grown by a projection is not a pad), but it used to discard in silence.
+  It now reports the footprint it declined to invent a pad for. A drawing that
+  carries its own foundation layer never reaches that path at all, which is the
+  real answer to "a raft is bigger than a column".
+
+## 8. Test environment
 
 The suite runs green on Linux only after `pip install ezdxf`. The bundled
 `lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,

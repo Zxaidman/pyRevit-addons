@@ -252,6 +252,86 @@ class OutcomesReachTheExportClean(unittest.TestCase):
                          "an outcome dict exports an id list under a plain key")
 
 
+class TheDrawnFoundationsReachTheBuilder(unittest.TestCase):
+    """The drawing-fed footing path is Revit-side, so only a static check sees it.
+
+    Every link in it fails QUIETLY. Drop the records or the notes at the call
+    and `plan_foundations` reads an empty drawing; drop `outlines=` and the
+    builder falls back to the column-offset derivation. Either way the run says
+    "footings created" and lays invented pads over a drawing that showed the
+    real ones -- the same class of silent wrong answer as the swallowed type
+    clash in v0.68.1, and unreachable by the offline harnesses because
+    builders/footings.py imports Revit at module level.
+    """
+
+    def _function(self, source, name):
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return node
+        self.fail("no %s" % name)
+
+    def _call(self, node, name):
+        """The call to `name` (plain or dotted) inside `node`."""
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            func = inner.func
+            called = (func.id if isinstance(func, ast.Name)
+                      else getattr(func, "attr", None))
+            if called == name:
+                return inner
+        return None
+
+    def test_the_storey_hands_its_geometry_and_notes_to_the_footings(self):
+        call = self._call(self._function(_script_source(), "_build_one_storey"),
+                          "_create_footings")
+        self.assertIsNotNone(call, "_build_one_storey never creates footings")
+        passed = set(keyword.arg for keyword in call.keywords)
+        for argument in ("records", "texts"):
+            self.assertIn(argument, passed,
+                          "the footing pass is called without %s: the drawing's "
+                          "own foundations cannot be read" % argument)
+
+    def test_the_notes_are_routed_by_layer_and_never_fall_back_to_all_text(self):
+        # a BARE "1200MM THK" is a raft on the foundation layer and a slab note
+        # anywhere else; only the routing separates them, so the slab notes'
+        # "use every text when nothing is routed" fallback would claim them
+        source = _script_source()
+        self.assertIn("CATEGORY_FOUNDATION_TEXT", source)
+        assignments = [node for node in ast.walk(ast.parse(source))
+                       if isinstance(node, ast.Assign)
+                       and any(getattr(t, "id", None) == "foundation_texts"
+                               for t in node.targets)]
+        self.assertEqual(len(assignments), 1,
+                         "foundation_texts is assigned more than once: one of "
+                         "them is a fall back to every text in the drawing")
+        self.assertIsInstance(assignments[0].value, ast.ListComp)
+
+    def test_the_outlines_the_drawing_carries_reach_place_footings(self):
+        node = self._function(_builders_source(), "_create_footings")
+        self.assertIsNotNone(self._call(node, "plan_foundations"),
+                             "the footing pass never reads the drawing")
+        call = self._call(node, "place_footings")
+        self.assertIsNotNone(call, "the footing pass places nothing")
+        self.assertIn("outlines", [keyword.arg for keyword in call.keywords],
+                      "place_footings is called without the drawn outlines: "
+                      "every run falls back to pads invented from the columns")
+
+    def test_the_region_limit_is_read_where_the_dialog_files_it(self):
+        # it lives in TOLERANCES, where the column pass reads it; the footing
+        # pass looked in "limits" and so always found None, which meant the
+        # user's own setting never reached it
+        call = self._call(self._function(_builders_source(), "_create_footings"),
+                          "place_footings")
+        keyword = [k for k in call.keywords if k.arg == "region_max_side_mm"]
+        self.assertEqual(len(keyword), 1)
+        read = set(node.value for node in ast.walk(keyword[0])
+                   if isinstance(node, ast.Constant)
+                   and isinstance(node.value, str))
+        self.assertIn("tolerances", read)
+        self.assertNotIn("limits", read)
+
+
 class StoreyTableIsSelectable(unittest.TestCase):
     """The storey stack has to be pickable, and visibly so.
 
