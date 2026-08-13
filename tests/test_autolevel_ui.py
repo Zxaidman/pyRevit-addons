@@ -25,7 +25,7 @@ _PACKAGE = os.path.join(_BUTTON, "anongee_autolevel")
 if _BUTTON not in sys.path:
     sys.path.insert(0, _BUTTON)
 
-from anongee_autolevel import planner                            # noqa: E402
+from anongee_autolevel import VERSION, planner                   # noqa: E402
 
 XAML_NS = "{http://schemas.microsoft.com/winfx/2006/xaml}"
 PRESENTATION_NS = "{http://schemas.microsoft.com/winfx/2006/xaml/presentation}"
@@ -93,10 +93,168 @@ def binding_paths(root):
     return paths
 
 
+# XAML reads any attribute value that STARTS with "{" as a markup extension.
+# These are the extensions this file legitimately uses; a literal value that
+# happens to start with a brace has to be escaped as "{}...".
+MARKUP_EXTENSIONS = ("Binding", "StaticResource", "DynamicResource",
+                     "TemplateBinding", "RelativeSource", "x:Static", "x:Null",
+                     "x:Type", "x:Array", "Static", "ThemeDictionary",
+                     "ComponentResourceKey")
+
+
+def _static_resource_name(value):
+    """The key out of a ``{StaticResource Foo}`` attribute, or None."""
+    text = (value or "").strip()
+    if not text.startswith("{StaticResource"):
+        return None
+    return text[len("{StaticResource"):].strip().rstrip("}").strip() or None
+
+
+def resource_keys(root):
+    """Every x:Key defined in the file."""
+    keys = set()
+    for element in root.iter():
+        key = element.get(XAML_NS + "Key")
+        if key:
+            keys.add(key)
+    return keys
+
+
+def resource_references(root):
+    """Every {StaticResource Foo} / {DynamicResource Foo} name used."""
+    names = set()
+    for element in root.iter():
+        for value in element.attrib.values():
+            for marker in ("{StaticResource", "{DynamicResource"):
+                start = 0
+                while True:
+                    start = value.find(marker, start)
+                    if start < 0:
+                        break
+                    cursor = start + len(marker)
+                    while cursor < len(value) and value[cursor] == " ":
+                        cursor += 1
+                    name = []
+                    while cursor < len(value) and (value[cursor].isalnum()
+                                                   or value[cursor] in "_."):
+                        name.append(value[cursor])
+                        cursor += 1
+                    if name:
+                        names.add("".join(name))
+                    start = cursor
+    return names
+
+
 class XamlTests(unittest.TestCase):
 
     def test_the_file_is_well_formed(self):
         self.assertIsNotNone(load_xaml())
+
+    def test_no_literal_value_is_mistaken_for_a_markup_extension(self):
+        """A value starting with "{" is parsed as markup, not as text.
+
+        This is invisible to an XML parser — the file is perfectly well-formed
+        — and it throws at XamlReader.Load, so the window never opens at all.
+        It shipped once: a tooltip listing the naming tokens began "{n} 1 ..."
+        and XAML read "{n}" as an extension, then choked on the rest with
+        "Unexpected token after end of markup extension". The escape is a
+        leading "{}".
+        """
+        offenders = []
+        for element in load_xaml().iter():
+            tag = element.tag.replace(PRESENTATION_NS, "")
+            for key, value in element.attrib.items():
+                text = value.lstrip()
+                if not text.startswith("{") or text.startswith("{}"):
+                    continue
+                body = text[1:].lstrip()
+                if not any(body.startswith(name) for name in MARKUP_EXTENSIONS):
+                    offenders.append("<{0} {1}=\"{2}…\"".format(
+                        tag, key, value[:40]))
+        self.assertEqual(offenders, [],
+                         "escape these with a leading {{}}: "
+                         + "; ".join(offenders))
+
+    def test_no_resource_key_is_defined_twice(self):
+        """A repeated x:Key in one dictionary throws at load."""
+        root = load_xaml()
+        seen = [element.get(XAML_NS + "Key") for element in root.iter()
+                if element.get(XAML_NS + "Key")]
+        duplicates = sorted({key for key in seen if seen.count(key) > 1})
+        self.assertEqual(duplicates, [])
+
+    def test_every_style_matches_the_element_it_is_applied_to(self):
+        """A Style whose TargetType is not the element's type throws at load."""
+        root = load_xaml()
+        styles = {}
+        for element in root.iter():
+            if (element.tag.replace(PRESENTATION_NS, "") == "Style"
+                    and element.get(XAML_NS + "Key")):
+                styles[element.get(XAML_NS + "Key")] = element.get("TargetType")
+
+        wrong = []
+        for element in root.iter():
+            key = _static_resource_name(element.get("Style"))
+            if not key:
+                continue
+            target = styles.get(key)
+            tag = element.tag.replace(PRESENTATION_NS, "")
+            if target and tag != target:
+                wrong.append("<{0} Style={1}> targets {2}".format(
+                    tag, key, target))
+        self.assertEqual(wrong, [])
+
+    def test_every_based_on_style_agrees_on_its_target_type(self):
+        """BasedOn across different TargetTypes throws at load."""
+        root = load_xaml()
+        styles = {}
+        for element in root.iter():
+            if (element.tag.replace(PRESENTATION_NS, "") == "Style"
+                    and element.get(XAML_NS + "Key")):
+                styles[element.get(XAML_NS + "Key")] = element.get("TargetType")
+
+        mismatched = []
+        for element in root.iter():
+            if element.tag.replace(PRESENTATION_NS, "") != "Style":
+                continue
+            base = _static_resource_name(element.get("BasedOn"))
+            if base and styles.get(base) \
+                    and element.get("TargetType") != styles[base]:
+                mismatched.append("{0} BasedOn {1}".format(
+                    element.get(XAML_NS + "Key"), base))
+        self.assertEqual(mismatched, [])
+
+    def test_every_trigger_targets_an_element_in_its_own_template(self):
+        """A TargetName with no such element throws when the style applies.
+
+        Later than load, and therefore harder to spot: the window opens and
+        the control misbehaves only once the trigger fires.
+        """
+        missing = []
+        for template in load_xaml().iter():
+            if template.tag not in TEMPLATE_TAGS:
+                continue
+            names = set(child.get(XAML_NS + "Name") for child in template.iter()
+                        if child.get(XAML_NS + "Name"))
+            for child in template.iter():
+                target = child.get("TargetName")
+                if target and target not in names:
+                    missing.append("{0} -> {1}".format(
+                        template.get("TargetType"), target))
+        self.assertEqual(missing, [])
+
+    def test_every_resource_reference_resolves(self):
+        """A {StaticResource} naming a key that isn't there throws on load.
+
+        Same failure mode as above — well-formed XML, dead window — so it is
+        worth catching here rather than in Revit.
+        """
+        root = load_xaml()
+        keys = resource_keys(root)
+        missing = sorted(name for name in resource_references(root)
+                         if name not in keys)
+        self.assertEqual(missing, [],
+                         "no x:Key for: {0}".format(", ".join(missing)))
 
     def test_the_root_window_uses_literals_only(self):
         """§12.7.A — XamlReader resolves Window attributes before Resources."""
@@ -356,10 +514,59 @@ def _python_files():
     return paths
 
 
+class VersionTests(unittest.TestCase):
+    """The version is written in four places; they have to agree.
+
+    The header badge is what a user can see and quote, so it has to be the
+    build they are actually running — which means one constant feeding
+    everything else, and a test to keep it that way.
+    """
+
+    def test_the_version_is_semantic(self):
+        parts = VERSION.split(".")
+        self.assertEqual(len(parts), 3,
+                         "{0} is not MAJOR.MINOR.PATCH".format(VERSION))
+        for part in parts:
+            self.assertTrue(part.isdigit(),
+                            "{0} is not MAJOR.MINOR.PATCH".format(VERSION))
+
+    def test_the_bundle_tooltip_states_the_same_version(self):
+        bundle = _read(os.path.join(_BUTTON, "bundle.yaml"))
+        self.assertIn("Version: {0}".format(VERSION), bundle)
+
+    def test_the_changelog_leads_with_this_version(self):
+        changelog = _read(os.path.join(_BUTTON, "CHANGELOG.md"))
+        headings = [line.strip() for line in changelog.splitlines()
+                    if line.startswith("## ")]
+        self.assertTrue(headings, "CHANGELOG.md has no version headings")
+        self.assertEqual(headings[0], "## {0}".format(VERSION),
+                         "newest CHANGELOG entry is {0}, package says {1}"
+                         .format(headings[0], VERSION))
+
+    def test_every_released_version_is_written_down(self):
+        changelog = _read(os.path.join(_BUTTON, "CHANGELOG.md"))
+        headings = [line[3:].strip() for line in changelog.splitlines()
+                    if line.startswith("## ")]
+        for heading in headings:
+            parts = heading.split(".")
+            self.assertEqual(len(parts), 3, heading)
+            for part in parts:
+                self.assertTrue(part.isdigit(), heading)
+        self.assertEqual(headings, sorted(
+            headings, key=lambda v: [int(p) for p in v.split(".")], reverse=True),
+            "CHANGELOG entries are not newest-first")
+
+    def test_the_window_shows_the_version(self):
+        script = _read(_SCRIPT)
+        self.assertIn('self.VersionText.Text = "v{0}".format(VERSION)', script)
+        self.assertIn("VersionText", named_elements(load_xaml()))
+
+
 class BundleTests(unittest.TestCase):
 
     def test_the_bundle_ships_what_pyrevit_needs(self):
-        for name in ("bundle.yaml", "icon.png", "ui.xaml", "script.py"):
+        for name in ("bundle.yaml", "icon.png", "ui.xaml", "script.py",
+                     "CHANGELOG.md"):
             self.assertTrue(os.path.isfile(os.path.join(_BUTTON, name)), name)
 
     def test_the_script_targets_cpython_3(self):

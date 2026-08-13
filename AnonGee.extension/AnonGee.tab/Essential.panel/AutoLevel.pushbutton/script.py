@@ -121,6 +121,7 @@ def _bootstrap_lib_path():
 _bootstrap_package()
 _bootstrap_lib_path()
 
+from anongee_autolevel import VERSION                             # noqa: E402
 from anongee_autolevel import (compat, dxf_text, naming,          # noqa: E402
                                planner, revit_ops, stackview, textparse)
 
@@ -345,6 +346,7 @@ class AutoLevelApp(object):
     def _bind_controls(self):
         find = self.window.FindName
         names = (
+            "VersionText",
             "StackCanvas", "StackHint", "HeightBadgeText",
             "ZoomInBtn", "ZoomOutBtn", "ZoomFitBtn", "SnapCombo",
             "TabDetect", "TabGenerate", "TabRename", "TabViews", "TabGuide",
@@ -372,6 +374,8 @@ class AutoLevelApp(object):
             setattr(self, name, find(name))
 
     def _fill_static_lists(self):
+        self.VersionText.Text = "v{0}".format(VERSION)
+
         for label in ("Auto-detect", "Millimetres (mm)", "Centimetres (cm)",
                       "Metres (m)", "Feet (ft)"):
             self.UnitCombo.Items.Add(label)

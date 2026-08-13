@@ -15,7 +15,17 @@ Only ``compat`` and ``revit_ops`` import Autodesk namespaces; the rest are
 plain Python and are covered by ``tests/test_autolevel.py``.
 """
 
-VERSION = "1.1.0"
+# The one place this tool's version is written. bundle.yaml's "Version:" line,
+# the badge in the window header and CHANGELOG.md's newest heading are all
+# checked against it by tests/test_autolevel_ui.py, so they cannot drift.
+#
+# Semantic versioning, read as "what does this mean for someone using it":
+#   MAJOR  the tool behaves differently on purpose — a workflow moved, a
+#          default now creates something it did not create before, or what
+#          Apply writes to the model changed shape.
+#   MINOR  a new capability, everything you already did still works.
+#   PATCH  a fix. No new capability, nothing to relearn.
+VERSION = "1.1.1"
 
 __all__ = ["textparse", "naming", "planner", "stackview", "dxf_text",
            "compat", "revit_ops"]

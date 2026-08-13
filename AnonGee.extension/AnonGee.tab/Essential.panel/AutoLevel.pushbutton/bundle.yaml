@@ -40,5 +40,7 @@ tooltip: |
     • Nothing touches the model until Apply changes, which lands as one
       undo step.
     • Runs on the CPython 3 engine. Reading a DXF uses the bundled ezdxf.
+    • The version in the window header is the build you are running. See
+      CHANGELOG.md beside this file for what changed and when.
 
-  Version: 1.1.0
+  Version: 1.1.1

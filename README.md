@@ -118,7 +118,17 @@ Some tools keep their Revit-free logic in plain Python modules so it can be exer
 python -m unittest discover -s tests -v
 ```
 
-`tests/test_autolevel.py` covers the Auto Level Manager's text detection, naming and plan model; `tests/test_autolevel_ui.py` is a static check of its XAML against the delivery rules in §12.7–§12.9 of the brand guidelines (every `FindName` lookup resolves, every `{Binding}` path has a matching slot, no `re`, no pyRevit imports, no `StaticResource` on the root `Window`).
+`tests/test_autolevel.py` covers the Auto Level Manager's text detection, naming, plan model and stack-drawing camera. `tests/test_autolevel_ui.py` checks its XAML and Python wiring statically, against the delivery rules in §12.7–§12.9 of the brand guidelines and against the failures that are expensive to find inside Revit:
+
+- every `FindName` lookup resolves and every named control is used;
+- every `{Binding}` path has a matching `__slots__` entry;
+- no `re`, no pyRevit imports, no `StaticResource` on the root `Window`;
+- **no attribute value is mistaken for a markup extension** — a literal starting with `{` must be escaped `{}`, or `XamlReader.Load` throws and the window never opens;
+- every `{StaticResource}` names a key that exists, no `x:Key` is defined twice, every `Style` matches the element it is applied to, and every trigger `TargetName` exists in its own template;
+- every interactive control carries a tooltip;
+- the tool's version agrees across `__init__.py`, `bundle.yaml`, `CHANGELOG.md` and the window header.
+
+Each tool that carries a `CHANGELOG.md` beside its `bundle.yaml` is versioned with semantic versioning, independently of the extension as a whole; the version shown in a tool's window is the build actually running.
 
 ### Project Structure
 

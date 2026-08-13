@@ -668,10 +668,17 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <TextBlock Grid.Column="0" Text="Auto Level Manager" Style="{StaticResource TextH2OnDark}"
                            VerticalAlignment="Center" />
-                <Border Grid.Column="1" Background="{StaticResource BrushVividRed}" CornerRadius="3"
+                <!-- The build actually running, filled in from the package's
+                     single VERSION constant. Quote it in any bug report. -->
+                <TextBlock Grid.Column="1" x:Name="VersionText" Text="—"
+                           FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeCaption}"
+                           Foreground="{StaticResource BrushSilverSteel}"
+                           VerticalAlignment="Center" Margin="0,0,12,0" />
+                <Border Grid.Column="2" Background="{StaticResource BrushVividRed}" CornerRadius="3"
                         Padding="8,3" VerticalAlignment="Center">
                     <TextBlock Text="SMART TEXT DETECTION"
                                FontFamily="{StaticResource FontMono}" FontSize="{StaticResource FontSizeCaption}"
@@ -1001,7 +1008,7 @@
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
                                     <TextBlock Grid.Row="0" Grid.Column="2" Text="Start at"
                                                Style="{StaticResource FieldLabel}" Margin="0,0,0,3"/>
-                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput" ToolTip="{n} 1 - {nn} 01 - {nnn} 001 - {ordinal} 1st - {ORDINAL} 1ST - {Word} First - {roman} I - {elev_m} 3.500 - {elev_mm} 3500"
+                                    <TextBox Grid.Row="1" Grid.Column="0" x:Name="TemplateInput" ToolTip="{}{n} 1 - {nn} 01 - {nnn} 001 - {ordinal} 1st - {ORDINAL} 1ST - {Word} First - {roman} I - {elev_m} 3.500 - {elev_mm} 3500"
                                              Style="{StaticResource InputSmall}" Text="Level {n}"/>
                                     <TextBox Grid.Row="1" Grid.Column="2" x:Name="StartInput" ToolTip="First number to use. Leave empty to carry on from the highest number already in use."
                                              Style="{StaticResource InputSmall}"/>
