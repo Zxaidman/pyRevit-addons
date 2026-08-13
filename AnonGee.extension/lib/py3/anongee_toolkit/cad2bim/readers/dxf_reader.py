@@ -16,7 +16,7 @@ to Revit internal feet.
 import math
 import os
 
-from ..model import CurveRecord, TextRecord, DxfReadResult
+from ..model import CurveRecord, RegionRecord, TextRecord, DxfReadResult
 
 # ezdxf is vendored under lib/py3. Import LAZILY (not at module load): the CPython3
 # engine caches sys.modules across runs, so a module-load import that failed once
@@ -73,17 +73,18 @@ def read_dxf(path):
 
     records = []
     texts = []
-    _walk(doc.modelspace(), records, texts, depth=0)
-    return DxfReadResult(os.path.basename(path), records, texts)
+    regions = []
+    _walk(doc.modelspace(), records, texts, regions, depth=0)
+    return DxfReadResult(os.path.basename(path), records, texts, regions)
 
 
-def _walk(entities, records, texts, depth):
+def _walk(entities, records, texts, regions, depth):
     """Process an entity container, recursing one level into block INSERTs."""
     for entity in entities:
         dxftype = entity.dxftype()
         try:
             if dxftype == "INSERT":
-                _read_insert(entity, records, texts, depth)
+                _read_insert(entity, records, texts, regions, depth)
             elif dxftype in ("TEXT", "ATTRIB", "ATTDEF"):
                 _add_text(texts, _safe(lambda: entity.dxf.text),
                           _layer(entity), _insert_point(entity),
@@ -91,6 +92,10 @@ def _walk(entities, records, texts, depth):
             elif dxftype == "MTEXT":
                 _add_text(texts, _safe(entity.plain_text), _layer(entity),
                           _xyz(entity.dxf.insert), _text_rotation(entity))
+            elif dxftype in ("HATCH", "MPOLYGON"):
+                region = _region_record(entity)
+                if region is not None:
+                    regions.append(region)
             else:
                 record = _geometry_record(entity, dxftype)
                 if record is not None:
@@ -100,7 +105,7 @@ def _walk(entities, records, texts, depth):
             continue
 
 
-def _read_insert(insert, records, texts, depth):
+def _read_insert(insert, records, texts, regions, depth):
     """Explode a block reference: nested geometry (WCS) + its ATTRIB tag text."""
     for attrib in getattr(insert, "attribs", []):
         _add_text(texts, _safe(lambda: attrib.dxf.text), _layer(attrib),
@@ -111,7 +116,7 @@ def _read_insert(insert, records, texts, depth):
         virtual = list(insert.virtual_entities())
     except Exception:
         virtual = []
-    _walk(virtual, records, texts, depth + 1)
+    _walk(virtual, records, texts, regions, depth + 1)
 
 
 def _geometry_record(entity, dxftype):
@@ -137,6 +142,76 @@ def _geometry_record(entity, dxftype):
         if len(pts) >= 2:
             return CurveRecord(dxftype.lower(), pts, layer, None)
     return None
+
+
+# --- regions (HATCH) --------------------------------------------------------
+
+# DXF boundary-path flags (group code 92). A hatch drawn UNDER a label is clipped
+# around it, so the label's box arrives as an extra path -- a hole in the
+# hatching, not a hole in the thing the hatch marks.
+_PATH_EXTERNAL = 1
+_PATH_TEXTBOX = 8
+
+
+def _region_record(entity):
+    """One HATCH as a RegionRecord carrying its OUTER boundary, or None.
+
+    Which path is the region: the EXTERNAL one. Failing that (some writers set
+    no flags at all) the largest remaining non-textbox path, which is the same
+    boundary by another route.
+    """
+    ring = _outer_boundary(entity)
+    if len(ring) < 3:
+        return None
+    pattern = _safe(lambda: entity.dxf.pattern_name)
+    solid = bool(_safe(lambda: entity.dxf.solid_fill))
+    return RegionRecord(ring, _layer(entity), pattern, solid)
+
+
+def _outer_boundary(entity):
+    """The hatch's outer ring as [(x, y, z), ...]; [] when it has none."""
+    candidates = []
+    for path in getattr(entity, "paths", []) or []:
+        flags = _safe(lambda: path.path_type_flags) or 0
+        if flags & _PATH_TEXTBOX:
+            continue
+        points = _boundary_points(path)
+        if len(points) >= 3:
+            candidates.append((bool(flags & _PATH_EXTERNAL), _area(points),
+                               points))
+    if not candidates:
+        return []
+    external = [row for row in candidates if row[0]]
+    pool = external or candidates
+    return max(pool, key=lambda row: row[1])[2]
+
+
+def _boundary_points(path):
+    """A boundary path's vertices, whether it is a polyline or an edge path."""
+    vertices = getattr(path, "vertices", None)
+    if vertices:
+        return [(float(v[0]), float(v[1]), 0.0) for v in vertices]
+    points = []
+    for edge in getattr(path, "edges", []) or []:
+        start = getattr(edge, "start", None)
+        if start is not None:
+            points.append((float(start[0]), float(start[1]), 0.0))
+            continue
+        centre = getattr(edge, "center", None)     # an arc edge in the boundary
+        if centre is not None:
+            points.append((float(centre[0]), float(centre[1]), 0.0))
+    return points
+
+
+def _area(points):
+    """Unsigned polygon area, used only to rank candidate boundaries."""
+    total = 0.0
+    count = len(points)
+    for index in range(count):
+        x1, y1 = points[index][0], points[index][1]
+        x2, y2 = points[(index + 1) % count][0], points[(index + 1) % count][1]
+        total += x1 * y2 - x2 * y1
+    return abs(total) / 2.0
 
 
 # --- geometry helpers -------------------------------------------------------

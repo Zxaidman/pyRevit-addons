@@ -38,6 +38,46 @@ class CurveRecord(object):
             self.kind, self.layer, len(self.points))
 
 
+class RegionRecord(object):
+    """One filled REGION read from a drawing -- a DXF HATCH.
+
+    A region is not a curve. It says "this AREA means something": a fold in a
+    foundation, a sunk bay, a cutout, a column's concrete fill. It is kept apart
+    from CurveRecord for that reason and, practically, so a few hundred closed
+    rings never reach the passes that try to make columns and beams out of
+    closed rings.
+
+    `points` is the EXTERNAL boundary only. AutoCAD clips a hatch around any
+    label drawn over it, so a hatch commonly arrives with textbox islands cut
+    out of it; those are holes in the hatching, not holes in the thing.
+    """
+
+    def __init__(self, points, layer, pattern=None, solid=False):
+        self.points = points        # outer ring, [(x, y, z), ...]
+        self.layer = layer          # CAD layer name, or None if unresolved
+        self.pattern = pattern      # "ANSI37", "SOLID", ... or None
+        self.solid = bool(solid)    # a solid fill carries no pattern to read
+        self.category = None        # filled in after classification
+
+    @property
+    def layer_key(self):
+        """Stable dictionary key, collapsing a missing layer to NO_LAYER."""
+        return self.layer if self.layer else NO_LAYER
+
+    def to_dict(self):
+        return {
+            "layer": self.layer,
+            "category": self.category,
+            "pattern": self.pattern,
+            "solid": self.solid,
+            "points": [list(p) for p in self.points],
+        }
+
+    def __repr__(self):
+        return "<RegionRecord layer={0!r} pattern={1!r} pts={2}>".format(
+            self.layer, self.pattern, len(self.points))
+
+
 class TextRecord(object):
     """One text entity read from the DXF (TEXT / MTEXT / block ATTRIB).
 
@@ -88,13 +128,16 @@ class DxfReadResult(object):
     until transform.apply maps them to internal feet.
     """
 
-    def __init__(self, source_name, records, texts):
+    def __init__(self, source_name, records, texts, regions=None):
         self.source_name = source_name
         self.records = records      # list[CurveRecord], DXF coords
         self.texts = texts          # list[TextRecord], DXF coords
+        # Hatches, kept OUT of `records` so the curve pipeline is untouched by
+        # their arrival. Optional so every existing three-argument caller works.
+        self.regions = regions if regions is not None else []
 
     def is_empty(self):
-        return not self.records and not self.texts
+        return not self.records and not self.texts and not self.regions
 
 
 class ReadResult(object):
