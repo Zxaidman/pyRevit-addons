@@ -1,79 +1,153 @@
-# Findings — cad2bim v0.68 work
+# Findings — cad2bim after v0.68.0
 
-## 1. "Duplicate type name within an assembly" — root cause (confirmed by reading code)
+## 1. "The name is already in use for this element type" — root cause
 
-Python.NET emits a REAL CLR type into a dynamic assembly for every Python class that
-derives from a .NET interface. `__namespace__ = "CadToBim"` (required for Python.NET 3
-to build the derived type at all) fixes that type's full name. Creating the same full
-name twice in one AppDomain raises `Duplicate type name within an assembly`. A Revit
-session is one AppDomain and the CPython3 engine keeps it alive across clicks.
+Reported against the column pass at v0.68.0. `builders/columns.py::_resolve_symbol`:
 
-Sites in this repo (grep: `IFailuresPreprocessor|ISelectionFilter|IExternalEventHandler|IUpdater`):
-
-```
-lib/py3/anongee_toolkit/cad2bim/builders/txn_failures.py:14
-    class WarningSwallower(IFailuresPreprocessor):     __namespace__ = "CadToBim"
-
-lib/py3/anongee_toolkit/revit/transactions.py:26
-    class SuppressWarningsPreprocessor(IFailuresPreprocessor):
-
-AnonGee.tab/Core.panel/cad2bim.pushbutton/script.py  (_wrap_selection_filter)
-    class _Filter(ISelectionFilter, _CurveElementFilter):  __namespace__ = "CadToBim"
+```python
+existing = _find_type_in_family(base_symbol.Family, type_name)   # get_element_name(s) == type_name
+if existing is not None: ... return existing
+new_symbol = base_symbol.Duplicate(type_name)                    # threw here
 ```
 
-Why it appeared only now: before v0.67.3 those modules were imported ONCE per Revit
-session and cached, so the type was built once. v0.67.3's `_drop_stale_modules()` (the
-fix for `naming has no attribute next_level_names`) deletes `anongee_toolkit*` from
-`sys.modules` on every run, so the module bodies execute again → second type → crash.
+`Duplicate` was reached **only because the pre-check had just reported the name
+free**. Both statements concern the same family at the same moment, so the
+pre-check was provably stricter than Revit's own uniqueness rule. That holds
+whichever normalisation detail differs, and is the whole diagnosis.
 
-Timeline matches the report exactly: a fresh session's run 1 has nothing to purge and
-builds the types; run 2 purges, re-imports and crashes.
+The specific difference is case. Revit matches type names case-insensitively;
+Python `==` does not. The default template is `"{b} X {h}"` (capital X,
+`naming.py`), Revit's stock concrete column families ship `300 x 450`-style
+lowercase names, and the user's settings fixture has `naming: null`, so defaults
+were in force. A family already holding `400 x 600` was asked for `400 X 600`.
 
-`_wrap_selection_filter` is worse and predates v0.67.3: it defines `_Filter` INSIDE the
-function, so a second call in the same session (pick stair outlines twice) crashes on
-its own. Nobody had hit it because the flow is rarely used twice per session.
+Ruled out on evidence, not assumption:
 
-**Fix shape:** cache the created type outside the purge. A module that is not under
-`anongee_toolkit` survives `_drop_stale_modules()`, so a tiny `anongee_clr.py` at the
-top of `lib/py3` can hold `{name: type}` and hand the same type back on re-import.
+- **Rounding collision** (two cache keys, one name) — impossible. `place_columns`
+  rounds to `int` before forming the cache key, so key ⇔ name is 1:1. Same in
+  beams, slabs, footings.
+- **A template that collapses sizes** (`"{b}"`) — not this user, `naming` is
+  null. Still a live hazard for anyone editing the Naming tab, so `validate` now
+  refuses it.
+- **Stale `GetFamilySymbolIds()` across storeys** — each storey commits its own
+  transaction before the next begins, so the family is current.
 
-Rejected alternatives:
-- Revert the reload → brings back the stale-library bug on every future release.
-- Exempt those two modules from the purge → they then go stale silently; a future edit
-  to either would need a Revit restart and would look like the bug we just fixed.
-- Version-gated purge (only reload when the on-disk version differs) → still creates the
-  type a second time on the first run after any update, i.e. the crash just moves.
+### Every site that had the shape
 
-## 2. Module sizes driving the refactor (lines, current branch)
+| Site | Guarded | Consequence before the fix |
+|------|---------|----------------------------|
+| `columns.py` rect + round | no | **the reported crash**; every column of that size lost |
+| `beams.py` | no | would have thrown identically |
+| `slabs.py` | no | would have thrown identically |
+| `footings.py` | yes → base type | **silent**: pad cast at the picked type's depth, not the computed one |
+| `stairs.py` | yes → base id | **silent**: stair built at stock riser/tread/width |
+| `stairs.py` `_apply_waist` | yes | **silent**: waist never applied |
+| `grids.py` | yes | grid keeps Revit's auto name instead of its CAD bubble |
+| `view_filters.py` | yes | filter dropped |
+
+The three silent ones were arguably worse than the crash: no error, wrong
+geometry. Fixed in v0.68.1; they still fall back, but they report.
+
+Second defect found in the same sweep: `slabs.py` and `footings.py` searched
+**every `FloorType` in the document**. Floors and Foundation Slabs share the
+`FloorType` class but are different system families, and Revit scopes type-name
+uniqueness to the family — so a Floor named `PAD 600 THK` could be handed back
+for a foundation pad, filing it under the wrong category. Now scoped to the base
+type's own system family.
+
+## 2. Regression harness state
+
+Three of the four legs were never committed and are gone
+(`scratchpad/slabbase.py`, `base_after.json`, `sweep67.py`, `t10_full.py`,
+`t10_cols.py`). Rebuilt in P0 under `tests/`:
+
+| Leg | Corpus | Runtime |
+|-----|--------|---------|
+| `regression_slab_fingerprints` | 29 archived exports, newest per drawing | ~50s |
+| `regression_dxf_sweep` | 17 fixture DXFs, full pipeline | ~110s |
+| `regression_storeys` | 4 storey stacks | ~29s |
+
+Two constraints discovered while rebuilding them:
+
+- **An export cannot drive slab labelling.** The export format stores texts as
+  parsed marks (`{"mark", "b", "h"}`) and drops the string. Both
+  `apply_slab_labels` and `loops_for_unclaimed_notes` re-parse `text.text`.
+  test13's export has 211 texts, every one with `mark: None`. Note recovery is
+  therefore measured by the DXF leg, where the text survives.
+- **The baselines are v0.68.1 measurements.** The v0.67.3 originals cannot be
+  reproduced. One independent check that the harness reproduces the real
+  pipeline: the old findings recorded "test10 +6 noted bays", and the sweep
+  measures `slab_loops_recovered_from_notes = 6` on test10.
+
+## 3. The DXF reader discards every hatch
+
+`readers/dxf_reader.py::_geometry_record` handles LINE, ARC, CIRCLE, POINT,
+LWPOLYLINE, POLYLINE, ELLIPSE and SPLINE. There is no HATCH branch. Hatches per
+fixture: test4 360, test5 360, test10 276, Project1 228, test9 147. All dropped.
+
+This is the shared prerequisite for foundations (P1), folds/sunk (P2) and
+openings (P4).
+
+## 4. Foundations are invented, and rafts are impossible
+
+`footing_plan.pads_for(sections, projection_mm, region_max_side_mm)` reads only
+`sections["entries"][*]["rectangles"]` and `sections["circles"]` — column
+geometry — grows each by a projection and merges overlaps. Nothing is read from
+the drawing.
+
+`builders/footings.py` `_MAX_COLUMN_MIN_SIDE_MM = config.DEFAULTS["col_region_max_side_mm"]`
+discards any footprint whose smaller side exceeds a column's, commented "a
+lift/stair region, not a column". A raft is larger than a column by definition,
+so it cannot be produced.
+
+## 5. The foundation convention (test10, supplied 2026-08-13)
+
+| Layer | Content |
+|-------|---------|
+| `S-FND` | 12 LWPOLYLINE + 8 LINE — footing and raft outlines |
+| `S-FND-IDEN` | 19 MTEXT — `F1_1200MM THK` … `F3_1500MM THK\P2000MM FOLD` |
+| `S-FND-FOLD` | 6 HATCH (ANSI37) + 6 LINE |
+| `S-FND-SUNK` | 1 HATCH (ANSI37) |
+
+Marks F1–F6; thicknesses 800, 1000, 1200, 1500, 2000 mm. A stepped foundation
+carries a second MTEXT paragraph after `\P`: `2000MM FOLD`, `1000MM SUNK`.
+**6 fold hatches to 6 FOLD labels, 1 sunk hatch to 1 SUNK label** — the
+correspondence is exact, so region-to-label pairing is verifiable.
+
+Current classification of these layers:
+
+- `S-FND` → `CATEGORY_UNMAPPED` (no convention pattern matches "fnd").
+- `S-FND-IDEN` → excluded from geometry by the `iden` rule, which is right, and
+  `classify_text_layer` returns `CATEGORY_TEXT_IGNORE`, which is not.
+- `S-FND-FOLD`, `S-FND-SUNK` → unmapped.
+
+No collision with existing categories, so these are additions rather than
+changes.
+
+## 6. A second, legend-driven convention exists (test9)
+
+Test9's `PI_TEXT 25` layer carries a legend whose entries read:
 
 ```
-3039  cad2bim/report.py
-2956  cad2bim.pushbutton/script.py
-1683  cad2bim/stair_layout.py
-1550  cad2bim/slab_outlines.py
-1310  cad2bim/geom/shapes.py
-1310  cad2bim/__init__.py          (mostly the version history block)
- 896  cad2bim/floor_plans.py
+HATCH INDICATE T.O.S. +50MM.
+HATCH INDICATE T.O.S. +400MM.
+HATCH INDICATE TOS. +6250.
+HATCH INDICATE CUTOUT FOR DOOR ABOVE
+HATCH INDICATE COLUMN/SHEAR WALL THROUGH FOUNDATION TO TERMINATION.
 ```
 
-`report.py` holds four unrelated jobs: column sectioning, column recovery/text fitting,
-beam segmentation/cleanup, and the JSON export. `script.py` holds the console, the
-progress bars, two dialogs, the storey stack and the whole run pipeline.
+Legend swatches are 600x500 hatch rectangles sitting ~2600 mm from their text, so
+the mapping is swatch pattern → legend text → meaning, inherited by every plan
+hatch of that pattern. Nearest-text pairing mispairs at distance (observed at
+5000 mm+), so it must auto-propose into the override dialog rather than apply
+silently.
 
-## 3. Regression harnesses that must be re-run after every extraction
+`+6250` is not a fold — it is a different storey. A magnitude threshold is
+required in P2 whatever the representation.
 
-- Unit suite: `cd lib/py3/anongee_toolkit/cad2bim/tests && python -m unittest discover -s . -p "test_*.py"` (403 tests)
-- Slab fingerprints: `scratchpad/slabbase.py <out.json>` → diff against `base_after.json`
-  (22 stored exports; all 22 currently byte-identical)
-- Fixture sweep: `scratchpad/sweep67.py` → columns before/after face recovery, slab
-  loops + note recovery, beam count, per DXF (17 fixtures)
-- Storey/roof replays: `scratchpad/t10_full.py`, `t10_cols.py`
+## 7. Test environment
 
-Current sweep baseline (v0.67.3): test1/2/3 +2 face columns each, test10 +15 faces and
-+6 noted bays, test13 +195 noted bays, every other fixture unchanged.
-
-## 4. Test10 / test12 fixtures were updated by the user on 2026-08-06 (commit 89bdae2)
-
-The roof of test10 now has NO A-FLOR layer at all, which is what exposed the
-"note recovery only ran when edges were found" bug fixed in v0.67.2. Any offline replay
-result quoted before that commit is stale.
+The suite runs green on Linux only after `pip install ezdxf`. The bundled
+`lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,
+absent on Linux, so the bundled `ezdxf` will not load. The DXF regression leg
+skips with that message rather than failing.

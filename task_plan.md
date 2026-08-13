@@ -1,142 +1,135 @@
-# Task Plan — cad2bim v0.68: CLR type fix, modular refactor, merge to main
+# Task Plan — cad2bim after v0.68.0
 
-**Goal:** clear the "Duplicate type name within an assembly" crash introduced by the
-v0.67.3 module reload, break the four oversized modules into small focused ones with
-zero behaviour change, prove no regressions across the fixture suite, then merge this
-branch into main and archive it.
+**Roadmap:** `docs/superpowers/specs/2026-08-13-cad2bim-post-v0.68-roadmap.md`
+(the sequencing decision and its reasoning; this file is the working checklist).
 
-**Branch:** `claude/ecstatic-dijkstra-rmvyl7` → merge into `main` at the end.
+**Branch:** `claude/cad2bim-roadmap-continuation-ynszsk`, off `main` at `12224b7`.
 
-**Non-negotiable through every phase:** the 403-test suite stays green, the 22 stored
-slab fingerprints stay byte-identical, and the DXF fixture sweep (columns / beams /
-slabs per fixture) stays unchanged unless a change is intended and explained.
+**Non-negotiable from here on:** `tests/run_regressions.py` green before every
+release. A number that moves is not automatically a bug, but it gets explained in
+the commit that moves it and the baseline re-blessed on purpose, never silently.
 
 ---
 
-## Phase 1 — "Duplicate type name within an assembly" (BLOCKER)
+## Phase 0.5 — "The name is already in use for this element type"
+
+**Status:** complete, shipped as v0.68.1
+
+Reported against columns. The pre-check for "does this type already exist?" used
+`==`; Revit matches type names case- and whitespace-insensitively. Reaching
+`Duplicate()` at all proved the check was stricter than Revit's own rule. See
+findings.md #1.
+
+- [x] 0.5.1 `type_names.py` — `key()`, `find()`, `resolve_type()`, `record()`.
+      Revit-free, so it is unit-testable outside Revit.
+- [x] 0.5.2 Columns (rect + round), beams, slabs — the four that threw.
+- [x] 0.5.3 Footings, stairs, stair waist — the three that swallowed it and
+      built the wrong geometry in silence. They still fall back; they report now.
+- [x] 0.5.4 Grids and view filters — name reuse missed on a case difference.
+- [x] 0.5.5 Floor-type lookup scoped to the base type's own system family.
+      Floors and Foundation Slabs share `FloorType` but are different system
+      families, so a Floor named "PAD 600 THK" could be returned for a pad.
+- [x] 0.5.6 `naming.validate` refuses a template that drops a size (`"{b}"`),
+      which names a 300x900 and a 300x450 alike.
+- [x] 0.5.7 Two AST checks over the package: no bare `.Duplicate(` outside the
+      helper, no element name compared with `==`.
+
+**Confirmed by the user in Revit:** the duplication error is gone.
+
+---
+
+## Phase 0 — rebuild the lost regression harnesses
 
 **Status:** complete
 
-Root cause is understood and confirmed by reading the code (see findings.md #1).
-Python.NET builds a real CLR type for every Python class that derives from a .NET
-interface. The AppDomain rejects a second type with the same name, and v0.67.3's
-`_drop_stale_modules()` makes those modules re-import on every click:
+Three of the four legs named in the old findings.md were written into an
+uncommitted scratchpad and lost with it. Rebuilt as committed code under
+`tests/`, driven by `tests/run_regressions.py` (~3 min).
 
-| Site | Kind | Re-created because |
-|------|------|--------------------|
-| `cad2bim/builders/txn_failures.py` `WarningSwallower(IFailuresPreprocessor)` | module level | purged + re-imported each run |
-| `revit/transactions.py` `SuppressWarningsPreprocessor(IFailuresPreprocessor)` | module level | purged + re-imported each run |
-| `cad2bim.pushbutton/script.py` `_wrap_selection_filter._Filter(ISelectionFilter)` | inside a function | re-created on every CALL (latent since long before v0.67.3) |
+- [x] 0.1 `tests/_golden.py` — baseline load/compare/save, `CAD2BIM_BLESS=1` to
+      re-record. 12 unit tests, because it is the only part with logic in it.
+- [x] 0.2 `regression_slab_fingerprints` — 29 archived exports, newest per
+      drawing. Wider than the 22 it replaces; five of its drawings (test14,
+      test15, test18, test19, test20) have no surviving DXF.
+- [x] 0.3 `regression_dxf_sweep` — 17 DXFs through the full pipeline, note
+      recovery and slab labels included.
+- [x] 0.4 `regression_storeys` — 4 storey stacks, per-storey, roof called out.
+- [x] 0.5 `tests/README.md` — the two tiers and why they are kept apart.
+- [x] 0.6 Gate proved to bite: a perturbed baseline produced three named
+      failures. Full verify pass green against the committed baselines.
 
-Run 1 in a fresh Revit session builds the types; run 2 purges, re-imports and tries to
-build them again → the crash the user saw.
-
-**Approach:** keep the reload (it fixes the whole stale-library class of bugs) and make
-CLR type creation idempotent instead. A tiny purge-proof registry module holds each
-created type; every site asks the registry first and only builds the class on a miss.
-
-- [x] 1.1 `lib/py3/anongee_clr.py` — top-level (outside `anongee_toolkit`, so the purge
-      never touches it): `get_or_create(name, factory)` + `registered()`. Pure Python,
-      unit-testable without Revit.
-- [x] 1.2 `txn_failures.py` — class body moves into a factory, module attribute comes
-      from the registry. Public name `WarningSwallower` unchanged.
-- [x] 1.3 `revit/transactions.py` — same treatment for `SuppressWarningsPreprocessor`.
-- [x] 1.4 `script.py` `_wrap_selection_filter` — build through the registry, which also
-      fixes picking stair outlines twice in one session.
-- [x] 1.5 Tests: registry unit tests + a static test asserting no module under
-      `anongee_toolkit` declares a CLR-derived class at import time outside the registry.
-- [x] 1.6 Ship as v0.67.4 for the user to confirm two consecutive runs in one session.
-- [x] 1.7 (from the v0.67.3 export) `drop_nested_columns`: the roof's 12300 wall was
-      placed alongside two 2700 lengths of itself. Wholly inside + same thickness +
-      parallel; shipped as v0.67.5.
-
-**Exit criteria:** user runs the button twice in one Revit session without the crash.
+Baselines are v0.68.1 measurements, not the lost v0.67.3 ones — those cannot be
+reproduced. Drift from here is what they defend.
 
 ---
 
-## Phase 2 — Refactor: smaller, focused modules
+## Phase 1 — hatch/region reader + foundations from CAD
 
-**Status:** complete — every split verified as a no-op three ways
+**Status:** starting
 
-Current sizes (the four the user is reacting to):
+Two together, because the second cannot be verified without the first.
 
-| File | Lines | Split into |
-|------|-------|-----------|
-| `cad2bim/report.py` | 3039 | `columns/sections.py`, `columns/recovery.py`, `columns/text_fit.py`, `beams/segments.py`, `beams/cleanup.py`, `export.py`, keep `report.py` as the facade |
-| `cad2bim.pushbutton/script.py` | 2956 | `dialog/` (window + tabs), `run/` (phases), `progress.py`, `console.py`; `script.py` becomes the entry point |
-| `cad2bim/stair_layout.py` | 1683 | `stairs/runs.py`, `stairs/landings.py`, `stairs/fan.py`, `stairs/plan.py` |
-| `cad2bim/slab_outlines.py` | 1550 | `slabs/edges.py`, `slabs/graph.py`, `slabs/exactness.py`, `slabs/labels.py` |
+Today: `footing_plan.pads_for` reads only column rectangles and circles and grows
+them by a projection — nothing comes from the drawing. `builders/footings.py`
+`_MAX_COLUMN_MIN_SIDE_MM` discards anything bigger than a column, so a raft
+cannot be produced at all. And `readers/dxf_reader.py::_geometry_record` has no
+HATCH branch, so every hatch in every fixture is discarded (276 in test10, 360
+each in test4/test5, 228 in Project1).
 
-**Rules for this phase (regression discipline):**
-1. One module extracted per commit — never two at once.
-2. Pure moves. No logic edits, no renames of public functions, no "while I'm here".
-3. The old module keeps its public API by re-exporting, so no call site changes in the
-   same commit as a move.
-4. After EVERY extraction: full unit suite + slab fingerprint replay + fixture sweep.
-   Any diff at all stops the commit until it is explained.
-5. `script.py` last — it is the riskiest and cannot be unit-tested outside Revit beyond
-   the static wiring checks.
+Fixture in the repo as of 2026-08-13 — test10 now carries its foundation level:
 
-- [x] 2.1 Target layout agreed by default (user did not pick; all four files, library
-      first, script.py last). Merge style still open, decided at merge time.
-- [x] 2.2 Baseline captured: `scratchpad/refactor_base_fingerprints.json` (22 exports)
-      and `scratchpad/refactor_base_sweep.txt` (17 DXFs)
-- [x] 2.3a `export.py` — console summary + JSON export (400 lines)
-- [x] 2.3b `columns_recovery.py` — the five recovery passes (747 lines)
-- [x] 2.3c `column_geom.py` (188) + `limits.py` (67) — the shared primitives
-- [x] 2.3d `tests/_loader.py` — one dependency graph instead of twenty hand-rolled
-      loaders; the scratchpad harnesses use it too
-- [x] 2.3e `beam_segments.py` (850) + `beam_cleanup.py` (328) — report.py now 888
-- [x] 2.4 `slab_graph.py` (1077) + `slab_labels.py` (145) — slab_outlines.py now 445
-- [x] 2.5 `stair_runs.py` (630) + `stair_landings.py` (403) + `stair_text.py` (111)
-      + `stair_tolerances.py` (31) — stair_layout.py now 721
-- [x] 2.6 `script.py` 2956 → 962: `run_console.py` (184), `ui_dialogs.py` (180),
-      `ui_window.py` (1211), `run_builders.py` (528), `run_picking.py` (199)
-- [ ] 2.7 Delete the facades if (and only if) every call site has moved cleanly
-      (deferred: the facades are one line each and keep every commit revertable)
+| Layer | Content | Meaning |
+|-------|---------|---------|
+| `S-FND` | 12 LWPOLYLINE + 8 LINE | footing and raft outlines |
+| `S-FND-IDEN` | 19 MTEXT | `F3_1500MM THK\P2000MM FOLD` |
+| `S-FND-FOLD` | 6 HATCH (ANSI37) + 6 LINE | fold regions |
+| `S-FND-SUNK` | 1 HATCH (ANSI37) | sunk region |
+
+- [ ] 1.1 HATCH in the DXF reader: boundary paths as rings, pattern name kept.
+      Reader-level, so P2 and P4 inherit it.
+- [ ] 1.2 Layer categories: foundation outline, foundation text, fold, sunk.
+      `S-FND` currently classifies as unmapped; `S-FND-IDEN` is excluded from
+      geometry by the `iden` rule (correct) and ignored as text (not correct).
+- [ ] 1.3 Parse `F<n>_<t>MM THK` and the `\P<d>MM FOLD|SUNK` continuation.
+      Marks F1–F6, thicknesses 800/1000/1200/1500/2000.
+- [ ] 1.4 Footings and rafts placed from the CAD outline, thickness from the
+      label. Column-offset derivation becomes the fallback for a drawing with no
+      foundation layer, not the only path.
+- [ ] 1.5 Quality, riding along: the `col_region_max_side_mm` discard that makes
+      rafts impossible.
+- [ ] 1.6 Regression: the sweep gains foundation counts; test10 is the case.
 
 ---
 
-## Phase 3 — Review pass
+## Phase 2 — folds and sunk
 
-**Status:** complete (bar the Revit run, which is Phase 4's gate)
+**Status:** not started. Applies to slabs AND rafts.
 
-- [x] 3.1 `/code-review high` over the refactor series. Verified the moves are
-      textual, a def/class census confirmed nothing was lost, no undefined names.
-- [x] 3.2 Four findings, all fixed in one commit:
-      1. `tests/replay_beams.py` — pre-refactor loader, could not import report
-      2. `tests/demo_slabs.py` — same, plus the single-storey-only export shape and
-         a stale pair-unpack of slab loops
-      3. `run_picking._uidoc` — resolved `__revit__` through builtins only (the rest
-         of the toolkit tries `__main__` first) and raised where the callers expect
-         None, turning a skip into an aborted run
-      4. `script.py` — the new module imports run before main()'s try/except, so a
-         stale library gave a raw traceback instead of the "library out of date"
-         dialog. Guarded, with fallbacks for the names the report itself needs.
-- [x] 3.3 Re-ran everything: 419 tests, 22 fingerprints, stair replay, 17-DXF sweep
-      — all identical to the pre-refactor baseline. Shipped as v0.68.0.
+Representation decided: a separate floor at an offset, with the region cut as a
+hole in the parent. `builders/slabs.py::_nest_openings` already nests a
+ring-inside-a-ring; `builders/footings.py::_zero_offset` already drives the
+height parameter. `SlabShapeEditor` was rejected — it has no offline
+representation, so the P0 harnesses could not see it.
+
+- [ ] 2.1 Fold/sunk regions from the hatch rings of 1.1, paired to their label.
+- [ ] 2.2 Depth applied as a height offset; parent gets the hole.
+- [ ] 2.3 Magnitude threshold. Test9's legend has `T.O.S. +50MM`, `+400MM` and
+      `+6250`. 6250 is a storey, not a fold: route to its own level or report.
+- [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern → legend
+      text → meaning), auto-proposed into the override dialog, never silent.
 
 ---
 
-## Phase 4 — Merge and archive
+## Phase 3-7
 
-**Status:** complete
+Detail in the roadmap document; opened when the phase starts.
 
-- [~] 4.1 The user waived the Revit-run gate and asked for the merge. v0.68.0 has NOT
-      been run in Revit; it is verified by the suite, the fingerprints, the stair
-      replay and the fixture sweep, all of which are offline.
-- [x] 4.2 Merged with a MERGE COMMIT (26400ae), keeping every version from v0.36 to
-      v0.68 in main's history -- the trail the regressions have been traced through.
-      The user did not choose a style; this was the recommendation.
-- [x] 4.3 main pushed (313438a, including a settings fixture the user pushed to the
-      branch after the merge). The branch is fully contained in main.
-- [x] 4.4 v0.68.0 shipped with its version-history entry before the merge.
-
-**Not done:** the `v0.68.0` and `archive/...` tags exist LOCALLY but the remote
-refuses tag pushes through this proxy ("Everything up-to-date", no ref created).
-The branch is therefore left in place on the remote -- with tags unavailable, the
-branch is what keeps the history reachable, and every one of its commits is an
-ancestor of main.
+- [ ] 3 Walls as real `DB.Wall`. Today `geom/shapes.py::recover_core_walls`
+      emits them as column entries, so a wall is placed as a long thin column.
+- [ ] 4 Openings — doors, windows, shafts. Needs 1.1 and phase 3's hosts.
+- [ ] 5 Round-trip QA — built model vs source DXF delta.
+- [ ] 6 Annotation — dimensions, tags, views, sheets.
+- [ ] 7 Rebar feeding `Dev.panel/BBS Generator.pushbutton`.
 
 ---
 
@@ -144,14 +137,16 @@ ancestor of main.
 
 | # | Decision | Why |
 |---|----------|-----|
-| 1 | Keep the v0.67.3 module reload; fix the CLR types instead | Reverting reintroduces "no attribute next_level_names" after every update |
-| 2 | Registry module lives OUTSIDE `anongee_toolkit` | Anything inside is purged by design, so it could not hold the cache |
-| 3 | Refactor is pure moves, one module per commit | The only way to prove "no regressions" on a codebase whose tests are mostly end-to-end replays |
-| 4 | Facade modules stay until every caller is migrated | Keeps each commit independently revertable |
+| 1 | Harnesses (P0) before any feature | The next release changes geometry in every domain; without the legs, "no regressions" is an assertion |
+| 2 | Foundations before walls | Today's foundations are invented from column offsets and rafts are impossible; and P1 builds the hatch machinery P2 and P4 both need |
+| 3 | Folds/sunk as a separate floor at an offset | Reuses `_nest_openings`, which is already covered by the harnesses; `SlabShapeEditor` cannot be verified offline |
+| 4 | Regression legs named `regression_*`, not `test_*` | Keeps the inner loop at ~1s; a gate that slows the inner loop stops being run, which is how the last set was lost |
+| 5 | Baselines re-measured at v0.68.1 | The v0.67.3 originals cannot be reproduced; the scripts that made them are gone |
+| 6 | Type-name clash becomes a REUSE, never a rename | The name encodes the size, so an existing type of that name is the right type; inventing "400 X 600 (2)" would pollute the model |
+| 7 | `modules_plan.md` superseded | Older toolkit-wide plan, overtaken by the v0.68.0 refactor and this roadmap |
 
-## Errors Encountered
+## Errors encountered
 
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| `naming has no attribute next_level_names` (v0.67.1) | 1 | v0.67.3 purges `anongee_toolkit` from `sys.modules` each run |
-| `Duplicate type name within an assembly` (v0.67.3, 2nd run) | 1 | Phase 1: purge-proof CLR type registry |
+| Error | Resolution |
+|-------|------------|
+| `The name is already in use for this element type` (v0.68.0, columns) | Phase 0.5: match names the way Revit matches them |

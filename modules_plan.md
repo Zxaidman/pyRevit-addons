@@ -1,3 +1,9 @@
+> **SUPERSEDED (2026-08-13).** This is an older toolkit-wide refactor plan. The
+> cad2bim part of it was carried out in v0.68.0 (four oversized modules became
+> twenty). Current planning lives in `task_plan.md` and
+> `docs/superpowers/specs/2026-08-13-cad2bim-post-v0.68-roadmap.md`. Kept for the
+> non-cad2bim notes it still carries.
+
 ## Analysis Complete - Full Code Review & Refactoring Plan
 
 ### 📁 Toolkit Modules Available (`anongee_toolkit`)
