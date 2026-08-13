@@ -22,7 +22,7 @@ The extension adds an **AnonGee** tab inside Revit with four panels:
 | **Export Schedule**       | Export Revit schedules to Excel / CSV format.                                                                               |
 | **Bulk Rename**           | Rename multiple elements (views, sheets, families, etc.) with naming patterns.                                              |
 | **Bulk Delete**           | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more.                                         |
-| **Auto Level Manager**    | Modeless level manager with smart text detection. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; works out the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels, and commits as one undo step. The stack is drawn to scale and is editable in place — click to select, drag to move, double-click to rename, wheel to zoom. |
+| **Auto Level Manager**    | Modeless level manager with smart text detection. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; works out the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels, and commits as one undo step. The stack is drawn to scale and is editable in place — click to select, drag to move, double-click to rename, wheel to zoom. Versioned independently — see its [CHANGELOG](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md). |
 
 ### 🔵 Advance Panel
 
@@ -128,7 +128,15 @@ python -m unittest discover -s tests -v
 - every interactive control carries a tooltip;
 - the tool's version agrees across `__init__.py`, `bundle.yaml`, `CHANGELOG.md` and the window header.
 
-Each tool that carries a `CHANGELOG.md` beside its `bundle.yaml` is versioned with semantic versioning, independently of the extension as a whole; the version shown in a tool's window is the build actually running.
+### Per-tool changelogs
+
+A tool's changelog lives **beside its `bundle.yaml`**, not at the repository root, so the history ships with the tool it describes:
+
+| Tool | Changelog |
+| ---- | --------- |
+| Auto Level Manager | [`AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
+
+Each such tool is versioned with semantic versioning independently of the extension as a whole, and the version shown in the tool's own window is the build actually running — quote it when reporting anything.
 
 ### Project Structure
 
