@@ -31,6 +31,12 @@ CATEGORY_STAIR = "stair"
 # convention below is only a proposal -- the dialog's layer table overrides it.
 CATEGORY_FLOOR_BOUNDARY = "floor boundary"
 CATEGORY_FLOOR_ORIGIN = "floor origin"
+# FOUNDATIONS from the drawing rather than invented from column offsets. The
+# outline layer carries footings AND rafts; the step layers carry the hatched
+# regions where the foundation drops (test10: S-FND, S-FND-FOLD, S-FND-SUNK).
+CATEGORY_FOUNDATION = "foundation"
+CATEGORY_FOLD = "fold"
+CATEGORY_SUNK = "sunk"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -53,6 +59,15 @@ EXCLUSION_PATTERNS = (
 # a slab edge alone never becomes a beam).
 DEFAULT_CONVENTION = (
     (r"grid|axis", CATEGORY_GRID),
+    # The two STEP layers before the foundation one: "S-FND-FOLD" contains
+    # "fnd", so a foundation-first ordering would swallow both of them.
+    (r"fold", CATEGORY_FOLD),
+    (r"sunk|sink", CATEGORY_SUNK),
+    # Foundation before "col": a footing layer never carries a column token, but
+    # keeping it early means a "S-FND-COL-PAD" style name reads as foundation.
+    # Deliberately NOT matching "step"/"thk"/"drop" -- those live on stair and
+    # wall layers in this corpus ("A-STAIR-Steps", "JW_ 150 thk NON-STRU. WALL").
+    (r"fnd|found|footing|raft|pcc|pile", CATEGORY_FOUNDATION),
     (r"col", CATEGORY_COLUMN),
     (r"beam|girder|joist", CATEGORY_BEAM),
     (r"slab|flor|floor", CATEGORY_SLAB_EDGE),
@@ -66,7 +81,8 @@ DEFAULT_CONVENTION = (
 ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
     CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
-    CATEGORY_STAIR, CATEGORY_FLOOR_BOUNDARY, CATEGORY_FLOOR_ORIGIN,
+    CATEGORY_STAIR, CATEGORY_FOUNDATION, CATEGORY_FOLD, CATEGORY_SUNK,
+    CATEGORY_FLOOR_BOUNDARY, CATEGORY_FLOOR_ORIGIN,
     CATEGORY_UNMAPPED,
 )
 
@@ -86,9 +102,13 @@ CATEGORY_COLUMN_SCHEDULE = "schedule (column/beam/slab)"
 # notes are on THIS layer" -- which narrows the search on a drawing whose other
 # text happens to read like a thickness.
 CATEGORY_SLAB_TEXT = "slab text"
+# Foundation notes name, size and STEP a footing or raft in one label:
+# "F3_1500MM THK" and, where it drops, a second paragraph "2000MM FOLD".
+CATEGORY_FOUNDATION_TEXT = "foundation text"
 CATEGORY_TEXT_IGNORE = "ignore"
 TEXT_CATEGORIES = (CATEGORY_COLUMN_TEXT, CATEGORY_BEAM_TEXT,
                    CATEGORY_GRID_TEXT, CATEGORY_SLAB_TEXT,
+                   CATEGORY_FOUNDATION_TEXT,
                    CATEGORY_COLUMN_SCHEDULE, CATEGORY_TEXT_IGNORE)
 
 
@@ -103,6 +123,9 @@ def classify_text_layer(layer_name):
     # so a "S-COLS-SCHEDULE" layer routes to the table, not to plan column text.
     if "sched" in text or "schd" in text or "table" in text:
         return CATEGORY_COLUMN_SCHEDULE
+    # Before "col": a foundation note layer may well be named "S-FND-COL-IDEN".
+    if re.search(r"fnd|found|footing|raft|pcc|pile", text):
+        return CATEGORY_FOUNDATION_TEXT
     if "col" in text:
         return CATEGORY_COLUMN_TEXT
     if "beam" in text or "girder" in text or "joist" in text:

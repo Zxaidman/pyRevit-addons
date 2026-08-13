@@ -119,12 +119,29 @@ Entry gate: the fixture is in the repo, so P1 is unblocked.
 
 Applies to slabs **and** rafts.
 
-Representation, decided: **a separate floor at an offset, with the region cut as
-a hole in the parent.** `builders/slabs.py::_nest_openings` already turns a
-ring-inside-a-ring into an inner `CurveLoop`, and `builders/footings.py`
-`_zero_offset` already drives the height parameter, so this reuses code that is
-already fingerprinted rather than introducing `SlabShapeEditor` — which has no
-offline representation and therefore cannot be covered by the P0 harnesses.
+**Representation — corrected 2026-08-13 against the office's own Revit detail.**
+The decision recorded earlier in this session was two floors: a dropped floor
+plus a hole cut in the parent. The detail the user supplied shows the real
+construction uses **three**:
+
+1. the normal slab, on the level, running up to where the fold starts;
+2. a **fold support** along the fold line — plan width = the slab thickness,
+   depth = the sunk value — the vertical face between the two levels;
+3. the folded/sunk slab at the dropped level.
+
+The three together are one folded slab. The middle element is exactly what the
+two-floor plan had no answer for: without it the step is a gap rather than
+concrete, which would have produced a model that looked right in plan and was
+wrong in section.
+
+`SlabShapeEditor` stays rejected — all three are ordinary `Floor.Create` calls,
+so the construction remains visible to the offline harnesses, which a shape edit
+would not be.
+
+One number is still open: the fold support's vertical placement. In the supplied
+detail the slab is `350 THK RCC SLAB`, the levels read 0.000 and -350.000, and
+the selected floor sits at `Height Offset From Level = -200.000`. Slab thickness
+and sunk value are both 350 there, so the image cannot say which drives it.
 
 A magnitude threshold is required regardless of representation: Test9's legend
 carries `T.O.S. +50MM`, `+400MM` and `+6250`. 6250 mm is not a fold, it is a

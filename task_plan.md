@@ -105,18 +105,35 @@ Fixture in the repo as of 2026-08-13 — test10 now carries its foundation level
 
 **Status:** not started. Applies to slabs AND rafts.
 
-Representation decided: a separate floor at an offset, with the region cut as a
-hole in the parent. `builders/slabs.py::_nest_openings` already nests a
-ring-inside-a-ring; `builders/footings.py::_zero_offset` already drives the
-height parameter. `SlabShapeEditor` was rejected — it has no offline
-representation, so the P0 harnesses could not see it.
+**Representation, corrected 2026-08-13 by the user's own Revit detail.** The
+earlier plan was two floors — a dropped floor plus a hole in the parent. The
+office actually builds a fold from **three** floors:
 
-- [ ] 2.1 Fold/sunk regions from the hatch rings of 1.1, paired to their label.
-- [ ] 2.2 Depth applied as a height offset; parent gets the hole.
+1. the normal slab, on the level, running up to where the fold starts;
+2. a **fold support** along the fold line — plan width = the slab thickness,
+   depth = the sunk value — which is the vertical face between the two levels;
+3. the folded/sunk slab at the dropped level.
+
+The three together are one folded slab. The middle element is the part the
+two-floor plan had no answer for: without it the step is a gap, not concrete.
+
+Still no `SlabShapeEditor` — all three are ordinary `Floor.Create` calls, so the
+whole construction stays visible to the offline harnesses.
+
+- [ ] 2.1 Fold/sunk regions from the hatch rings of 1.1, paired to their label
+      (already proven 1:1 on test10 — 6 folds, 1 sunk).
+- [ ] 2.2 Place the three floors per region: parent, fold support, dropped slab.
 - [ ] 2.3 Magnitude threshold. Test9's legend has `T.O.S. +50MM`, `+400MM` and
       `+6250`. 6250 is a storey, not a fold: route to its own level or report.
 - [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern → legend
       text → meaning), auto-proposed into the override dialog, never silent.
+
+**Open question before 2.2 can be written:** the exact vertical placement of the
+fold support. In the supplied detail the slab is `350 THK RCC SLAB`, the two
+levels read 0.000 and -350.000, and the selected floor sits at
+`Height Offset From Level = -200.000` with a 200 dimension against it. With slab
+thickness and sunk value both 350 in that example, the image alone cannot say
+which of the two drives the support's offset.
 
 ---
 
