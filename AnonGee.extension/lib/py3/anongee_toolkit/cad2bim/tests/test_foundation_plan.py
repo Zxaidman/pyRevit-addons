@@ -142,6 +142,94 @@ class Outlines(unittest.TestCase):
         self.assertEqual(_bbox_mm(got[0][0]), (5200, 6650))
 
 
+def _corridor_block():
+    """The middle of the REDRAWN test10, at the coordinates it is drawn at.
+
+    The corridor block (10533..14033 x 4350..21650) closes only through the
+    SUNK rectangle's sides: the foundation layer carries the two seams and four
+    vertical stubs, and the sunk region drawn between (10050..15950) supplies
+    the middle of each side. The two seams double as the mouths of the big
+    raft's boundary.
+    """
+    fnd = [
+        _Record("line", [(10533, 21650), (14033, 21650)]),      # top seam
+        _Record("polyline", [(10533, 4350), (14033, 4350)]),    # bottom seam
+        _Record("line", [(10533, 15950), (10533, 21650)]),      # stubs
+        _Record("line", [(14033, 21650), (14033, 15950)]),
+        _Record("line", [(10533, 4350), (10533, 10050)]),
+        _Record("line", [(14033, 10050), (14033, 4350)]),
+    ]
+    sunk = [_Record("line", [pair[0], pair[1]],
+                    layers.CATEGORY_SUNK)
+            for pair in (((10533, 10050), (14033, 10050)),
+                         ((10533, 15950), (14033, 15950)),
+                         ((14033, 15950), (14033, 10050)),
+                         ((10533, 10050), (10533, 15950)))]
+    return fnd + sunk
+
+
+class OutlinesThroughTheStepLayers(unittest.TestCase):
+    """The redrawn test10: outlines that close only through the sunk linework."""
+
+    def test_step_layer_lines_complete_an_outline_and_are_dissolved(self):
+        # the sunk rectangle's sides carry the middle of the corridor's sides;
+        # without them nothing closes, and with them the corridor must come out
+        # as ONE block, not three cells split at the sunk boundary
+        got = foundation_plan.outlines(_corridor_block())
+        self.assertEqual(len(got), 1)
+        self.assertEqual(_bbox_mm(got[0][0]), (3500, 17300))
+
+    def test_step_lines_alone_never_make_an_outline(self):
+        # the fold/sunk layers mark where a foundation steps, not where one
+        # ends: a sunk rectangle with no foundation linework is not a footing
+        sunk_only = [r for r in _corridor_block()
+                     if r.category == layers.CATEGORY_SUNK]
+        self.assertEqual(foundation_plan.outlines(sunk_only), [])
+
+    def test_a_seam_drawn_a_little_long_still_closes_its_outline(self):
+        # test10's right seam overshoots the raft corner by 400 mm; the
+        # overshoot must be split off and pruned, not drag the seam with it
+        records = [
+            _Record("polyline", [(0, 6650), (0, 0), (5200, 0)]),
+            _Record("line", [(5200, 0), (5200, 7050)]),          # 400 long
+            _Record("line", [(5200, 6650), (0, 6650)]),
+        ]
+        got = foundation_plan.outlines(records)
+        self.assertEqual(len(got), 1)
+        self.assertEqual(_bbox_mm(got[0][0]), (5200, 6650))
+
+    def test_the_corridor_nests_as_a_hole_in_the_raft_around_it(self):
+        # the block sits wholly inside the big raft, so the raft is cast round
+        # it: the block ring becomes the raft plan's hole, one level deep, and
+        # the block still plans as its own foundation
+        records = [_closed(4933, -1650, 19633, 29100)] + _corridor_block()
+        plans = foundation_plan.plan_foundations(
+            records,
+            [_Text("F3_750MM THK", (12265, 25000)),
+             _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
+        self.assertEqual(len(plans), 2)
+        raft = next(p for p in plans if p["thickness_mm"] == 750.0)
+        block = next(p for p in plans if p["thickness_mm"] == 500.0)
+        self.assertEqual(len(raft["holes"]), 1)
+        self.assertEqual(_bbox_mm(raft["holes"][0]), (3500, 17300))
+        self.assertEqual(block["holes"], [])
+
+    def test_a_note_sizes_the_smallest_ring_it_sits_in_and_only_that_one(self):
+        # the block's note sits inside the raft too; letting it size both would
+        # cast a 500 raft. And the sunk step note belongs to the block alone.
+        records = [_closed(4933, -1650, 19633, 29100)] + _corridor_block()
+        plans = foundation_plan.plan_foundations(
+            records,
+            [_Text("F3_750MM THK", (12265, 25000)),
+             _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
+        raft = next(p for p in plans if p["thickness_mm"] == 750.0)
+        block = next(p for p in plans if p["thickness_mm"] == 500.0)
+        self.assertEqual(raft["labels"], 1)
+        self.assertEqual(len(raft["steps"]), 0)
+        self.assertEqual(len(block["steps"]), 1)
+        self.assertEqual(block["steps"][0]["step_kind"], "sunk")
+
+
 class SizingFromTheNote(unittest.TestCase):
     def test_the_note_inside_an_outline_names_and_sizes_it(self):
         plans = foundation_plan.plan_foundations(

@@ -150,17 +150,31 @@ on zero is what says the convention is soffit-aligned rather than assumed.
       Each region takes the note that sits INSIDE it, so test10's three fold
       notes per F3 raft pair exactly rather than by proximity.
 - [x] 2.2 The three parts placed: the parent with the region cut out of it, the
-      support between the soffits, the dropped slab at the step depth. A
-      support is emitted per EDGE and only where concrete continues beyond it —
-      the sunk strip abuts pads on two sides and open ground on the other two.
+      support between the soffits, the dropped slab at the step depth.
+      **Corrected per the user's review:** the support is ONE slab per stepped
+      run, not a strip per edge — a closed collar with the region as its hollow
+      for a mid-footing fold, an L at a corner, a strip along a lone edge.
 - [x] 2.3 Magnitude threshold: over 3000 mm is a storey, not a step. Test9's
-      `+6250` is refused and named; test10's 2000 mm fold still builds.
+      `+6250` is refused and named; test10's folds still build.
 - [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern →
       legend text → meaning), auto-proposed into the override dialog.
 
-**Measured on test10:** 7 step regions → 7 planned, 0 skipped. Six folds inside
-the two F3 rafts, each cut out with 4 supports 2000 deep at `-1500`; one sunk
-strip that IS its own F6 outline, so nothing is cut and no support is invented.
+**Test10 was redrawn by the user 2026-08-14** — the old F5/F6 middle (1000 sunk
+between 2000 pads) was a design error on the drawing side. The new foundation
+level: eight closed pads (F1/F2/F4), one big F3 raft 750 thick whose boundary
+closes through two long seams, and a 500-thick corridor block NESTED inside it
+whose sides are completed by the drawn sunk rectangle. That drawing drove three
+recovery upgrades: segments split where another segment's endpoint lands on
+them (the right seam overshoots a corner by 400 mm), step-layer lines join the
+face graph and are then dissolved (they mark where a foundation steps, not
+where one ends), and a nested outline becomes a hole in its parent, one level,
+like slab openings.
+
+**Measured on the redrawn test10:** 10 outlines, 10 sized; 7 steps planned, 0
+skipped. Six folds each get one 1500-deep collar at `-750` (hollow = the fold);
+the sunk strip in the corridor gets two 250-deep strips at `-500` on its
+stepped edges — and none on its long edges, where the abutting raft is 750
+thick and `250 + 500 − 750 = 0`: the soffits already meet.
 
 ---
 

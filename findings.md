@@ -137,7 +137,7 @@ be a worse model than the column-derived guess they replaced. So
 and Test0 falls back to the old path untouched. One labelled outline vouches for
 the rest of the layer, which is what a partially-annotated drawing needs.
 
-## 5. The foundation convention (test10, supplied 2026-08-13)
+## 5. The foundation convention (test10, supplied 2026-08-13; superseded by #8)
 
 | Layer | Content |
 |-------|---------|
@@ -234,9 +234,64 @@ Two consequences that fall out of the same reasoning:
 
 Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first
 two are steps; 6250 is the next floor. A step deeper than 3000 mm is refused and
-named — the limit sits above test10's real 2000 mm fold and far below a storey.
+named — the limit sits above test10's real folds and far below a storey.
 
-## 8. The user's region-size setting had never reached the footings
+### The support is one slab, not a strip per edge (user review, 2026-08-14)
+
+The first cut emitted a support strip per stepped edge — four butting floors
+around a mid-footing fold. The office casts ONE collar: a closed band around
+the region with the region itself as its hollow; at a corner, one L-shaped
+slab around the two inner edges; only a lone stepped edge is a plain strip.
+Contiguous stepped edges (same parent thickness, same remaining depth) now
+merge into one ring — mitred where it turns, closed with the region's own
+edge — and the full cycle closes into the collar with the region as a hole.
+
+### The saved dialog settings can starve the foundation pass
+
+Why the user's Revit run left F6 flat: their saved settings predated the
+foundation categories, so the restore carried `S-FND: unmapped` and
+`S-FND-IDEN: ignore` over the convention's proposal — no notes were routed,
+`plan_foundations` had nothing to vouch for the layer, and the whole pass fell
+back to column-derived pads. A saved mapping older than a category silently
+wins over the convention that now recognises the layer. The user re-saved
+their settings with the foundation rows mapped; the trap remains open for any
+other pre-P1 settings file.
+
+## 8. The redrawn foundation level (test10, 2026-08-14)
+
+The user replaced test10's foundation level — the F5/F6 middle was a design
+error on the drawing side. The new level:
+
+| What | Drawn as |
+|------|----------|
+| 8 pads F1/F2/F4 | closed polylines, as before |
+| 1 raft F3, 750 thk | boundary closing through two long seams; 6 fold hatches, `1500MM FOLD` |
+| 1 corridor block F3, 500 thk | NESTED inside the raft; sides completed by the sunk rectangle; `250MM SUNK` |
+
+Three properties of that linework broke the first recovery, and each got its
+own machinery:
+
+- **A seam overshoots a corner by 400 mm.** The junction is a vertex of one
+  piece and the middle of the other, so endpoint clustering never unifies it,
+  the far end dangles, and pruning removed the whole seam. Segments now split
+  wherever another segment's endpoint lands on their body.
+- **The block closes only through the SUNK rectangle's sides.** Step-layer
+  lines join the face graph — and are then dissolved: two real faces separated
+  only by step linework merge, because a fold line marks where a foundation
+  steps, never where one ends. A face bounded entirely by step lines is
+  refused: that is a step mark, not a footing.
+- **The block nests inside the raft.** The inner ring becomes a hole of its
+  parent (one level, like slab openings), the parent is cast around it, and
+  the block casts as its own slab. A note sizes the SMALLEST ring containing
+  it, or the block's `F3_500` note would have sized the raft too.
+
+The sunk arithmetic on the new drawing lands on zero exactly as F6's did on
+the old one: the strip's long edges abut the 750 raft, `250 + 500 − 750 = 0`,
+no support — while its short edges abut the 500 block and get `250` deep
+strips at `−500`. Two drawings, both confirming the soffit-aligned convention.
+
+
+## 9. The user's region-size setting had never reached the footings
 
 Found while wiring P1.4. `run_builders._create_footings` read
 `col_region_max_side_mm` from `selections["limits"]`; the dialog writes it to
@@ -256,7 +311,7 @@ Now read from `tolerances`. Two notes on the consequence:
   carries its own foundation layer never reaches that path at all, which is the
   real answer to "a raft is bigger than a column".
 
-## 9. Test environment
+## 10. Test environment
 
 The suite runs green on Linux only after `pip install ezdxf`. The bundled
 `lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,

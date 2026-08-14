@@ -206,7 +206,7 @@ def _place_steps(doc, steps, base_type, level, cache, result):
     between the two soffits.
     """
     for step in (steps or []):
-        for part, ring, thickness, offset in _step_parts(step):
+        for part, ring, hole, thickness, offset in _step_parts(step):
             floor_type, note = _resolve_type(doc, base_type, thickness, cache)
             type_names.record(result, note)
             if floor_type is None:
@@ -217,6 +217,10 @@ def _place_steps(doc, steps, base_type, level, cache, result):
             try:
                 loops = List[CurveLoop]()
                 loops.Add(_curve_loop([(p[0], p[1]) for p in ring]))
+                if hole:
+                    # a mid-footing fold's support is a closed collar: the
+                    # band round the region, the region itself the hollow
+                    loops.Add(_curve_loop([(p[0], p[1]) for p in hole]))
                 instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
                 problem = _offset(instance, offset)
                 if problem:
@@ -230,15 +234,16 @@ def _place_steps(doc, steps, base_type, level, cache, result):
 
 
 def _step_parts(step):
-    """[(part, ring, thickness_mm, offset_mm)] -- the dropped slab, then its supports."""
+    """[(part, ring, hole, thickness_mm, offset_mm)] -- the dropped slab, then
+    its support slab(s)."""
     dropped = step.get("dropped") or {}
     parts = []
     if dropped.get("ring"):
-        parts.append((step.get("kind") or "step", dropped["ring"],
+        parts.append((step.get("kind") or "step", dropped["ring"], None,
                       dropped.get("thickness_mm"), dropped.get("offset_mm")))
     for support in (step.get("supports") or []):
-        parts.append(("support", support["ring"], support.get("thickness_mm"),
-                      support.get("offset_mm")))
+        parts.append(("support", support["ring"], support.get("hole"),
+                      support.get("thickness_mm"), support.get("offset_mm")))
     return parts
 
 
@@ -314,7 +319,9 @@ def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
     A ring the drawing did not size falls back to the dialog's thickness and
     says so, the way an unlabelled slab loop falls back to its floor type.
 
-    `holes` are the stepped areas cut out of THIS outline. A step whose region
+    `holes` are the areas cut out of THIS outline: its stepped regions, and any
+    NESTED outline the drawing lets into it -- the corridor block in the middle
+    of a raft is a hole in the raft and a slab of its own. A step whose region
     IS its own outline contributes none: there the outline itself is the thing
     that drops, and cutting it would leave a hole where the slab should be.
     """
@@ -333,7 +340,7 @@ def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
             result["notes"].append(
                 "{0} outline has no thickness note: cast at {1:.0f} mm".format(
                     plan.get("mark") or "an unnamed", thickness or 0.0))
-        holes = openings.get(index, [])
+        holes = list(plan.get("holes") or []) + openings.get(index, [])
         # A step region that IS this outline drops the WHOLE outline: the
         # parent is not placed flat and then stepped, it is placed at the
         # depth. Skipping it here leaves the dropped slab as the only element.

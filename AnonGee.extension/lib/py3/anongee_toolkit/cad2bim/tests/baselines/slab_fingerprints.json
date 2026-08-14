@@ -80,13 +80,13 @@
     "column_footprints": 66,
     "column_rectangles": 62,
     "loops_from_beam_graph": 23,
-    "loops_from_beam_graph_area_m2": 159.9,
+    "loops_from_beam_graph_area_m2": 159.8,
     "loops_from_edges": 46,
     "loops_from_edges_area_m2": 595.3,
     "loops_from_placed_members": 56,
-    "loops_from_placed_members_area_m2": 654.5,
+    "loops_from_placed_members_area_m2": 653.6,
     "records": 378,
-    "sized_beams": 124,
+    "sized_beams": 139,
     "storey": "Ground Floor Level"
   },
   "test10-1stfloor300l": {

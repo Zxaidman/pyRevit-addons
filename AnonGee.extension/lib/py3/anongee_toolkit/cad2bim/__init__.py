@@ -37,7 +37,39 @@ with XamlReader.Load and uses System.Windows dialogs directly. The pure modules
 statically inspected and unit-tested outside Revit.
 """
 
-__version__ = "0.68.1"  # "The name is already in use for this element type."
+# The version moves with EVERY commit that changes this package -- it is a
+# tracking number, not a release or a tag. A user reporting "0.69.2 did X"
+# names one commit; three commits all answering "0.68.1" name nothing.
+__version__ = "0.69.0"  # Foundations from the drawing; folds and sunk built.
+#
+#                         P1: the DXF reader keeps HATCH regions; the foundation
+#                         layers classify; foundation_plan reads the outlines
+#                         off S-FND (closed polylines, planar faces of the loose
+#                         linework -- shared edges, T-junctions and overshoots
+#                         included -- completed through the step layers and
+#                         dissolved back), sizes each from the note inside it,
+#                         and refuses a drawing that never labels an outline
+#                         (Test0). Rafts are possible for the first time; the
+#                         column-offset derivation is the fallback, and its
+#                         size discard reports instead of dropping in silence.
+#
+#                         P2: a fold or sunk hatch steps its outline: the parent
+#                         is cast with the region cut out, the dropped slab goes
+#                         in at the step depth, and ONE support slab fills the
+#                         vertical face between the soffits -- a closed collar
+#                         with the region as its hollow mid-footing, an L at a
+#                         corner, a strip along a lone edge. Support arithmetic
+#                         (per edge, from whichever outline abuts it):
+#                         offset = -T_parent, depth = d + T_dropped - T_parent,
+#                         width = T_parent. Nested outlines cut their parent and
+#                         cast as their own slab. Steps deeper than 3000 mm are
+#                         storeys and are refused by name.
+#
+#                         541 tests (was 440). The sweep gains foundation and
+#                         step counts; the Revit-side wiring is pinned by AST
+#                         checks because every link in it degrades silently.
+#
+# 0.68.1                  "The name is already in use for this element type."
 #
 #                         Reported against columns. A family already carrying
 #                         Revit's own "400 x 600" was asked for the toolkit's

@@ -113,9 +113,18 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
         # without the hole the parent and the dropped slab occupy the same plan
         self.assertIsNotNone(self._planned()["opening"])
 
-    def test_a_support_hangs_off_every_edge_that_has_concrete_beyond_it(self):
+    def test_a_mid_footing_fold_gets_ONE_collar_not_a_strip_per_edge(self):
+        # concrete continues past all four edges, so the support is one closed
+        # band with the fold as its hollow -- four butting strips would be four
+        # floors meeting edge-to-edge where the detail shows one cast collar
         step = self._planned()
-        self.assertEqual(len(step["supports"]), 4)
+        self.assertEqual(len(step["supports"]), 1)
+        support = step["supports"][0]
+        self.assertIsNotNone(support["hole"])
+        self.assertEqual(_size_mm(support["hole"]), (2700, 3000))
+        # the band reaches one parent-thickness past the fold on every side
+        self.assertEqual(_size_mm(support["ring"]),
+                         (2700 + 2 * 1500, 3000 + 2 * 1500))
 
     def test_the_support_hangs_from_the_parents_soffit_and_reaches_the_drop(self):
         # the user's detail: offset is minus the PARENT's thickness, and the
@@ -123,12 +132,6 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
         support = self._planned()["supports"][0]
         self.assertEqual(support["offset_mm"], -1500.0)
         self.assertEqual(support["thickness_mm"], 2000.0)   # 2000 + 1500 - 1500
-
-    def test_the_support_is_one_parent_thickness_wide_in_plan(self):
-        widths = set()
-        for support in self._planned()["supports"]:
-            widths.add(min(_size_mm(support["ring"])))
-        self.assertEqual(widths, set([1500]))
 
     def test_the_users_own_detail_reproduces_its_own_numbers(self):
         # 350 THK slab, levels 0.000 and -350.000, support at -200 with a 200
@@ -140,7 +143,27 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
         support = step["supports"][0]
         self.assertEqual(support["offset_mm"], -200.0)
         self.assertEqual(support["thickness_mm"], 350.0)
-        self.assertEqual(min(_size_mm(support["ring"])), 200)
+        # collar 200 wide in plan: outer = hole grown by 200 on every side
+        self.assertEqual(_size_mm(support["ring"]), (4000 + 400, 4000 + 400))
+        self.assertEqual(_size_mm(support["hole"]), (4000, 4000))
+
+    def test_a_corner_fold_gets_one_L_shaped_slab_not_two_strips(self):
+        # the region sits in the host's corner: concrete continues past its two
+        # INNER edges only, and those are adjacent, so the support is a single
+        # L round the inner corner -- with no hollow, because the band never
+        # closes round the region
+        host = _plan(0, 0, 10000, 8000, 300.0,
+                     [_step(400.0, fold_plan.FOLD, (1000, 1000))], "S1")
+        step = fold_plan.plan_steps([host],
+                                    [_fold(0, 0, 2000, 2000)])["steps"][0]
+        self.assertEqual(len(step["supports"]), 1)
+        support = step["supports"][0]
+        self.assertIsNone(support["hole"])
+        # six corners, spanning the fold plus one width past its inner edges
+        self.assertEqual(len(support["ring"]), 6)
+        self.assertEqual(_size_mm(support["ring"]), (2300, 2300))
+        self.assertEqual(support["thickness_mm"], 400.0)    # 400 + 300 - 300
+        self.assertEqual(support["offset_mm"], -300.0)
 
 
 class ARegionThatISItsParent(unittest.TestCase):

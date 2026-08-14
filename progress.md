@@ -180,16 +180,49 @@ the two F3 rafts with 4 supports each at 2000 deep / `-1500` offset, and the one
 sunk strip placed with no cut and no support. Test9's `+6250` is refused by name
 as a storey rather than a step. Unit tests 514 → 536.
 
+## Session 2026-08-14 — user review, redrawn fixture, v0.69.0
+
+Four corrections from the user's Revit test, all landed:
+
+1. **Version now moves with every commit.** `__version__` had sat at 0.68.1
+   across five commits — a tracking number that doesn't track. 0.69.0 now, and
+   the policy is written next to it: bump on every commit that changes the
+   package; it is not a release or a tag.
+2. **The support is ONE slab, not a strip per edge.** A mid-footing fold gets a
+   closed collar with the region as its hollow; a corner fold one L-shaped
+   slab; only a lone stepped edge stays a strip. Contiguous stepped edges
+   (same parent, same depth) merge, mitred where the run turns.
+3. **Why F6 never dropped in Revit:** the user's saved dialog settings predated
+   the foundation categories — the restore carried `S-FND: unmapped` /
+   `S-FND-IDEN: ignore` over the convention, no notes were routed, and the pass
+   fell back to column pads (findings #7). The user re-saved their settings.
+4. **Test10's foundation level was redrawn** (the F5/F6 middle was a drawing
+   design error). The new level nests a 500-thick corridor block inside a
+   750-thick raft, closes the block through the drawn sunk rectangle's sides,
+   and overshoots one seam by 400 mm. Three recovery upgrades came out of it:
+   split segments where another segment's endpoint lands on them; take step-
+   layer lines into the face graph and dissolve them after (they mark where a
+   foundation steps, not where one ends — and a face bounded entirely by step
+   lines is refused); nest an inner outline as a hole in its parent, with a
+   note sizing only the SMALLEST ring containing it.
+
+The redrawn drawing confirms the soffit arithmetic from a second direction:
+the sunk strip's long edges abut the 750 raft — `250 + 500 − 750 = 0`, no
+support — while its short edges abut the 500 block and get 250-deep strips.
+Measured end to end: 10 outlines, 10 sized, 7 steps, 0 skipped. 541 tests.
+All three baselines re-blessed — the fixture AND its export changed under
+them, so every moved number is the redraw plus the new counts, explained in
+the commit.
+
 ### Open
 
-- P2 next: folds and sunk, on slabs and rafts. P1 leaves each foundation plan
-  carrying its `steps` notes, and the fold/sunk hatch regions read and counted;
-  nothing is stepped yet. The open number is still the fold support's vertical
-  placement — slab thickness and sunk value are both 350 in the supplied detail,
-  so the image cannot say which drives it.
-- Foundation outlines that NEST (a pad drawn inside a raft) are placed as two
-  overlapping floors. Not present in this corpus; slabs solve it with
-  `_nest_openings`, which is the obvious source to borrow from if a drawing
-  turns one up.
+- P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →
+  legend text → meaning), auto-proposed into the override dialog.
+- The fold construction is unverified in Revit since the support rework — the
+  collar/L representation and the redrawn corridor both await the user's next
+  run on the real model.
+- A saved settings file from before P1 silently unroutes the foundation layers
+  (findings #7). The user's own copy is fixed; the dialog does not yet warn
+  when a restored mapping downgrades a layer the convention recognises.
 - `graphify-out/` is 18 versions stale (built at `56c2d6a`, v0.50.0) and contains
   none of the twenty post-refactor modules. Documentation, not a gate.

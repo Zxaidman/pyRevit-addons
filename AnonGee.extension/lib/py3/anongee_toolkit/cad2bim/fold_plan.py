@@ -189,42 +189,134 @@ def _depth_for(ring, host, kind):
 
 
 def _parts(ring, kind, depth_mm, host, host_index, rings):
-    """One step's parent opening, support strips and dropped slab.
+    """One step's parent opening, support slab(s) and dropped slab.
 
     The parent is read PER EDGE, from whatever outline abuts it, because the two
     cases disagree about who the parent is. A region cut out of its host steps
-    down from that host. A region that IS its host -- test10's sunk strip --
-    steps down from the NEIGHBOURS it abuts, and they are a different thickness:
-    reading the host there says the strip steps down from itself, and invents a
-    support that the drawing's own arithmetic says is not there.
+    down from that host. A region that IS its host -- an outline the drawing
+    marks sunk in its entirety -- steps down from the NEIGHBOURS it abuts, and
+    they are a different thickness: reading the host there says the region
+    steps down from itself, and invents a support that the drawing's own
+    arithmetic says is not there.
+
+    A support is ONE slab per contiguous run of stepped edges, not a strip per
+    edge. A fold in the middle of a footing gets a closed band round the whole
+    region -- the region itself the hollow in it; a fold in a corner gets one
+    L-shaped slab round its two inner edges. Separate strips would meet at the
+    corners edge-to-edge, which Revit joins as two butting floors rather than
+    the one cast collar the detail shows.
     """
     # The dropped slab is as thick as whatever it is a piece of: its own
     # outline when it IS one, otherwise the parent it was cut out of.
     dropped_thickness = host.get("thickness_mm")
     coincident = _is_host_itself(ring, host["ring"])
-    supports = []
-    for edge in _outward_edges(ring):
+    edges = _outward_edges(ring)
+    sides = []                          # per edge: (width_mm, depth_mm) or None
+    for edge in edges:
         parent = _neighbour_beyond(edge, rings,
                                    skip=host_index if coincident else None)
-        if parent is None:
-            continue                   # open ground: nothing to step down from
-        parent_thickness = parent.get("thickness_mm")
-        if not parent_thickness:
+        thickness = parent.get("thickness_mm") if parent else None
+        if not thickness:
+            sides.append(None)         # open ground: nothing to step down from
             continue
-        depth = depth_mm + (dropped_thickness or 0.0) - parent_thickness
+        depth = depth_mm + (dropped_thickness or 0.0) - thickness
         if depth <= 0:
             # The two soffits already meet -- the parent is deep enough to BE
             # the vertical face. Filling this would double the concrete.
+            sides.append(None)
             continue
-        supports.append({"ring": _strip(edge, parent_thickness),
-                         "thickness_mm": depth,
-                         "offset_mm": -parent_thickness})
+        sides.append((thickness, depth))
     return {"kind": kind, "ring": ring, "depth_mm": depth_mm,
             "mark": host.get("mark"), "host_index": host_index,
             "dropped": {"ring": ring, "thickness_mm": dropped_thickness,
                         "offset_mm": -depth_mm},
-            "supports": supports,
+            "supports": _support_slabs(edges, sides),
             "opening": None if coincident else ring}
+
+
+def _support_slabs(edges, sides):
+    """[{ring, hole, thickness_mm, offset_mm}] -- one slab per stepped run.
+
+    Every edge is stepped the same way -> ONE closed band: the outer ring is
+    the region offset outward by the parent's thickness, and the region itself
+    is the `hole` -- a collar with the drop as its hollow. Otherwise each
+    contiguous run of stepped edges (same parent thickness, same remaining
+    depth) becomes one polygon: outward offsets along the run, mitred at the
+    corners it turns, closed back along the region's own edge -- a single edge
+    gives the plain strip, a corner's two edges the L.
+    """
+    stepped = [side for side in sides if side]
+    if stepped and len(stepped) == len(sides) and len(set(stepped)) == 1:
+        width, depth = stepped[0]
+        outer = [_miter(edges[index - 1], edges[index], width, width)
+                 for index in range(len(edges))]
+        return [{"ring": outer, "hole": [edge[0] for edge in edges],
+                 "thickness_mm": depth, "offset_mm": -width}]
+    slabs = []
+    for run in _runs(sides):
+        width, depth = sides[run[0]]
+        outer = [_offset_point(edges[run[0]], 0, width)]
+        for position in range(1, len(run)):
+            outer.append(_miter(edges[run[position] - 1], edges[run[position]],
+                                width, width))
+        outer.append(_offset_point(edges[run[-1]], 1, width))
+        inner = [edges[index][0] for index in reversed(run)]
+        slabs.append({"ring": outer + [edges[run[-1]][1]] + inner,
+                      "hole": None,
+                      "thickness_mm": depth, "offset_mm": -width})
+    return slabs
+
+
+def _runs(sides):
+    """Maximal circular runs of consecutive edges stepped the same way."""
+    count = len(sides)
+    in_run = [index for index in range(count) if sides[index]]
+    if not in_run:
+        return []
+    runs = []
+    current = [in_run[0]]
+    for index in in_run[1:]:
+        if index == current[-1] + 1 and sides[index] == sides[current[0]]:
+            current.append(index)
+        else:
+            runs.append(current)
+            current = [index]
+    runs.append(current)
+    # The ring is circular: a run ending at the last edge continues into one
+    # starting at the first, so a corner fold's two edges join into one L even
+    # when the ring happens to start between them.
+    if (len(runs) > 1 and runs[0][0] == 0 and runs[-1][-1] == count - 1
+            and sides[0] == sides[count - 1]):
+        runs[0] = runs.pop() + runs[0]
+    return runs
+
+
+def _offset_point(edge, end, width_mm):
+    """An edge endpoint pushed straight out by the support's width."""
+    point = edge[end]
+    normal = edge[2]
+    reach = config.mm_to_ft(width_mm)
+    return (point[0] + normal[0] * reach, point[1] + normal[1] * reach)
+
+
+def _miter(edge_a, edge_b, width_a, width_b):
+    """Where the two edges' outward offsets MEET at their shared corner.
+
+    The intersection of the two offset lines -- for the right angles the corpus
+    draws, the corner pushed out by both normals at once. Parallel edges (a
+    straight side arriving as two pieces) have no intersection; either offset
+    is already the point.
+    """
+    shared = edge_b[0]
+    na, nb = edge_a[2], edge_b[2]
+    wa, wb = config.mm_to_ft(width_a), config.mm_to_ft(width_b)
+    cross = na[0] * nb[1] - na[1] * nb[0]
+    if abs(cross) < 1e-9:
+        return (shared[0] + na[0] * wa, shared[1] + na[1] * wa)
+    # Solve (p - shared) . na = wa and (p - shared) . nb = wb.
+    dx = (wa * nb[1] - wb * na[1]) / cross
+    dy = (wb * na[0] - wa * nb[0]) / cross
+    return (shared[0] + dx, shared[1] + dy)
 
 
 def _is_host_itself(ring, host_ring):
@@ -279,20 +371,6 @@ def _neighbour_beyond(edge, rings, skip=None):
         if smallest is None or size < smallest:
             best, smallest = plan, size
     return best
-
-
-def _strip(edge, width_mm):
-    """The support's plan footprint: a band `width_mm` wide OUTSIDE the edge.
-
-    Outside, because it hangs UNDER the parent, whose concrete is on that side.
-    Putting it inside would land it in the dropped slab's own footprint, and
-    two floors sharing a footprint is a warning and a wrong section.
-    """
-    a, b, normal = edge
-    reach = config.mm_to_ft(width_mm)
-    return [a, b,
-            (b[0] + normal[0] * reach, b[1] + normal[1] * reach),
-            (a[0] + normal[0] * reach, a[1] + normal[1] * reach)]
 
 
 def area_m2(ring):
