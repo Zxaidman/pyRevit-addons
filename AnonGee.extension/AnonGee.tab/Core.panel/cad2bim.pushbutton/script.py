@@ -403,6 +403,11 @@ def main():
     marks.parse_texts(dxf_result.texts)
     # Map a copy of the DXF geometry the same way, only to report problem geometry.
     transform.apply_to_records(text_affine, dxf_result.records)
+    # HATCH regions come from the DXF only -- the Revit API cannot read a hatch
+    # inside a link any more than it can read text -- so they take the same
+    # affine the texts do. A region carries `points` like a record, which is
+    # what lets apply_to_records move it.
+    transform.apply_to_records(text_affine, dxf_result.regions)
 
     # Build the window from the REVIT records (the build source) UNIONED with the
     # DXF-only layers. Revit's import drops some entity types outright -- a bare
@@ -496,6 +501,9 @@ def main():
     # the DXF records carry the markers a Revit import drops, so they get the
     # SAME mapping -- otherwise a DXF-only layer stays uncategorised
     layers.apply_mapping(dxf_result.records, selections["mapping"])
+    # ...and so do the hatches, which is what tells a fold region from a sunk
+    # one and both from the column fill on the layer next to them.
+    layers.apply_mapping(dxf_result.regions, selections["mapping"])
     # The Multi-storey tab picks the boundary/origin layers BY NAME (they differ
     # per drawing), so route them here -- after the layer table, so an explicit
     # pick always wins over the naming convention.
@@ -542,7 +550,8 @@ def main():
             revit_result.records, dxf_result.texts,
             marker_records=dxf_result.records,
             boundary_layer=selections.get("boundary_layer"),
-            origin_layer=selections.get("origin_layer"))
+            origin_layer=selections.get("origin_layer"),
+            hatches=dxf_result.regions)
         for note in floor_notes:
             _say("  storey: {0}".format(note))
         regions = floor_plans.apply_storey_settings(
@@ -582,7 +591,8 @@ def main():
                 doc, storey_result, region.texts, storey_selections,
                 schedule_source=dxf_result.texts, path=path,
                 comparison=comparison, transform_method=transform_method,
-                storey_label=label, collect=storey_payloads)
+                storey_label=label, collect=storey_payloads,
+                hatches=region.regions)
             all_outcomes["{0}".format(label)] = outcomes
         if storey_payloads:
             _export_storeys(storey_payloads, revit_result.source_name,
@@ -594,7 +604,8 @@ def main():
     outcomes = _build_one_storey(doc, revit_result, dxf_result.texts, selections,
                                  schedule_source=dxf_result.texts, path=path,
                                  comparison=comparison,
-                                 transform_method=transform_method)
+                                 transform_method=transform_method,
+                                 hatches=dxf_result.regions)
     _colour_open_views(doc, uidoc, selections)
     _OUT.finish(outcomes)
 
@@ -686,7 +697,7 @@ def _storey_level_pairs(doc, selections, built):
 
 def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None,
                       path=None, comparison=None, transform_method=None,
-                      storey_label=None, collect=None):
+                      storey_label=None, collect=None, hatches=None):
     """Build ONE storey: columns, beams, slabs and stairs from its records.
 
     `collect` is the multi-storey accumulator: when it is a list this storey
@@ -902,7 +913,8 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
     if selections.get("create_footings") and selections.get("build_footings", True):
         outcomes["footings"] = _create_footings(doc, sections, selections,
                                                 records=revit_result.records,
-                                                texts=foundation_texts)
+                                                texts=foundation_texts,
+                                                regions=hatches)
     _progress(_BUILD_STEPS, _BUILD_STEPS, "materials")
     applied = _apply_materials(doc, outcomes, selections)
     if applied:

@@ -25,7 +25,7 @@ from Autodesk.Revit.DB import Transaction, TransactionGroup
 
 import re
 
-from . import config, foundation_plan, naming, report, slab_outlines
+from . import config, fold_plan, foundation_plan, naming, report, slab_outlines
 from .builders import (columns, beams, footings, grids, materials, slabs,
                        txn_failures, view_filters)
 from . import stair_layout
@@ -243,13 +243,18 @@ def _create_beams(doc, beam_segments, selections):
             "skip_details": _skip_details(result["skipped"])}
 
 
-def _create_footings(doc, sections, selections, records=None, texts=None):
+def _create_footings(doc, sections, selections, records=None, texts=None,
+                     regions=None):
     """The foundations, on the columns' BASE level.
 
     `records` and `texts` are this storey's geometry and its routed foundation
     notes. When they carry the foundation convention the outlines come from the
     drawing; when they do not, the pass derives pads from the columns exactly as
     it always has.
+
+    `regions` are the storey's hatches. A fold or sunk hatch inside an outline
+    steps it: the outline is cut, a dropped slab goes in at the step depth, and
+    the vertical face between the two soffits is filled.
     """
     from Autodesk.Revit.DB import Transaction, TransactionGroup
     type_id = selections.get("footing_symbol_id")
@@ -262,6 +267,15 @@ def _create_footings(doc, sections, selections, records=None, texts=None):
     if outlines:
         _say("Footings -- {0} outline(s) read from the drawing; the "
              "column-offset derivation is not used.".format(len(outlines)))
+    steps = fold_plan.plan_steps(
+        outlines, regions or [],
+        max_step_mm=(selections.get("tolerances") or {}).get("max_step_mm"))
+    for message in steps["skipped"]:
+        _say("  step: {0}".format(message))
+    if steps["steps"]:
+        _say("Footings -- {0} fold/sunk step(s): {1} support(s) between the "
+             "soffits.".format(len(steps["steps"]),
+                               sum(len(s["supports"]) for s in steps["steps"])))
 
     group = TransactionGroup(doc, "CAD to BIM: Footings")
     transaction = Transaction(doc, "Create footings")
@@ -278,7 +292,7 @@ def _create_footings(doc, sections, selections, records=None, texts=None):
             # the user's setting never reached the footings.
             region_max_side_mm=(selections.get("tolerances") or {}).get(
                 "col_region_max_side_mm"),
-            outlines=outlines)
+            outlines=outlines, steps=steps["steps"])
         transaction.Commit()
         group.Assimilate()
     except Exception as creation_error:

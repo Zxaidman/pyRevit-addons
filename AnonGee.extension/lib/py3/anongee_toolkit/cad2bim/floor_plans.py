@@ -90,13 +90,16 @@ class FloorRegion(object):
     """
 
     def __init__(self, bounds, origin, label=None, order=0, records=None,
-                 texts=None, repeat=1, storey_height_mm=None):
+                 texts=None, repeat=1, storey_height_mm=None, regions=None):
         self.bounds = bounds          # (x0, y0, x1, y1) in internal feet
         self.origin = origin          # (x, y) in internal feet, DRAWN position
         self.label = label
         self.order = order
         self.records = records or []
         self.texts = texts or []
+        # the hatches inside this storey: fold and sunk regions belong to the
+        # plan they are drawn on, exactly as its records and notes do
+        self.regions = regions or []
         self.repeat = repeat          # a TYPICAL plan stands for this many storeys
         # this storey's own floor-to-floor height; None means the tab's default.
         # NOT height_mm -- that property is the boundary BOX's height on the sheet.
@@ -474,7 +477,7 @@ def _shift_text(text, dx, dy):
 
 
 def split_floors(records, texts=None, align=True, marker_records=None,
-                 boundary_layer=None, origin_layer=None):
+                 boundary_layer=None, origin_layer=None, hatches=None):
     """Split one drawing into per-storey FloorRegions.
 
     `marker_records` supplies the boundary/origin geometry when it is not in
@@ -566,6 +569,10 @@ def split_floors(records, texts=None, align=True, marker_records=None,
             point = getattr(text, "point_internal", None)
             if point is not None and region.contains(point[0], point[1]):
                 region.texts.append(_shift_text(text, dx, dy))
+        for hatch in (hatches or []):
+            x, y = _record_point(hatch)
+            if region.contains(x, y):
+                region.regions.append(_shift_record(hatch, dx, dy))
 
     regions.sort(key=lambda r: r.order)
     empty = [r for r in regions if not r.records]
@@ -880,7 +887,8 @@ def _reuse(region):
     return FloorRegion(region.bounds, region.origin, label=region.label,
                        order=region.order, records=region.records,
                        texts=region.texts, repeat=region.repeat,
-                       storey_height_mm=region.storey_height_mm)
+                       storey_height_mm=region.storey_height_mm,
+                       regions=region.regions)
 
 
 def expand_repeats(regions):

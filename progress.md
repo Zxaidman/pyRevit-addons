@@ -145,6 +145,41 @@ imports Revit at module level, so no offline harness can reach it; the check is
 an AST read of the call sites, the same way the dialog bindings are pinned.
 Proved to bite: breaking each of the four links fails its own test.
 
+### Phase 2 — folds and sunk (2.1–2.3)
+
+**The open question closed.** The user supplied a second Revit detail: a 200 mm
+slab whose fold support reads `Height Offset From Level = -200`. So the offset
+is the PARENT's thickness, and the rest is arithmetic from the two soffits —
+`depth = d + T_dropped - T_parent`, plan width `T_parent` (findings #7). The
+earlier detail could not settle it because its slab thickness and sunk value
+were both 350.
+
+**The fixture then proved the formula from the other end.** test10's sunk strip
+F6: 1000 thick, drops 1000, flanked by 2000-thick F5 pads. `1000 + 1000 - 2000
+= 0`, so no support — and none is wanted, because a pad that deep already IS the
+vertical face where they abut. Three numbers off the drawing landing exactly on
+zero is what says the convention is soffit-aligned rather than assumed. A first
+cut that read the thickness off the HOST rather than per edge invented a
+1000-deep strip inside solid pad concrete; the fixture caught it immediately.
+
+Two rules fell out of that and both earn their keep on this one drawing:
+
+- The parent is read **per edge**. A region cut out of its host steps down from
+  the host; a region that IS its host steps down from its neighbours, which are
+  a different thickness.
+- An edge with **nothing beyond it** gets no support. The sunk strip abuts pads
+  on two sides and open ground on the other two.
+
+`fold_plan.py` plans the three parts; `builders/footings.py` places the dropped
+slab and the supports and cuts the region out of its parent. Regions now travel
+the pipeline like records: transformed, classified, and split per storey (a fold
+belongs to the plan it was drawn on, not to the sheet).
+
+**Measured on test10:** 7 step regions → 7 planned, 0 skipped; 6 folds cut out of
+the two F3 rafts with 4 supports each at 2000 deep / `-1500` offset, and the one
+sunk strip placed with no cut and no support. Test9's `+6250` is refused by name
+as a storey rather than a step. Unit tests 514 → 536.
+
 ### Open
 
 - P2 next: folds and sunk, on slabs and rafts. P1 leaves each foundation plan

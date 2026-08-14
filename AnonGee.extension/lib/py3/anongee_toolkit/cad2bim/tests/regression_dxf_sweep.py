@@ -32,9 +32,10 @@ import _golden
 import _loader
 
 
-report, layers, marks, dxf_reader, slab_outlines, foundation_plan = _loader.load(
+(report, layers, marks, dxf_reader, slab_outlines, foundation_plan,
+ fold_plan) = _loader.load(
     "report", "classify.layers", "classify.marks", "readers.dxf_reader",
-    "slab_outlines", "foundation_plan")
+    "slab_outlines", "foundation_plan", "fold_plan")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CAD = os.path.join(_HERE, "fixtures", "cad")
@@ -65,6 +66,12 @@ def _measure(path):
     result = dxf_reader.read_dxf(path)
     for record in result.records:
         record.points = [(p[0] * _FT, p[1] * _FT, 0.0) for p in record.points]
+    # The hatches are scaled with everything else. Leaving them in millimetres
+    # while the outlines are in feet puts every region a thousand-fold away from
+    # the drawing, so each one lands inside no outline and the whole step pass
+    # silently measures zero -- which is exactly how this line came to be added.
+    for region in result.regions:
+        region.points = [(p[0] * _FT, p[1] * _FT, 0.0) for p in region.points]
     layers.apply_mapping(
         result.records,
         layers.build_default_mapping([r.layer_key for r in result.records]))
@@ -113,6 +120,13 @@ def _measure(path):
     foundation_plans = foundation_plan.plan_foundations(result.records,
                                                         foundation_texts)
     regions = _regions_by_category(result.regions)
+    # FOLDS AND SUNK BAYS. The hatches are classified the way the pipeline
+    # classifies them, then stepped against the outlines they sit in. test10 is
+    # the case: six folds inside two F3 rafts, and one sunk strip that IS its
+    # own F6 outline and therefore needs no support at all.
+    for region in result.regions:
+        region.category = layers.classify_layer(region.layer_key)
+    steps = fold_plan.plan_steps(foundation_plans, result.regions)
 
     return {
         "records": len(result.records),
@@ -152,6 +166,12 @@ def _measure(path):
         "regions": len(result.regions),
         "fold_regions": regions.get(layers.CATEGORY_FOLD, 0),
         "sunk_regions": regions.get(layers.CATEGORY_SUNK, 0),
+        "steps_planned": len(steps["steps"]),
+        "steps_skipped": len(steps["skipped"]),
+        "step_supports": sum(len(s["supports"]) for s in steps["steps"]),
+        "step_openings": sum(1 for s in steps["steps"]
+                             if s["opening"] is not None),
+        "step_depth_mm_total": round(sum(s["depth_mm"] for s in steps["steps"]), 1),
     }
 
 

@@ -124,7 +124,49 @@ they replaced. Refusing costs nothing — the caller falls back.
 
 ## Phase 2 — folds and sunk
 
-**Status:** next. Applies to slabs AND rafts.
+**Status:** 2.1–2.3 complete. 2.4 (legend-driven mapping) open.
+
+**The open question is closed.** The user gave the rule from their own detail:
+the fold support's offset is the **thickness of the top slab** — `-200` on a
+200 mm slab. Generalised from that, taking the parent's top as 0:
+
+| | |
+|-|-|
+| parent soffit | `-T_parent` |
+| dropped slab top | `-d` |
+| dropped slab soffit | `-(d + T_dropped)` |
+
+The support fills what lies between the two soffits, so `offset = -T_parent`,
+`depth = d + T_dropped - T_parent`, plan width `T_parent`. The user's detail is
+the equal-thickness case (`350 + 200 - 200 = 350` at `-200`).
+
+**The fixture corroborates it independently.** test10's sunk strip F6 is 1000
+thick, drops 1000, and sits between F5 pads 2000 thick: `1000 + 1000 - 2000 =
+0`, so no support — and none is needed, because a 2000-deep pad already IS the
+vertical face at the shared edge. Three numbers off the drawing landing exactly
+on zero is what says the convention is soffit-aligned rather than assumed.
+
+- [x] 2.1 Fold/sunk regions from the hatch rings of 1.1, paired to their label.
+      Each region takes the note that sits INSIDE it, so test10's three fold
+      notes per F3 raft pair exactly rather than by proximity.
+- [x] 2.2 The three parts placed: the parent with the region cut out of it, the
+      support between the soffits, the dropped slab at the step depth. A
+      support is emitted per EDGE and only where concrete continues beyond it —
+      the sunk strip abuts pads on two sides and open ground on the other two.
+- [x] 2.3 Magnitude threshold: over 3000 mm is a storey, not a step. Test9's
+      `+6250` is refused and named; test10's 2000 mm fold still builds.
+- [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern →
+      legend text → meaning), auto-proposed into the override dialog.
+
+**Measured on test10:** 7 step regions → 7 planned, 0 skipped. Six folds inside
+the two F3 rafts, each cut out with 4 supports 2000 deep at `-1500`; one sunk
+strip that IS its own F6 outline, so nothing is cut and no support is invented.
+
+---
+
+## Phase 2 — the representation it was built from
+
+Applies to slabs AND rafts.
 
 P1 leaves the evidence assembled: each foundation plan carries a `steps` list
 holding every FOLD/SUNK note inside its outline (test10: three folds in each of

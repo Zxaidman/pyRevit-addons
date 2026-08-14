@@ -317,6 +317,31 @@ class TheDrawnFoundationsReachTheBuilder(unittest.TestCase):
                       "place_footings is called without the drawn outlines: "
                       "every run falls back to pads invented from the columns")
 
+    def test_the_hatches_are_moved_and_classified_like_everything_else(self):
+        """A region read but never placed or categorised is a region ignored.
+
+        The reader keeps hatches OUT of `records`, which is what stopped them
+        reaching the column passes -- and also what stops them being carried by
+        anything that walks records. Both passes have to name them explicitly.
+        """
+        source = _script_source()
+        self.assertIn("transform.apply_to_records(text_affine, dxf_result.regions)",
+                      source, "hatches are never moved into model coordinates")
+        self.assertIn("layers.apply_mapping(dxf_result.regions", source,
+                      "hatches are never classified, so no fold is a fold")
+
+    def test_each_storey_keeps_the_hatches_drawn_on_it(self):
+        # one DXF holds every storey side by side; a fold belongs to the plan it
+        # was drawn on, so the splitter has to carry hatches as it carries
+        # records, or the foundation storey inherits the whole sheet's folds
+        source = _script_source()
+        self.assertIn("hatches=dxf_result.regions", source)
+        self.assertIn("hatches=region.regions", source)
+        call = self._call(self._function(_builders_source(), "_create_footings"),
+                          "place_footings")
+        self.assertIn("steps", [keyword.arg for keyword in call.keywords],
+                      "the planned steps never reach the builder")
+
     def test_the_region_limit_is_read_where_the_dialog_files_it(self):
         # it lives in TOLERANCES, where the column pass reads it; the footing
         # pass looked in "limits" and so always found None, which meant the

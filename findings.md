@@ -182,7 +182,61 @@ silently.
 `+6250` is not a fold — it is a different storey. A magnitude threshold is
 required in P2 whatever the representation.
 
-## 7. The user's region-size setting had never reached the footings
+## 7. A fold support's depth is arithmetic, not a setting
+
+The open question from P1 was which number drives the support's vertical
+placement: in the detail first supplied, the slab thickness and the sunk value
+were both 350, so the image could not say. The user closed it against a second
+detail — a 200 mm slab whose support reads `Height Offset From Level = -200`.
+The offset is the **parent's thickness**.
+
+Everything else follows from taking the parent's top as 0:
+
+```
+parent soffit         -T_parent
+dropped slab top      -d                     (the fold/sunk value)
+dropped slab soffit   -(d + T_dropped)
+```
+
+The support is the concrete between the two soffits:
+
+```
+offset = -T_parent
+depth  =  d + T_dropped - T_parent           (nothing to fill when <= 0)
+width  =  T_parent                           (in plan, under the parent)
+```
+
+**The fixture proves the formula from the other end.** test10's sunk strip F6
+is 1000 thick, drops 1000, and is flanked by F5 pads 2000 thick:
+
+```
+1000 + 1000 - 2000 = 0
+```
+
+No support — and none is wanted, because a pad 2000 deep is already the whole
+vertical face where the two abut. Three numbers taken off the drawing landing
+exactly on zero is not luck; it is the drawing telling us the convention is
+soffit-aligned. Had the rule been "the support is always `d` deep", F6 would
+have been given a 1000-deep strip inside solid pad concrete.
+
+Two consequences that fall out of the same reasoning:
+
+- **The parent is read per EDGE, not per region.** A region cut out of its host
+  steps down from that host; a region that IS its host steps down from the
+  neighbours it abuts, and they can be a different thickness. Reading the host
+  in the second case says the strip steps down from itself, which invented the
+  support the arithmetic above says is not there.
+- **An edge with nothing beyond it gets no support.** F6 abuts a pad on its two
+  long sides and open ground on its two short ones. Wrapping concrete round all
+  four would hold up nothing on two of them.
+
+### A storey is not a step
+
+Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first
+two are steps; 6250 is the next floor. A step deeper than 3000 mm is refused and
+named — the limit sits above test10's real 2000 mm fold and far below a storey.
+
+## 8. The user's region-size setting had never reached the footings
 
 Found while wiring P1.4. `run_builders._create_footings` read
 `col_region_max_side_mm` from `selections["limits"]`; the dialog writes it to
@@ -202,7 +256,7 @@ Now read from `tolerances`. Two notes on the consequence:
   carries its own foundation layer never reaches that path at all, which is the
   real answer to "a raft is bigger than a column".
 
-## 8. Test environment
+## 9. Test environment
 
 The suite runs green on Linux only after `pip install ezdxf`. The bundled
 `lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,

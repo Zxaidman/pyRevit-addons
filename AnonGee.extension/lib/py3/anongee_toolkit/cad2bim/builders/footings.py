@@ -165,8 +165,86 @@ def _zero_offset(instance):
                 pass
 
 
+def _offset(instance, offset_mm):
+    """Hang the element `offset_mm` BELOW its level (0 sits it on the level).
+
+    A fold's three floors are told apart by nothing but this number, so it is
+    set explicitly rather than left to whatever the type carries. A parameter
+    that will not take it is reported, not swallowed: an unmoved floor is a
+    dropped slab sitting flush with its parent, which looks built and is wrong.
+    """
+    if not offset_mm:
+        _zero_offset(instance)
+        return None
+    # ONE parameter, not the pair `_zero_offset` writes. The two agree at zero
+    # and disagree everywhere else: HEIGHTABOVELEVEL positions the slab's TOP,
+    # STRUCTURAL_ELEVATION_AT_BOTTOM its BOTTOM, so falling back to the second
+    # would place the element one thickness out and say nothing. Better to
+    # report that the offset could not be set than to move it to the wrong one.
+    try:
+        parameter = instance.get_Parameter(
+            BuiltInParameter.FLOOR_HEIGHTABOVELEVEL_PARAM)
+    except Exception:
+        parameter = None
+    if parameter is not None and not parameter.IsReadOnly:
+        try:
+            parameter.Set(offset_mm / _MM)
+            return None
+        except Exception:
+            pass
+    return ("could not offset a floor to {0:.0f} mm: it is flush with its "
+            "level".format(offset_mm))
+
+
+def _place_steps(doc, steps, base_type, level, cache, result):
+    """The dropped slabs and their supports, per step region.
+
+    Openings are NOT cut here: the parent outline is placed with the step ring
+    as a hole by the outline pass, which already nests rings the way the slab
+    builder does. What this adds is the two elements that have no outline of
+    their own -- the slab at the bottom of the step, and the vertical concrete
+    between the two soffits.
+    """
+    for step in (steps or []):
+        for part, ring, thickness, offset in _step_parts(step):
+            floor_type, note = _resolve_type(doc, base_type, thickness, cache)
+            type_names.record(result, note)
+            if floor_type is None:
+                result["skipped"].append(
+                    "no foundation type for a {0:.0f} mm {1}".format(
+                        thickness or 0.0, part))
+                continue
+            try:
+                loops = List[CurveLoop]()
+                loops.Add(_curve_loop([(p[0], p[1]) for p in ring]))
+                instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+                problem = _offset(instance, offset)
+                if problem:
+                    result["skipped"].append(problem)
+                if step.get("mark"):
+                    set_element_mark(instance, "{0}-{1}".format(
+                        step["mark"], part.upper()))
+                result["created"].append(instance.Id)
+            except Exception as creation_error:
+                result["errors"].append(str(creation_error))
+
+
+def _step_parts(step):
+    """[(part, ring, thickness_mm, offset_mm)] -- the dropped slab, then its supports."""
+    dropped = step.get("dropped") or {}
+    parts = []
+    if dropped.get("ring"):
+        parts.append((step.get("kind") or "step", dropped["ring"],
+                      dropped.get("thickness_mm"), dropped.get("offset_mm")))
+    for support in (step.get("supports") or []):
+        parts.append(("support", support["ring"], support.get("thickness_mm"),
+                      support.get("offset_mm")))
+    return parts
+
+
 def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
-                   thickness_mm=600.0, region_max_side_mm=None, outlines=None):
+                   thickness_mm=600.0, region_max_side_mm=None, outlines=None,
+                   steps=None):
     """The foundations, on `level_id` at zero offset.
 
     `outlines` is what `foundation_plan.plan_foundations` read off the drawing.
@@ -192,18 +270,19 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
 
     if outlines:
         result["source"] = "drawing"
-        plans = _plans_from_outlines(outlines, thickness_mm, result)
+        plans = _plans_from_outlines(outlines, thickness_mm, result, steps)
     else:
         region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
                       else region_max_side_mm)
         oversized = []
-        plans = footing_plan.plan_pads(sections, projection_mm, thickness_mm,
-                                       region_max, oversized)
+        plans = [(ring, thickness, mark, []) for ring, thickness, mark
+                 in footing_plan.plan_pads(sections, projection_mm, thickness_mm,
+                                           region_max, oversized)]
         singles = len(footing_plan.pads_for(sections, projection_mm, region_max))
         result["merged"] = max(0, singles - len(plans))
         result["skipped"].extend(oversized)
     cache = {}
-    for ring, pad_thickness, mark in plans:
+    for ring, pad_thickness, mark, holes in plans:
         try:
             floor_type, note = _resolve_type(doc, base_type, pad_thickness, cache)
             type_names.record(result, note)
@@ -213,6 +292,11 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
                 continue
             loops = List[CurveLoop]()
             loops.Add(_curve_loop(ring))
+            # The stepped area is a HOLE in the parent: without it the parent
+            # and the dropped slab claim the same plan, which Revit takes and
+            # sections as two slabs in one place.
+            for hole in holes:
+                loops.Add(_curve_loop([(p[0], p[1]) for p in hole]))
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
             _zero_offset(instance)
             if mark:
@@ -220,21 +304,26 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
             result["created"].append(instance.Id)
         except Exception as creation_error:
             result["errors"].append(str(creation_error))
+    _place_steps(doc, steps, base_type, level, cache, result)
     return result
 
 
-def _plans_from_outlines(outlines, thickness_mm, result):
-    """[(ring, thickness_mm, mark)] from what the drawing showed.
+def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
+    """[(ring, thickness_mm, mark, holes)] from what the drawing showed.
 
     A ring the drawing did not size falls back to the dialog's thickness and
-    says so, the way an unlabelled slab loop falls back to its floor type. The
-    fold and sunk regions a note carries are recorded, not built: the three
-    floors a fold is made of are P2's, and claiming them here would put a step
-    in the model that nothing has placed the concrete for.
+    says so, the way an unlabelled slab loop falls back to its floor type.
+
+    `holes` are the stepped areas cut out of THIS outline. A step whose region
+    IS its own outline contributes none: there the outline itself is the thing
+    that drops, and cutting it would leave a hole where the slab should be.
     """
+    openings = {}
+    for step in (steps or []):
+        if step.get("opening") is not None:
+            openings.setdefault(step["host_index"], []).append(step["opening"])
     plans = []
-    steps = 0
-    for plan in outlines:
+    for index, plan in enumerate(outlines):
         ring = plan.get("ring")
         if not ring or len(ring) < 3:
             continue
@@ -244,12 +333,22 @@ def _plans_from_outlines(outlines, thickness_mm, result):
             result["notes"].append(
                 "{0} outline has no thickness note: cast at {1:.0f} mm".format(
                     plan.get("mark") or "an unnamed", thickness or 0.0))
-        steps += len(plan.get("steps") or [])
-        plans.append(([(p[0], p[1]) for p in ring], thickness, plan.get("mark")))
+        holes = openings.get(index, [])
+        # A step region that IS this outline drops the WHOLE outline: the
+        # parent is not placed flat and then stepped, it is placed at the
+        # depth. Skipping it here leaves the dropped slab as the only element.
+        if _drops_entirely(index, steps):
+            continue
+        plans.append(([(p[0], p[1]) for p in ring], thickness,
+                      plan.get("mark"), holes))
     result["notes"].append(
         "{0} foundation outline(s) read from the drawing".format(len(plans)))
-    if steps:
-        result["notes"].append(
-            "{0} fold/sunk region(s) noted; stepping them is not built "
-            "yet".format(steps))
     return plans
+
+
+def _drops_entirely(index, steps):
+    """True when a step says this whole outline is the one that drops."""
+    for step in (steps or []):
+        if step.get("host_index") == index and step.get("opening") is None:
+            return True
+    return False
