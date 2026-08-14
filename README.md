@@ -10,48 +10,98 @@ A professional suite of structural and architectural BIM automation tools for **
 
 ## ✨ Tools Overview
 
-The extension adds an **AnonGee** tab inside Revit with four panels:
+The extension adds an **AnonGee** tab to the Revit ribbon with four panels and 29 tools.
 
 ### 🟢 Essential Panel
 
+Everyday modelling and clean-up work.
 
-| Tool                      | Description                                                                                                                 |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Obscured Rebar**        | Set rebars as unobscured and solid across selected views. Adjusts view detail level (Fine for 3D, Medium for plan/section). |
-| **Copy Rebar Visibility** | Copy rebar visibility / graphic settings from one view to others.                                                           |
-| **Export Schedule**       | Export Revit schedules to Excel / CSV format.                                                                               |
-| **Bulk Rename**           | Rename multiple elements (views, sheets, families, etc.) with naming patterns.                                              |
-| **Bulk Delete**           | Bulk-delete unused categories: fill patterns, line patterns, line styles, and more.                                         |
+**Auto Level Manager** *(v2.0.0 · [changelog](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md))*
+
+
+| Tool                   | Description                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Auto Level Manager** | Every level in the model from one**modeless** window — Revit stays interactive while it is open. Reads level marks out of drawing text ("FFL +3.500", "TOS -1.200", "TERRACE +14'-6\"") from the active view, the Revit selection, a DXF, or a paste box; infers the drawing's unit from the storey heights and cross-checks each text against where it sits on the sheet. Adds, renames, re-spaces and deletes levels. The stack is drawn to scale and editable in place — click to select, drag to move, double-click to rename, wheel to zoom. Undo/redo over staged changes; nothing reaches the model until Apply, which lands as one undo step. |
+
+**StrucBIM** — structural slabs and setting-out
+
+
+| Tool                     | Description                                                                                                                                                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Round Element Dist**   | Check element distances against one correct datum element or point and round them to a design value. Reports every deviation first; you approve each fix before anything moves. Skips pinned, grouped and linked elements. |
+| **Draw Floor**           | Click inside a closed region formed by structural framing and columns in a plan view; a structural floor or foundation slab is created with its boundary on the**inner faces** of those elements. Pick a type, click regions, repeat. |
+| **Convert Slab**         | Convert Structural Floor ⇄ Structural Foundation (slab). Works on a pre-selection or lets you pick in plan, 3D, section or elevation, and shows a pre-flight list of every element with its resolved target type before committing. |
+
+**Bulk Tool** — model-wide clean-up
+
+
+| Tool                      | Description                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Bulk Delete**           | Bulk-delete**Fill Patterns**, **Line Patterns** or **Line Styles**. Search and tick what to remove, with All / None helpers. |
+| **Bulk Rename**           | Bulk find-and-replace across all**Fill Pattern**, **Line Pattern** or **Line Style** names.                            |
+| **Obscured Rebar**        | Set rebars as Unobscured and Solid across selected views. Uses the pre-selection if there is one, otherwise every rebar in the document. |
+| **Copy Rebar Visibility** | Copy rebar visibility from one view to many: hidden/unhidden state, the Unobscured flag, and the Solid flag for 3D → 3D pairs. |
+
+**Action** — annotation and placement
+
+
+| Tool                | Description                                                                                                                                                                        |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **AutoDIM**         | *Self Dimension.* Dimension a selected element's own extents, measured along the element's**own** orientation, on whichever axes lie in the active view's plane. Placement is tuned per category so dimensions stay clear of the geometry. |
+| **Export Schedule** | Export Revit schedules to a single Excel workbook (`.xlsx`) with borders, fonts and header styling. Lists every project schedule with checkboxes.                                 |
+| **Rotate Column**   | Rotate selected columns sequentially by a dynamically calculated step angle. Pure Revit API through Python.NET.                                                                    |
+
+**Modify** — joins and link visibility
+
+
+| Tool                    | Description                                                                                                        |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Join Priority**       | Enforce a category-based join order on selected elements, so higher-priority categories cut lower-priority ones.  |
+| **Unjoin by Category**  | Unjoin the selected elements from everything they are joined to in the categories you choose.                      |
+| **Toggle Linked**       | Toggle the visibility of linked Revit categories in the current view.                                              |
 
 ### 🔵 Advance Panel
+
+Parameter work across many elements, always with a preview before anything is written.
 
 
 | Tool                       | Description                                                                                                                                                |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **One Filter Parameter**   | Filter Revit elements by a single parameter condition, preview matches in a table, then batch-edit a parameter (Set / Prefix / Suffix / Replace / Delete). |
-| **Multi Filter Parameter** | Filter Revit elements by multiple parameter conditions (All/Any logic), then batch-edit parameters in one transaction.                                     |
-| **Parameter Combine**      | Combine or split parameter values across multiple elements.                                                                                                |
+| **One Filter Parameter**   | Filter elements by a single parameter condition, preview the matches in a table, then batch-change a parameter on everything that passes (Set / Prefix / Suffix / Replace / Delete). |
+| **Multi Filter Parameter** | Filter by multiple parameter conditions (All / Any logic), then batch-edit a parameter on everything that matches.                                        |
+| **Parameter Combination**  | Write a value into a target parameter across model elements, built from one of four operations, with a live per-element preview before you apply.          |
 
 ### 🔴 Core Panel
+
+Build a model from an external source.
 
 
 | Tool               | Description                                                                                                                                                                                           |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **BIM Generation** | Build a structural Revit model from a PLANWIN / FRAMEWIN**INP** file. Creates levels, columns, beams, and floors with auto-sized type duplicates.                                                     |
-| **CAD2BIM**        | Import a**DXF** file, link it with unit + positioning settings, then auto-generate Revit grids, columns, and beams from the DXF geometry and text marks. Uses hybrid extraction (Revit link + ezdxf). |
-| **FramewinToBIM**  | Convert FRAMEWIN structural data directly into Revit elements.                                                                                                                                        |
+| **BIM Generation** | Build a structural Revit model from a PLANWIN / FRAMEWIN**INP** file. Creates levels, structural columns, beams and floors with auto-sized type duplicates.                                          |
+| **FramewinToBIM**  | Generate a structural RC frame (columns / beams / slabs) from FRAMEWIN data.                                                                                                                          |
+| **cad2bim**        | Pick a**DXF**, link it with unit and positioning settings, then build Revit grids, columns, beams, slabs and stairs from it. Hybrid extraction — the Revit link's geometry plus ezdxf for geometry and text — with layer classification and size refinement from text marks ("C1 400x400"). |
 
 ### 🟠 Dev Panel
 
+Generators, the design system, and the reference patterns new tools are built from.
 
-| Tool                 | Description                                                                                                                                                                                                                                                  |
-| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **BBS Generator**    | **Bar Bending Schedule** generator. Reads native `DB.Rebar` elements and exports formatted Excel workbooks (BBS, Calculation, Summary sheets). Supports **IS 2502:2019**, **BS 8666:2020**, and **ACI 318-19 / CRSI** standards. Includes revision tracking. |
-| **Brand Guidelines** | Live component gallery showing the AnonGee design system — brand colors, typography, buttons, inputs, toggles, and status badges.                                                                                                                           |
-| **CPython3 engine**  | Check / test the CPython 3 engine configuration.                                                                                                                                                                                                             |
-| **Create Button**    | Quick scaffolding utility for creating new pyRevit buttons.                                                                                                                                                                                                  |
+
+| Tool                    | Description                                                                                                                                                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **BBS Generator**       | **Bar Bending Schedule** generator. Reads native `DB.Rebar` elements and exports formatted Excel workbooks (BBS, Calculation, Summary sheets). Supports **IS 2502:2019**, **BS 8666:2020** and **ACI 318-19 / CRSI**, with revision tracking. |
+| **Brand Guidelines**    | Living component gallery for the design system — brand colours, typography, buttons, inputs, selection controls, lists and status badges, exactly as they render inside Revit.                                                  |
+| **CPython3 engine**     | Engine health check. Reports whether the CPython 3 engine is a fresh load or a reused instance (and how many runs this session), which third-party libraries resolve, and whether the Revit API bridge responds.                |
+| **Create Button**       | Scaffold a new pyRevit pushbutton: collects the tab / panel / group / metadata in a brand-themed dialog, writes the folder, script, icon and `bundle.yaml`, then asks pyRevit to reload.                                        |
+| **Modeless Window**     | Reference implementation of the modeless (non-blocking) window pattern — `window.Show()`, an `IExternalEventHandler` bridge marshalling every Revit call onto Revit's primary thread, and the session-state rules that go with it. |
 
 ---
+
+## 🏷️ Versioning
+
+The extension carries one version in `extension.json`, recorded in the [root changelog](CHANGELOG.md).
+
+A tool that changes often enough for "which build am I running" to be a real question carries **its own version and its own changelog**, beside its `bundle.yaml`. Those move independently — `AnonGee BIM Tools 1.1.0` ships `Auto Level Manager 2.0.0`, and neither number is wrong. The version shown in a tool's own window is the build actually running; quote it when reporting anything.
 
 ## 🎨 Design System
 
@@ -109,26 +159,63 @@ python auto_provision.py
 
 This installs `numpy`, `openpyxl`, `pythonnet`, and `ezdxf` into the extension's bundled library folders (`lib/py3/` and `lib/py2/`).
 
+### Tests
+
+Some tools keep their Revit-free logic in plain Python modules so it can be exercised without opening Revit. Run them from the repository root:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+`tests/test_repo_docs.py` holds this README and the [root changelog](CHANGELOG.md) to what is actually on the ribbon — every `.pushbutton` on disk has to be documented, every panel has to be declared in `extension.json`, and the changelog has to lead with the version `extension.json` states. `tests/test_autolevel.py` covers the Auto Level Manager's text detection, naming, plan model and stack-drawing camera. `tests/test_autolevel_ui.py` checks its XAML and Python wiring statically, against the delivery rules in §12.7–§12.9 of the brand guidelines and against the failures that are expensive to find inside Revit:
+
+- every `FindName` lookup resolves and every named control is used;
+- every `{Binding}` path has a matching `__slots__` entry;
+- no `re`, no pyRevit imports, no `StaticResource` on the root `Window`;
+- **no attribute value is mistaken for a markup extension** — a literal starting with `{` must be escaped `{}`, or `XamlReader.Load` throws and the window never opens;
+- every `{StaticResource}` names a key that exists, no `x:Key` is defined twice, every `Style` matches the element it is applied to, and every trigger `TargetName` exists in its own template;
+- every interactive control carries a tooltip;
+- the tool's version agrees across `__init__.py`, `bundle.yaml`, `CHANGELOG.md` and the window header.
+
 ### Project Structure
 
 ```
-AnonGee.extension/
-├── AnonGee.tab/           # Revit ribbon tab definition
-│   ├── Essential.panel/   # Essential panel tools
-│   ├── Advance.panel/     # Advance panel tools
-│   ├── Core.panel/        # Core panel tools
-│   └── Dev.panel/         # Dev panel tools
-├── lib/                   # Bundled Python libraries
-│   ├── py2/               # IronPython 2 libraries
-│   └── py3/               # CPython 3 libraries
-├── Resources/             # WPF design system (XAML)
-│   ├── AnonGeeTheme.xaml  # Main theme
-│   ├── Colors.xaml        # Brand colors
-│   ├── Controls.xaml      # Reusable controls
-│   ├── Icons.xaml         # SVG icons
-│   ├── Panels.xaml        # Panel templates
-│   └── Typography.xaml    # Typography styles
-└── path_resolver.py       # Library path resolver
+pyRevit-addons/
+├── CHANGELOG.md               # the extension's own version history
+├── README.md
+├── extension.json             # extension name, version, panel order
+├── tests/                     # Revit-free tests, run with plain unittest
+├── tools/                     # dependency provisioning for contributors
+├── AnonGee_BIM_Tools_Brand_Guidelines.md
+└── AnonGee.extension/
+    ├── AnonGee.tab/           # Revit ribbon tab definition
+    │   ├── Essential.panel/   # Auto Level Manager, StrucBIM, Bulk Tool, Action, Modify
+    │   ├── Advance.panel/     # parameter filtering and combination
+    │   ├── Core.panel/        # BIM Generation, FramewinToBIM, cad2bim
+    │   └── Dev.panel/         # BBS, design system, engine check, scaffolding, patterns
+    ├── lib/                   # bundled Python libraries
+    │   ├── py2/               # IronPython 2
+    │   └── py3/               # CPython 3, incl. the anongee_toolkit package
+    ├── Resources/             # WPF design system (XAML)
+    │   ├── AnonGeeTheme.xaml  # main theme (merges the five below)
+    │   ├── Colors.xaml        # brand colours
+    │   ├── Controls.xaml      # reusable controls
+    │   ├── Icons.xaml         # vector icons
+    │   ├── Panels.xaml        # panel templates
+    │   └── Typography.xaml    # type styles
+    └── path_resolver.py       # library path resolver
+```
+
+A tool bundle is a folder ending in `.pushbutton`, holding `bundle.yaml` (title, author, tooltip), `icon.png`, `script.py`, and — for anything with a window — a sibling `ui.xaml`. A tool with its own version adds a `CHANGELOG.md` and keeps its logic in a package beside the script, so the parts that do not touch Revit can be tested:
+
+```
+AutoLevel.pushbutton/
+├── bundle.yaml
+├── CHANGELOG.md            # this tool's own version history
+├── icon.png
+├── script.py               # window, event wiring, the Revit-thread bridge
+├── ui.xaml                 # WPF layout, theme inlined per §12.7.B
+└── anongee_autolevel/      # the thinking parts, importable without Revit
 ```
 
 ---
