@@ -333,6 +333,98 @@ class NeighbouringFoldsPoolTheirSupport(unittest.TestCase):
             self.assertEqual(len(support["holes"]), 1)
 
 
+class PoolingSurvivesWhatReviewFoundInIt(unittest.TestCase):
+    """Three defects an adversarial review proved by running the module.
+
+    Each test is the review's own reproduction, kept so the defect stays dead.
+    """
+
+    def _steps(self, folds, host_thickness=500.0, depth=750.0,
+               host=(-20000, -20000, 30000, 30000)):
+        notes = [_step(depth, fold_plan.FOLD,
+                       (((f[0] + f[2]) / 2.0), ((f[1] + f[3]) / 2.0)))
+                 for f in folds]
+        plan = _plan(host[0], host[1], host[2], host[3], host_thickness,
+                     notes, "F1")
+        return fold_plan.plan_steps(plan and [plan],
+                                    [_fold(*f) for f in folds])
+
+    def test_a_corner_pinched_union_is_refused_the_same_way_in_every_order(self):
+        # four collars whose union encloses a courtyard AND necks to a point
+        # at (4000,4000): 6 of the 24 hatch orders used to splice the outer
+        # ring and the courtyard into one figure-eight -- a self-intersecting
+        # ring whose net area still read positive -- and lose the pocket
+        import itertools
+        folds = [(500, 500, 3500, 3500), (4500, 4500, 7500, 7500),
+                 (500, -3500, 11500, -500), (8500, -3500, 11500, 7500)]
+        seen = set()
+        for order in itertools.permutations(folds):
+            out = self._steps(list(order))
+            supports = [s for step in out["steps"] for s in step["supports"]]
+            for support in supports:
+                ring = support["ring"]
+                self.assertEqual(len(ring), len(set(ring)),
+                                 "a support ring visits a vertex twice")
+            seen.add((len(supports),
+                      tuple(sorted(len(s["holes"]) for s in supports))))
+        # every order lands on the SAME answer: the necked union is refused
+        # and the four collars stay four separate floors
+        self.assertEqual(seen, {(4, (1, 1, 1, 1))})
+        note = self._steps(folds)["notes"]
+        self.assertTrue(any("neck" in n for n in note), note)
+
+    def test_a_rectangle_with_a_mid_edge_vertex_still_pools(self):
+        # a CAD polyline routinely lands a vertex mid-edge; the 5-point ring
+        # is still a rectangle, and used to be silently left out of pooling
+        five_point = _Region(0, 0, 0, 0, layers.CATEGORY_FOLD)
+        five_point.points = [(_mm(2000), _mm(2000), 0.0),
+                             (_mm(3000), _mm(2000), 0.0),
+                             (_mm(4000), _mm(2000), 0.0),
+                             (_mm(4000), _mm(4000), 0.0),
+                             (_mm(2000), _mm(4000), 0.0)]
+        plain = _fold(4300, 2000, 6300, 4000)
+        host = _plan(-20000, -20000, 30000, 30000, 500.0,
+                     [_step(750.0, fold_plan.FOLD, (3000, 3000)),
+                      _step(750.0, fold_plan.FOLD, (5300, 3000))], "F1")
+        out = fold_plan.plan_steps([host], [five_point, plain])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 1)
+        self.assertEqual(len(supports[0]["holes"]), 2)
+
+    def test_a_genuinely_non_rectangular_collar_is_left_out_and_says_so(self):
+        l_shape = _Region(0, 0, 0, 0, layers.CATEGORY_FOLD)
+        l_shape.points = [(_mm(2000), _mm(2000), 0.0),
+                          (_mm(6000), _mm(2000), 0.0),
+                          (_mm(6000), _mm(4000), 0.0),
+                          (_mm(4000), _mm(4000), 0.0),
+                          (_mm(4000), _mm(6000), 0.0),
+                          (_mm(2000), _mm(6000), 0.0)]
+        plain = _fold(6300, 2000, 8300, 4000)
+        host = _plan(-20000, -20000, 30000, 30000, 500.0,
+                     [_step(750.0, fold_plan.FOLD, (3000, 3000)),
+                      _step(750.0, fold_plan.FOLD, (7300, 3000))], "F1")
+        out = fold_plan.plan_steps([host], [l_shape, plain])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 2)      # excluded, not swallowed
+        self.assertTrue(any("not rectangular" in n for n in out["notes"]),
+                        out["notes"])
+
+    def test_folds_drawn_edge_to_edge_pool_into_ONE_merged_hollow(self):
+        # two regions sharing a full edge used to arrive as two hole loops
+        # sharing that segment -- a tangent pair Revit rejects wholesale
+        out = self._steps([(1000, 1000, 3000, 3000), (3000, 1000, 5000, 3000)])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 1)
+        self.assertEqual(len(supports[0]["holes"]), 1)
+        self.assertEqual(_size_mm(supports[0]["holes"][0]), (4000, 2000))
+
+    def test_a_duplicated_hatch_leaves_one_hollow_not_two_coincident_ones(self):
+        out = self._steps([(1000, 1000, 3000, 3000), (1000, 1000, 3000, 3000)])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 1)
+        self.assertEqual(len(supports[0]["holes"]), 1)
+
+
 class AnOpeningAtTheBoundaryDividesTheOutline(unittest.TestCase):
     """The corridor block: its sunk bay spans the block's full width.
 

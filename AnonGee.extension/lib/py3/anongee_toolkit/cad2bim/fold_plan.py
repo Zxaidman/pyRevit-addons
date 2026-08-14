@@ -180,18 +180,19 @@ def _pool_collars(steps, notes):
     this corpus is a rectangle; the note is for the drawing that breaks that.
     """
     collars = []               # (step, support, rect) for every poolable collar
-    irregular = False
+    irregular = 0
     for step in steps:
         for support in step["supports"]:
             if not support["holes"]:
                 continue                     # strips and Ls do not pool
             rect = _as_rect(support["ring"])
             if rect is None:
-                irregular = True
+                irregular += 1
                 continue
             collars.append((step, support, rect))
-    if irregular and len(collars) < 2:
-        return
+    if irregular:
+        notes.append("{0} support collar(s) not rectangular: left out of "
+                     "pooling, placed on their own".format(irregular))
     groups = _touching_groups(collars)
     for group in groups:
         if len(group) < 2:
@@ -201,12 +202,28 @@ def _pool_collars(steps, notes):
             notes.append("{0} overlapping support collars left separate: a "
                          "non-rectangular union".format(len(group)))
             continue
+        # A union that NECKS to a point -- an enclosed pocket meeting the
+        # outer edge at a shared corner -- is not one castable slab, and
+        # Revit rejects loops that touch. Those collars stay separate floors,
+        # which is exactly what the drawing shows there: two pieces of
+        # concrete meeting at a corner.
+        pinch = set(outer) & set(point for pocket in pockets
+                                 for point in pocket)
+        if pinch:
+            notes.append("{0} support collars neck to a point: left "
+                         "separate".format(len(group)))
+            continue
         first = group[0][1]
         first["ring"] = outer
         holes = []
         for _step, support, _rect in group:
             holes.extend(support["holes"])
-        first["holes"] = holes + pockets
+        # MERGED, not concatenated. Two folds drawn edge-to-edge arrive as two
+        # rings sharing a full segment, and a duplicated hatch as two coincident
+        # ones -- either handed to Revit verbatim is a tangent pair of sketch
+        # loops that kills the whole support. The union dissolves shared edges
+        # and duplicates into one hollow.
+        first["holes"] = _merged_holes(holes) + pockets
         for step, support, _rect in group[1:]:
             step["supports"].remove(support)
 
@@ -247,13 +264,29 @@ _TOUCH_TOL_FT = 1.0 / 304.8    # a millimetre: drawn-to-meet counts as touching
 
 
 def _rects_touch(a, b):
-    return not (a[2] < b[0] - _TOUCH_TOL_FT or b[2] < a[0] - _TOUCH_TOL_FT
-                or a[3] < b[1] - _TOUCH_TOL_FT or b[3] < a[1] - _TOUCH_TOL_FT)
+    """Overlapping or edge-sharing -- corner-to-corner contact is NOT touching.
+
+    Two collars meeting only at a point are two perfectly placeable floors, and
+    pooling them buys nothing. It also costs: the union's boundary passes
+    through the shared corner TWICE (a pinch), which is where the ring walk
+    used to splice two loops into one self-intersecting figure-eight.
+    """
+    gap_x = min(a[2], b[2]) - max(a[0], b[0])
+    gap_y = min(a[3], b[3]) - max(a[1], b[1])
+    if gap_x < -_TOUCH_TOL_FT or gap_y < -_TOUCH_TOL_FT:
+        return False
+    return gap_x > _TOUCH_TOL_FT or gap_y > _TOUCH_TOL_FT
 
 
 def _as_rect(ring):
-    """(x0, y0, x1, y1) when the ring is an axis-aligned rectangle, else None."""
-    cleaned = _dedup_ring(list(ring))
+    """(x0, y0, x1, y1) when the ring is an axis-aligned rectangle, else None.
+
+    Collinear vertices are dropped first: a CAD polyline routinely lands a
+    vertex mid-edge, and a rectangle with five points is still a rectangle.
+    Without this the collar built round it was quietly left out of pooling --
+    which is the overlapping-floors defect pooling exists to fix.
+    """
+    cleaned = _collinear_simplified(_dedup_ring(list(ring)))
     if len(cleaned) != 4:
         return None
     tol = _TOUCH_TOL_FT
@@ -347,9 +380,32 @@ def _grid_rings(xs, ys, covered):
             following = starts.get(cursor[1]) or []
             if not following:
                 return None
-            cursor = (cursor[1], following[0])
+            cursor = (cursor[1], _sharpest_right(cursor[0], cursor[1], following))
         rings.append(_collinear_simplified(ring[:-1]))
     return rings
+
+
+def _sharpest_right(previous, vertex, following):
+    """The continuation turning hardest RIGHT -- the only sound choice at a pinch.
+
+    A vertex where two covered cells meet only diagonally has FOUR boundary
+    segments through it, two of them outgoing. A boundary walk traces the
+    face on its RIGHT (the uncovered side), and staying on that same face
+    means the most clockwise continuation; taking whichever outgoing happened
+    to be listed first spliced the outer ring and the enclosed pocket into
+    one figure-eight whose net area still read positive -- a self-intersecting
+    ring the single-outer guard cannot see and Revit will not take.
+    """
+    if len(following) == 1:
+        return following[0]
+    into = math.atan2(vertex[1] - previous[1], vertex[0] - previous[0])
+    best, best_turn = following[0], None
+    for candidate in following:
+        out = math.atan2(candidate[1] - vertex[1], candidate[0] - vertex[0])
+        turn = (out - into + math.pi) % (2.0 * math.pi)
+        if best_turn is None or turn < best_turn:
+            best, best_turn = candidate, turn
+    return best
 
 
 def split_profile(outer, holes):
@@ -431,6 +487,36 @@ def _point_edge_gap(point, a, b):
     t = ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length2
     t = max(0.0, min(1.0, t))
     return _dist(point, (a[0] + t * dx, a[1] + t * dy))
+
+
+def _merged_holes(holes):
+    """The pooled hollows as ONE ring per connected piece of them.
+
+    Cells covered by any hole ring are the hollow; each connected run walks
+    out as one ring. Shared edges and coincident duplicates dissolve. A ring
+    of holes enclosing an un-hollowed middle keeps that middle as support --
+    only the counter-clockwise outers come back. Falls back to the holes as
+    given if the walk cannot close.
+    """
+    if len(holes) < 2:
+        return list(holes)
+    coords = [point for hole in holes for point in hole]
+    snap_x = _snapped([p[0] for p in coords])
+    snap_y = _snapped([p[1] for p in coords])
+    xs = sorted(set(snap_x.values()))
+    ys = sorted(set(snap_y.values()))
+    covered = {}
+    for column in range(len(xs) - 1):
+        for row in range(len(ys) - 1):
+            centre = ((xs[column] + xs[column + 1]) / 2.0,
+                      (ys[row] + ys[row + 1]) / 2.0)
+            if any(_point_in_ring(centre, hole) for hole in holes):
+                covered[(column, row)] = True
+    rings = _grid_rings(xs, ys, covered)
+    if rings is None:
+        return list(holes)
+    merged = [ring for ring in rings if _signed_area(ring) > 0]
+    return merged if merged else list(holes)
 
 
 def _snapped(values):

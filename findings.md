@@ -264,6 +264,33 @@ between them, all three verified against Revit's own profile rules offline.
 Openings strictly inside stay holes; the big raft's seven pass through
 untouched.
 
+### Three ways pooling could fail, found by adversarial review
+
+An independent review executed the pooling code against inputs the corpus does
+not carry, and confirmed three defects by reproduction; each fix keeps the
+review's own scenario as a test.
+
+- **A corner-pinched union spliced its loops.** Four collars whose union
+  encloses a courtyard and necks to a point had a degree-4 boundary vertex;
+  the ring walk took whichever continuation was listed first, and 6 of the 24
+  hatch draw orders spliced the outer ring and the courtyard pocket into one
+  figure-eight — net area still positive, so the single-outer guard passed it,
+  and Revit would have rejected the sketch, losing the whole support on a
+  draw-order lottery. The walk now takes the sharpest RIGHT turn (staying on
+  the face it is tracing), corner-only contact no longer counts as touching,
+  and a union that still necks to a point is refused with a note — the
+  collars stay separate floors, which is what concrete meeting at a corner is.
+- **A rectangle with a mid-edge vertex was silently unpoolable.** CAD
+  polylines routinely land a vertex mid-edge; the 5-point collar failed the
+  4-point rectangle test and dropped out of pooling with no note — quietly
+  reintroducing the overlapping-collar defect. Collinear vertices are now
+  dropped before the test, and a genuinely non-rectangular collar says so.
+- **Pooled hollows were concatenated, not merged.** Two folds drawn
+  edge-to-edge arrived as two hole loops sharing a full segment — a tangent
+  pair Revit rejects wholesale; a duplicated hatch arrived as two coincident
+  holes. Pooled holes now run through the same grid union, dissolving shared
+  edges and duplicates into one hollow per connected piece.
+
 ### A storey is not a step
 
 Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first

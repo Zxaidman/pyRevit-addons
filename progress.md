@@ -272,6 +272,18 @@ the skip/note lines that used to share their formatting, across all six
 creators. Tests 549 → 553; the sweep gains `foundation_profiles` /
 `foundation_outlines_divided` (test10: 11 profiles, 1 divided).
 
+### Session 2026-08-14 (continued) — v0.69.4, the review's three finds
+
+An adversarial review ran the pooling code against inputs the corpus never
+draws and confirmed three defects by executing the module (findings, "Three
+ways pooling could fail"). All three fixed; each review reproduction is now a
+test, including the 24-permutation pinch case proved deterministic. The walk
+takes the sharpest right turn at a pinch, corner contact no longer groups,
+necked unions are refused with a note, collinear vertices no longer disqualify
+a rectangle, and pooled hollows merge through the same grid union instead of
+arriving as tangent or coincident loops. Tests 553 → 558; test10's output is
+bit-identical (2 supports, 4-point rings) and every baseline stands untouched.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →
