@@ -250,6 +250,20 @@ and every fold in the group is a hollow of that one slab. The concrete between
 folds belongs to it. test10 builds exactly **two** fold supports — one per
 raft — where it built six.
 
+### An opening at the boundary divides the outline
+
+The user's Revit run of v0.69.1: 18 created, 1 error — `Floor.Create` refusing
+"curve loops intersect with each other". Validating all 19 planned profiles
+offline named the culprit exactly: the corridor block, whose sunk bay spans the
+block's **full width**. Its "hole" shares its left and right edges with the
+block's own boundary, and two loops sharing edges is not a slab with a hole —
+it is two slabs. `split_profile` now subtracts any opening that reaches its
+outline's boundary (compressed-grid walk, same machinery as the collar union):
+the block arrives as a north piece and a south piece with the dropped slab
+between them, all three verified against Revit's own profile rules offline.
+Openings strictly inside stay holes; the big raft's seven pass through
+untouched.
+
 ### A storey is not a step
 
 Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first

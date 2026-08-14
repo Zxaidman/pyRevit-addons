@@ -253,6 +253,25 @@ index where an identity belongs. The roof is now found by its label, the
 transposed lists blessed as the export's stored order, and the roof metrics
 stayed 0 and 7 — the true statement about the drawing.
 
+### Session 2026-08-14 (later still) — v0.69.3, the corridor's rejected profile
+
+The user's Revit run of v0.69.1/2: 18 created, 1 error, `Floor.Create`
+refusing a profile. Offline validation of all 19 planned profiles against
+Revit's own rules (closed, planar, non-intersecting loops) isolated it in one
+pass: the corridor block, whose sunk bay spans its full width — a "hole"
+sharing two edges with its outline's boundary is two slabs, not a slab with a
+hole. `fold_plan.split_profile` now divides an outline wherever an opening
+reaches its boundary (the collar-union grid machinery, reused); the block
+places as north + south pieces around the dropped slab, and all 20 profiles
+validate. Interior openings still nest as holes — the raft's seven pass
+untouched.
+
+Also per the user's request: builder ERROR lines now print in red
+(`_say_error`, an HTML span pyRevit's output window renders), separated from
+the skip/note lines that used to share their formatting, across all six
+creators. Tests 549 → 553; the sweep gains `foundation_profiles` /
+`foundation_outlines_divided` (test10: 11 profiles, 1 divided).
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

@@ -61,7 +61,8 @@ import math
 
 from . import config
 from .classify.layers import CATEGORY_FOLD, CATEGORY_SUNK
-from .slab_graph import _centroid, _dedup_ring, _point_in_ring, _signed_area
+from .slab_graph import (_centroid, _dedup_ring, _dist,
+                         _point_in_ring, _signed_area)
 
 _MM = config.MM_PER_FT
 
@@ -299,9 +300,23 @@ def _rect_union_outline(rects):
                     continue
                 covered[(column, row)] = True
 
-    # Boundary segments, oriented with the COVERED side on the left, so the
-    # outer ring walks counter-clockwise and every pocket clockwise -- the
-    # sign of the walked area tells the two apart without a containment test.
+    rings = _grid_rings(xs, ys, covered)
+    if rings is None:
+        return None, []                  # open boundary: not a clean union
+    outers = [ring for ring in rings if _signed_area(ring) > 0]
+    if len(outers) != 1:
+        return None, []                  # disconnected union, or none at all
+    pockets = [ring for ring in rings if _signed_area(ring) < 0]
+    return outers[0], pockets
+
+
+def _grid_rings(xs, ys, covered):
+    """Every boundary ring of the covered cells, or None if the walk breaks.
+
+    Boundary segments are oriented with the COVERED side on the left, so an
+    outer boundary walks counter-clockwise and an enclosed hole clockwise --
+    the sign of the walked area tells the two apart with no containment test.
+    """
     segments = {}
     for (column, row) in covered:
         x0, x1 = xs[column], xs[column + 1]
@@ -331,15 +346,91 @@ def _rect_union_outline(rects):
                 break
             following = starts.get(cursor[1]) or []
             if not following:
-                return None, []          # open boundary: not a clean union
+                return None
             cursor = (cursor[1], following[0])
         rings.append(_collinear_simplified(ring[:-1]))
+    return rings
 
-    outers = [ring for ring in rings if _signed_area(ring) > 0]
-    if len(outers) != 1:
-        return None, []                  # disconnected union, or none at all
-    pockets = [ring for ring in rings if _signed_area(ring) < 0]
-    return outers[0], pockets
+
+def split_profile(outer, holes):
+    """[(ring, holes)] -- the outline's profile as Revit will accept it.
+
+    A hole STRICTLY inside the outline stays a hole. A hole that reaches the
+    outline's boundary is not a hole at all -- it DIVIDES the outline. The
+    corridor block is the case: its sunk bay spans the block's full width, so
+    "the block with a hole" hands Floor.Create two loops sharing two edges,
+    which it rejects ("curve loops intersect with each other" -- the user's
+    one-error run). The concrete truth is a north piece and a south piece with
+    the dropped slab between them, and that is what this returns.
+
+    Rectilinear, like the union above: cells of a compressed grid are covered
+    when inside the outline and not inside a boundary-reaching hole, and each
+    connected run of covered cells walks out as one piece. Interior holes are
+    handed to whichever piece contains them; a piece can also GAIN a hole the
+    subtraction itself created (a U-shaped cut closing round an island).
+    """
+    inside, touching = [], []
+    for hole in holes or []:
+        if _strictly_inside(hole, outer):
+            inside.append(hole)
+        else:
+            touching.append(hole)
+    if not touching:
+        return [(outer, inside)]
+
+    coords = list(outer)
+    for hole in touching:
+        coords.extend(hole)
+    snap_x = _snapped([p[0] for p in coords])
+    snap_y = _snapped([p[1] for p in coords])
+    xs = sorted(set(snap_x.values()))
+    ys = sorted(set(snap_y.values()))
+    covered = {}
+    for column in range(len(xs) - 1):
+        for row in range(len(ys) - 1):
+            centre = ((xs[column] + xs[column + 1]) / 2.0,
+                      (ys[row] + ys[row + 1]) / 2.0)
+            if not _point_in_ring(centre, outer):
+                continue
+            if any(_point_in_ring(centre, hole) for hole in touching):
+                continue
+            covered[(column, row)] = True
+    rings = _grid_rings(xs, ys, covered)
+    if rings is None:
+        return [(outer, inside)]        # a walk that failed changes nothing
+    pieces = [(ring, []) for ring in rings if _signed_area(ring) > 0]
+    orphans = [ring for ring in rings if _signed_area(ring) < 0]
+    for hole in inside + orphans:
+        anchor = _centroid(hole)
+        for ring, piece_holes in pieces:
+            if _point_in_ring(anchor, ring):
+                piece_holes.append(hole)
+                break
+    return pieces
+
+
+def _strictly_inside(hole, outer):
+    """Every vertex inside the outline and clear of its boundary."""
+    count = len(outer)
+    for point in hole:
+        if not _point_in_ring(point, outer):
+            return False
+        for index in range(count):
+            if _point_edge_gap(point, outer[index],
+                               outer[(index + 1) % count]) <= _TOUCH_TOL_FT:
+                return False
+    return True
+
+
+def _point_edge_gap(point, a, b):
+    """Distance from a point to the segment ab."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length2 = dx * dx + dy * dy
+    if length2 <= 0:
+        return _dist(point, a)
+    t = ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy) / length2
+    t = max(0.0, min(1.0, t))
+    return _dist(point, (a[0] + t * dx, a[1] + t * dy))
 
 
 def _snapped(values):

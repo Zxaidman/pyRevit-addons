@@ -127,6 +127,26 @@ def _measure(path):
     for region in result.regions:
         region.category = layers.classify_layer(region.layer_key)
     steps = fold_plan.plan_steps(foundation_plans, result.regions)
+    # The PROFILES the builder would hand Floor.Create, assembled the same
+    # way: step openings and nested outlines as holes, then split wherever an
+    # opening reaches its outline's boundary. The corridor block is the case:
+    # profile-split is what turned its rejected hole into two placed pieces.
+    openings, drops = {}, set()
+    for step in steps["steps"]:
+        if step["opening"] is None:
+            drops.add(step["host_index"])
+        else:
+            openings.setdefault(step["host_index"], []).append(step["opening"])
+    profile_count = 0
+    outlines_divided = 0
+    for index, plan in enumerate(foundation_plans):
+        if index in drops or not plan.get("ring"):
+            continue
+        holes = list(plan.get("holes") or []) + openings.get(index, [])
+        pieces = fold_plan.split_profile(plan["ring"], holes)
+        profile_count += len(pieces)
+        if len(pieces) > 1:
+            outlines_divided += 1
 
     return {
         "records": len(result.records),
@@ -172,6 +192,8 @@ def _measure(path):
         "step_openings": sum(1 for s in steps["steps"]
                              if s["opening"] is not None),
         "step_depth_mm_total": round(sum(s["depth_mm"] for s in steps["steps"]), 1),
+        "foundation_profiles": profile_count,
+        "foundation_outlines_divided": outlines_divided,
     }
 
 

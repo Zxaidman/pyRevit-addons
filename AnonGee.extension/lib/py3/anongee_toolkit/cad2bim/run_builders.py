@@ -32,7 +32,7 @@ from . import stair_layout
 from .classify import layers
 from .builders import stairs
 from .run_picking import _pick_stair_regions
-from .run_console import _say, _progress
+from .run_console import _say, _say_error, _progress
 from .ui_dialogs import _alert, _error, _persisted, _rollback_alert
 
 
@@ -120,7 +120,7 @@ def _create_grids(doc, records, grid_texts=None):
     _say("Grids -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
     for message in result["errors"]:
-        _say("  grid: {0}".format(message))
+        _say_error("  grid: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]),
             "error_details": [str(e)[:220] for e in result["errors"][:8]],
@@ -174,8 +174,10 @@ def _create_columns(doc, sections, selections):
     _say("Columns -- rect created: {0}, circular: {1}, skipped: {2}, errors: {3}".format(
         len(result["created"]), len(circular["created"]),
         len(result["skipped"]), len(result["errors"]) + len(circular["errors"])))
-    for message in (result["errors"] + circular["errors"] + result["skipped"]
-                    + result.get("notes", []) + circular.get("notes", [])):
+    for message in result["errors"] + circular["errors"]:
+        _say_error("  column: {0}".format(message))
+    for message in (result["skipped"] + result.get("notes", [])
+                    + circular.get("notes", [])):
         _say("  column: {0}".format(message))
     return {"rect": len(result["created"]), "circular": len(circular["created"]),
             _IDS: result["created"] + circular["created"],
@@ -229,8 +231,9 @@ def _create_beams(doc, beam_segments, selections):
 
     _say("Beams -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
-    for message in (result["errors"] + result["skipped"]
-                    + result.get("notes", [])):
+    for message in result["errors"]:
+        _say_error("  beam: {0}".format(message))
+    for message in result["skipped"] + result.get("notes", []):
         _say("  beam: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]),
@@ -306,8 +309,9 @@ def _create_footings(doc, sections, selections, records=None, texts=None,
 
     _say("Footings -- created: {0}, skipped: {1}, errors: {2}".format(
         len(result["created"]), len(result["skipped"]), len(result["errors"])))
-    for message in (result["errors"] + result["skipped"]
-                    + result.get("notes", [])):
+    for message in result["errors"]:
+        _say_error("  footing: {0}".format(message))
+    for message in result["skipped"] + result.get("notes", []):
         _say("  footing: {0}".format(message))
     return {"created": len(result["created"]),
             "skipped": len(result["skipped"]),
@@ -491,8 +495,9 @@ def _create_slabs(doc, records, beam_segments, texts, selections, schedule=None,
          "created: {3}, skipped: {4}, errors: {5}".format(
              source, len(slab_defs), sized, len(result["created"]),
              len(result["skipped"]), len(result["errors"])))
-    for message in (result["errors"] + result["skipped"]
-                    + result.get("notes", [])):
+    for message in result["errors"]:
+        _say_error("  slab: {0}".format(message))
+    for message in result["skipped"] + result.get("notes", []):
         _say("  slab: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]), "source": source, "loops": len(slab_defs),
@@ -551,8 +556,9 @@ def _create_stairs(doc, records, beam_segments, texts, selections,
              len(result["created"]), len(result["skipped"]),
              len(result["errors"]), int(storey_mm), plans[0]["risers_total"],
              plans[0]["riser_mm"]))
-    for message in (result["errors"] + result["skipped"]
-                    + result.get("notes", [])):
+    for message in result["errors"]:
+        _say_error("  stair: {0}".format(message))
+    for message in result["skipped"] + result.get("notes", []):
         _say("  stair: {0}".format(message))
     return {"created": len(result["created"]), "skipped": len(result["skipped"]),
             "errors": len(result["errors"]), "planned": len(plans),

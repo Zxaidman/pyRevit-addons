@@ -333,6 +333,55 @@ class NeighbouringFoldsPoolTheirSupport(unittest.TestCase):
             self.assertEqual(len(support["holes"]), 1)
 
 
+class AnOpeningAtTheBoundaryDividesTheOutline(unittest.TestCase):
+    """The corridor block: its sunk bay spans the block's full width.
+
+    Handed to Revit as "the block with a hole", the two loops share two edges
+    and Floor.Create refuses the profile -- the user's 18-created-1-error run.
+    The concrete truth is a north piece and a south piece, with the dropped
+    slab between them.
+    """
+
+    def test_a_full_width_opening_makes_two_pieces_and_no_hole(self):
+        # the block and its sunk bay, at the drawing's own coordinates
+        outer = _ring(10533, 4350, 14033, 21650)
+        hole = _ring(10533, 10050, 14033, 15950)
+        pieces = fold_plan.split_profile(outer, [hole])
+        self.assertEqual(len(pieces), 2)
+        sizes = sorted(_size_mm(ring) for ring, _holes in pieces)
+        self.assertEqual(sizes, [(3500, 5700), (3500, 5700)])
+        for _ring_, piece_holes in pieces:
+            self.assertEqual(piece_holes, [])
+
+    def test_an_interior_hole_stays_a_hole(self):
+        outer = _ring(0, 0, 20000, 10000)
+        hole = _ring(8000, 3000, 12000, 7000)
+        pieces = fold_plan.split_profile(outer, [hole])
+        self.assertEqual(len(pieces), 1)
+        ring, holes = pieces[0]
+        self.assertEqual(_size_mm(ring), (20000, 10000))
+        self.assertEqual(len(holes), 1)
+
+    def test_a_mixed_profile_splits_and_keeps_the_interior_hole(self):
+        # one opening reaches the left edge, another sits clear inside: the
+        # outline splits round the first and the second stays a hole of the
+        # piece that contains it
+        outer = _ring(0, 0, 20000, 10000)
+        touching = _ring(0, 4000, 6000, 6000)
+        interior = _ring(12000, 3000, 16000, 7000)
+        pieces = fold_plan.split_profile(outer, [touching, interior])
+        self.assertEqual(len(pieces), 1)     # a side notch does not disconnect
+        ring, holes = pieces[0]
+        self.assertEqual(len(ring), 8)       # the notch is part of the boundary
+        self.assertEqual(len(holes), 1)
+        self.assertEqual(_size_mm(holes[0]), (4000, 4000))
+
+    def test_an_opening_covering_the_whole_outline_leaves_nothing(self):
+        outer = _ring(0, 0, 5000, 4000)
+        pieces = fold_plan.split_profile(outer, [_ring(0, 0, 5000, 4000)])
+        self.assertEqual(pieces, [])
+
+
 class PairingAStepToItsDepth(unittest.TestCase):
     def test_each_region_takes_the_note_that_sits_inside_it(self):
         # test10's F3 rings hold THREE fold notes each, one per region;

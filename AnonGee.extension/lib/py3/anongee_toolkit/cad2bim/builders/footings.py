@@ -40,6 +40,7 @@ from Autodesk.Revit.DB import (BuiltInCategory, BuiltInParameter, CurveLoop,
 
 from ..compat import get_element_name, set_element_mark
 from .. import config
+from .. import fold_plan
 from .. import footing_plan
 from .. import naming
 from .. import type_names
@@ -347,8 +348,20 @@ def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
         # depth. Skipping it here leaves the dropped slab as the only element.
         if _drops_entirely(index, steps):
             continue
-        plans.append(([(p[0], p[1]) for p in ring], thickness,
-                      plan.get("mark"), holes))
+        # An opening that reaches the outline's boundary is not a hole -- it
+        # DIVIDES the outline. The corridor block's full-width sunk bay is the
+        # case: handed over as a hole, its loops share two edges with the
+        # block's own and Floor.Create refuses the profile. Each piece is
+        # placed on its own, at the outline's thickness and mark.
+        pieces = fold_plan.split_profile([(p[0], p[1]) for p in ring], holes)
+        if len(pieces) > 1:
+            result["notes"].append(
+                "{0} outline divided into {1} piece(s): an opening reaches "
+                "its boundary".format(plan.get("mark") or "an unnamed",
+                                      len(pieces)))
+        for piece_ring, piece_holes in pieces:
+            plans.append((piece_ring, thickness, plan.get("mark"),
+                          piece_holes))
     result["notes"].append(
         "{0} foundation outline(s) read from the drawing".format(len(plans)))
     return plans

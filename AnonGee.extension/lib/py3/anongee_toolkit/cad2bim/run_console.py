@@ -78,6 +78,18 @@ def _say(msg=""):
     _OUT.say(msg)
 
 
+def _say_error(msg=""):
+    """An ERROR line, in red, so it stands apart from the notes around it.
+
+    pyRevit's output window is an HTML view and renders markup printed into it,
+    which is the one way to colour a line without importing pyrevit modules
+    (those crash the CPython3 engine; see the pushbutton header). The wrapping
+    happens at say-time so a buffered error is revealed red too.
+    """
+    _OUT.say('<span style="color:#c00000;font-weight:bold">{0}</span>'
+             .format(msg))
+
+
 class _NullProgress(object):
     """Last resort: no window, no crash."""
     cancelled = False
