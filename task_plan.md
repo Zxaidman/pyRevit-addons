@@ -136,24 +136,28 @@ the fold support's offset is the **thickness of the top slab** — `-200` on a
 | dropped slab top | `-d` |
 | dropped slab soffit | `-(d + T_dropped)` |
 
-The support fills what lies between the two soffits, so `offset = -T_parent`,
-`depth = d + T_dropped - T_parent`, plan width `T_parent`. The user's detail is
-the equal-thickness case (`350 + 200 - 200 = 350` at `-200`).
+A support exists only where the drop leaves a **void** — `d > T_parent`, the
+dropped slab's top below the parent's soffit. Where it does, it is cast soffit
+to soffit: `offset = -T_parent`, `depth = d + T_dropped - T_parent`, plan width
+`T_parent`. The user's detail is the equal-thickness case (`350 + 200 - 200 =
+350` at `-200`).
 
-**The fixture corroborates it independently.** test10's sunk strip F6 is 1000
-thick, drops 1000, and sits between F5 pads 2000 thick: `1000 + 1000 - 2000 =
-0`, so no support — and none is needed, because a 2000-deep pad already IS the
-vertical face at the shared edge. Three numbers off the drawing landing exactly
-on zero is what says the convention is soffit-aligned rather than assumed.
+**The existence condition was corrected once, against the corridor** (findings
+#7): "soffit gap > 0" measured 250 on the 250-sunk-in-500-block bay and cast
+two phantom footings inside solid concrete — the dropped slab's own side face
+already closed that section. `d > T_parent` is the test; the original F6's
+`1000 + 1000 - 2000 = 0` was that drawing's coincidence, not the rule.
 
 - [x] 2.1 Fold/sunk regions from the hatch rings of 1.1, paired to their label.
       Each region takes the note that sits INSIDE it, so test10's three fold
       notes per F3 raft pair exactly rather than by proximity.
 - [x] 2.2 The three parts placed: the parent with the region cut out of it, the
       support between the soffits, the dropped slab at the step depth.
-      **Corrected per the user's review:** the support is ONE slab per stepped
-      run, not a strip per edge — a closed collar with the region as its hollow
-      for a mid-footing fold, an L at a corner, a strip along a lone edge.
+      **Corrected twice per the user's Revit tests:** first, the support is ONE
+      slab per stepped run, not a strip per edge — a collar, an L, or a strip.
+      Then, neighbouring collars POOL: same host, same thickness and offset,
+      touching outers → one slab wrapping the whole group, every fold in it a
+      hollow. test10's row of three folds per raft = one support per raft.
 - [x] 2.3 Magnitude threshold: over 3000 mm is a storey, not a step. Test9's
       `+6250` is refused and named; test10's folds still build.
 - [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern →
@@ -170,11 +174,11 @@ face graph and are then dissolved (they mark where a foundation steps, not
 where one ends), and a nested outline becomes a hole in its parent, one level,
 like slab openings.
 
-**Measured on the redrawn test10:** 10 outlines, 10 sized; 7 steps planned, 0
-skipped. Six folds each get one 1500-deep collar at `-750` (hollow = the fold);
-the sunk strip in the corridor gets two 250-deep strips at `-500` on its
-stepped edges — and none on its long edges, where the abutting raft is 750
-thick and `250 + 500 − 750 = 0`: the soffits already meet.
+**Measured on the redrawn test10 (v0.69.1):** 10 outlines, 10 sized; 7 steps
+planned, 0 skipped; **2 supports total**. Each raft's three folds pool into one
+13200 x 4500 slab, 1500 deep at `-750`, with the three folds as its hollows.
+The sunk bay gets **none** — `250 < 500`, no void — while still dropping: the
+corridor is cut and the dropped slab cast 500 thick at `-250`.
 
 ---
 

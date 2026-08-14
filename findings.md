@@ -198,26 +198,33 @@ dropped slab top      -d                     (the fold/sunk value)
 dropped slab soffit   -(d + T_dropped)
 ```
 
-The support is the concrete between the two soffits:
+A support exists only where there is a **void**: the drop deeper than the
+parent is thick (`d > T_parent`), so the dropped slab's top sits below the
+parent's soffit and daylight shows between them. Where it does exist it is cast
+full height, soffit to soffit — the user's detail shows the 350 drop off a 200
+slab cast as one 350-deep support, overlapping the dropped slab's edge:
 
 ```
+exists  only when  d > T_parent
 offset = -T_parent
-depth  =  d + T_dropped - T_parent           (nothing to fill when <= 0)
+depth  =  d + T_dropped - T_parent
 width  =  T_parent                           (in plan, under the parent)
 ```
 
-**The fixture proves the formula from the other end.** test10's sunk strip F6
-is 1000 thick, drops 1000, and is flanked by F5 pads 2000 thick:
+**The condition was wrong once, in an instructive way.** The first cut used
+"soffit gap > 0" — `d + T_dropped - T_parent > 0` — which is the same test only
+when the dropped slab is thinner than the void is deep. The redrawn corridor
+broke it: a 250 sunk bay in a 500 block has a soffit gap of 250, but the
+dropped slab's top (−250) sits *above* the block's soffit (−500) — its own side
+face already closes the section. The old condition cast two phantom 250 mm
+footings inside that solid concrete, and the user found them in Revit against
+a drawing that showed nothing there.
 
-```
-1000 + 1000 - 2000 = 0
-```
-
-No support — and none is wanted, because a pad 2000 deep is already the whole
-vertical face where the two abut. Three numbers taken off the drawing landing
-exactly on zero is not luck; it is the drawing telling us the convention is
-soffit-aligned. Had the rule been "the support is always `d` deep", F6 would
-have been given a 1000-deep strip inside solid pad concrete.
+Both sunk cases land right under the corrected rule, each for its own reason.
+The original F6 (1000 thick, sunk 1000, pads 2000): `1000 < 2000`, no void —
+its soffit arithmetic happening to land on exactly zero was that drawing's
+coincidence, not the rule. The corridor: `250 < 500`, no void, gap 250 and
+still nothing to fill.
 
 Two consequences that fall out of the same reasoning:
 
@@ -229,6 +236,19 @@ Two consequences that fall out of the same reasoning:
 - **An edge with nothing beyond it gets no support.** F6 abuts a pad on its two
   long sides and open ground on its two short ones. Wrapping concrete round all
   four would hold up nothing on two of them.
+
+### Neighbouring folds pool one support
+
+test10 draws three fold rectangles in a row inside each raft, 300 mm apart. A
+collar reaches one parent-thickness past its region, so three separate collars
+overlap heavily — Revit reads three intersecting floors where the cast is one
+piece. Collars in the same host at the same thickness and offset whose outers
+touch therefore pool into ONE slab: its outer edge wraps the whole group (a
+rectilinear union walked over a compressed grid, coordinates snapped to the
+millimetre so float noise in the drawn corners cannot leave nanometre jogs),
+and every fold in the group is a hollow of that one slab. The concrete between
+folds belongs to it. test10 builds exactly **two** fold supports — one per
+raft — where it built six.
 
 ### A storey is not a step
 

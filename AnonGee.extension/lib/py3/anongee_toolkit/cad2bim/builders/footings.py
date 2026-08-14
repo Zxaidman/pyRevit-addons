@@ -206,7 +206,7 @@ def _place_steps(doc, steps, base_type, level, cache, result):
     between the two soffits.
     """
     for step in (steps or []):
-        for part, ring, hole, thickness, offset in _step_parts(step):
+        for part, ring, step_holes, thickness, offset in _step_parts(step):
             floor_type, note = _resolve_type(doc, base_type, thickness, cache)
             type_names.record(result, note)
             if floor_type is None:
@@ -217,9 +217,10 @@ def _place_steps(doc, steps, base_type, level, cache, result):
             try:
                 loops = List[CurveLoop]()
                 loops.Add(_curve_loop([(p[0], p[1]) for p in ring]))
-                if hole:
-                    # a mid-footing fold's support is a closed collar: the
-                    # band round the region, the region itself the hollow
+                for hole in (step_holes or []):
+                    # a fold support is a closed collar (or a pooled group of
+                    # collars): the band round the region(s), each region a
+                    # hollow cut out of the one slab
                     loops.Add(_curve_loop([(p[0], p[1]) for p in hole]))
                 instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
                 problem = _offset(instance, offset)
@@ -234,7 +235,7 @@ def _place_steps(doc, steps, base_type, level, cache, result):
 
 
 def _step_parts(step):
-    """[(part, ring, hole, thickness_mm, offset_mm)] -- the dropped slab, then
+    """[(part, ring, holes, thickness_mm, offset_mm)] -- the dropped slab, then
     its support slab(s)."""
     dropped = step.get("dropped") or {}
     parts = []
@@ -242,7 +243,7 @@ def _step_parts(step):
         parts.append((step.get("kind") or "step", dropped["ring"], None,
                       dropped.get("thickness_mm"), dropped.get("offset_mm")))
     for support in (step.get("supports") or []):
-        parts.append(("support", support["ring"], support.get("hole"),
+        parts.append(("support", support["ring"], support.get("holes"),
                       support.get("thickness_mm"), support.get("offset_mm")))
     return parts
 

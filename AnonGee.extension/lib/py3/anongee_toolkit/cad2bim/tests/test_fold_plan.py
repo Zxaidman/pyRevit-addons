@@ -120,8 +120,8 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
         step = self._planned()
         self.assertEqual(len(step["supports"]), 1)
         support = step["supports"][0]
-        self.assertIsNotNone(support["hole"])
-        self.assertEqual(_size_mm(support["hole"]), (2700, 3000))
+        self.assertEqual(len(support["holes"]), 1)
+        self.assertEqual(_size_mm(support["holes"][0]), (2700, 3000))
         # the band reaches one parent-thickness past the fold on every side
         self.assertEqual(_size_mm(support["ring"]),
                          (2700 + 2 * 1500, 3000 + 2 * 1500))
@@ -145,7 +145,7 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
         self.assertEqual(support["thickness_mm"], 350.0)
         # collar 200 wide in plan: outer = hole grown by 200 on every side
         self.assertEqual(_size_mm(support["ring"]), (4000 + 400, 4000 + 400))
-        self.assertEqual(_size_mm(support["hole"]), (4000, 4000))
+        self.assertEqual(_size_mm(support["holes"][0]), (4000, 4000))
 
     def test_a_corner_fold_gets_one_L_shaped_slab_not_two_strips(self):
         # the region sits in the host's corner: concrete continues past its two
@@ -158,7 +158,7 @@ class ARegionCutOutOfItsParent(unittest.TestCase):
                                     [_fold(0, 0, 2000, 2000)])["steps"][0]
         self.assertEqual(len(step["supports"]), 1)
         support = step["supports"][0]
-        self.assertIsNone(support["hole"])
+        self.assertEqual(support["holes"], [])
         # six corners, spanning the fold plus one width past its inner edges
         self.assertEqual(len(support["ring"]), 6)
         self.assertEqual(_size_mm(support["ring"]), (2300, 2300))
@@ -190,7 +190,11 @@ class ARegionThatISItsParent(unittest.TestCase):
         self.assertEqual(step["dropped"]["offset_mm"], -1000.0)
 
     def test_no_support_is_invented_where_the_soffits_already_meet(self):
-        # 1000 + 1000 - 2000 = 0: the pad IS the face
+        # sunk 1000 into 2000-thick pads: the drop never clears the pad's own
+        # depth, so the pad IS the face. (Its numbers also happen to put the
+        # two soffits level -- 1000+1000-2000 -- but that is this drawing's
+        # coincidence, not the rule: see TheVoidRule for the case where the
+        # soffit gap is positive and there is still nothing to fill.)
         self.assertEqual(self._planned()["supports"], [])
 
     def test_a_thinner_neighbour_would_need_a_support(self):
@@ -214,6 +218,119 @@ class ARegionThatISItsParent(unittest.TestCase):
         step = fold_plan.plan_steps([strip, thin],
                                     [_sunk(10533, 10050, 14033, 15950)])["steps"][0]
         self.assertEqual(len(step["supports"]), 1)
+
+
+class TheVoidRule(unittest.TestCase):
+    """A support exists only where the drop is deeper than the parent is thick.
+
+    The corridor drawing is the case that forced this. A 250 sunk bay in a 500
+    block leaves the dropped slab's top at -250 -- ABOVE the block's soffit at
+    -500 -- so the slab's own side face already closes the section. The old
+    "soffit gap > 0" condition measured 250+500-500 = 250 there and cast two
+    phantom footings inside solid concrete; the user found them in Revit.
+    """
+
+    def test_a_drop_shallower_than_its_parent_gets_no_support(self):
+        # the redrawn corridor: sunk 250, cut out of a 500-thick block
+        block = _plan(0, 0, 20000, 3500, 500.0,
+                      [_step(250.0, fold_plan.SUNK, (10000, 1750))], "F3")
+        out = fold_plan.plan_steps([block], [_sunk(8000, 0, 12000, 3500)])
+        self.assertEqual(out["skipped"], [])
+        step = out["steps"][0]
+        self.assertEqual(step["supports"], [])
+        # the drop itself still happens -- only the phantom support is gone
+        self.assertEqual(step["dropped"]["offset_mm"], -250.0)
+
+    def test_a_drop_exactly_the_parents_thickness_gets_no_support_either(self):
+        # top of the dropped slab lands ON the soffit: faces meet, no void
+        block = _plan(0, 0, 20000, 3500, 500.0,
+                      [_step(500.0, fold_plan.SUNK, (10000, 1750))], "F3")
+        step = fold_plan.plan_steps([block],
+                                    [_sunk(8000, 0, 12000, 3500)])["steps"][0]
+        self.assertEqual(step["supports"], [])
+
+    def test_a_drop_deeper_than_the_parent_leaves_a_void_and_fills_it(self):
+        # the same block, the drop pushed past the 500 soffit: the region is
+        # interior here, so the filled void arrives as one collar
+        block = _plan(0, 0, 20000, 3500, 500.0,
+                      [_step(750.0, fold_plan.SUNK, (10000, 1750))], "F3")
+        step = fold_plan.plan_steps([block],
+                                    [_sunk(8000, 500, 12000, 3000)])["steps"][0]
+        self.assertEqual(len(step["supports"]), 1)
+        self.assertEqual(step["supports"][0]["offset_mm"], -500.0)
+        self.assertEqual(step["supports"][0]["thickness_mm"], 750.0)
+
+
+class NeighbouringFoldsPoolTheirSupport(unittest.TestCase):
+    """test10's row of three folds gets ONE support slab, not three collars.
+
+    The folds sit 300 mm apart and a collar reaches 1500 past its region, so
+    three separate collars overlap heavily -- three intersecting floors where
+    the cast is one piece. Pooled: the outer edge wraps the whole group, the
+    three folds are its hollows, and the concrete between them is part of it.
+    """
+
+    def _row(self):
+        """The north raft as drawn: 1500 thick, three folds, one note each."""
+        host = _plan(5333, 22050, 19233, 28700, 1500.0,
+                     [_step(2000.0, fold_plan.FOLD, (7859, 24738)),
+                      _step(2000.0, fold_plan.FOLD, (12327, 24738)),
+                      _step(2000.0, fold_plan.FOLD, (16988, 24738))], "F3")
+        return fold_plan.plan_steps(
+            [host], [_fold(6433, 23150, 9133, 26150),
+                     _fold(9433, 23150, 15133, 26150),
+                     _fold(15433, 23150, 18133, 26150)])
+
+    def test_three_folds_in_a_row_make_ONE_support(self):
+        out = self._row()
+        self.assertEqual(out["skipped"], [])
+        self.assertEqual(len(out["steps"]), 3)
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 1)
+
+    def test_the_pooled_support_wraps_the_group_and_keeps_every_hollow(self):
+        supports = [s for step in self._row()["steps"]
+                    for s in step["supports"]]
+        pooled = supports[0]
+        self.assertEqual(len(pooled["holes"]), 3)
+        # outer edge = the whole group grown by the parent thickness: the row
+        # spans 6433..18133 x 23150..26150, so the slab is that plus 1500 round
+        self.assertEqual(_size_mm(pooled["ring"]),
+                         (18133 - 6433 + 2 * 1500, 26150 - 23150 + 2 * 1500))
+        self.assertEqual(pooled["thickness_mm"], 2000.0)
+        self.assertEqual(pooled["offset_mm"], -1500.0)
+
+    def test_every_dropped_slab_survives_the_pooling(self):
+        out = self._row()
+        self.assertEqual([_size_mm(s["dropped"]["ring"]) for s in out["steps"]],
+                         [(2700, 3000), (5700, 3000), (2700, 3000)])
+        self.assertEqual([s["opening"] is not None for s in out["steps"]],
+                         [True, True, True])
+
+    def test_folds_in_DIFFERENT_footings_never_pool(self):
+        # the north and south rafts each keep their own support even though
+        # a group is a per-cast thing: concrete does not span two footings
+        north = _plan(5333, 22050, 19233, 28700, 1500.0,
+                      [_step(2000.0, fold_plan.FOLD, (7859, 24738))], "F3")
+        south = _plan(5333, -1250, 19233, 3950, 1500.0,
+                      [_step(2000.0, fold_plan.FOLD, (7859, 1438))], "F3")
+        out = fold_plan.plan_steps(
+            [north, south], [_fold(6433, 23150, 9133, 26150),
+                             _fold(6433, -150, 9133, 2850)])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 2)
+
+    def test_two_far_apart_folds_keep_their_own_collars(self):
+        host = _plan(0, 0, 40000, 8000, 500.0,
+                     [_step(750.0, fold_plan.FOLD, (3000, 4000)),
+                      _step(750.0, fold_plan.FOLD, (35000, 4000))], "F1")
+        out = fold_plan.plan_steps(
+            [host], [_fold(2000, 3000, 4000, 5000),
+                     _fold(34000, 3000, 36000, 5000)])
+        supports = [s for step in out["steps"] for s in step["supports"]]
+        self.assertEqual(len(supports), 2)
+        for support in supports:
+            self.assertEqual(len(support["holes"]), 1)
 
 
 class PairingAStepToItsDepth(unittest.TestCase):

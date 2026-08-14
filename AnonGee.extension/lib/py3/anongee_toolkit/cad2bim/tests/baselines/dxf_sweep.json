@@ -203,7 +203,7 @@
     "slab_source": "slab_edges",
     "step_depth_mm_total": 9250.0,
     "step_openings": 7,
-    "step_supports": 8,
+    "step_supports": 2,
     "steps_planned": 7,
     "steps_skipped": 0,
     "sunk_regions": 1,

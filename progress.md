@@ -214,6 +214,34 @@ All three baselines re-blessed — the fixture AND its export changed under
 them, so every moved number is the redraw plus the new counts, explained in
 the commit.
 
+### Session 2026-08-14 (later) — v0.69.1, the user's Revit test of v0.69.0
+
+Two corrections from the model itself, both structural:
+
+**The phantom 250 footings.** The corridor's sunk bay produced two 250-deep
+supports at `-500` that the drawing shows nothing for. The support condition
+was "soffit gap > 0" — but with the drop (250) shallower than the block (500),
+the dropped slab's top sits ABOVE the block's soffit and its own side face
+closes the section; the "gap" the formula measured lies inside solid concrete.
+Corrected to the void test: a support exists only when `d > T_parent`. The
+original F6's zero was that drawing's coincidence, not the rule — exactly as
+the user put it: right convention, "but not always the gap would be zero"
+(findings #7).
+
+**Collars pool per group.** Each raft draws its three folds 300 mm apart;
+three separate collars reaching 1500 past their regions overlap into three
+intersecting floors. Now collars in the same host at the same thickness and
+offset whose outers touch merge into ONE slab — outer edge wrapping the whole
+group (rectilinear union on a compressed grid, coordinates snapped to the mm
+so float noise in the drawn corners cannot leave sub-tolerance jogs), each
+fold a hollow of it. test10: **2 fold supports, one per raft**, as the user
+specified. Dropped slabs and parent openings are untouched by the pooling.
+
+Support schema `hole` → `holes` (a pooled slab carries several); the builder
+adds every hollow as its own CurveLoop. Tests 541 → 549; the sweep's
+`step_supports` moves 8 → 2 — six collars pooled into two, the two phantom
+strips gone — with every other number identical.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

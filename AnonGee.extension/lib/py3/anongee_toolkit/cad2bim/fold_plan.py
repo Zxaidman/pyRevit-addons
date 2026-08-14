@@ -13,37 +13,45 @@ two-floor reading has no answer for:
 Without the support the step is a gap rather than concrete -- a model that looks
 right in plan and is hollow in section.
 
-THE SUPPORT'S DEPTH IS DERIVED, NOT CONFIGURED. Take the parent's top as 0:
+THE SUPPORT'S EXISTENCE AND DEPTH ARE DERIVED, NOT CONFIGURED. Take the
+parent's top as 0:
 
     parent soffit          -T_parent
     dropped slab top       -d                    (d = the fold/sunk value)
     dropped slab soffit    -(d + T_dropped)
 
-The support fills what is between the two soffits, so it hangs from the parent's
-soffit and reaches the dropped slab's:
+A support exists only where there is a VOID to fill -- where the drop is
+deeper than the parent is thick (d > T_parent), so the dropped slab's top sits
+below the parent's soffit and daylight shows between them. Where d <= T_parent
+the dropped slab's own side face already rises past the parent's soffit: the
+two faces overlap, the section is solid, and a "support" there is a second
+slab buried inside concrete that exists. That is not hypothetical -- the
+corridor drawing produced exactly that pair of phantom 250 mm footings before
+this condition was tightened from "soffit gap > 0" to "void exists".
+
+Where the void is real, the support is cast full height, soffit to soffit --
+the user's own detail shows the 350 drop off a 200 slab cast as one 350-deep
+support at -200, overlapping the dropped slab's edge rather than stopping at
+its top:
 
     offset  = -T_parent
-    depth   =  d + T_dropped - T_parent          (nothing to fill when <= 0)
+    depth   =  d + T_dropped - T_parent
     width   =  T_parent                          (in plan, under the parent)
 
-The user's own detail is the equal-thickness case of that formula: a 350 THK
-slab dropping 350 gives depth 350 + 350 - 350 = 350 at offset -350... and the
-detail they supplied reads 200 for both, on a slab whose two levels are 0.000
-and -350.000, which is the same arithmetic with T = 200: depth 350, offset -200.
+The sunk cases both land right under this rule, each for its own reason.
+test10's original F6 (1000 thick, sunk 1000, between 2000-thick pads):
+1000 < 2000, no void, the pad IS the face. The redrawn corridor (sunk 250 in a
+500 block): 250 < 500, no void, the dropped slab's edge IS the face. The
+first looks like "the soffit gap is zero" -- 1000+1000-2000 -- but that is the
+coincidence of its numbers, not the rule; the corridor's gap is 250 and there
+is still nothing to fill.
 
-The formula is corroborated by the fixture from the other direction. test10's
-sunk strip F6 is 1000 thick, drops 1000, and sits between F5 pads 2000 thick:
-1000 + 1000 - 2000 = 0. No support -- and none is needed, because the pad is
-full depth right up to the shared edge and already IS the vertical face. Three
-independent numbers landing on exactly zero is not a coincidence; it is what
-tells us the convention is soffit-aligned rather than something we chose.
-
-A support is emitted per EDGE, and only where concrete continues on the far side
-of it. The test is a probe just outside the edge: inside another outline means
-there is something for the step to step down from. test10's sunk strip abuts a
-pad on its two long sides and open ground on its two short ones, so a naive
-"support all the way round" would wrap concrete round two faces that have
-nothing to hold.
+A support is one slab per contiguous stepped RUN, never a strip per edge, and
+neighbouring step regions POOL theirs: three folds drawn in a row inside one
+footing get one support slab whose outer edge wraps the whole group and whose
+hollows are the three folds -- the concrete between them is part of the same
+cast. Separate collars would overlap each other in the gaps, which Revit takes
+as three intersecting floors.
 
 Revit-free, so all of it is unit-testable and replayable offline. Compare
 `footing_plan.py`, which does the same job for the pads.
@@ -111,9 +119,12 @@ def plan_steps(plans, regions, max_step_mm=None):
 
         {"kind", "ring", "depth_mm", "mark",
          "dropped": {"ring", "thickness_mm", "offset_mm"},
-         "supports": [{"ring", "thickness_mm", "offset_mm"}],
+         "supports": [{"ring", "holes", "thickness_mm", "offset_mm"}],
          "opening": ring or None,
          "host_index": i}
+
+    Neighbouring collars POOL (`_pool_collars`): one slab per touching group,
+    carried by the group's first step, every pooled region in its `holes`.
 
     `opening` is the hole the PARENT needs cut in it, and it is None exactly
     when the region IS its host outline -- test10's sunk strip is its own F6
@@ -146,7 +157,215 @@ def plan_steps(plans, regions, max_step_mm=None):
                     depth, kind, limit, host.get("mark") or "an unnamed outline"))
             continue
         out["steps"].append(_parts(ring, kind, depth, host, host_index, rings))
+    _pool_collars(out["steps"], out["notes"])
     return out
+
+
+def _pool_collars(steps, notes):
+    """Merge the collars of NEIGHBOURING regions into one slab per group.
+
+    test10 draws three fold rectangles in a row inside each raft, 300 mm
+    apart, and a collar reaches one parent-thickness (1500) past its region --
+    so the three collars overlap heavily, and Revit reads them as three
+    intersecting floors. The cast reality is ONE support: its outer edge wraps
+    the whole group, the three folds are its hollows, and the concrete between
+    folds belongs to it. So collars in the same host, at the same thickness
+    and offset, whose outer rings touch, pool: outer ring = the union outline,
+    holes = every region in the group (mutated in place -- the pooled slab
+    replaces the first group member's collar and the rest lose theirs).
+
+    Pooling is rectilinear -- the union walks a compressed grid -- so a group
+    with a non-rectangular collar is left unpooled and says so. Every hatch in
+    this corpus is a rectangle; the note is for the drawing that breaks that.
+    """
+    collars = []               # (step, support, rect) for every poolable collar
+    irregular = False
+    for step in steps:
+        for support in step["supports"]:
+            if not support["holes"]:
+                continue                     # strips and Ls do not pool
+            rect = _as_rect(support["ring"])
+            if rect is None:
+                irregular = True
+                continue
+            collars.append((step, support, rect))
+    if irregular and len(collars) < 2:
+        return
+    groups = _touching_groups(collars)
+    for group in groups:
+        if len(group) < 2:
+            continue
+        outer, pockets = _rect_union_outline([rect for _s, _sup, rect in group])
+        if outer is None:
+            notes.append("{0} overlapping support collars left separate: a "
+                         "non-rectangular union".format(len(group)))
+            continue
+        first = group[0][1]
+        first["ring"] = outer
+        holes = []
+        for _step, support, _rect in group:
+            holes.extend(support["holes"])
+        first["holes"] = holes + pockets
+        for step, support, _rect in group[1:]:
+            step["supports"].remove(support)
+
+
+def _touching_groups(collars):
+    """Collars grouped transitively by touching outers, same depth and offset.
+
+    A group never crosses hosts: a support is cast within one footing, so two
+    footings' collars stay two slabs even if the drawn rectangles graze.
+    """
+    groups = []
+    for entry in collars:
+        step, support, rect = entry
+        joined = None
+        for group in groups:
+            for other_step, other_support, other_rect in group:
+                if other_step["host_index"] != step["host_index"]:
+                    continue
+                if other_support["thickness_mm"] != support["thickness_mm"]:
+                    continue
+                if other_support["offset_mm"] != support["offset_mm"]:
+                    continue
+                if not _rects_touch(rect, other_rect):
+                    continue
+                if joined is None:
+                    group.append(entry)
+                    joined = group
+                else:
+                    joined.extend(group)
+                    group[:] = []
+                break
+        if joined is None:
+            groups.append([entry])
+    return [group for group in groups if group]
+
+
+_TOUCH_TOL_FT = 1.0 / 304.8    # a millimetre: drawn-to-meet counts as touching
+
+
+def _rects_touch(a, b):
+    return not (a[2] < b[0] - _TOUCH_TOL_FT or b[2] < a[0] - _TOUCH_TOL_FT
+                or a[3] < b[1] - _TOUCH_TOL_FT or b[3] < a[1] - _TOUCH_TOL_FT)
+
+
+def _as_rect(ring):
+    """(x0, y0, x1, y1) when the ring is an axis-aligned rectangle, else None."""
+    cleaned = _dedup_ring(list(ring))
+    if len(cleaned) != 4:
+        return None
+    tol = _TOUCH_TOL_FT
+    for index in range(4):
+        a = cleaned[index]
+        b = cleaned[(index + 1) % 4]
+        if abs(a[0] - b[0]) > tol and abs(a[1] - b[1]) > tol:
+            return None                  # a slanted edge
+    xs = [p[0] for p in cleaned]
+    ys = [p[1] for p in cleaned]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
+def _rect_union_outline(rects):
+    """(outer_ring, pocket_rings) -- the outline of a union of rectangles.
+
+    Walks a coordinate-compressed grid: cells covered by any rectangle are the
+    union, and the boundary between covered and uncovered is the outline.
+    Exact for axis-aligned input, which is what `_as_rect` guarantees. Returns
+    (None, []) if the union is not one connected piece -- the caller grouped
+    by touching, so that would mean the grouping and the geometry disagree.
+
+    `pocket_rings` are ENCLOSED uncovered areas -- a courtyard of collars.
+    They become holes: the parent above them is full depth, so support
+    concrete there would hang below solid slab that needs none.
+    """
+    # Coordinates within a millimetre are ONE coordinate. The drawn rectangles
+    # carry float noise in their last bits, and without this the union outline
+    # grows micro-jogs a fraction of a nanometre wide -- sixteen vertices where
+    # the shape has four, on edges shorter than Revit's curve tolerance.
+    snap_x = _snapped([r[0] for r in rects] + [r[2] for r in rects])
+    snap_y = _snapped([r[1] for r in rects] + [r[3] for r in rects])
+    rects = [(snap_x[r[0]], snap_y[r[1]], snap_x[r[2]], snap_y[r[3]])
+             for r in rects]
+    xs = sorted(set(snap_x.values()))
+    ys = sorted(set(snap_y.values()))
+    covered = {}
+    for x0, y0, x1, y1 in rects:
+        for column in range(len(xs) - 1):
+            if xs[column] < x0 - _TOUCH_TOL_FT or xs[column + 1] > x1 + _TOUCH_TOL_FT:
+                continue
+            for row in range(len(ys) - 1):
+                if ys[row] < y0 - _TOUCH_TOL_FT or ys[row + 1] > y1 + _TOUCH_TOL_FT:
+                    continue
+                covered[(column, row)] = True
+
+    # Boundary segments, oriented with the COVERED side on the left, so the
+    # outer ring walks counter-clockwise and every pocket clockwise -- the
+    # sign of the walked area tells the two apart without a containment test.
+    segments = {}
+    for (column, row) in covered:
+        x0, x1 = xs[column], xs[column + 1]
+        y0, y1 = ys[row], ys[row + 1]
+        if (column, row - 1) not in covered:
+            segments[((x0, y0), (x1, y0))] = True    # bottom edge, left-to-right
+        if (column, row + 1) not in covered:
+            segments[((x1, y1), (x0, y1))] = True    # top edge, right-to-left
+        if (column - 1, row) not in covered:
+            segments[((x0, y1), (x0, y0))] = True    # left edge, downward
+        if (column + 1, row) not in covered:
+            segments[((x1, y0), (x1, y1))] = True    # right edge, upward
+
+    starts = {}
+    for (a, b) in segments:
+        starts.setdefault(a, []).append(b)
+    rings = []
+    while segments:
+        (a, b) = next(iter(segments))
+        ring = [a]
+        cursor = (a, b)
+        while True:
+            del segments[cursor]
+            starts[cursor[0]].remove(cursor[1])
+            ring.append(cursor[1])
+            if cursor[1] == a:
+                break
+            following = starts.get(cursor[1]) or []
+            if not following:
+                return None, []          # open boundary: not a clean union
+            cursor = (cursor[1], following[0])
+        rings.append(_collinear_simplified(ring[:-1]))
+
+    outers = [ring for ring in rings if _signed_area(ring) > 0]
+    if len(outers) != 1:
+        return None, []                  # disconnected union, or none at all
+    pockets = [ring for ring in rings if _signed_area(ring) < 0]
+    return outers[0], pockets
+
+
+def _snapped(values):
+    """{value: cluster representative} -- coordinates within a mm collapse."""
+    mapping = {}
+    anchor = None
+    for value in sorted(set(values)):
+        if anchor is None or value - anchor > _TOUCH_TOL_FT:
+            anchor = value
+        mapping[value] = anchor
+    return mapping
+
+
+def _collinear_simplified(ring):
+    """The ring without the vertices the grid compression introduced."""
+    out = []
+    count = len(ring)
+    for index in range(count):
+        previous = ring[(index - 1) % count]
+        point = ring[index]
+        following = ring[(index + 1) % count]
+        cross = ((point[0] - previous[0]) * (following[1] - point[1])
+                 - (point[1] - previous[1]) * (following[0] - point[0]))
+        if abs(cross) > 1e-12:
+            out.append(point)
+    return out if len(out) >= 3 else ring
 
 
 def _host_for(ring, rings):
@@ -219,13 +438,16 @@ def _parts(ring, kind, depth_mm, host, host_index, rings):
         if not thickness:
             sides.append(None)         # open ground: nothing to step down from
             continue
-        depth = depth_mm + (dropped_thickness or 0.0) - thickness
-        if depth <= 0:
-            # The two soffits already meet -- the parent is deep enough to BE
-            # the vertical face. Filling this would double the concrete.
+        if depth_mm <= thickness:
+            # No void. The drop is shallower than the parent is thick, so the
+            # dropped slab's own side face rises past the parent's soffit and
+            # the section is already solid concrete. A support here is a
+            # phantom slab inside it -- the corridor drawing's pair of 250 mm
+            # footings at -500 were exactly this.
             sides.append(None)
             continue
-        sides.append((thickness, depth))
+        sides.append((thickness,
+                      depth_mm + (dropped_thickness or 0.0) - thickness))
     return {"kind": kind, "ring": ring, "depth_mm": depth_mm,
             "mark": host.get("mark"), "host_index": host_index,
             "dropped": {"ring": ring, "thickness_mm": dropped_thickness,
@@ -235,22 +457,25 @@ def _parts(ring, kind, depth_mm, host, host_index, rings):
 
 
 def _support_slabs(edges, sides):
-    """[{ring, hole, thickness_mm, offset_mm}] -- one slab per stepped run.
+    """[{ring, holes, thickness_mm, offset_mm}] -- one slab per stepped run.
 
     Every edge is stepped the same way -> ONE closed band: the outer ring is
     the region offset outward by the parent's thickness, and the region itself
-    is the `hole` -- a collar with the drop as its hollow. Otherwise each
+    the hollow -- a collar with the drop cut out of it. Otherwise each
     contiguous run of stepped edges (same parent thickness, same remaining
     depth) becomes one polygon: outward offsets along the run, mitred at the
     corners it turns, closed back along the region's own edge -- a single edge
     gives the plain strip, a corner's two edges the L.
+
+    `holes` is a LIST because collars pool: `_pool_collars` merges the collars
+    of neighbouring regions into one slab carrying every region as a hollow.
     """
     stepped = [side for side in sides if side]
     if stepped and len(stepped) == len(sides) and len(set(stepped)) == 1:
         width, depth = stepped[0]
         outer = [_miter(edges[index - 1], edges[index], width, width)
                  for index in range(len(edges))]
-        return [{"ring": outer, "hole": [edge[0] for edge in edges],
+        return [{"ring": outer, "holes": [[edge[0] for edge in edges]],
                  "thickness_mm": depth, "offset_mm": -width}]
     slabs = []
     for run in _runs(sides):
@@ -262,7 +487,7 @@ def _support_slabs(edges, sides):
         outer.append(_offset_point(edges[run[-1]], 1, width))
         inner = [edges[index][0] for index in reversed(run)]
         slabs.append({"ring": outer + [edges[run[-1]][1]] + inner,
-                      "hole": None,
+                      "holes": [],
                       "thickness_mm": depth, "offset_mm": -width})
     return slabs
 
