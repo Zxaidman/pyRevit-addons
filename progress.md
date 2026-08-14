@@ -242,6 +242,17 @@ adds every hollow as its own CurveLoop. Tests 541 → 549; the sweep's
 `step_supports` moves 8 → 2 — six collars pooled into two, the two phantom
 strips gone — with every other number identical.
 
+**The 0.69.0 export, and the roof metric it re-pointed.** The user's Revit
+test export became the newest test10 export, and its storey stack came back
+with the last two entries swapped — `[..., Roof, Terrace]` where every earlier
+export had `[..., Terrace, Roof]`. Every per-storey number was identical; only
+the positions moved. But the storey leg's roof callout indexed `[-1]`, so it
+silently started measuring the terrace and reported `7 → 30` as if the roof
+had changed. Same disease the fingerprint leg cured in P0 (`de55430`): an
+index where an identity belongs. The roof is now found by its label, the
+transposed lists blessed as the export's stored order, and the roof metrics
+stayed 0 and 7 — the true statement about the drawing.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

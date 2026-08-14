@@ -29,6 +29,7 @@ SLOW (~40s), hence `regression_*` and not `test_*`:
 
 import json
 import os
+import re
 import unittest
 
 import _golden
@@ -89,6 +90,7 @@ def _measure(path):
         areas.append(round(sum(fingerprints._area_m2(loop[0])
                                for loop in placed_loops), 1))
 
+    roof = _roof_index(storeys)
     return {
         "storeys": len(storeys),
         "labels": labels,
@@ -97,11 +99,30 @@ def _measure(path):
         "loops_from_beam_graph_per_storey": graph,
         "loops_from_placed_members_per_storey": placed,
         "placed_area_m2_per_storey": areas,
-        # The top storey is the roof. Called out on its own because it is the
-        # one that has broken before while every floor below stayed right.
-        "roof_loops_from_edges": edges[-1] if edges else 0,
-        "roof_loops_from_placed_members": placed[-1] if placed else 0,
+        # The roof, called out on its own because it is the storey that has
+        # broken before while every floor below stayed right.
+        "roof_loops_from_edges": edges[roof] if edges else 0,
+        "roof_loops_from_placed_members": placed[roof] if placed else 0,
     }
+
+
+def _roof_index(storeys):
+    """The storey the drawing CALLS the roof, else the top of the stack.
+
+    Pinned by label, not position -- the same lesson the fingerprint leg
+    already learned about its main storey. "Terrace" and "Roof" tie in level
+    order (both are top-of-building names), so their stored order can flip
+    between two runs of the same drawing: the user's 0.69.0 test10 export came
+    back [..., Roof, Terrace] where every earlier one was [..., Terrace,
+    Roof], and an index of -1 silently re-pointed the roof metrics at the
+    terrace -- reporting 7 -> 30 as if the roof had changed, when nothing in
+    either storey had moved at all.
+    """
+    for index in range(len(storeys) - 1, -1, -1):
+        if re.search(r"\broof\b", str(storeys[index].get("storey") or ""),
+                     re.IGNORECASE):
+            return index
+    return len(storeys) - 1
 
 
 class Storeys(unittest.TestCase):
