@@ -291,6 +291,29 @@ review's own scenario as a test.
   holes. Pooled holes now run through the same grid union, dissolving shared
   edges and duplicates into one hollow per connected piece.
 
+### A step note never names an element
+
+The redrawn test10's corridor closed the loop on what a step note means. The
+raft is one full rectangle; inside it the engineer drew the corridor's seams
+and caps, and the face walk duly returned that interior zone as an outline of
+its own. Its only label is `F3_500MM THK / 250MM SUNK` — a STEP note. Read as
+an element, it cast two 500 slabs at zero offset over concrete the 750 raft
+already provides; the user found them in Revit against a drawing that shows
+one raft.
+
+The rule that falls out: **a step note describes the hatched region it sits
+in, never the outline round it.** A NESTED outline whose only labels are step
+notes dissolves — its ring holes nothing, and its step notes move to the
+outline that contains it, which is the element they step. Two boundaries hold
+the rule in place: a nested outline with a plain THK note is a real block and
+keeps nesting, and a TOP-LEVEL outline with only a step note (the original
+F6, which IS its own sunk region) stays the element it always was.
+
+The note's THK field is the DROPPED slab's own thickness — the folds repeat
+their raft's 750, but the sunk bay says 500 against a 750 raft, and only the
+note can say so. The dropped slab now takes its thickness from its paired
+note first, its host second.
+
 ### A storey is not a step
 
 Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first

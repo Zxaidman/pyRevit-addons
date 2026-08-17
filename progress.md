@@ -284,6 +284,25 @@ a rectangle, and pooled hollows merge through the same grid union instead of
 arriving as tangent or coincident loops. Tests 553 → 558; test10's output is
 bit-identical (2 supports, 4-point rings) and every baseline stands untouched.
 
+### Session 2026-08-15 — v0.69.5, the corridor was never an element
+
+The user's Revit run of v0.69.4: the raft is right, and two 500 mm slabs at
+zero offset flank the sunk bay where the drawing shows plain raft. The
+redrawn labels settle it: the corridor's only note is `F3_500MM THK / 250MM
+SUNK` — a STEP note, the same family as the fold notes — and a step note
+describes the hatched region it sits in, never the outline round it. A nested
+outline whose only labels are step notes now DISSOLVES: its ring holes
+nothing, its step notes move to the containing element, and the dropped
+slab's thickness comes from the note's own THK field (500 out of a 750 raft)
+rather than from whichever host happened to contain it. The original F6 —
+top-level, its own sunk region — still places, and a nested block with a
+plain note still nests; both are pinned by test.
+
+test10 now models as the user specified: one full raft with 7 openings, 8
+pads, 6 fold drops, 2 pooled supports, 1 sunk slab at −250 — 18 elements, no
+phantom pieces. Tests 558 → 560; the sweep's foundation_planned/profiles move
+10→9/11→9 and outlines_divided 1→0, all the dissolved corridor.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

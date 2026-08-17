@@ -198,36 +198,63 @@ class OutlinesThroughTheStepLayers(unittest.TestCase):
         self.assertEqual(len(got), 1)
         self.assertEqual(_bbox_mm(got[0][0]), (5200, 6650))
 
-    def test_the_corridor_nests_as_a_hole_in_the_raft_around_it(self):
-        # the block sits wholly inside the big raft, so the raft is cast round
-        # it: the block ring becomes the raft plan's hole, one level deep, and
-        # the block still plans as its own foundation
+    def test_the_corridor_is_a_stepped_zone_of_the_raft_not_an_element(self):
+        # the face walk duly returns the neck of the H as an outline -- but
+        # the only note inside it is a STEP note, and a step note describes
+        # the hatched region it sits in, never the outline round it. Reading
+        # the neck as an element cast two 500 slabs at zero offset over
+        # concrete the 750 raft already provides (found by the user in Revit).
         records = [_closed(4933, -1650, 19633, 29100)] + _corridor_block()
         plans = foundation_plan.plan_foundations(
             records,
             [_Text("F3_750MM THK", (12265, 25000)),
              _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
+        self.assertEqual(len(plans), 1)
+        raft = plans[0]
+        self.assertEqual(raft["thickness_mm"], 750.0)
+        self.assertEqual(raft["holes"], [])       # the zone is not a hole either
+
+    def test_the_dissolved_zones_step_note_moves_to_the_raft(self):
+        # the sunk region still has to pair with its note, and after the zone
+        # dissolves the raft is the element it steps -- carrying the note's
+        # OWN thickness, because a 500 slab drops out of this 750 raft and
+        # only the note says 500
+        records = [_closed(4933, -1650, 19633, 29100)] + _corridor_block()
+        plans = foundation_plan.plan_foundations(
+            records,
+            [_Text("F3_750MM THK", (12265, 25000)),
+             _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
+        raft = plans[0]
+        self.assertEqual(len(raft["steps"]), 1)
+        self.assertEqual(raft["steps"][0]["step_kind"], "sunk")
+        self.assertEqual(raft["steps"][0]["step_mm"], 250.0)
+        self.assertEqual(raft["steps"][0]["thickness_mm"], 500.0)
+
+    def test_a_nested_outline_with_a_plain_note_still_nests_and_places(self):
+        # a REAL block drawn inside a raft carries its own plain THK note:
+        # that one keeps being an element, and the raft is cast round it
+        records = [_closed(0, 0, 30000, 30000), _closed(10000, 10000,
+                                                        16000, 18000)]
+        plans = foundation_plan.plan_foundations(
+            records,
+            [_Text("F1_750MM THK", (5000, 5000)),
+             _Text("F5_500MM THK", (13000, 14000))])
         self.assertEqual(len(plans), 2)
         raft = next(p for p in plans if p["thickness_mm"] == 750.0)
         block = next(p for p in plans if p["thickness_mm"] == 500.0)
         self.assertEqual(len(raft["holes"]), 1)
-        self.assertEqual(_bbox_mm(raft["holes"][0]), (3500, 17300))
         self.assertEqual(block["holes"], [])
 
-    def test_a_note_sizes_the_smallest_ring_it_sits_in_and_only_that_one(self):
-        # the block's note sits inside the raft too; letting it size both would
-        # cast a 500 raft. And the sunk step note belongs to the block alone.
-        records = [_closed(4933, -1650, 19633, 29100)] + _corridor_block()
+    def test_a_TOP_LEVEL_outline_with_only_a_step_note_stays_an_element(self):
+        # the original F6: an outline that IS its own sunk region, sitting
+        # BETWEEN the pads rather than inside anything. Nothing contains it,
+        # so there is nothing to dissolve it into -- it is the element.
         plans = foundation_plan.plan_foundations(
-            records,
-            [_Text("F3_750MM THK", (12265, 25000)),
-             _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
-        raft = next(p for p in plans if p["thickness_mm"] == 750.0)
-        block = next(p for p in plans if p["thickness_mm"] == 500.0)
-        self.assertEqual(raft["labels"], 1)
-        self.assertEqual(len(raft["steps"]), 0)
-        self.assertEqual(len(block["steps"]), 1)
-        self.assertEqual(block["steps"][0]["step_kind"], "sunk")
+            [_closed(10533, 10050, 14033, 15950)],
+            [_Text("F6_1000MM THK\n1000MM SUNK", (12251, 12944))])
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["thickness_mm"], 1000.0)
+        self.assertEqual(len(plans[0]["steps"]), 1)
 
 
 class SizingFromTheNote(unittest.TestCase):

@@ -142,7 +142,8 @@ def plan_steps(plans, regions, max_step_mm=None):
                 "a {0} region of {1:.1f} m2 sits inside no outline: nothing to "
                 "step".format(kind, area_m2(ring)))
             continue
-        depth = _depth_for(ring, host, kind)
+        note = _note_for(ring, host, kind)
+        depth = None if note is None else float(note["step_mm"])
         if depth is None:
             out["skipped"].append(
                 "a {0} region in {1} carries no depth: the note that would "
@@ -157,7 +158,8 @@ def plan_steps(plans, regions, max_step_mm=None):
                 "region in {3} is left flat".format(
                     depth, kind, limit, host.get("mark") or "an unnamed outline"))
             continue
-        out["steps"].append(_parts(ring, kind, depth, host, host_index, rings))
+        out["steps"].append(_parts(ring, kind, depth, note, host, host_index,
+                                   rings))
     _pool_collars(out["steps"], out["notes"])
     return out
 
@@ -562,14 +564,16 @@ def _host_for(ring, rings):
     return best[0], best[1]
 
 
-def _depth_for(ring, host, kind):
-    """The step's depth in mm: the note INSIDE this region, else the host's one.
+def _note_for(ring, host, kind):
+    """The step note paired to this region: the one INSIDE it, else the host's.
 
     A host can hold several steps -- test10's F3 rings carry three fold notes
     each, one per fold region, and each note sits inside the region it belongs
     to. Containment therefore pairs them exactly, and proximity never has to be
     guessed at. The single-note fallback is for a region whose note was placed
-    just outside it.
+    just outside it. The whole NOTE comes back, not just the depth: its THK
+    field is the dropped slab's own thickness, which the sunk bay needs (a 500
+    slab dropping out of a 750 raft).
     """
     same_kind = [step for step in (host.get("steps") or [])
                  if step.get("step_kind") == kind and step.get("step_mm")]
@@ -578,13 +582,13 @@ def _depth_for(ring, host, kind):
     for step in same_kind:
         point = step.get("point")
         if point and _point_in_ring((point[0], point[1]), ring):
-            return float(step["step_mm"])
+            return step
     if len(same_kind) == 1:
-        return float(same_kind[0]["step_mm"])
+        return same_kind[0]
     return None
 
 
-def _parts(ring, kind, depth_mm, host, host_index, rings):
+def _parts(ring, kind, depth_mm, note, host, host_index, rings):
     """One step's parent opening, support slab(s) and dropped slab.
 
     The parent is read PER EDGE, from whatever outline abuts it, because the two
@@ -602,9 +606,11 @@ def _parts(ring, kind, depth_mm, host, host_index, rings):
     corners edge-to-edge, which Revit joins as two butting floors rather than
     the one cast collar the detail shows.
     """
-    # The dropped slab is as thick as whatever it is a piece of: its own
-    # outline when it IS one, otherwise the parent it was cut out of.
-    dropped_thickness = host.get("thickness_mm")
+    # The dropped slab's thickness: its own note's THK first (the sunk bay is
+    # a 500 slab dropping out of a 750 raft, and only the note says 500), the
+    # host it is cut from otherwise.
+    dropped_thickness = ((note or {}).get("thickness_mm")
+                         or host.get("thickness_mm"))
     coincident = _is_host_itself(ring, host["ring"])
     edges = _outward_edges(ring)
     sides = []                          # per edge: (width_mm, depth_mm) or None

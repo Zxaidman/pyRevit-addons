@@ -368,17 +368,64 @@ def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
         inside = assigned[index]
         mark, thickness = _size_from(inside, ring)
         steps = [{"step_mm": note["step_mm"], "step_kind": note["step_kind"],
+                  # The note's THK is the DROPPED slab's own thickness: the
+                  # folds repeat their raft's 750, but the sunk bay says 500
+                  # against a 750 raft, and the host cannot know that.
+                  "thickness_mm": note["thickness_mm"],
                   "point": text.point_internal}
                  for text, note in inside if note["step_kind"]]
-        if inside:
-            labelled += 1
+        plain = sum(1 for _text, note in inside if not note["step_kind"])
         plans.append({"ring": ring, "z": z, "mark": mark,
                       "thickness_mm": thickness, "steps": steps,
-                      "source": source, "labels": len(inside), "holes": []})
+                      "source": source, "labels": len(inside), "holes": [],
+                      "_plain": plain})
+    _dissolve_step_zones(plans)
+    for plan in plans:
+        del plan["_plain"]
+        if plan["labels"]:
+            labelled += 1
     if not labelled:
         return []
     _nest(plans)
     return plans
+
+
+def _dissolve_step_zones(plans):
+    """Remove a NESTED outline whose only labels are step notes.
+
+    The redrawn test10's corridor is the case. The raft is an H whose neck is
+    drawn with seams and caps, and the face walk duly returns the neck as an
+    outline of its own -- but the only note inside it is `F3_500MM THK / 250MM
+    SUNK`, a STEP note. A step note describes the hatched region it sits in,
+    never the outline round it: reading the neck as an element cast two 500
+    slabs at zero offset over concrete the 750 raft already provides (the
+    user found them in Revit against a drawing that shows one raft).
+
+    Only a nested zone dissolves. The original F6 -- an outline that IS its
+    own sunk region, sitting BETWEEN pads rather than inside anything -- keeps
+    being the element it always was. The zone's step notes move to the outline
+    that contains it, which is the element they step.
+    """
+    for index in range(len(plans) - 1, -1, -1):
+        plan = plans[index]
+        if not plan["labels"] or plan["_plain"]:
+            continue                    # unlabelled, or a real named element
+        parent = None
+        parent_area = None
+        for other in plans:
+            if other is plan:
+                continue
+            if not all(_point_in_ring(vertex, other["ring"])
+                       for vertex in plan["ring"]):
+                continue
+            area = abs(_signed_area(other["ring"]))
+            if parent_area is None or area < parent_area:
+                parent, parent_area = other, area
+        if parent is None:
+            continue                    # top-level: the old F6, a real element
+        parent["steps"].extend(plan["steps"])
+        parent["labels"] += plan["labels"]
+        plans.pop(index)
 
 
 def _nest(plans):
