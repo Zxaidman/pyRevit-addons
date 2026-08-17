@@ -649,14 +649,6 @@ def _storey_level_pairs(doc, selections, built):
     When the model runs out, new levels are created -- each at ITS OWN storey's
     height (the Multi-storey tab's per-plan Height column), falling back to the
     single storey height when a row was left blank.
-
-    A storey whose row picked a Level on the Multi-storey tab uses THAT level
-    as its TOP: structure is drawn below the slab it supports, on the model as
-    on site, so the plan titled "Ground Floor" holds the storey that ENDS at
-    Ground Floor. Its base is the nearest level BELOW by elevation (test10:
-    the Foundation Level under Ground Floor); a pick at the very bottom of the
-    model gets a base CREATED under it, one storey height down. Rows on
-    "(auto)" keep the positional ladder above.
     """
     from Autodesk.Revit.DB import Level, Transaction, FilteredElementCollector
 
@@ -665,17 +657,6 @@ def _storey_level_pairs(doc, selections, built):
                   or config.DEFAULTS["storey_height_mm"])
     heights_mm = [(getattr(region, "storey_height_mm", None) or default_mm)
                   for region, _label in built]
-    # the per-row Level picks, one per storey. A typical plan repeats its
-    # region OBJECT, so only the first repeat takes the pick -- the rest climb
-    # positionally, exactly like unpinned storeys.
-    picks = []
-    pinned = set()
-    for region, _label in built:
-        pick = getattr(region, "level_id", None)
-        if pick is not None and id(region) in pinned:
-            pick = None
-        pinned.add(id(region))
-        picks.append(pick)
 
     existing = sorted(FilteredElementCollector(doc).OfClass(Level).ToElements(),
                       key=lambda lv: lv.Elevation)
@@ -687,16 +668,6 @@ def _storey_level_pairs(doc, selections, built):
             break
     ladder = existing[start:]
     needed = count + 1
-    # a picked level is that storey's TOP, so its base is the nearest level
-    # BELOW it by elevation. Only the model's bottom level has nothing below
-    # at all: that pick gets a base made under it, dropped by its own row's
-    # storey height -- in the same transaction as the ladder's rungs.
-    below_mm = None
-    if existing:
-        for index in range(count):
-            if picks[index] is not None and picks[index] == existing[0].Id:
-                below_mm = heights_mm[index]
-                break
     # How the new levels are NAMED: either continue what the model already calls
     # its levels ("02 2ND FLOOR LVL." -> "03 3RD FLOOR LVL."), which is what an
     # office template arrives with, or render the Naming tab's level template.
@@ -708,8 +679,7 @@ def _storey_level_pairs(doc, selections, built):
         if convention:
             _say("Multi-storey: naming new levels after the model's own "
                  "convention ({0} ...)".format(convention[0]))
-    base_below = None
-    if len(ladder) < needed or below_mm is not None:
+    if len(ladder) < needed:
         transaction = Transaction(doc, "CAD to BIM: storey levels")
         transaction.Start()
         try:
@@ -734,26 +704,10 @@ def _storey_level_pairs(doc, selections, built):
                     pass          # a name clash keeps Revit's default name
                 ladder.append(new_level)
                 created += 1
-            if below_mm is not None:
-                # the base under a bottom-of-model pick. The model's numbered
-                # convention only counts UP, so this one takes the Naming
-                # tab's level template (index 0: it sits under storey 1)
-                elevation = existing[0].Elevation - config.mm_to_ft(below_mm)
-                base_below = Level.Create(doc, elevation)
-                name = naming.level_name(0, elevation * config.MM_PER_FT)
-                try:
-                    if name:
-                        base_below.Name = name
-                except Exception:
-                    pass          # a name clash keeps Revit's default name
-                _say("Multi-storey: created a base level {0:g} mm below "
-                     "{1} -- a picked level is the storey's TOP".format(
-                         below_mm, compat.get_element_name(existing[0])))
             transaction.Commit()
-            if created:
-                spacing = sorted(set(int(h) for h in heights_mm))
-                _say("Multi-storey: created {0} level(s) at {1} mm".format(
-                    created, ", ".join(str(value) for value in spacing)))
+            spacing = sorted(set(int(h) for h in heights_mm))
+            _say("Multi-storey: created {0} level(s) at {1} mm".format(
+                created, ", ".join(str(value) for value in spacing)))
         except Exception as level_error:
             if transaction.HasStarted() and not transaction.HasEnded():
                 transaction.RollBack()
@@ -761,28 +715,7 @@ def _storey_level_pairs(doc, selections, built):
                  "share the chosen pair".format(str(level_error)[:120]))
             return [(selections.get("base_level_id"),
                      selections.get("top_level_id"))] * count
-    # every level lowest-first: the ladder, whatever sat below the base, and
-    # the base made for a bottom-of-model pick. A pinned storey TOPS on its
-    # picked level and bases on the one below it; a pick that cannot be found
-    # (or still has nothing below it) falls back to the ladder rather than
-    # failing the run.
-    all_levels = list(existing[:start]) + list(ladder)
-    if base_below is not None:
-        all_levels.insert(0, base_below)
-    pairs = []
-    for index in range(count):
-        position = None
-        if picks[index] is not None:
-            for spot, level in enumerate(all_levels):
-                if level.Id == picks[index]:
-                    position = spot
-                    break
-        if position is None or position == 0:
-            pairs.append((ladder[index].Id, ladder[index + 1].Id))
-        else:
-            pairs.append((all_levels[position - 1].Id,
-                          all_levels[position].Id))
-    return pairs
+    return [(ladder[i].Id, ladder[i + 1].Id) for i in range(count)]
 
 
 def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None,

@@ -96,67 +96,6 @@ class LevelNames(unittest.TestCase):
         self.assertIsNone(order("Typical Floor @7.00+, 11.00+, 14.00+ & 17.00+"))
 
 
-class ProposeLevel(unittest.TestCase):
-    """The Multi-storey tab's Level combo arrives pre-picked by name match.
-
-    propose_level pairs a plan title with a MODEL level: on the words when
-    either name contains the other (case and spacing ignored), else on the
-    storey number both state. It only ever proposes when exactly ONE level
-    matches -- a wrong level placed silently is worse than a row left on
-    "(auto)". What it proposes lands as that storey's TOP (structure is drawn
-    below the slab it supports); the matching itself knows nothing of that.
-    """
-
-    def test_the_level_name_inside_the_title(self):
-        self.assertEqual(
-            floor_plans.propose_level("GROUND FLOOR PLAN",
-                                      ["Ground Floor", "First Floor"]),
-            "Ground Floor")
-
-    def test_the_title_inside_the_level_name(self):
-        self.assertEqual(
-            floor_plans.propose_level("Ground Floor",
-                                      ["00 Ground Floor LVL",
-                                       "01 First Floor LVL"]),
-            "00 Ground Floor LVL")
-
-    def test_case_and_spacing_are_normalised(self):
-        self.assertEqual(
-            floor_plans.propose_level("ground   floor level",
-                                      ["GROUND FLOOR", "TERRACE"]),
-            "GROUND FLOOR")
-
-    def test_words_match_on_boundaries_not_prefixes(self):
-        # "Level 1" must NOT claim "LEVEL 11 PLAN" -- that title is Level 11's
-        self.assertEqual(
-            floor_plans.propose_level("LEVEL 11 PLAN", ["Level 1", "Level 11"]),
-            "Level 11")
-
-    def test_a_numeric_match_bridges_the_wording(self):
-        # "1st" and "Level 1" share no words, only the storey number
-        self.assertEqual(
-            floor_plans.propose_level("1ST FLOOR PLAN", ["Level 1", "Level 2"]),
-            "Level 1")
-
-    def test_two_levels_claiming_one_title_propose_nothing(self):
-        self.assertIsNone(
-            floor_plans.propose_level("GROUND FLOOR & MEZZANINE PLAN",
-                                      ["Ground Floor", "Mezzanine"]))
-
-    def test_an_ambiguous_number_proposes_nothing(self):
-        self.assertIsNone(
-            floor_plans.propose_level("1st Floor Plan",
-                                      ["Level 1", "01 1ST FLOOR"]))
-
-    def test_no_match_and_no_title_propose_nothing(self):
-        self.assertIsNone(
-            floor_plans.propose_level("TERRACE PLAN", ["Level 1", "Level 2"]))
-        self.assertIsNone(floor_plans.propose_level(None, ["Level 1"]))
-        self.assertIsNone(floor_plans.propose_level("", ["Level 1"]))
-        self.assertIsNone(floor_plans.propose_level("GROUND FLOOR PLAN", []))
-        self.assertIsNone(floor_plans.propose_level("GROUND FLOOR PLAN", None))
-
-
 class SplitFloors(unittest.TestCase):
     def _two_sheets(self):
         """Two 20x20 m boxes side by side, each with a column 1 m past its
@@ -432,17 +371,6 @@ class PerStoreySettings(unittest.TestCase):
              {"label": "TYPICAL", "plan": 1, "height_mm": 3000.0, "repeat": 5}])
         self.assertEqual(regions[0].storey_height_mm, 4200.0)
         self.assertEqual(regions[1].repeat, 5)
-
-    def test_the_level_pick_rides_with_its_storey(self):
-        # the id is opaque here (a Revit ElementId in the dialog) and means
-        # the storey's TOP; this module only keeps it with the storey, and a
-        # row without one stays positional
-        regions = floor_plans.apply_storey_settings(
-            self._regions(),
-            [{"label": "GROUND", "plan": 0, "level_id": "level-9"},
-             {"label": "TYPICAL", "plan": 1}])
-        self.assertEqual(regions[0].level_id, "level-9")
-        self.assertIsNone(regions[1].level_id)
 
     def test_rows_match_positionally_when_labels_are_missing(self):
         regions = [floor_plans.FloorRegion((0, 0, 1, 1), (0, 0), order=i,

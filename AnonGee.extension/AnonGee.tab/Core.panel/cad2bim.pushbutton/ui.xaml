@@ -1126,23 +1126,19 @@
                         <TextBlock Text="Detected storeys" Style="{StaticResource TextH3}" Margin="24,16,0,4"/>
                         <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Click a row to select it, then use the buttons below to move, add or remove that storey."
                                    Style="{StaticResource HelpText}" Margin="24,0,0,4"/>
-                        <TextBlock Text="Level is the storey's TOP: structure is drawn below the slab it supports, on site and on the model, so the plan titled GROUND FLOOR builds the storey whose top is Ground Floor. The base is the nearest model level below the picked one; when nothing sits below, a level is created there, one storey height down. In a multi-storey run a pick overrides the base/top pair on Build &gt; General, which only steers the single-storey path. (auto) keeps the positional ladder -- first row on the base level, each row one level higher. A row whose plan title matches a level name arrives with that level already picked."
-                                   Style="{StaticResource HelpText}" Margin="24,0,0,4"/>
                         <Grid Margin="28,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="40"/>
                                 <ColumnDefinition Width="30"/>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="110"/>
                                 <ColumnDefinition Width="70"/>
                                 <ColumnDefinition Width="52"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Build" Style="{StaticResource TextCaption}"/>
                             <TextBlock Grid.Column="1" Text="No." Style="{StaticResource TextCaption}"/>
                             <TextBlock Grid.Column="2" Text="Plan drawing" Style="{StaticResource TextCaption}"/>
-                            <TextBlock Grid.Column="3" Text="Level" Style="{StaticResource TextCaption}"/>
-                            <TextBlock Grid.Column="4" Text="Height" Style="{StaticResource TextCaption}"/>
-                            <TextBlock Grid.Column="5" Text="Repeat" Style="{StaticResource TextCaption}"/>
+                            <TextBlock Grid.Column="3" Text="Height" Style="{StaticResource TextCaption}"/>
+                            <TextBlock Grid.Column="4" Text="Repeat" Style="{StaticResource TextCaption}"/>
                         </Grid>
                         <ListBox x:Name="storey_rows" Style="{StaticResource InputListBox}"
                                  Margin="24,0,0,0" MaxHeight="190"

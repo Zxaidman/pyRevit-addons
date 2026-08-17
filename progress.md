@@ -395,6 +395,17 @@ Graphics behind a Yes/No gate that states the risk; the window renders the
 registry (rows code-built like the layer table) under a warning header, with
 Reset-all.
 
+**v0.72.1 — the per-storey level mapping is REMOVED.** The user's Revit test
+showed the v0.70.4/v0.71.1 feature destroying the model: with the name-match
+auto-assign, a plan whose title matches a ladder-CREATED level name re-anchors
+the stack a rung down, and every re-run compounds the shift. Pulled out
+entirely — the Multi-storey table's Level column, propose_level,
+FloorRegion.level_id and the pick handling in _storey_level_pairs are all
+gone (git history keeps them); the positional ladder stands exactly as it
+worked before v0.70.4 (`_storey_level_pairs` is byte-identical to the
+v0.70.3 version). Tests 648 → 632. A revisit needs a design that survives
+re-runs.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →
