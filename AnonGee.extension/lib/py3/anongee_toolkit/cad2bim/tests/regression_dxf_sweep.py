@@ -33,9 +33,9 @@ import _loader
 
 
 (report, layers, marks, dxf_reader, slab_outlines, foundation_plan,
- fold_plan) = _loader.load(
+ fold_plan, legend) = _loader.load(
     "report", "classify.layers", "classify.marks", "readers.dxf_reader",
-    "slab_outlines", "foundation_plan", "fold_plan")
+    "slab_outlines", "foundation_plan", "fold_plan", "legend")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CAD = os.path.join(_HERE, "fixtures", "cad")
@@ -123,6 +123,14 @@ def _measure(path):
     foundation_plans = foundation_plan.plan_foundations(result.records,
                                                         foundation_texts)
     regions = _regions_by_category(result.regions)
+    # THE LEGEND, read the way the pushbutton reads it before the dialog:
+    # swatch pattern -> legend text -> meaning, translated into per-layer
+    # proposals. test9 is the only fixture that carries one -- 14 rows across
+    # its three tower legends -- and its ambiguity (the same pattern meaning
+    # different things per tower) plus the one-layer rule leave exactly ONE
+    # proposal standing (ASPHALT -> cutout on PI_SHEAR WALL CUTOUT).
+    legend_entries = legend.read(result.regions, result.texts)
+    legend_proposals = legend.propose(legend_entries, result.regions)
     # FOLDS AND SUNK BAYS. The hatches are classified the way the pipeline
     # classifies them, then stepped against the outlines they sit in. test10 is
     # the case: six folds inside two F3 rafts, and one sunk strip that IS its
@@ -190,6 +198,8 @@ def _measure(path):
         "regions": len(result.regions),
         "fold_regions": regions.get(layers.CATEGORY_FOLD, 0),
         "sunk_regions": regions.get(layers.CATEGORY_SUNK, 0),
+        "legend_entries": len(legend_entries),
+        "legend_proposals": len(legend_proposals["mapping"]),
         "steps_planned": len(steps["steps"]),
         "steps_skipped": len(steps["skipped"]),
         "step_supports": sum(len(s["supports"]) for s in steps["steps"]),

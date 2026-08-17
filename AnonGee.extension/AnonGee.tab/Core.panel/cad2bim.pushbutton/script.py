@@ -117,8 +117,9 @@ import anongee_clr                      # noqa: F401  (imported for its lifetime
 
 from anongee_toolkit import cad2bim
 from anongee_toolkit.cad2bim import (advanced, compat, config, floor_plans,
-                                     foundation_plan, naming, prefs, report,
-                                     settings, slab_outlines, stair_layout)
+                                     foundation_plan, legend, naming, prefs,
+                                     report, settings, slab_outlines,
+                                     stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -436,6 +437,29 @@ def main():
         _say("Layers present in the DXF but not in the Revit link (still "
              "mappable): {0}".format(", ".join(dxf_only)))
     default_mapping = layers.build_default_mapping(names)
+    # The LEGEND, if the drawing carries one (test9's convention): swatch
+    # pattern -> legend text -> meaning, inherited by every plan hatch of the
+    # pattern. The result is a PROPOSAL into the dialog, never a silent
+    # application -- it overrides the name-convention default for its layers,
+    # the rows are marked, and the user can still change them. Regions and
+    # texts are already through the affine here, so the pairing distances are
+    # real millimetres.
+    legend_notes = {}
+    legend_entries = legend.read(dxf_result.regions, dxf_result.texts)
+    if legend_entries:
+        proposal = legend.propose(legend_entries, dxf_result.regions)
+        _say("Legend: {0} entr{1} read from the drawing.".format(
+            len(legend_entries),
+            "y" if len(legend_entries) == 1 else "ies"))
+        for layer_name in sorted(proposal["mapping"]):
+            default_mapping[layer_name] = proposal["mapping"][layer_name]
+            legend_notes[layer_name] = proposal["rows"][layer_name]
+            _say("  legend: {0} {1}".format(layer_name,
+                                            proposal["rows"][layer_name]))
+        for line in proposal["reports"]:
+            _say("  legend: {0}".format(line))
+        for line in proposal["notes"]:
+            _say("  legend: {0}".format(line))
     column_symbols = columns.structural_column_symbols(doc)
     level_options = columns.levels(doc)
     beam_symbols = beams.structural_framing_symbols(doc)
@@ -500,7 +524,8 @@ def main():
                                 saved_standards=saved_standards,
                                 footing_type_options=footing_type_options,
                                 material_options=material_options,
-                                saved_settings=saved_settings)
+                                saved_settings=saved_settings,
+                                layer_notes=legend_notes)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed

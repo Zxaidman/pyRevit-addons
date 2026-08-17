@@ -335,6 +335,51 @@ class AnXMarkedFaceIsACutout(unittest.TestCase):
         self.assertEqual([_bbox_mm(ring) for ring in got], [(6000, 8000)])
 
 
+class ACutoutRegionIsAHoleToo(unittest.TestCase):
+    """A hatch ROUTED to "cutout" says what the X says, as an area.
+
+    The route is the legend proposal (test9: "HATCH INDICATE CUTOUT FOR DOOR
+    ABOVE", every ASPHALT hatch on PI_SHEAR WALL CUTOUT) or a hand pick in
+    the dialog -- either way the category arrives through `apply_mapping`,
+    the region-category cousin of the fold/sunk hatches. Consumed exactly as
+    an X-marked face: only ever a hole of the smallest plan containing it,
+    never an element. No fixture draws one over a foundation level yet, so
+    the numbers here are synthetic.
+    """
+
+    class _Region(object):
+        def __init__(self, x0, y0, x1, y1, category):
+            self.points = [(_mm(x0), _mm(y0), 0.0), (_mm(x1), _mm(y0), 0.0),
+                           (_mm(x1), _mm(y1), 0.0), (_mm(x0), _mm(y1), 0.0)]
+            self.category = category
+            self.pattern = "ASPHALT"
+            self.layer_key = "PI_SHEAR WALL CUTOUT"
+
+    def _plans(self, regions):
+        return foundation_plan.plan_foundations(
+            [_closed(0, 0, 30000, 30000)],
+            [_Text("F1_750MM THK", (5000, 5000))], regions=regions)
+
+    def test_a_cutout_region_holes_the_plan_containing_it(self):
+        plans = self._plans([self._Region(10000, 10000, 16000, 18000,
+                                          layers.CATEGORY_CUTOUT)])
+        self.assertEqual(len(plans), 1)          # never an element of its own
+        self.assertEqual([_bbox_mm(h) for h in plans[0]["holes"]],
+                         [(6000, 8000)])
+        self.assertEqual(plans[0]["kind"], "raft")   # an opening let into it
+
+    def test_any_other_region_category_holes_nothing(self):
+        # a fold region is a STEP -- fold_plan's business, not a void
+        plans = self._plans([self._Region(10000, 10000, 16000, 18000,
+                                          layers.CATEGORY_FOLD)])
+        self.assertEqual(plans[0]["holes"], [])
+
+    def test_a_cutout_inside_no_plan_attaches_nowhere(self):
+        plans = self._plans([self._Region(40000, 10000, 46000, 18000,
+                                          layers.CATEGORY_CUTOUT)])
+        self.assertEqual(plans[0]["holes"], [])
+
+
 class TheCrossedOutCorridor(unittest.TestCase):
     """The redrawn test10 corridor read whole, at the drawing's coordinates.
 

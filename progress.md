@@ -406,15 +406,58 @@ worked before v0.70.4 (`_storey_level_pairs` is byte-identical to the
 v0.70.3 version). Tests 648 → 632. A revisit needs a design that survives
 re-runs.
 
+### Session 2026-08-17 (later) — v0.73.0, the legend read (P2.4)
+
+**Measured first, built after.** test9 is THREE tower plans on one sheet,
+each with its own legend block — 14 `HATCH INDICATE ...` rows on `PI_TEXT
+25`. The old findings estimate was wrong twice: swatches are 807x484 /
+1001x601 / 1100x400 (not ~600x500) and texts anchor 657–947 mm from the
+swatch centre (not ~2600). Rows stack 617–640 mm, so the wrong row's swatch
+is 839–1020 mm out — pairing is MUTUAL nearest within a 2500 mm reach and a
+200..1500 mm size band, all four numbers drawn from the measurement. The
+nearest PLAN hatch to any legend text is 6622 mm: meaning travels by
+PATTERN, never proximity.
+
+**`legend.py` (Revit-free): read → propose → legend_steps.** read() pairs
+rows; propose() translates to per-LAYER category proposals under two loud
+refusals — two meanings for one pattern is ambiguity (test9's ZIGZAG means
+`+50MM` / `COMPENSATORY STRIP` / `+6250` across the towers; SOLID and STARS
+likewise) and a pattern whose plan hatches span two layers (AR-CONC) cannot
+ride a per-layer table. Exactly ONE proposal survives on test9: ASPHALT →
+cutout on `PI_SHEAR WALL CUTOUT` (9 hatches, one layer), overriding the
+name convention's "structural wall". The pushbutton seeds it into
+`default_mapping` BEFORE the dialog, marks the row (`*` + tooltip via
+`_build_rows(row_notes=)`), and prints every proposal, report-only meaning
+and refusal to the console — proposed, never silent. New CATEGORY_CUTOUT is
+consumed like the fold/sunk region categories: a cutout-routed hatch holes
+the plan containing it (`plan_foundations(regions=)`, same `_hole_cutouts`
+walk as the X-marked faces), and run_builders hands the regions over.
+
+**The storey case cannot leak in through the legend.** `legend_steps()`
+returns the per-pattern step depth behind the SAME `max_step_mm` threshold
+plan_steps applies; +6250 is refused and named. Depths stop at that
+accessor by design — stepping a SLAB from a legend depth is P2-on-slabs,
+recorded in task_plan.md rather than half-wired. The sign question (is
+`+50` raised or dropped?) is recorded open in findings #6 — every value on
+the sheet is `+`, so step proposals go to CATEGORY_FOLD, not to a guess.
+
+Tests 632 → 664 (26 legend, 3 cutout-region, 3 dialog-wiring pins); sweep
+gains `legend_entries` / `legend_proposals` (test9: 14 / 1, all else 0 —
+the re-blessed baseline moved exactly those 34 lines); full gate green.
+
 ### Open
 
-- P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →
-  legend text → meaning), auto-proposed into the override dialog.
+- P2.4 remainder: `legend.legend_steps()` has no consumer yet (legend-driven
+  slab stepping is P2-on-slabs), and a per-tower legend read — each block is
+  internally coherent — needs the multi-storey split to run before the
+  mapping stage. The step-sign question is open in findings #6.
 - The fold construction is unverified in Revit since the support rework — the
   collar/L representation and the redrawn corridor both await the user's next
   run on the real model.
 - A saved settings file from before P1 silently unroutes the foundation layers
   (findings #7). The user's own copy is fixed; the dialog does not yet warn
-  when a restored mapping downgrades a layer the convention recognises.
+  when a restored mapping downgrades a layer the convention recognises. The
+  same restore now also outvotes a LEGEND proposal (it lands after the
+  seeding — findings #6): the row's marker survives, the selection does not.
 - `graphify-out/` is 18 versions stale (built at `56c2d6a`, v0.50.0) and contains
   none of the twenty post-refactor modules. Documentation, not a gate.

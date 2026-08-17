@@ -124,7 +124,7 @@ they replaced. Refusing costs nothing — the caller falls back.
 
 ## Phase 2 — folds and sunk
 
-**Status:** 2.1–2.3 complete. 2.4 (legend-driven mapping) open.
+**Status:** complete (2.4 shipped as v0.73.0, with a recorded remainder).
 
 **The open question is closed.** The user gave the rule from their own detail:
 the fold support's offset is the **thickness of the top slab** — `-200` on a
@@ -160,8 +160,37 @@ already closed that section. `d > T_parent` is the test; the original F6's
       hollow. test10's row of three folds per raft = one support per raft.
 - [x] 2.3 Magnitude threshold: over 3000 mm is a storey, not a step. Test9's
       `+6250` is refused and named; test10's folds still build.
-- [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern →
+- [x] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern →
       legend text → meaning), auto-proposed into the override dialog.
+      `legend.py`, Revit-free; v0.73.0.
+
+**Measured on test9 (the numbers that drove every 2.4 rule):** 14 legend rows
+("HATCH INDICATE ...", layer `PI_TEXT 25`) across THREE tower legends plus a
+standalone cutout entry — the sheet is three plans (3 Boundary + 3 Origin
+records). Swatches are 807x484 / 1001x601 / 1100x400 rectangles (the old
+~600x500 estimate was wrong), texts 657–947 mm from the swatch centre (not
+~2600), rows stacked 617–640 mm so the WRONG row's swatch is 839–1020 mm out
+— hence MUTUAL-nearest pairing. The nearest PLAN hatch to any legend text is
+6622 mm (worst 16140): the measured form of the "mispairs at 5000 mm+"
+warning, and why meaning travels by pattern. The same pattern means different
+things per tower (ZIGZAG: `+50MM` / `COMPENSATORY STRIP` / `+6250`; STARS and
+SOLID likewise), so the whole-sheet read refuses those patterns loudly — two
+meanings, no proposal, a note. What survives: **ONE proposal**, ASPHALT →
+cutout on `PI_SHEAR WALL CUTOUT` (9 plan hatches, all on that one layer),
+overriding the name convention's "structural wall" ("shear") — visibly
+marked in the dialog row, printed to the console, still editable. Three
+report-only meanings (AR-CONC, ANSI32, ANSI37) ride along verbatim.
+
+**2.4 remainder, recorded rather than half-wired:** `legend.legend_steps()`
+delivers the per-pattern step DEPTH behind the same `max_step_mm` threshold
+plan_steps applies (+6250 is refused and named wherever depths flow), but no
+pass consumes it yet — stepping a SLAB from a legend depth is P2-on-slabs
+territory (plan_steps only runs for foundations today). And a per-tower read
+(after the multi-storey split, one legend block per plan) would disambiguate
+what the whole-sheet read rightly refuses; it needs the split to hand regions
+per plan to the mapping stage, which happens before the split today. The
+SIGN question is open in findings #6: every step value on test9 is "+", so
+step proposals go to CATEGORY_FOLD rather than guessing raised-vs-dropped.
 
 **Test10 was redrawn by the user 2026-08-14** — the old F5/F6 middle (1000 sunk
 between 2000 pads) was a design error on the drawing side. The new foundation
@@ -224,8 +253,9 @@ whole construction stays visible to the offline harnesses.
 - [ ] 2.2 Place the three floors per region: parent, fold support, dropped slab.
 - [ ] 2.3 Magnitude threshold. Test9's legend has `T.O.S. +50MM`, `+400MM` and
       `+6250`. 6250 is a storey, not a fold: route to its own level or report.
-- [ ] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern → legend
+- [x] 2.4 Legend-driven mapping for Test9-style drawings (swatch pattern → legend
       text → meaning), auto-proposed into the override dialog, never silent.
+      (Shipped v0.73.0 — the measured numbers live in the Phase 2 block above.)
 
 **Open question before 2.2 can be written:** the exact vertical placement of the
 fold support. In the supplied detail the slab is `350 THK RCC SLAB`, the two

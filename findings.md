@@ -161,26 +161,72 @@ Current classification of these layers:
 No collision with existing categories, so these are additions rather than
 changes.
 
-## 6. A second, legend-driven convention exists (test9)
+## 6. A second, legend-driven convention exists (test9) — measured in P2.4
 
-Test9's `PI_TEXT 25` layer carries a legend whose entries read:
+The earlier estimate here (600x500 swatches, texts ~2600 mm away) was wrong in
+both numbers. Measured with the package's own reader (v0.73.0):
 
-```
-HATCH INDICATE T.O.S. +50MM.
-HATCH INDICATE T.O.S. +400MM.
-HATCH INDICATE TOS. +6250.
-HATCH INDICATE CUTOUT FOR DOOR ABOVE
-HATCH INDICATE COLUMN/SHEAR WALL THROUGH FOUNDATION TO TERMINATION.
-```
+**The sheet is THREE tower plans (3 Boundary + 3 Origin records), and each
+carries its own legend block** — 14 rows in all on `PI_TEXT 25`, every one
+reading `HATCH INDICATE ...`, plus one near-miss (`*A- INDICATE 20mm CAMBER
+TO BE PROVIDED IN BEAM`) that lacks the HATCH prefix and is rightly no row.
 
-Legend swatches are 600x500 hatch rectangles sitting ~2600 mm from their text, so
-the mapping is swatch pattern → legend text → meaning, inherited by every plan
-hatch of that pattern. Nearest-text pairing mispairs at distance (observed at
-5000 mm+), so it must auto-propose into the override dialog rather than apply
-silently.
+| | |
+|-|-|
+| Swatch rectangles | 807x484 (towers 1–2), 1001x601 (tower 3), 1100x400 (cutout) |
+| Text anchor to own swatch centre | 657–947 mm |
+| Rows stacked | 617–640 mm apart, so the WRONG row's swatch is 839–1020 mm |
+| Nearest PLAN hatch to any legend text | 6622 mm (worst 16140) |
+| Nearest non-swatch smalls | 83x83 level markers, 600x75 / 600x125 slivers |
 
-`+6250` is not a fold — it is a different storey. A magnitude threshold is
-required in P2 whatever the representation.
+The ~200 mm margin between "own swatch" and "next row's swatch" is why the
+pairing is MUTUAL nearest (a missing swatch unpairs its row instead of
+stealing the neighbour's), and the 6622 mm floor is the measured form of the
+old "mispairs at 5000 mm+" observation — meaning travels by PATTERN, never by
+proximity.
+
+**The same pattern means different things per tower**, which the whole-sheet
+read must refuse rather than resolve:
+
+| Pattern | Tower 1 | Tower 2 | Tower 3 | Plan hatches (excl. swatches) |
+|---------|---------|---------|---------|-------------------------------|
+| ZIGZAG | `T.O.S. +50MM.` | `COMPENSATORY STRIP.` | `TOS. +6250.` | 9, all `PI_HATCH` |
+| STARS | `T.O.S. +400MM.` | `NON TOWER AREA.` | — | 0 (swatches only) |
+| SOLID | three wordings of `.. THROUGH FOUNDATION TO TERMINATION.` | | | 63 `PI_COLUMN HATCH` + 14 `PI_LEVEL` |
+| AR-CONC | `COLUMN/SHEAR WALL TERMINATE.` (identical, 3x) | | | 26 `PI_COLUMN HATCH` + 8 `PI_RETAINING WALL HATCH` |
+| ANSI32 | — | — | `NON STRUCTURE SHEAR WALL` | 9, all `PI_COLUMN HATCH` |
+| ANSI37 | — | — | `STUB SHEAR WALL.` | 0 (its swatch is the only one) |
+| ASPHALT | `CUTOUT FOR DOOR ABOVE` (standalone entry) | | | 9, all `PI_SHEAR WALL CUTOUT` |
+
+So `legend.py` reads 14 entries and exactly **one proposal survives** the
+ambiguity rule (two meanings for a pattern → no proposal, a loud note) and
+the one-layer rule (a proposal is per LAYER, so every plan hatch of the
+pattern must sit on one): ASPHALT → cutout on `PI_SHEAR WALL CUTOUT`,
+overriding the name convention's "structural wall" (it matches "shear").
+That override is a marked, editable row in the dialog and a console line —
+never a silent application. AR-CONC/ANSI32/ANSI37 agree with themselves but
+carry no actionable kind: kept verbatim, report-only. Reading the legend
+PER TOWER (each block is internally coherent) needs the multi-storey split
+to happen before the mapping stage; today it happens after, and the refusal
+is the honest whole-sheet answer.
+
+**The sign question is OPEN.** Every step value on the sheet is `+` — the
+`VIN_LEVEL` spot levels read `+50`, `+400`, `+950`, `+6250`, `+6450`, all
+`(T.O.S.)` — and a plan cannot say what the parent slab's own level is, so
+`+` cannot be proven to mean raised-above-parent rather than a drop. Step
+proposals therefore go to CATEGORY_FOLD whatever the sign, and this entry
+records the question instead of the code guessing. A drawing that pairs a
+legend step with a section, or uses both signs, would close it.
+
+`+6250` is not a fold — it is a different storey. `legend.legend_steps()`
+refuses it through the same `max_step_mm` threshold `fold_plan.plan_steps`
+applies (2.3), so the storey case cannot leak in through the legend path
+either.
+
+One trap carried over from #7: a saved settings file restores layer combos
+by name AFTER the legend proposal seeds them, so an old mapping silently
+outvotes the proposal exactly as it outvotes the foundation convention. The
+row's `*` marker and tooltip survive; the selection does not.
 
 ## 7. A fold support's depth is arithmetic, not a setting
 

@@ -295,7 +295,7 @@ class CadToBimWindow(object):
                  stair_regions=None, preset=None, storey_detection=None,
                  saved_naming=None, saved_standards=None,
                  footing_type_options=None, material_options=None,
-                 saved_settings=None):
+                 saved_settings=None, layer_notes=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -308,7 +308,8 @@ class CadToBimWindow(object):
         find("version_text").Text = "v{0}".format(_version())
         find("source_text").Text = source_name
         self._build_rows(find("layer_rows"), layer_rows, categories,
-                         default_mapping, self._combos)
+                         default_mapping, self._combos,
+                         row_notes=layer_notes)
         self._build_rows(find("text_rows"), text_layer_rows or [],
                          text_categories or [], default_text_mapping or {},
                          self._text_combos)
@@ -578,9 +579,17 @@ class CadToBimWindow(object):
             combo.SelectedIndex = 0
         return mapping
 
-    def _build_rows(self, panel, layer_rows, categories, default_mapping, combo_store):
+    def _build_rows(self, panel, layer_rows, categories, default_mapping,
+                    combo_store, row_notes=None):
         """One row per layer: name, count, category combo. Appends (layer, combo)
-        to combo_store so the caller can read the chosen mapping back."""
+        to combo_store so the caller can read the chosen mapping back.
+
+        `row_notes` ({layer: note}) marks the rows whose default came from
+        somewhere the user should know about -- the LEGEND proposals. The row
+        shows a `*` after the layer name and carries the note as its tooltip
+        (name and combo both), so the proposal is visible where it can still
+        be changed; the combo stays an ordinary combo.
+        """
         label_style = _theme_style(self.window, "TextLabel")
         caption_style = _theme_style(self.window, "TextCaption")
         combo_style = _theme_style(self.window, "InputComboBox")
@@ -593,10 +602,13 @@ class CadToBimWindow(object):
                                 else GridLength(width))
                 row.ColumnDefinitions.Add(column)
 
+            note = (row_notes or {}).get(layer)
             name_block = TextBlock()
             _apply_style(name_block, label_style)
-            name_block.Text = layer
+            name_block.Text = layer + (" *" if note else "")
             name_block.VerticalAlignment = VerticalAlignment.Center
+            if note:
+                name_block.ToolTip = note
             WpfGrid.SetColumn(name_block, 0)
 
             count_block = TextBlock()
@@ -607,6 +619,8 @@ class CadToBimWindow(object):
 
             combo = ComboBox()
             _apply_style(combo, combo_style)
+            if note:
+                combo.ToolTip = note
             for category in categories:
                 combo.Items.Add(category)
             combo.SelectedItem = default_mapping.get(layer)

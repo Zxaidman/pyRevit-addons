@@ -266,7 +266,11 @@ def _create_footings(doc, sections, selections, records=None, texts=None,
         _say("Footings -- no foundation type or base level chosen.")
         return {"created": 0, "skipped": 0, "errors": 0}
 
-    outlines = foundation_plan.plan_foundations(records or [], texts or [])
+    # The regions ride along so a hatch the dialog routed to "cutout" (the
+    # legend proposal, or a hand pick) holes the plan containing it -- the
+    # region-category cousin of the X-marked faces.
+    outlines = foundation_plan.plan_foundations(records or [], texts or [],
+                                                regions=regions or [])
     if outlines:
         _say("Footings -- {0} outline(s) read from the drawing; the "
              "column-offset derivation is not used.".format(len(outlines)))

@@ -73,8 +73,8 @@ from collections import defaultdict
 from . import config
 from . import foundation_labels
 from . import slab_graph
-from .classify.layers import (CATEGORY_FOLD, CATEGORY_FOUNDATION,
-                              CATEGORY_SUNK)
+from .classify.layers import (CATEGORY_CUTOUT, CATEGORY_FOLD,
+                              CATEGORY_FOUNDATION, CATEGORY_SUNK)
 from .geom import shapes
 from .slab_graph import (_centroid, _cluster_nodes, _dedup_ring, _dist,
                          _is_simple_ring, _next_ccw, _point_in_ring,
@@ -472,13 +472,20 @@ def _stitch(face_a, face_b, outline_edges):
     return ring
 
 
-def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
+def plan_foundations(records, texts, category=CATEGORY_FOUNDATION,
+                     regions=None):
     """[{ring, z, mark, thickness_mm, steps, source, labels, holes, kind}] for
     the DRAWN foundations.
 
     `texts` are the foundation notes -- the caller routes them by layer, the
     way slab notes are routed, because that is what tells `foundation_labels`
     a bare "1200MM THK" is a raft rather than a slab.
+
+    `regions` are the reader's hatches, already classified. A region routed
+    to CATEGORY_CUTOUT -- a legend proposal or an explicit dialog pick -- is
+    consumed exactly as an X-marked face is: only ever a hole of the plan
+    containing it, never an element. That is the region-category cousin of
+    the fold/sunk hatches `fold_plan.step_regions` reads.
 
     EMPTY when the drawing does not carry the convention: no foundation layer,
     or a foundation layer whose rings nothing names. The caller falls back to
@@ -497,6 +504,7 @@ def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
     rule offline.
     """
     rings, crossed_out = _outlines_and_cutouts(records, category)
+    crossed_out = list(crossed_out) + _region_cutouts(regions)
     assigned = [[] for _ring in rings]
     labelled = 0
     for text, note in _parsed_labels(texts):
@@ -544,6 +552,25 @@ def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
     for plan in plans:
         plan["kind"] = _kind(plan)
     return plans
+
+
+def _region_cutouts(regions):
+    """The rings of the hatch regions routed to CATEGORY_CUTOUT.
+
+    A cutout hatch says what an X across a face says -- no concrete here --
+    only as an area instead of two strokes. It joins the crossed-out rings
+    ahead of `_hole_cutouts`, so it holes the smallest plan containing it and
+    nothing else: it completes no outline, sizes nothing, and a cutout that
+    lands inside no plan attaches nowhere, same as an orphaned X.
+    """
+    out = []
+    for region in (regions or []):
+        if getattr(region, "category", None) != CATEGORY_CUTOUT:
+            continue
+        ring = _dedup_ring([(p[0], p[1]) for p in region.points])
+        if len(ring) >= 3:
+            out.append(ring)
+    return out
 
 
 def _kind(plan):

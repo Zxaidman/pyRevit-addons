@@ -37,6 +37,15 @@ CATEGORY_FLOOR_ORIGIN = "floor origin"
 CATEGORY_FOUNDATION = "foundation"
 CATEGORY_FOLD = "fold"
 CATEGORY_SUNK = "sunk"
+# A CUTOUT region is a hole: no concrete where it sits, never an element of
+# its own -- the hatch-region cousin of the X-marked face (foundation_plan).
+# No convention pattern routes here on purpose: the corpus reaches it through
+# a LEGEND proposal (test9's ASPHALT hatches, "HATCH INDICATE CUTOUT FOR DOOR
+# ABOVE", all on PI_SHEAR WALL CUTOUT) or an explicit pick in the dialog. A
+# name rule would also re-route test9's shear-wall-named layers away from the
+# wall passes behind the user's back, which is exactly what a proposal into
+# the dialog exists to avoid.
+CATEGORY_CUTOUT = "cutout"
 CATEGORY_UNMAPPED = "unmapped"
 
 # Identification / annotation layers must NEVER inherit a structural category,
@@ -82,6 +91,7 @@ ALL_CATEGORIES = (
     CATEGORY_GRID, CATEGORY_COLUMN, CATEGORY_BEAM,
     CATEGORY_SLAB_EDGE, CATEGORY_STRUCT_WALL, CATEGORY_ARCH_WALL,
     CATEGORY_STAIR, CATEGORY_FOUNDATION, CATEGORY_FOLD, CATEGORY_SUNK,
+    CATEGORY_CUTOUT,
     CATEGORY_FLOOR_BOUNDARY, CATEGORY_FLOOR_ORIGIN,
     CATEGORY_UNMAPPED,
 )

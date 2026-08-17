@@ -452,6 +452,49 @@ class TheNewTolerancesAreWired(unittest.TestCase):
         self.assertIn('"foundation_min_area_m2": self._read_float(', window)
 
 
+class TheLegendProposalReachesTheDialog(unittest.TestCase):
+    """The legend result is a PROPOSAL into the dialog, never a silent apply.
+
+    test9's convention: swatch pattern -> legend text -> meaning, inherited
+    by every plan hatch of the pattern. The read itself is unit-tested in
+    test_legend.py; what no offline harness can reach is the WPF window, so
+    every link from the read to the marked row is pinned as text here, the
+    way the tolerance wires are. Each of these degrades SILENTLY if cut --
+    the dialog simply opens without the proposal and nobody is told.
+    """
+
+    def test_the_pushbutton_reads_the_legend_before_the_window(self):
+        script = _script_source()
+        self.assertIn("legend.read(dxf_result.regions, dxf_result.texts)",
+                      script)
+        self.assertIn("legend.propose(legend_entries, dxf_result.regions)",
+                      script)
+        # the proposal OVERRIDES the name-convention default for its layers --
+        # that override, sitting in the editable table, IS the proposal...
+        self.assertIn('default_mapping[layer_name] = '
+                      'proposal["mapping"][layer_name]', script)
+        # ...the marked rows ride into the window, and the console says so
+        self.assertIn("layer_notes=legend_notes", script)
+        self.assertIn('_say("  legend:', script)
+
+    def test_the_window_marks_the_proposed_rows(self):
+        window = _window_source()
+        self.assertIn("layer_notes=None", window)
+        self.assertIn("row_notes=layer_notes", window)
+        block = window.split("def _build_rows(", 1)[1].split("\n    def ",
+                                                             1)[0]
+        self.assertIn("row_notes", block)
+        self.assertIn("ToolTip = note", block)
+
+    def test_the_builder_hands_the_regions_to_the_cutout_machinery(self):
+        # a hatch the dialog routed to "cutout" must reach plan_foundations,
+        # where it holes the plan containing it (test_foundation_plan pins
+        # the behaviour; this pins the hand-over)
+        self.assertIn("foundation_plan.plan_foundations(records or [], "
+                      "texts or [],", _builders_source())
+        self.assertIn("regions=regions or []", _builders_source())
+
+
 class TheDrawStairsRoundTripKeepsTheWholeDialog(unittest.TestCase):
     """Closing the window to draw outlines must not cost the user's settings.
 
