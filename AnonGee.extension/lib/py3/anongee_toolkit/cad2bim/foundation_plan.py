@@ -74,8 +74,10 @@ _MM = config.MM_PER_FT
 # small, and unlike a slab bay it has a label to prove it means something.
 _MIN_AREA_M2 = 0.25
 
-# Endpoint identity for the face walk, the same 50 mm the beam graph uses.
-_SNAP_MM = slab_graph._SNAP_MM
+# Endpoint identity for the face walk: read LIVE from slab_graph at each use,
+# never copied at import -- a copy freezes the value before apply_tolerances
+# runs, and the dialog's "Node weld distance" silently stops reaching the
+# foundation walk (the exact trap stair_tolerances.py warns about).
 
 # The categories whose LINES may complete an outline without being one.
 _STEP_CATEGORIES = (CATEGORY_FOLD, CATEGORY_SUNK)
@@ -135,7 +137,7 @@ def _faces(segments, flags):
     """
     if len(segments) < 3:
         return []
-    snap_ft = config.mm_to_ft(_SNAP_MM)
+    snap_ft = config.mm_to_ft(slab_graph._SNAP_MM)
     segments, flags = _split_at_endpoints(segments, flags, snap_ft)
     key, nodes = _cluster_nodes([p for segment in segments for p in segment],
                                 snap_ft)

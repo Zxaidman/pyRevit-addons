@@ -746,8 +746,7 @@ class CadToBimWindow(object):
             "filter_colour_lines": bool(self.chk_filter_lines.IsChecked),
             "naming": self._read_naming(),
             "level_follow_existing": bool(self.chk_level_follow.IsChecked),
-            "standard_text": {"column": self.tb_std_columns.Text,
-                              "beam_widths": self.tb_std_beams.Text},
+
         }
 
     def _apply_preset(self, preset):
@@ -800,7 +799,7 @@ class CadToBimWindow(object):
         if source:
             self.cb_stair_source.SelectedIndex = {
                 "auto": 0, "linework": 1, "text": 2, "region": 3}.get(source, 0)
-        shape = preset.get("stair_shape")
+        shape = (preset.get("stair_params") or {}).get("shape")
         for radio, value in self.shape_buttons:
             if value == shape:
                 radio.IsChecked = True
@@ -1053,18 +1052,18 @@ class CadToBimWindow(object):
     def _read_storey_settings(self):
         """The per-storey rows as plain dicts, bottom-up (what the build wants)."""
         self._capture_storey_rows()
-        settings = []
+        rows_out = []
         for row in self._storey_rows:
             plan = self._storey_plans[min(row.get("plan") or 0,
                                           len(self._storey_plans) - 1)]
-            settings.append({
+            rows_out.append({
                 "label": plan.get("label"),
                 "plan": row.get("plan") or 0,
                 "order": plan.get("order"),
                 "include": bool(row.get("include", True)),
                 "height_mm": row.get("height_mm"),
                 "repeat": int(row.get("repeat") or 1)})
-        return settings
+        return rows_out
 
     def _remember_conventions(self):
         """Keep this dialog for the NEXT Revit session.

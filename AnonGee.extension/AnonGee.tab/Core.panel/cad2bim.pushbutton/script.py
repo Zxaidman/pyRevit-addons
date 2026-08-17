@@ -416,12 +416,20 @@ def main():
     # which left multi-storey runs without an origin and every storey shifted.
     layer_counts = report.build_layer_counts(revit_result.records)
     dxf_counts = report.build_layer_counts(dxf_result.records)
-    names = sorted(set(layer_counts) | set(dxf_counts))
+    # HATCH-only layers get a row too. A hatch is a region, not a record, so a
+    # layer carrying nothing else (Project1's COLUMN HATCH_ASC, test9's legend
+    # swatches) had no row, no combo, and no route to fold/sunk -- the P2
+    # categories were unreachable exactly where they are needed.
+    region_counts = {}
+    for region in dxf_result.regions:
+        region_counts[region.layer_key] = region_counts.get(region.layer_key,
+                                                            0) + 1
+    names = sorted(set(layer_counts) | set(dxf_counts) | set(region_counts))
     layer_rows = []
     for name in names:
         revit_n = layer_counts.get(name, {}).get("count", 0)
         dxf_n = dxf_counts.get(name, {}).get("count", 0)
-        layer_rows.append((name, revit_n if revit_n else dxf_n))
+        layer_rows.append((name, revit_n or dxf_n or region_counts.get(name, 0)))
     dxf_only = [name for name in names if not layer_counts.get(name)]
     if dxf_only:
         _say("Layers present in the DXF but not in the Revit link (still "
