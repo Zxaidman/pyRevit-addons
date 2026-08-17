@@ -16,6 +16,7 @@ A template is a plain format string over the sizes that type carries:
     stair         {r} {t} {w} {k}  riser/tread/width/waist
     stair_waist   {k}              the stair's waist type
     footing       {t}              600 thick foundation pad
+    raft          {t}              750 thick raft foundation
     level         {n} {o} {e} {label}  a storey level ({o} = 1st/2nd/3rd)
     grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
@@ -41,6 +42,7 @@ DEFAULTS = {
     "stair": "cad2bim {r}R x {t}T x {w}W x {k}wst",
     "stair_waist": "cad2bim waist {k}",
     "footing": "PAD {t} THK",
+    "raft": "RAFT {t} THK",
     "level": "CAD Level {n}",
     "grid": "{name}",
 }
@@ -55,6 +57,7 @@ FIELDS = {
     "stair": ("r", "t", "w", "k"),
     "stair_waist": ("k",),
     "footing": ("t",),
+    "raft": ("t",),
     "level": ("n", "o", "e", "label"),
     "grid": ("name",),
 }
@@ -94,10 +97,19 @@ _TEXT_FIELDS = ("label", "name")
 # name is already in use for this element type" and that member is lost. The
 # templates left out are unique on the field they do use ({t} thickness, {n}
 # level number) or name something the drawing already made unique ({name}).
+#
+# `raft` requires its one field even so. A raft's thickness comes from the
+# ENGINEER's note, not a formula, and since v0.68.1 a name collision is not an
+# error but a silent reuse -- two rafts noted 500 and 750 rendering the same
+# name would cast the second at the first one's depth with nothing said. The
+# older single-field templates keep their latitude ("GENERIC SLAB" is a choice
+# offices have already saved); the raft template is new, so the trap is closed
+# from day one.
 _MUST_USE = {
     "column_rect": ("b", "h"),
     "beam_sized": ("w", "d"),
     "stair": ("r", "t", "w", "k"),
+    "raft": ("t",),
 }
 
 
@@ -189,6 +201,18 @@ def footing_type_name(thickness_mm):
     telling us.
     """
     return _render("footing", {"t": _mm(thickness_mm)})
+
+
+def raft_type_name(thickness_mm):
+    """The name for a RAFT foundation type.
+
+    A raft is the same Revit shape as a pad -- a foundation-slab floor whose
+    type carries only a thickness -- but offices name the two differently
+    ("RAFT 750 THK" beside "PAD 600 THK"), so it gets a template of its own.
+    Which template a placed outline takes is decided in the Revit-free layer
+    (foundation_plan's "kind"), never guessed here.
+    """
+    return _render("raft", {"t": _mm(thickness_mm)})
 
 
 def level_name(index, elevation_mm=0.0, label=None):

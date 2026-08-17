@@ -340,6 +340,49 @@ Regression gate green with every baseline untouched.
 Still open before the phase closes: brand-guidelines styling, after the user
 reviews the layout in Revit.
 
+### Session 2026-08-17 — v0.71.0, raft naming + gated Advanced settings
+
+Two user requests, both landed. Tests 599 → 640; all three regression legs
+green against the committed baselines (no measurement moved).
+
+**Raft naming template.** The user asked for "different naming scheme to
+Footing and Raft in Naming tabs". `naming.DEFAULTS` gains `raft` ("RAFT {t}
+THK") with `raft_type_name()` beside the footing's; validate REFUSES a raft
+template that drops {t} (since v0.68.1 a collision is a silent reuse — two
+rafts noted 500 and 750 rendering one name would cast the second at the
+first's depth; the template is new, so the trap is closed from day one where
+the older single-field templates keep their saved latitude). What IS a raft
+is decided in the Revit-free layer: `plan_foundations` plans carry `kind` —
+"raft" at or above `config.DEFAULTS["raft_min_area_m2"]` (60 m2; test10's
+raft ~450, largest pad ~35) OR when the outline carries holes (a footing with
+openings cut into it is a raft by construction; judged after `_nest` and
+`_hole_cutouts`, which supply the evidence). Column-derived pads are always
+"pad". `builders/footings._resolve_type` routes the template on kind and
+keys its cache by (kind, thickness); step supports and dropped slabs keep the
+footing template (templates of their own are a later item). The Naming tab
+gains the "Raft (t)" row; static checks pin the Revit-side routing the same
+way P1.6 pinned the call sites.
+
+**Advanced settings, gated and persistent.** New Revit-free `advanced.py`: a
+REGISTRY of 19 module tunables (fold_plan probe/same-area, footing_plan depth
+step/factors, slab_graph heal/face-area/arc/chamfer/coverage/joint/cell,
+floor_plans region/origin/coverage/elevation-cutoff), each with unit, default,
+label and a one-sentence `effect` a newcomer can read. Only constants their
+consumers read LIVE are registered — the liveness test pins
+`effective() == defaults()` (existence + drift) and an ast scan proves no
+module froze a copy of a registered name at import. Excluded and noted
+(findings #10): slab_graph._COLUMN_RECT_PAD_MM (import-frozen in
+slab_outlines), slab_labels._ORPHAN_MIN_AREA_M2 (def-time default; the live
+knob is the dialog's slab_note_min_area_m2), and every builders/* constant
+(Revit imports at module level). Overrides persist under prefs "advanced",
+apply at pushbutton start BEFORE storey detection (floor_plans is a consumer)
+and again from the dialog's result so an edit binds on the run it was made
+for; they also ride the explicit settings file (schema 1 → 2, optional
+section, old files load unchanged). UI: an "Advanced..." button on Output &
+Graphics behind a Yes/No gate that states the risk; the window renders the
+registry (rows code-built like the layer table) under a warning header, with
+Reset-all.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

@@ -87,6 +87,10 @@ DEFAULTS = {
                                       # storey, not a step, and is refused
     "foundation_min_area_m2": 0.25,   # smallest linework face that is an outline
                                       # (a pile cap is small; a sliver is smaller)
+    "raft_min_area_m2": 60.0,         # an outline at or above this plan area is
+                                      # a RAFT, not a pad -- test10's raft is
+                                      # ~450 m2 and its largest pad ~35, so the
+                                      # line sits well clear of both
 
     # --- view filters (Output & Graphics tab) -------------------------------
     "filter_transparency": 0,     # 0 = solid fill; the fill is what identifies

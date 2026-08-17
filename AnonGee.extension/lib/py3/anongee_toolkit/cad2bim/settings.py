@@ -6,11 +6,12 @@ sizes. Everything else was rebuilt from defaults on every Revit session, so a
 user who had tuned twenty boxes had to tune them again the next morning. This
 module snapshots every named control in the window instead:
 
-    {"schema": 1, "version": "0.67.0",
+    {"schema": 2, "version": "0.67.0",
      "controls": {"tb_slab_step": "20", "chk_beams": True,
                   "cb_floor_type": "Generic 150mm"},
      "layers": {"S-COLS": "Column", ...},
-     "texts":  {"S-TEXT": "Column mark", ...}}
+     "texts":  {"S-TEXT": "Column mark", ...},
+     "advanced": {"beam_heal_mm": 400.0, ...}}
 
 Two rules make the snapshot safe to reload into a DIFFERENT model:
 
@@ -28,7 +29,12 @@ it testable and keeps the file format independent of the dialog's plumbing.
 import json
 import os
 
-SCHEMA = 1
+# 2 added the OPTIONAL "advanced" section (module-constant overrides). The
+# number is a statement of what a file may carry, not a gate: every reader
+# here takes what it recognises and ignores the rest, so a schema-1 file loads
+# unchanged (its advanced section simply reads as empty) and a schema-2 file
+# in old hands restores everything but the section it does not know.
+SCHEMA = 2
 
 # Controls the dialog OWNS: read-only text it computes, or a list whose contents
 # come from the drawing. Restoring these would either be a no-op or a lie.
@@ -87,13 +93,19 @@ def pick_index(items, wanted):
     return starts[0] if len(starts) == 1 else -1
 
 
-def payload(controls, layers=None, texts=None, version=""):
-    """A complete settings dict, ready for `write()` or `prefs`."""
+def payload(controls, layers=None, texts=None, version="", advanced=None):
+    """A complete settings dict, ready for `write()` or `prefs`.
+
+    `advanced` is the Advanced window's overrides ({key: number}); it rides
+    the file so a settings file is the WHOLE run, not the whole run minus the
+    values that bite hardest when they silently differ.
+    """
     return {"schema": SCHEMA,
             "version": version or "",
             "controls": dict(controls or {}),
             "layers": dict(layers or {}),
-            "texts": dict(texts or {})}
+            "texts": dict(texts or {}),
+            "advanced": dict(advanced or {})}
 
 
 def sections(data):
@@ -109,6 +121,18 @@ def sections(data):
         section = data.get(key)
         out.append(section if isinstance(section, dict) else {})
     return tuple(out)
+
+
+def advanced_overrides(data):
+    """The saved advanced overrides, or {} -- a schema-1 file has none.
+
+    Kept OUT of `sections()` so its three-tuple callers do not all change
+    shape for a section most files will not carry.
+    """
+    if not isinstance(data, dict):
+        return {}
+    section = data.get("advanced")
+    return dict(section) if isinstance(section, dict) else {}
 
 
 def describe(data):

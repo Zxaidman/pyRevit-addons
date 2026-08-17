@@ -24,15 +24,16 @@ _WINDOW = os.path.normpath(os.path.join(_HERE, "..", "ui_window.py"))
 _BUILDERS = os.path.normpath(os.path.join(_HERE, "..", "run_builders.py"))
 _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")
+_ADV_XAML = os.path.join(_BUTTON, "advanced.xaml")
 
 _FIND = re.compile(r'\bfind\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*\)')
 
 
 def _xaml_names(*paths):
-    """Every x:Name in the given .xaml files (both dialogs by default)."""
+    """Every x:Name in the given .xaml files (all three dialogs by default)."""
     key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
     names = set()
-    for path in (paths or (_XAML, _LINK_XAML)):
+    for path in (paths or (_XAML, _LINK_XAML, _ADV_XAML)):
         names.update(el.get(key) for el in ET.parse(path).iter() if el.get(key))
     return names
 
@@ -166,7 +167,7 @@ class NamingTabControls(unittest.TestCase):
                 "beam_sized": "beam", "beam_width": "beam_width",
                 "floor": "floor", "stair": "stair",
                 "stair_waist": "stair_waist", "level": "level",
-                "grid": "grid", "footing": "footing"}
+                "grid": "grid", "footing": "footing", "raft": "raft"}
 
     def test_one_box_and_one_preview_per_template(self):
         names = _xaml_names(_XAML)
@@ -263,7 +264,7 @@ class TheDialogTabSet(unittest.TestCase):
 
     def test_no_name_is_declared_twice(self):
         key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
-        for path in (_XAML, _LINK_XAML):
+        for path in (_XAML, _LINK_XAML, _ADV_XAML):
             names = [el.get(key) for el in ET.parse(path).iter() if el.get(key)]
             doubled = sorted(name for name in set(names)
                              if names.count(name) > 1)
@@ -784,6 +785,92 @@ class AnOldLibraryIsReportedNotCrashed(unittest.TestCase):
         source = _script_source()
         block = source.split("def _library_mismatch(", 1)[1].split("\n\n\n", 1)[0]
         self.assertIn("_MISSING_MODULE", block)
+
+
+class TheAdvancedWindowIsGatedAndWired(unittest.TestCase):
+    """The Advanced settings window: its button, its gate, and its shell.
+
+    The rows themselves are code-built from advanced.REGISTRY (like the layer
+    table), so what the static check can pin is everything around them: the
+    button lives on Output & Graphics, the click goes through the Yes/No gate
+    before any window opens, the shell XAML declares the panel and the three
+    buttons the dialog binds, and the warning prose is the one the gate
+    repeats.
+    """
+
+    def test_the_button_lives_on_output_and_graphics(self):
+        homes = _tab_homes()
+        self.assertEqual(homes.get("btn_advanced"), "Output & Graphics",
+                         "btn_advanced sits on %r" % homes.get("btn_advanced"))
+
+    def test_the_click_goes_through_the_confirmation_gate(self):
+        block = _window_source().split("def on_advanced(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("_confirm(", block)
+        self.assertIn("AdvancedSettingsDialog(", block)
+        # the risk statement is IN the gate, not only in the window behind it
+        self.assertIn("fails quietly", block)
+        # the gate refuses by default: the dialog only opens inside the branch
+        self.assertLess(block.index("_confirm("),
+                        block.index("AdvancedSettingsDialog("))
+
+    def test_the_shell_declares_what_the_dialog_binds(self):
+        names = _xaml_names(_ADV_XAML)
+        for control in ("advanced_rows", "advanced_version_text",
+                        "advanced_warning_text", "btn_adv_reset",
+                        "btn_adv_apply", "btn_adv_cancel"):
+            self.assertIn(control, names)
+
+    def test_the_warning_header_states_the_risk_and_the_way_back(self):
+        tree = ET.parse(_ADV_XAML)
+        key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+        warning = [el for el in tree.iter()
+                   if el.get(key) == "advanced_warning_text"]
+        self.assertEqual(len(warning), 1)
+        text = warning[0].get("Text") or ""
+        for sentence in ("These change how drawings are read",
+                         "fails quietly", "Reset restores every default"):
+            self.assertIn(sentence, text)
+
+    def test_the_rows_render_the_registry_not_a_second_list(self):
+        block = _window_source().split("class AdvancedSettingsDialog", 1)[1].split(
+            "\nclass ", 1)[0]
+        self.assertIn("for entry in advanced.REGISTRY", block)
+        self.assertIn("entry.effect", block)
+        self.assertIn("entry.unit", block)
+
+    def test_the_values_ride_collect_capture_and_restore(self):
+        source = _window_source()
+        collect = source.split("def _collect(", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn('"advanced": dict(self._advanced_values)', collect)
+        capture = source.split("def _capture_settings(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("advanced=dict(self._advanced_values)", capture)
+        restore = source.split("def _restore_controls(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("settings.advanced_overrides(data)", restore)
+        remember = source.split("def _remember_conventions(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("advanced.save(self._advanced_values)", remember)
+
+    def test_the_pushbutton_applies_the_overrides_before_any_planning(self):
+        # the saved overrides must rebind BEFORE storey detection runs --
+        # floor_plans is a registered consumer -- and again from the dialog's
+        # result so an edit takes effect on the run it was made for
+        source = _script_source()
+        self.assertIn('advanced.apply(_saved_prefs.get("advanced") or {})',
+                      source)
+        self.assertLess(
+            source.index('advanced.apply(_saved_prefs.get("advanced")'),
+            source.index("floor_plans.autodetect_storeys("))
+        self.assertIn('advanced.apply(selections.get("advanced") or {})',
+                      source)
+
+    def test_the_advanced_xaml_reaches_use_xaml(self):
+        source = _script_source()
+        self.assertIn('os.path.join(_HERE, "advanced.xaml")', source)
+        self.assertIn("ui_window.use_xaml(_XAML, _LINK_XAML, _ADVANCED_XAML)",
+                      source)
 
 
 class SettingsSaveAndLoad(unittest.TestCase):

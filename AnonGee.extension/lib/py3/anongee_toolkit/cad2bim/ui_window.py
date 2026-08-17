@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""The two windows: Link DXF, and the main cad2bim dialog.
+"""The three windows: Link DXF, the main cad2bim dialog, and Advanced settings.
 
-Both are CAPTURE-ONLY. They hold no Revit API references and write nothing to
+All are CAPTURE-ONLY. They hold no Revit API references and write nothing to
 the model -- they gather the user's choices into `self.result` and close, and
 every model write happens afterwards on the Revit API thread. That separation is
 what lets the whole run be replayed offline from an exported JSON.
@@ -23,21 +23,24 @@ import os
 import xml.etree.ElementTree as ElementTree
 
 from System.Windows import (Thickness, GridLength, GridUnitType,
-                            VerticalAlignment)
+                            VerticalAlignment, TextWrapping)
 from System.Windows.Controls import (Grid as WpfGrid, ColumnDefinition, TextBlock,
                                      ComboBox, TextBox, CheckBox, ListBoxItem)
+from System.Windows.Media import Brushes
 
-from . import config, floor_plans, naming, prefs, report, settings, stair_layout
+from . import (advanced, config, floor_plans, naming, prefs, report, settings,
+               stair_layout)
 from .builders import materials
 from .classify import layers
 from .readers import dxf_linker
 from .run_console import _say
-from .ui_dialogs import (_alert, _load_window, _select_containing, _open_dxf,
-                         _control_value, _set_control_value,
+from .ui_dialogs import (_alert, _confirm, _load_window, _select_containing,
+                         _open_dxf, _control_value, _set_control_value,
                          _open_settings_file, _save_settings_file)
 
 _XAML = None
 _LINK_XAML = None
+_ADVANCED_XAML = None
 
 
 def _version():
@@ -49,10 +52,11 @@ def _version():
         return "?"
 
 
-def use_xaml(main_path, link_path):
+def use_xaml(main_path, link_path, advanced_path=None):
     """Tell the windows where their .xaml files are (they live by the button)."""
-    global _XAML, _LINK_XAML
+    global _XAML, _LINK_XAML, _ADVANCED_XAML
     _XAML, _LINK_XAML = main_path, link_path
+    _ADVANCED_XAML = advanced_path
 
 
 _XAML_NAME_KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
@@ -127,6 +131,102 @@ class LinkOptionsDialog(object):
         self.window.Close()
 
     def _on_cancel(self, sender, args):
+        self.result = None
+        self.window.Close()
+
+    def show(self):
+        self.window.ShowDialog()
+
+
+class AdvancedSettingsDialog(object):
+    """The gated window over `advanced.REGISTRY`: one row per module tunable.
+
+    Capture-only, like every window here: it collects the numbers into
+    `self.result` and closes; nothing is rebound until the run applies them.
+    The rows are BUILT from the registry rather than declared in XAML, so a
+    constant registered tomorrow gets a row, a unit and its effect sentence
+    the day it appears -- the same reason the layer table is code-built.
+    """
+
+    def __init__(self, values):
+        self.result = None
+        self.window = _load_window(_ADVANCED_XAML)
+        find = self.window.FindName
+        find("advanced_version_text").Text = "v{0}".format(_version())
+        self._boxes = {}
+        panel = find("advanced_rows")
+        values = values or {}
+        for entry in advanced.REGISTRY:
+            panel.Children.Add(self._row(entry,
+                                         values.get(entry.key, entry.default)))
+        self.btn_adv_reset = find("btn_adv_reset")
+        self.btn_adv_apply = find("btn_adv_apply")
+        self.btn_adv_cancel = find("btn_adv_cancel")
+        self.btn_adv_reset.Click += self.on_reset
+        self.btn_adv_apply.Click += self.on_apply
+        self.btn_adv_cancel.Click += self.on_cancel
+
+    def _row(self, entry, value):
+        """label | value box | unit | the effect sentence."""
+        row = WpfGrid()
+        row.Margin = Thickness(0, 3, 0, 3)
+        for width in (170, 70, 76, None):          # None -> star column
+            column = ColumnDefinition()
+            column.Width = (GridLength(1, GridUnitType.Star) if width is None
+                            else GridLength(width))
+            row.ColumnDefinitions.Add(column)
+
+        label = TextBlock()
+        label.Text = entry.label
+        label.VerticalAlignment = VerticalAlignment.Center
+        WpfGrid.SetColumn(label, 0)
+
+        box = TextBox()
+        box.Height = 22.0
+        box.Text = "{0:g}".format(value)
+        box.VerticalAlignment = VerticalAlignment.Center
+        WpfGrid.SetColumn(box, 1)
+        self._boxes[entry.key] = box
+
+        unit = TextBlock()
+        unit.Text = entry.unit
+        unit.VerticalAlignment = VerticalAlignment.Center
+        unit.Margin = Thickness(6, 0, 6, 0)
+        WpfGrid.SetColumn(unit, 2)
+
+        effect = TextBlock()
+        effect.Text = entry.effect
+        effect.TextWrapping = TextWrapping.Wrap
+        effect.FontSize = 12.0
+        effect.Foreground = Brushes.Gray
+        effect.VerticalAlignment = VerticalAlignment.Center
+        WpfGrid.SetColumn(effect, 3)
+
+        for child in (label, box, unit, effect):
+            row.Children.Add(child)
+        return row
+
+    def on_reset(self, sender, args):
+        # every box back to its registered default; nothing is stored until
+        # the user says "use these values"
+        for entry in advanced.REGISTRY:
+            self._boxes[entry.key].Text = "{0:g}".format(entry.default)
+
+    def on_apply(self, sender, args):
+        # a box that does not read as a number keeps the default -- the same
+        # forgiveness _read_float extends everywhere else on the dialog
+        out = {}
+        for entry in advanced.REGISTRY:
+            try:
+                value = float(self._boxes[entry.key].Text)
+            except (ValueError, TypeError):
+                continue
+            if value != entry.default:
+                out[entry.key] = value
+        self.result = out
+        self.window.Close()
+
+    def on_cancel(self, sender, args):
         self.result = None
         self.window.Close()
 
@@ -259,6 +359,14 @@ class CadToBimWindow(object):
         self.chk_view_filters = find("chk_view_filters")
         self.tb_filter_transparency = find("tb_filter_transparency")
         self.chk_filter_lines = find("chk_filter_lines")
+        # Advanced module tunables: a plain {key: number} dict on the window.
+        # The separate window edits a copy behind a confirmation gate; the
+        # dict rides _collect, the settings snapshot and the preferences file
+        # like any other value. Seeded from the prefs the pushbutton already
+        # applied, so the window shows what is actually in force.
+        self._advanced_values = advanced.load()
+        self.btn_advanced = find("btn_advanced")
+        self.btn_advanced.Click += self.on_advanced
         self.chk_multistorey = find("chk_multistorey")
         self.cb_boundary_layer = find("cb_boundary_layer")
         self.cb_origin_layer = find("cb_origin_layer")
@@ -329,7 +437,8 @@ class CadToBimWindow(object):
                              ("stair_waist", "stair_waist"),
                              ("level", "level"),
                              ("grid", "grid"),
-                             ("footing", "footing")):
+                             ("footing", "footing"),
+                             ("raft", "raft")):
             box = find("tb_name_{0}".format(control))
             box.Text = saved_naming.get(key, naming.DEFAULTS[key])
             box.TextChanged += self.on_naming_changed
@@ -777,6 +886,7 @@ class CadToBimWindow(object):
                 config.DEFAULTS["filter_transparency"]),
             "filter_colour_lines": bool(self.chk_filter_lines.IsChecked),
             "naming": self._read_naming(),
+            "advanced": dict(self._advanced_values),
             "level_follow_existing": bool(self.chk_level_follow.IsChecked),
             # the window itself, as a settings snapshot: the draw-stairs round
             # trip restores from this, so every control survives the rebuild
@@ -1089,6 +1199,9 @@ class CadToBimWindow(object):
         so a user who tuned twenty boxes finds them tuned tomorrow morning.
         """
         naming.save(self._read_naming())
+        # the advanced overrides go under their OWN prefs key -- the pushbutton
+        # applies them before any planning runs, long before a dialog exists
+        advanced.save(self._advanced_values)
         prefs.update({"standards": {"column": self.tb_std_columns.Text or "",
                                     "beam_widths": self.tb_std_beams.Text or ""},
                       "dialog": self._capture_settings()})
@@ -1117,7 +1230,8 @@ class CadToBimWindow(object):
                         for layer, combo in self._text_combos
                         if combo.SelectedItem is not None)
         return settings.payload(values, layer_map, text_map,
-                                _version())
+                                _version(),
+                                advanced=dict(self._advanced_values))
 
     def _restore_controls(self, data):
         """Land a captured snapshot back on the window; returns how many took.
@@ -1143,9 +1257,45 @@ class CadToBimWindow(object):
                 if index >= 0:
                     combo.SelectedIndex = index
                     landed += 1
+        # a schema-1 file has no advanced section and must land unchanged --
+        # the current overrides stay; a file that carries one replaces them
+        saved_advanced = settings.advanced_overrides(data)
+        if saved_advanced:
+            self._advanced_values = saved_advanced
+            landed += len(saved_advanced)
         self._show_naming_preview()
         self._stair_sync()
         return landed
+
+    def on_advanced(self, sender, args):
+        """The Yes/No gate, then the Advanced window.
+
+        The gate states the risk BEFORE the window opens: these values fail
+        quietly, so the user must take a decision to reach them, not scroll
+        into them. Cancel in the window keeps whatever was in force.
+        """
+        if not _ADVANCED_XAML:
+            # a button older than this library never handed advanced.xaml
+            # over -- say so instead of crashing on a None path
+            _alert("Advanced settings",
+                   "This button is older than the cad2bim library and did "
+                   "not provide advanced.xaml, so the window cannot open.")
+            return
+        if not _confirm(
+                "Advanced settings",
+                "These change how drawings are read. The defaults are "
+                "measured against the fixture corpus; a wrong value here "
+                "fails quietly. Reset restores every default.\n\n"
+                "Open the advanced settings?"):
+            return
+        dialog = AdvancedSettingsDialog(dict(self._advanced_values))
+        dialog.show()
+        if dialog.result is not None:
+            self._advanced_values = dialog.result
+            self.status_text.Text = (
+                "{0} advanced value(s) changed from default".format(
+                    len(dialog.result)) if dialog.result
+                else "advanced values back on their defaults")
 
     def on_settings_save(self, sender, args):
         path = _save_settings_file()

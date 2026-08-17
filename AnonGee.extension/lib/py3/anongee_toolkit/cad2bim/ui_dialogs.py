@@ -25,7 +25,8 @@ clr.AddReference("System.Windows.Forms")
 
 from System.Windows.Markup import XamlReader
 from System.IO import FileStream, FileMode, FileAccess
-from System.Windows import MessageBox, MessageBoxButton, MessageBoxImage
+from System.Windows import (MessageBox, MessageBoxButton, MessageBoxImage,
+                            MessageBoxResult)
 from System.Windows.Controls import (ComboBox, TextBox, CheckBox, RadioButton,
                                      Slider)
 import System.Windows.Forms
@@ -36,6 +37,16 @@ from .run_console import _OUT, _say
 
 def _alert(title, message):
     MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Warning)
+
+
+def _confirm(title, message):
+    """A Yes/No question. True only on an explicit Yes.
+
+    The gate in front of the Advanced window: closing the box, Esc and No all
+    read as No, because the risky path must be the one that takes a decision.
+    """
+    return MessageBox.Show(message, title, MessageBoxButton.YesNo,
+                           MessageBoxImage.Warning) == MessageBoxResult.Yes
 
 
 def _error(title, message, detail=None):

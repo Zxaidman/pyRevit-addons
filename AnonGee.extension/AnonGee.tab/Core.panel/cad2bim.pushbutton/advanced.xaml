@@ -1,0 +1,46 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="cad2bim -- Advanced settings"
+        Height="640" Width="720"
+        MinHeight="420" MinWidth="560"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanResize"
+        Background="White"
+        UseLayoutRounding="True">
+
+    <!-- The rows are NOT declared here: they render advanced.REGISTRY, the
+         one list of module tunables, so a constant registered tomorrow gets
+         its row the day it appears. This file is the shell round them. -->
+
+    <DockPanel LastChildFill="True" Margin="12">
+
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0" Text="Advanced settings" FontSize="14" FontWeight="Bold"
+                       VerticalAlignment="Center"/>
+            <TextBlock Grid.Column="1" x:Name="advanced_version_text" Text="v0.13"
+                       VerticalAlignment="Center"/>
+        </Grid>
+
+        <Border DockPanel.Dock="Top" Background="#FFF4E5" BorderBrush="#E0A030"
+                BorderThickness="1" Padding="8" Margin="0,0,0,8">
+            <TextBlock x:Name="advanced_warning_text" TextWrapping="Wrap" Foreground="#7A4A00" FontSize="12"
+                       Text="These change how drawings are read. The defaults are measured against the fixture corpus; a wrong value here fails quietly. Reset restores every default."/>
+        </Border>
+
+        <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                    HorizontalAlignment="Right" Margin="0,8,0,0">
+            <Button x:Name="btn_adv_reset"  Content="Reset all to defaults" Width="150" Height="26"/>
+            <Button x:Name="btn_adv_apply"  Content="Use these values" Width="130" Height="26" Margin="8,0,0,0"/>
+            <Button x:Name="btn_adv_cancel" Content="Cancel" Width="84" Height="26" Margin="8,0,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="advanced_rows" Orientation="Vertical"/>
+        </ScrollViewer>
+
+    </DockPanel>
+</Window>

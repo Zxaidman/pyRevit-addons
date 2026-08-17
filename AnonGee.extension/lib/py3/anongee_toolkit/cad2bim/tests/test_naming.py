@@ -40,6 +40,7 @@ class DefaultNames(unittest.TestCase):
                          "CAD Level 2")
         self.assertEqual(naming.grid_name("A"), "A")
         self.assertEqual(naming.footing_type_name(600), "PAD 600 THK")
+        self.assertEqual(naming.raft_type_name(750), "RAFT 750 THK")
 
     def test_sizes_are_whole_millimetres(self):
         # a float size must never leak "400.0" into a type name
@@ -127,6 +128,23 @@ class CustomTemplates(unittest.TestCase):
     def test_a_template_may_ignore_the_sizes_entirely(self):
         naming.apply({"floor": "GENERIC SLAB"})
         self.assertEqual(naming.floor_type_name(200), "GENERIC SLAB")
+
+    def test_rafts_take_a_convention_of_their_own(self):
+        # a raft is the same Revit shape as a pad; the SEPARATE template is
+        # the whole feature -- offices name the two apart
+        naming.apply({"raft": "MAT-{t}", "footing": "PCC-{t}"})
+        self.assertEqual(naming.raft_type_name(750), "MAT-750")
+        self.assertEqual(naming.footing_type_name(600), "PCC-600")
+
+    def test_a_raft_template_that_drops_the_thickness_is_refused(self):
+        # since v0.68.1 a name collision is a silent REUSE: two rafts noted
+        # 500 and 750 rendering one name would cast the second at the first
+        # one's depth with nothing said, so the tab refuses the template
+        problem = naming.validate("raft", "RAFT")
+        self.assertIsNotNone(problem)
+        self.assertIn("{t}", problem)
+        self.assertIsNone(naming.validate("raft", "RAFT {t} THK"))
+        self.assertIsNone(naming.validate("raft", "MAT-{t:04d}"))
 
 
 class LevelNames(unittest.TestCase):

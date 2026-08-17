@@ -473,8 +473,8 @@ def _stitch(face_a, face_b, outline_edges):
 
 
 def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
-    """[{ring, z, mark, thickness_mm, steps, source, labels, holes}] for the
-    DRAWN foundations.
+    """[{ring, z, mark, thickness_mm, steps, source, labels, holes, kind}] for
+    the DRAWN foundations.
 
     `texts` are the foundation notes -- the caller routes them by layer, the
     way slab notes are routed, because that is what tells `foundation_labels`
@@ -492,7 +492,9 @@ def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
     rings the parent is cast AROUND: outlines nested directly inside it, and
     any crossed-out face it contains -- the difference being that a nested
     outline is also placed as its own slab, while a cutout is only ever the
-    hole.
+    hole. `kind` is "raft" or "pad" -- see `_kind`. Decided HERE, in the
+    Revit-free layer, so the builder only routes on it and a test can pin the
+    rule offline.
     """
     rings, crossed_out = _outlines_and_cutouts(records, category)
     assigned = [[] for _ring in rings]
@@ -536,7 +538,38 @@ def plan_foundations(records, texts, category=CATEGORY_FOUNDATION):
         return []
     _nest(plans)
     _hole_cutouts(plans, crossed_out)
+    # Kind is judged LAST, after nesting and cutouts, because holes are half
+    # the evidence: the raft that earns its name by carrying the corridor hole
+    # only carries it once _hole_cutouts has run.
+    for plan in plans:
+        plan["kind"] = _kind(plan)
     return plans
+
+
+def _kind(plan):
+    """"raft" or "pad" -- which naming template a placed outline takes.
+
+    Two tells, either sufficient, both read off the drawing rather than
+    configured per outline:
+
+      * AREA. A raft covers ground no pad reaches. The threshold is
+        config's `raft_min_area_m2` (60 m2): test10's raft measures ~450 m2
+        and its largest pad ~35, so the line sits well clear of both sides.
+        Read at call time so the number keeps one home.
+
+      * HOLES. An outline the drawing cuts openings into -- a nested block, a
+        crossed-out corridor -- is a raft by construction: a pad with an
+        opening let into it is not a thing an engineer draws.
+
+    The column-derived path never reaches here and is always "pad": a pad
+    invented by growing a column footprint cannot be a raft, whatever its
+    area -- that filter is the whole point of `col_region_max_side_mm`.
+    """
+    if plan.get("holes"):
+        return "raft"
+    if area_m2(plan["ring"]) >= config.DEFAULTS["raft_min_area_m2"]:
+        return "raft"
+    return "pad"
 
 
 def _dissolve_step_zones(plans):

@@ -454,7 +454,30 @@ Now read from `tolerances`. Two notes on the consequence:
   carries its own foundation layer never reaches that path at all, which is the
   real answer to "a raft is bigger than a column".
 
-## 10. Test environment
+## 10. Constants an advanced override cannot reach (v0.71.0 registry audit)
+
+`advanced.py` registers only constants their consumers read LIVE — a
+module-global looked up at call time, which `advanced.apply` can rebind.
+Three candidates from the audit failed that test and are EXCLUDED, not
+converted (making them live is its own change with its own regression risk):
+
+- **`slab_graph._COLUMN_RECT_PAD_MM`** — `slab_outlines.py` imports the NAME
+  (`from .slab_graph import ... _COLUMN_RECT_PAD_MM`) and consumes the frozen
+  copy at both its call sites. Rebinding slab_graph's attribute would change
+  nothing anywhere; the exact trap foundation_plan.py warns about beside its
+  own tolerances. test_advanced's frozen-import scan now fails any registered
+  name that grows such a copy.
+- **`slab_labels._ORPHAN_MIN_AREA_M2`** — frozen at function DEFINITION as
+  the default of `loops_for_unclaimed_notes(min_area_m2=...)`. The live knob
+  already exists: the dialog's `slab_note_min_area_m2`, which run_builders
+  passes explicitly.
+- **`builders/beams._MIN_BEAM_LENGTH_MM`, `builders/grids._GRID_TEXT_MAX_FT`**
+  (and every other builders/* constant) — builders/ imports Revit at module
+  level, so the Revit-free registry cannot import them to rebind, and no
+  offline test could prove the wiring. Making them tunable means first giving
+  them a Revit-free home.
+
+## 11. Test environment
 
 The suite runs green on Linux only after `pip install ezdxf`. The bundled
 `lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,

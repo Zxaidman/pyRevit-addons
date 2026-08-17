@@ -116,7 +116,7 @@ _drop_stale_modules()
 import anongee_clr                      # noqa: F401  (imported for its lifetime)
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, config, floor_plans,
+from anongee_toolkit.cad2bim import (advanced, compat, config, floor_plans,
                                      foundation_plan, naming, prefs, report,
                                      settings, slab_outlines, stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
@@ -186,9 +186,10 @@ from anongee_toolkit.cad2bim.builders import (beams, columns, footings,
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _XAML = os.path.join(_HERE, "ui.xaml")
 _LINK_XAML = os.path.join(_HERE, "link_options.xaml")
+_ADVANCED_XAML = os.path.join(_HERE, "advanced.xaml")
 # the windows live in the library; their .xaml lives here, beside the button
 if _MISSING_MODULE is None:
-    ui_window.use_xaml(_XAML, _LINK_XAML)
+    ui_window.use_xaml(_XAML, _LINK_XAML, _ADVANCED_XAML)
 
 # What this button needs the library to have. Checked once, up front, so a
 # library older than the button says so plainly instead of failing an hour into
@@ -453,19 +454,27 @@ def main():
     text_layer_rows = [(name, text_layer_counts[name]) for name in text_names]
     default_text_mapping = layers.build_default_text_mapping(text_names)
 
-    # Is this ONE plan or a sheet of storeys? Read off the DXF (its bare origin
-    # POINTs do not always survive Revit's import) so the Multi-storey tab opens
-    # already answered instead of waiting for the user to guess two layer names.
-    storey_detection = floor_plans.autodetect_storeys(dxf_result.records,
-                                                      dxf_result.texts)
-    # Naming templates and standard sizes are office conventions, not per-drawing
-    # numbers, so they come back from the preferences file the last run wrote.
+    # Preferences come BEFORE any planning: the saved ADVANCED overrides
+    # rebind module constants, and the storey detection a few lines down is
+    # already a consumer (floor_plans reads its region and coverage
+    # thresholds at call time). Naming templates and standard sizes are
+    # office conventions, not per-drawing numbers, so they come back from the
+    # preferences file the last run wrote.
     saved_naming = naming.load()
     _saved_prefs = prefs.load()
     saved_standards = _saved_prefs.get("standards") or {}
     # ... and the rest of the dialog comes back too: every tolerance, tick and
     # dropdown the last run finished with, restored by name
     saved_settings = _saved_prefs.get("dialog") or None
+    advanced.apply(_saved_prefs.get("advanced") or {})
+    for problem in advanced.problems():
+        _say("advanced: {0}".format(problem))
+
+    # Is this ONE plan or a sheet of storeys? Read off the DXF (its bare origin
+    # POINTs do not always survive Revit's import) so the Multi-storey tab opens
+    # already answered instead of waiting for the user to guess two layer names.
+    storey_detection = floor_plans.autodetect_storeys(dxf_result.records,
+                                                      dxf_result.texts)
     _say("Storeys: {0}".format(storey_detection.reason))
     for note in storey_detection.notes:
         _say("  storey: {0}".format(note))
@@ -532,6 +541,11 @@ def main():
     slab_outlines.apply_tolerances(tolerances)
     stair_layout.apply_tolerances(tolerances)
     foundation_plan.apply_tolerances(tolerances)
+    # ...and the Advanced window's overrides bind for THIS run too, or an edit
+    # made behind the gate would only take effect next session
+    advanced.apply(selections.get("advanced") or {})
+    for problem in advanced.problems():
+        _say("advanced: {0}".format(problem))
     # every element writes its CAD mark into the parameter chosen on the
     # Build > General sub-tab (Mark stays the fallback when a family lacks it)
     compat.set_name_parameter(selections.get("name_parameter"))

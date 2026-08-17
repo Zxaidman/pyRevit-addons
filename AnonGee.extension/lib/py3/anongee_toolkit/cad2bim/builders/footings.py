@@ -20,8 +20,11 @@ Two sources, in that order of preference:
     column gets a square pad, which is what an isolated pad under a round column
     normally is. Depth follows plan area, since nothing drawn says otherwise.
 
-A type is duplicated per distinct THICKNESS and cached in both cases, exactly as
-the slab builder does.
+A type is duplicated per distinct (KIND, THICKNESS) and cached in both cases,
+exactly as the slab builder does per thickness. The kind -- "raft" or "pad",
+decided by `foundation_plan._kind` in the Revit-free layer -- picks the naming
+template: offices name their rafts apart from their pads ("RAFT 750 THK" beside
+"PAD 600 THK"). Column-derived pads are always pads.
 
 Levels: footings go on the BASE level of the columns, with a zero height offset.
 In a multi-storey run only the lowest storey builds them -- a building has one
@@ -93,8 +96,15 @@ def _set_thickness(floor_type, thickness_mm):
         return False
 
 
-def _resolve_type(doc, base_type, thickness_mm, cache):
-    """(FloorType, note) of this thickness, duplicated off the base and cached.
+def _resolve_type(doc, base_type, thickness_mm, cache, kind="pad"):
+    """(FloorType, note) of this kind and thickness, duplicated off the base
+    and cached.
+
+    `kind` picks the template -- "raft" renders the Naming tab's raft row,
+    anything else the footing row -- and is part of the cache key, because a
+    500-thick raft and a 500-thick pad are two types with two names. Step
+    supports and dropped slabs stay on the footing template (templates of
+    their own are a later item).
 
     A None type means the name could not be had. That used to fall back to the
     BASE type and say nothing, which cast the pad at whatever depth the picked
@@ -103,10 +113,13 @@ def _resolve_type(doc, base_type, thickness_mm, cache):
     """
     if not thickness_mm:
         return base_type, None
-    key = int(round(thickness_mm))
+    key = (kind, int(round(thickness_mm)))
     if key in cache:
         return cache[key]
-    name = naming.footing_type_name(key)
+    if kind == "raft":
+        name = naming.raft_type_name(key[1])
+    else:
+        name = naming.footing_type_name(key[1])
     floor_type, created, note = type_names.resolve_type(
         base_type, name, lambda: _sibling_types(doc, base_type))
     if created:
@@ -332,16 +345,19 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
         region_max = (_MAX_COLUMN_MIN_SIDE_MM if region_max_side_mm is None
                       else region_max_side_mm)
         oversized = []
-        plans = [(ring, thickness, mark, []) for ring, thickness, mark
+        # a derived pad is ALWAYS a pad: nothing grown from a column footprint
+        # can be a raft, whatever its merged area
+        plans = [(ring, thickness, mark, [], "pad") for ring, thickness, mark
                  in footing_plan.plan_pads(sections, projection_mm, thickness_mm,
                                            region_max, oversized)]
         singles = len(footing_plan.pads_for(sections, projection_mm, region_max))
         result["merged"] = max(0, singles - len(plans))
         result["skipped"].extend(oversized)
     cache = {}
-    for ring, pad_thickness, mark, holes in plans:
+    for ring, pad_thickness, mark, holes, kind in plans:
         try:
-            floor_type, note = _resolve_type(doc, base_type, pad_thickness, cache)
+            floor_type, note = _resolve_type(doc, base_type, pad_thickness,
+                                             cache, kind)
             type_names.record(result, note)
             if floor_type is None:
                 result["skipped"].append(
@@ -369,10 +385,14 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
 
 
 def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
-    """[(ring, thickness_mm, mark, holes)] from what the drawing showed.
+    """[(ring, thickness_mm, mark, holes, kind)] from what the drawing showed.
 
     A ring the drawing did not size falls back to the dialog's thickness and
     says so, the way an unlabelled slab loop falls back to its floor type.
+    `kind` is carried through from the plan ("raft"/"pad", judged offline in
+    foundation_plan); every piece a divided outline breaks into keeps its
+    outline's kind, because the division is a placement necessity, not a
+    reclassification.
 
     `holes` are the areas cut out of THIS outline: its stepped regions, and any
     NESTED outline the drawing lets into it -- the corridor block in the middle
@@ -414,7 +434,7 @@ def _plans_from_outlines(outlines, thickness_mm, result, steps=None):
                                       len(pieces)))
         for piece_ring, piece_holes in pieces:
             plans.append((piece_ring, thickness, plan.get("mark"),
-                          piece_holes))
+                          piece_holes, plan.get("kind") or "pad"))
     result["notes"].append(
         "{0} foundation outline(s) read from the drawing".format(len(plans)))
     return plans

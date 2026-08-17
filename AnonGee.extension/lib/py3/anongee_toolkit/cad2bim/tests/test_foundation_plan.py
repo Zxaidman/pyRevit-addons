@@ -24,7 +24,10 @@ import unittest
 import _loader
 
 
-foundation_plan, layers = _loader.load("foundation_plan", "classify.layers")
+# config rides the same namespace so the raft-threshold test mutates the very
+# dict foundation_plan reads at call time
+foundation_plan, layers, config = _loader.load("foundation_plan",
+                                               "classify.layers", "config")
 
 _MM = 304.8
 
@@ -497,6 +500,127 @@ class Area(unittest.TestCase):
         ring, _z, _source = foundation_plan.outlines(
             [_closed(0, 0, 5000, 4000)])[0]
         self.assertAlmostEqual(foundation_plan.area_m2(ring), 20.0, places=6)
+
+
+class RaftOrPad(unittest.TestCase):
+    """Which naming template an outline takes: "raft" or "pad", by the drawing.
+
+    Two tells, either sufficient. Plan AREA at or over config's
+    raft_min_area_m2 (60 m2 -- test10's raft is ~450, its largest pad ~35);
+    or HOLES, because an outline the drawing cuts openings into is a raft by
+    construction. The judgment lives in plan_foundations so the builder only
+    routes on it.
+    """
+
+    def test_a_pad_sized_outline_is_a_pad(self):
+        # 5.2 x 6.65 m = ~34.6 m2: the corpus's biggest pads
+        plans = foundation_plan.plan_foundations(
+            [_closed(0, 0, 5200, 6650)], [_Text("F1_1200MM THK", (2600, 3300))])
+        self.assertEqual(plans[0]["kind"], "pad")
+
+    def test_an_outline_at_raft_area_is_a_raft(self):
+        # 10 x 6 m = 60 m2 exactly: AT the threshold counts, per the spec
+        # "at or above"
+        plans = foundation_plan.plan_foundations(
+            [_closed(0, 0, 10000, 6000)], [_Text("F3_750MM THK", (5000, 3000))])
+        self.assertEqual(plans[0]["kind"], "raft")
+        self.assertAlmostEqual(foundation_plan.area_m2(plans[0]["ring"]),
+                               60.0, places=6)
+
+    def test_the_threshold_is_read_from_config_not_frozen_here(self):
+        self.assertEqual(config.DEFAULTS["raft_min_area_m2"], 60.0)
+        original = config.DEFAULTS["raft_min_area_m2"]
+        try:
+            config.DEFAULTS["raft_min_area_m2"] = 100.0
+            plans = foundation_plan.plan_foundations(
+                [_closed(0, 0, 10000, 6000)],
+                [_Text("F3_750MM THK", (5000, 3000))])
+            self.assertEqual(plans[0]["kind"], "pad")
+        finally:
+            config.DEFAULTS["raft_min_area_m2"] = original
+
+    def test_holes_make_a_raft_of_an_outline_below_the_area(self):
+        # 8 x 6 m = 48 m2, under the threshold -- but a nested block is let
+        # into it, and a pad with an opening cut in it is not a thing an
+        # engineer draws. The block itself stays a pad.
+        plans = foundation_plan.plan_foundations(
+            [_closed(0, 0, 8000, 6000), _closed(3000, 2000, 5000, 4000)],
+            [_Text("F1_750MM THK", (1000, 1000)),
+             _Text("F5_500MM THK", (4000, 3000))])
+        self.assertEqual(len(plans), 2)
+        outer = next(p for p in plans if p["thickness_mm"] == 750.0)
+        block = next(p for p in plans if p["thickness_mm"] == 500.0)
+        self.assertEqual(len(outer["holes"]), 1)
+        self.assertEqual(outer["kind"], "raft")
+        self.assertEqual(block["kind"], "pad")
+
+    def test_a_crossed_out_cutout_is_a_hole_and_therefore_a_raft_too(self):
+        # the corridor case in miniature: the X voids a nested linework face,
+        # the void becomes a hole of the outer plan, and the hole makes it a
+        # raft (only a FACE can be crossed out -- a drawn-closed ring is an
+        # outline the engineer vouched for, which is why _loose here)
+        records = ([_closed(0, 0, 8000, 6000)]
+                   + _loose(3000, 2000, 5000, 4000)
+                   + _cross(3000, 2000, 5000, 4000))
+        plans = foundation_plan.plan_foundations(
+            records, [_Text("F1_750MM THK", (1000, 1000))])
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(len(plans[0]["holes"]), 1)
+        self.assertEqual(plans[0]["kind"], "raft")
+
+    def test_every_plan_carries_a_kind_for_the_builder_to_route_on(self):
+        plans = foundation_plan.plan_foundations(
+            [_closed(0, 0, 5200, 6650), _closed(20000, 0, 25200, 6650)],
+            [_Text("F1_1200MM THK", (2600, 3300))])
+        for plan in plans:
+            self.assertIn(plan["kind"], ("raft", "pad"))
+
+
+class TheKindReachesTheBuilder(unittest.TestCase):
+    """builders/footings.py imports Revit at module level, so the routing --
+    kind picks the template, kind keys the cache -- is pinned the way the
+    other Revit-side wiring is: by reading the source. Each link fails
+    QUIETLY if dropped: every raft would silently take the pad template."""
+
+    def _source(self):
+        import os
+        path = os.path.join(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))), "builders", "footings.py")
+        with open(path, "rb") as handle:
+            return handle.read().decode("utf-8")
+
+    def test_the_type_name_routes_on_kind(self):
+        block = self._source().split("def _resolve_type(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("naming.raft_type_name(", block)
+        self.assertIn("naming.footing_type_name(", block)
+        self.assertIn('if kind == "raft"', block)
+
+    def test_the_cache_is_keyed_by_kind_AND_thickness(self):
+        # one cache keyed by thickness alone would hand a 500-thick raft the
+        # 500-thick pad's type -- same depth, wrong name, nothing said
+        block = self._source().split("def _resolve_type(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("key = (kind, int(round(thickness_mm)))", block)
+
+    def test_column_derived_pads_are_always_pads(self):
+        block = self._source().split("def place_footings(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn('(ring, thickness, mark, [], "pad")', block)
+
+    def test_drawn_outlines_carry_their_plans_kind_through_division(self):
+        block = self._source().split("def _plans_from_outlines(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn('plan.get("kind") or "pad"', block)
+
+    def test_steps_and_supports_keep_the_footing_template(self):
+        # their own templates are a later item; until then _place_steps must
+        # not pass a kind, so the default "pad" keeps them on the footing row
+        block = self._source().split("def _place_steps(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("_resolve_type(doc, base_type, thickness, cache)", block)
+        self.assertNotIn('_resolve_type(doc, base_type, thickness, cache, "raft"',
+                         block)
 
 
 if __name__ == "__main__":

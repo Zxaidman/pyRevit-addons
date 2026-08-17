@@ -104,6 +104,26 @@ class PayloadShape(unittest.TestCase):
                      {"controls": None}):
             self.assertEqual(settings.sections(junk), ({}, {}, {}), repr(junk))
 
+    def test_payload_carries_the_advanced_overrides(self):
+        data = settings.payload({"a": 1}, advanced={"beam_heal_mm": 400.0})
+        self.assertEqual(data["advanced"], {"beam_heal_mm": 400.0})
+        self.assertEqual(settings.advanced_overrides(data),
+                         {"beam_heal_mm": 400.0})
+
+    def test_a_schema_1_file_without_the_section_loads_unchanged(self):
+        # the section is OPTIONAL: an old file restores everything it always
+        # restored and its advanced overrides simply read as none
+        old = {"schema": 1, "version": "0.67.0",
+               "controls": {"chk_beams": True}, "layers": {}, "texts": {}}
+        controls, layers, texts = settings.sections(old)
+        self.assertEqual(controls, {"chk_beams": True})
+        self.assertEqual(settings.advanced_overrides(old), {})
+
+    def test_advanced_overrides_of_rubbish_is_an_empty_dict(self):
+        for junk in (None, [], "text", {"advanced": "not a dict"},
+                     {"advanced": None}, {"advanced": [1, 2]}):
+            self.assertEqual(settings.advanced_overrides(junk), {}, repr(junk))
+
     def test_describe_counts_both_layer_maps(self):
         text = settings.describe(settings.payload(
             {"a": 1, "b": 2}, {"L1": "Column"}, {"T1": "Beam mark"}, "0.67.0"))
