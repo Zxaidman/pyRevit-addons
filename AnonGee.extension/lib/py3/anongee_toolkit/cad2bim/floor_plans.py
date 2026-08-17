@@ -90,7 +90,8 @@ class FloorRegion(object):
     """
 
     def __init__(self, bounds, origin, label=None, order=0, records=None,
-                 texts=None, repeat=1, storey_height_mm=None, regions=None):
+                 texts=None, repeat=1, storey_height_mm=None, regions=None,
+                 level_id=None):
         self.bounds = bounds          # (x0, y0, x1, y1) in internal feet
         self.origin = origin          # (x, y) in internal feet, DRAWN position
         self.label = label
@@ -104,6 +105,10 @@ class FloorRegion(object):
         # this storey's own floor-to-floor height; None means the tab's default.
         # NOT height_mm -- that property is the boundary BOX's height on the sheet.
         self.storey_height_mm = storey_height_mm
+        # the MODEL level this storey builds on (the dialog's per-row Level
+        # pick, an opaque id this module never reads); None keeps the
+        # positional ladder the run has always used.
+        self.level_id = level_id
 
     @property
     def width_mm(self):
@@ -206,6 +211,39 @@ def elevation_from_text(text):
         return None
     value = float(match.group(1))
     return value if abs(value) >= _ELEV_MM_CUTOFF else value * 1000.0
+
+
+def _squash(text):
+    """Lower-cased and single-spaced: what two names must share to be one name."""
+    return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def propose_level(title, level_names):
+    """The model level a plan title names, or None when no single one does.
+
+    Feeds the Multi-storey tab's per-row Level combo: "Ground Floor Level"
+    <-> "Ground Floor" match on the words (either name containing the other,
+    case and spacing ignored), and "1st Floor Plan" <-> "Level 1" match on
+    the storey number both state. A proposal is only made when EXACTLY ONE
+    level matches -- a level placed on the wrong storey silently is worse
+    than a row left on "(auto)".
+    """
+    wanted = " {0} ".format(_squash(title))
+    if not wanted.strip():
+        return None
+    contained = []
+    for name in (level_names or []):
+        squashed = " {0} ".format(_squash(name))
+        if squashed.strip() and (squashed in wanted or wanted in squashed):
+            contained.append(name)
+    if contained:
+        return contained[0] if len(contained) == 1 else None
+    order = level_order_from_text(title)
+    if order is None:
+        return None
+    numbered = [name for name in (level_names or [])
+                if level_order_from_text(name) == order]
+    return numbered[0] if len(numbered) == 1 else None
 
 
 def describe_plan(texts):
@@ -873,6 +911,9 @@ def apply_storey_settings(regions, settings):
         repeat = row.get("repeat")
         if repeat:
             storey.repeat = max(1, int(repeat))
+        # the row's Level pick, carried as-is: the run pipeline reads it, this
+        # module only keeps it with the storey it belongs to
+        storey.level_id = row.get("level_id")
         stack.append(storey)
     return stack or regions
 
@@ -888,7 +929,7 @@ def _reuse(region):
                        order=region.order, records=region.records,
                        texts=region.texts, repeat=region.repeat,
                        storey_height_mm=region.storey_height_mm,
-                       regions=region.regions)
+                       regions=region.regions, level_id=region.level_id)
 
 
 def expand_repeats(regions):

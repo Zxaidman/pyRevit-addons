@@ -50,7 +50,7 @@ DEFAULTS = {
     "junction_tol_mm": 200.0,     # arc centred this close to a round column = junction
     "concentric_tol_mm": 60.0,    # two arcs sharing a centre this closely = concentric
 
-    # --- staircase (generic dog-leg from the Build > Stairs sub-tab, mm) -----
+    # --- staircase (generic dog-leg from the Build > Staircase sub-tab, mm) --
     "stair_riser_mm": 150.0,      # target MAX riser height; count = storey / this
     "stair_tread_mm": 300.0,      # tread depth (the fixtures' riser spacing)
     "stair_run_width_mm": 1250.0, # width of each run
@@ -80,7 +80,7 @@ DEFAULTS = {
                          "300x600, 400x400, 400x600, 450x600, 600x600"),
     "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
 
-    # --- foundations (Build > Foundations sub-tab) --------------------------
+    # --- foundations (Build > Foundation sub-tab) ---------------------------
     "footing_projection_mm": 300.0,   # MINIMUM reach past the column, every side
     "footing_thickness_mm": 600.0,    # depth at 1 m2; a pad scales from its area
     "max_step_mm": 3000.0,            # a fold/sunk step deeper than this is a

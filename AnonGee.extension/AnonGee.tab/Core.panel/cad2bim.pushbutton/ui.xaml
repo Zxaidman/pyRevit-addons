@@ -107,12 +107,13 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Build (element-wise sub-tabs; Foundations and Stairs are
+            <!-- TAB: Build (discipline sub-tabs; Foundation and Staircase are
                  sub-tabs here, not top-level tabs) -->
             <TabItem Header="Build">
             <TabControl Margin="4">
 
-            <!-- SUB-TAB: Build > General -->
+            <!-- SUB-TAB: Build > General (run-wide picks, plus the grids;
+                 they serve every element, so they live with the shared picks) -->
             <TabItem Header="General">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -146,25 +147,18 @@
                         <TextBlock Text="The level pair is shared by every element in the run, architectural ones included."
                                    Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
                         <Separator Margin="0,10,0,6"/>
-                        <TextBlock Text="Architectural walls and roofs are not built yet."
-                                   Style="{StaticResource HelpText}"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- SUB-TAB: Build > Grids -->
-            <TabItem Header="Grids">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="6">
                         <CheckBox x:Name="chk_grids" Content="Create grids (from grid lines)" IsChecked="True"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SUB-TAB: Build > Columns -->
-            <TabItem Header="Columns">
+            <!-- SUB-TAB: Build > Structure (columns, beams and slabs together;
+                 each keeps exactly the content its own sub-tab held) -->
+            <TabItem Header="Structure">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
+                        <GroupBox Header="Columns" Padding="4" Margin="0,0,0,8">
+                        <StackPanel Orientation="Vertical">
                         <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
@@ -182,14 +176,11 @@
                         </Grid>
                         <TextBlock Text="Base and top level for the columns are picked on the General sub-tab; they are shared by every element in the run."
                                    Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                        </StackPanel>
+                        </GroupBox>
 
-            <!-- SUB-TAB: Build > Beams -->
-            <TabItem Header="Beams">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="6">
+                        <GroupBox Header="Beams" Padding="4" Margin="0,0,0,8">
+                        <StackPanel Orientation="Vertical">
                         <CheckBox x:Name="chk_beams" Content="Create beams (from beam outlines)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
@@ -205,14 +196,11 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level. Depth from text marks where found, else from the chosen type."
                                        Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
                         </Grid>
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
+                        </StackPanel>
+                        </GroupBox>
 
-            <!-- SUB-TAB: Build > Slabs -->
-            <TabItem Header="Slabs">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Orientation="Vertical" Margin="6">
+                        <GroupBox Header="Slabs" Padding="4">
+                        <StackPanel Orientation="Vertical">
                         <CheckBox x:Name="chk_slabs" Content="Create slabs (from slab outline or beam layout)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
@@ -228,12 +216,27 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
                                        Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
                         </Grid>
+                        </StackPanel>
+                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SUB-TAB: Build > Foundations -->
-            <TabItem Header="Foundations">
+            <!-- SUB-TAB: Build > Architecture (a placeholder until the P3
+                 walls land; it exists so the tab set already has the home
+                 those elements will move into) -->
+            <TabItem Header="Architecture">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <TextBlock Text="Architecture" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <TextBlock Text="Architectural walls and roofs are not built yet -- walls are on the roadmap (P3) and their options will live on this tab. Until then the run builds the structure only, ready for the architectural layers to be modelled on top of it."
+                                   Style="{StaticResource HelpText}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SUB-TAB: Build > Foundation -->
+            <TabItem Header="Foundation">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
                         <TextBlock Text="Foundations" FontWeight="Bold" Margin="0,0,0,4"/>
@@ -271,8 +274,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SUB-TAB: Build > Stairs -->
-            <TabItem Header="Stairs">
+            <!-- SUB-TAB: Build > Staircase -->
+            <TabItem Header="Staircase">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
                         <TextBlock Text="Staircase" FontWeight="Bold" Margin="0,0,0,4"/>
@@ -420,19 +423,23 @@
                         <TextBlock Text="Detected storeys" FontWeight="Bold" Margin="20,10,0,2"/>
                         <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Click a row to select it, then use the buttons below to move, add or remove that storey."
                                    Style="{StaticResource HelpText}" Margin="20,0,0,4"/>
+                        <TextBlock Text="Level is which MODEL level the storey builds ON: a picked level is that storey's base (its top is the next level up), and in a multi-storey run it overrides the base/top pair on Build &gt; General, which only steers the single-storey path. (auto) keeps the positional ladder -- first row on the base level, each row one level higher. A row whose plan title matches a level name arrives with that level already picked."
+                                   Style="{StaticResource HelpText}" Margin="20,0,0,4"/>
                         <Grid Margin="26,0,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="40"/>
                                 <ColumnDefinition Width="30"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="110"/>
                                 <ColumnDefinition Width="70"/>
                                 <ColumnDefinition Width="52"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0" Text="Build" FontSize="10" Foreground="Gray"/>
                             <TextBlock Grid.Column="1" Text="No." FontSize="10" Foreground="Gray"/>
                             <TextBlock Grid.Column="2" Text="Plan drawing" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="3" Text="Height" FontSize="10" Foreground="Gray"/>
-                            <TextBlock Grid.Column="4" Text="Repeat" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="3" Text="Level" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="4" Text="Height" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Column="5" Text="Repeat" FontSize="10" Foreground="Gray"/>
                         </Grid>
                         <ListBox x:Name="storey_rows" Margin="20,0,0,0" MaxHeight="190"
                                  HorizontalContentAlignment="Stretch"

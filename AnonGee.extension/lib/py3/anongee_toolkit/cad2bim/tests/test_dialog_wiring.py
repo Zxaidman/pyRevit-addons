@@ -44,7 +44,7 @@ def _tab_homes():
     per window -- so a control pasted onto the wrong tab still binds and still
     runs. Only the user sees the difference, which makes the tab a thing worth
     asserting. A control under a nested TabItem records the whole path, e.g.
-    "Build > Foundations"."""
+    "Build > Foundation"."""
     key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
     homes = {}
 
@@ -222,32 +222,33 @@ class MaterialAndFootingControls(unittest.TestCase):
         for kind in kinds:
             self.assertIn("cb_mat_{0}".format(kind), names)
 
-    def test_the_footing_row_lives_on_the_foundations_sub_tab(self):
-        # Foundations is no longer a top-level tab: it lives inside Build
+    def test_the_footing_row_lives_on_the_foundation_sub_tab(self):
+        # Foundation is no longer a top-level tab: it lives inside Build
         homes = _tab_homes()
         for control in ("chk_footings", "cb_footing_family",
                         "tb_footing_projection", "tb_footing_thickness",
                         "tb_max_step", "tb_fnd_min_area"):
-            self.assertEqual(homes.get(control), "Build > Foundations",
+            self.assertEqual(homes.get(control), "Build > Foundation",
                              "%s sits on %r" % (control, homes.get(control)))
         self.assertEqual(homes.get("chk_view_filters"), "Output & Graphics")
 
 
 class TheDialogTabSet(unittest.TestCase):
-    """The restructure's contract: six top-level tabs, Build split element-wise.
+    """The restructure's contract: six top-level tabs, Build split by discipline.
 
-    Foundations and Stairs are NOT top-level tabs any more -- they are sub-tabs
-    of Build, beside one sub-tab per element kind. Settings files restore
-    controls BY NAME, so moving a node between tabs is free -- but a control
-    moved by copy-paste is easily left behind in the old tab too, and a
-    duplicated x:Name is something XamlReader only refuses at runtime, in
-    Revit, exactly where these checks exist not to look.
+    The user's exact five: General (the run-wide picks, grids included),
+    Structure (columns, beams and slabs together), Architecture (the walls
+    placeholder), Foundation and Staircase. Settings files restore controls
+    BY NAME, so moving a node between tabs is free -- but a control moved by
+    copy-paste is easily left behind in the old tab too, and a duplicated
+    x:Name is something XamlReader only refuses at runtime, in Revit, exactly
+    where these checks exist not to look.
     """
 
     _TABS = ["Layers", "Build", "Multi-storey", "Tolerances",
              "Output & Graphics", "Naming"]
-    _BUILD = ["General", "Grids", "Columns", "Beams", "Slabs",
-              "Foundations", "Stairs"]
+    _BUILD = ["General", "Structure", "Architecture", "Foundation",
+              "Staircase"]
 
     def test_the_six_top_level_tabs_in_order(self):
         self.assertEqual([header for header, _ in _tab_outline()], self._TABS)
@@ -273,20 +274,24 @@ class TheDialogTabSet(unittest.TestCase):
         homes = _tab_homes()
         for control, tab in (
                 # run-wide picks: the level pair serves columns, beams, slabs,
-                # stairs and footings alike, so it lives on Build > General
+                # stairs and footings alike, so it lives on Build > General --
+                # and the grids moved in beside them ("move grid inside
+                # General tab")
                 ("cb_name_param", "Build > General"),
                 ("cb_base_level", "Build > General"),
                 ("cb_top_level", "Build > General"),
-                ("chk_grids", "Build > Grids"),
-                ("chk_columns", "Build > Columns"),
-                ("cb_family", "Build > Columns"),
-                ("cb_circular_family", "Build > Columns"),
-                ("chk_beams", "Build > Beams"),
-                ("cb_beam_family", "Build > Beams"),
-                ("chk_slabs", "Build > Slabs"),
-                ("cb_floor_type", "Build > Slabs"),
-                ("chk_stairs", "Build > Stairs"),
-                ("cb_stair_type", "Build > Stairs"),
+                ("chk_grids", "Build > General"),
+                # columns, beams and slabs merged onto one Structure sub-tab,
+                # a GroupBox per element
+                ("chk_columns", "Build > Structure"),
+                ("cb_family", "Build > Structure"),
+                ("cb_circular_family", "Build > Structure"),
+                ("chk_beams", "Build > Structure"),
+                ("cb_beam_family", "Build > Structure"),
+                ("chk_slabs", "Build > Structure"),
+                ("cb_floor_type", "Build > Structure"),
+                ("chk_stairs", "Build > Staircase"),
+                ("cb_stair_type", "Build > Staircase"),
                 ("chk_export", "Output & Graphics"),
                 ("tb_compare", "Output & Graphics"),
                 ("tb_grid_snap", "Tolerances")):
@@ -339,7 +344,7 @@ class HelpProseIsReadable(unittest.TestCase):
 
     def test_the_known_guide_notes_are_spot_checked(self):
         # two the user actually complained about: the foundation prose and the
-        # walls one-liner (now on Build > General)
+        # walls note (now the Build > Architecture placeholder)
         tree = ET.parse(_XAML)
         walls = [el for el in tree.iter(self._WPF + "TextBlock")
                  if (el.get("Text") or "").startswith(
@@ -623,6 +628,51 @@ class StoreyTableIsSelectable(unittest.TestCase):
         for control in ("btn_storey_up", "btn_storey_down", "btn_storey_add",
                         "btn_storey_remove", "storey_selection_text"):
             self.assertIn(control, names)
+
+
+class StoreyRowsCarryTheirLevel(unittest.TestCase):
+    """Each storey row says which MODEL level it builds on.
+
+    The level was purely positional -- _storey_level_pairs walked upward from
+    cb_base_level -- so a drawing whose plans belong to existing named levels
+    could not be told so. The row's Level combo is code-built like the rest of
+    the row, invisible to the static find() check, so the builder and both
+    ends of the wire are asserted directly: the combo exists, the choice is
+    emitted under "level_id", the proposal comes from the (offline-tested)
+    matcher in floor_plans, and the run pipeline actually reads the key.
+    """
+
+    def test_the_row_builder_creates_the_level_combo(self):
+        block = _window_source().split("def _refresh_storey_rows(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("level_combo = ComboBox()", block)
+        self.assertIn('level_combo.Items.Add("(auto)")', block)
+
+    def test_read_storey_settings_emits_the_key(self):
+        block = _window_source().split("def _read_storey_settings(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn('"level_id": row.get("level_id")', block)
+
+    def test_the_proposal_comes_from_floor_plans(self):
+        # the matcher lives in floor_plans.propose_level so it can be unit
+        # tested without Revit; the dialog only calls it
+        block = _window_source().split("def _build_storey_rows(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("floor_plans.propose_level(", block)
+
+    def test_the_preset_round_trip_keeps_the_choice(self):
+        # the draw-stairs rebuild restores the rows from storey_settings, so a
+        # row field that is not carried there dies on the round trip
+        block = _window_source().split("def _apply_preset(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn('"level_id": saved.get("level_id")', block)
+
+    def test_an_explicit_level_reaches_the_ladder(self):
+        # script.py pins a picked level as that storey's BASE; "(auto)" rows
+        # keep the positional walk
+        block = _script_source().split("def _storey_level_pairs(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn('getattr(region, "level_id", None)', block)
 
 
 class LevelNamesReachTheBuilder(unittest.TestCase):

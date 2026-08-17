@@ -7,8 +7,8 @@ every model write happens afterwards on the Revit API thread. That separation is
 what lets the whole run be replayed offline from an exported JSON.
 
 The main dialog's tabs are its structure: Layers, Build, Multi-storey,
-Tolerances, Output & Graphics, Naming -- with Build split element-wise into
-General, Grids, Columns, Beams, Slabs, Foundations and Stairs sub-tabs (a
+Tolerances, Output & Graphics, Naming -- with Build split discipline-wise into
+General, Structure, Architecture, Foundation and Staircase sub-tabs (a
 nested TabControl; FindName resolves per window, so the bindings below never
 care about the nesting). Two of the tabs
 carry state that outlives the run -- the naming templates and the standard sizes
@@ -177,7 +177,9 @@ class CadToBimWindow(object):
         self._fill_combo(self.cb_circular_family, column_symbols)
         _select_containing(self.cb_circular_family, ["round", "circ"])
         # Levels are sorted lowest-first, so combo index ascends with elevation.
-        # Base defaults to the lowest, top to the next level above it.
+        # Base defaults to the lowest, top to the next level above it. The same
+        # list feeds the per-storey Level combos on the Multi-storey tab.
+        self._level_options = list(level_options or [])
         self._level_ids = self._fill_combo(self.cb_base_level, level_options)
         self._fill_combo(self.cb_top_level, level_options)
         if self.cb_top_level.Items.Count > 1:
@@ -383,7 +385,7 @@ class CadToBimWindow(object):
             self.chk_stairs.IsEnabled = False
             self.chk_stairs.Content = "Create staircases (the model has no stair type)"
 
-        # Build > Stairs sub-tab live sync: floor height follows the level
+        # Build > Staircase sub-tab live sync: floor height follows the level
         # picks (Build > General); an
         # ABSOLUTE riser count drives the riser height (storey / count)
         self.cb_base_level.SelectionChanged += self._on_stair_sync
@@ -638,7 +640,7 @@ class CadToBimWindow(object):
                     int(_math.ceil(storey / riser - 1e-9)))
 
     def _stair_shape(self):
-        """The generic stair shape picked on Build > Stairs (U by default)."""
+        """The generic stair shape picked on Build > Staircase (U by default)."""
         for button, shape in self.shape_buttons:
             if button.IsChecked:
                 return shape
@@ -803,7 +805,8 @@ class CadToBimWindow(object):
                              len(self._storey_plans) - 1),
                  "height_mm": saved.get("height_mm"),
                  "repeat": int(saved.get("repeat") or 1),
-                 "include": saved.get("include", True)}
+                 "include": saved.get("include", True),
+                 "level_id": saved.get("level_id")}
                 for saved in saved_rows]
             self._refresh_storey_rows()
         self._show_outline_count()
@@ -847,11 +850,19 @@ class CadToBimWindow(object):
         """
         self._storey_plans = list(plans or [])
         self._storey_rows = []
+        level_names = [label for label, _level_id in self._level_options]
         for index in range(len(self._storey_plans)):
+            # a plan titled like a model level starts on that level ("Ground
+            # Floor Level" <-> "Ground Floor"); every other row starts on
+            # "(auto)" and climbs the ladder exactly as before
+            proposed = floor_plans.propose_level(
+                self._storey_plans[index].get("label"), level_names)
             self._storey_rows.append({"plan": index, "height_mm": None,
                                       "repeat": self._storey_plans[index].get(
                                           "repeat") or 1,
-                                      "include": True})
+                                      "include": True,
+                                      "level_id": (self._level_ids.get(proposed)
+                                                   if proposed else None)})
         self._refresh_storey_rows()
 
     def _plan_label(self, index):
@@ -875,7 +886,7 @@ class CadToBimWindow(object):
         self._storey_boxes = []
         for position, row in enumerate(self._storey_rows):
             grid = WpfGrid()
-            for width in (40.0, 30.0, 0.0, 70.0, 52.0):
+            for width in (40.0, 30.0, 0.0, 110.0, 70.0, 52.0):
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if not width
                                 else GridLength(width))
@@ -903,19 +914,34 @@ class CadToBimWindow(object):
             WpfGrid.SetColumn(plan_combo, 2)
             grid.Children.Add(plan_combo)
 
+            # which MODEL level this storey builds on: "(auto)" keeps the
+            # positional ladder, a named level pins the storey's base to it
+            level_combo = ComboBox()
+            level_combo.Height = 22
+            level_combo.Margin = Thickness(0, 1, 8, 1)
+            level_combo.Items.Add("(auto)")
+            for label, _level_id in self._level_options:
+                level_combo.Items.Add(label)
+            level_combo.SelectedIndex = self._level_index(row.get("level_id"))
+            level_combo.ToolTip = ("The model level this storey's base sits "
+                                   "on; (auto) follows the row order upward "
+                                   "from the base level")
+            WpfGrid.SetColumn(level_combo, 3)
+            grid.Children.Add(level_combo)
+
             height = TextBox()
             height.Height = 22
             height.Margin = Thickness(0, 1, 8, 1)
             height.Text = ("" if row.get("height_mm") is None
                            else "{0:g}".format(row["height_mm"]))
-            WpfGrid.SetColumn(height, 3)
+            WpfGrid.SetColumn(height, 4)
             grid.Children.Add(height)
 
             repeat = TextBox()
             repeat.Height = 22
             repeat.Margin = Thickness(0, 1, 0, 1)
             repeat.Text = str(int(row.get("repeat") or 1))
-            WpfGrid.SetColumn(repeat, 4)
+            WpfGrid.SetColumn(repeat, 5)
             grid.Children.Add(repeat)
 
             item = ListBoxItem()
@@ -927,8 +953,8 @@ class CadToBimWindow(object):
             item.PreviewMouseLeftButtonDown += self._on_storey_row_clicked
             item.PreviewGotKeyboardFocus += self._on_storey_row_clicked
             self.storey_rows.Items.Add(item)
-            self._storey_boxes.append((row, plan_combo, height, repeat, include,
-                                       item))
+            self._storey_boxes.append((row, plan_combo, level_combo, height,
+                                       repeat, include, item))
         if self._storey_boxes:
             if not (0 <= keep < len(self._storey_boxes)):
                 keep = 0
@@ -963,10 +989,23 @@ class CadToBimWindow(object):
     def on_storey_selection_changed(self, sender, args):
         self._show_storey_selection()
 
+    def _level_index(self, level_id):
+        """A row's Level combo index for a level id: 0 is "(auto)"."""
+        if level_id is not None:
+            for position, (_label, candidate) in enumerate(self._level_options):
+                if candidate == level_id:
+                    return position + 1
+        return 0
+
     def _capture_storey_rows(self):
         """Read the on-screen table back into the model before reordering it."""
-        for row, plan_combo, height, repeat, include, _grid in self._storey_boxes:
+        for (row, plan_combo, level_combo, height, repeat, include,
+             _grid) in self._storey_boxes:
             row["plan"] = max(0, plan_combo.SelectedIndex)
+            picked = level_combo.SelectedIndex - 1     # 0 is "(auto)"
+            row["level_id"] = (self._level_options[picked][1]
+                               if 0 <= picked < len(self._level_options)
+                               else None)
             row["height_mm"] = self._read_float(height, None)
             row["repeat"] = self._read_int(repeat, row.get("repeat") or 1)
             row["include"] = bool(include.IsChecked)
@@ -1035,7 +1074,10 @@ class CadToBimWindow(object):
                 "order": plan.get("order"),
                 "include": bool(row.get("include", True)),
                 "height_mm": row.get("height_mm"),
-                "repeat": int(row.get("repeat") or 1)})
+                "repeat": int(row.get("repeat") or 1),
+                # the MODEL level this storey builds on; None keeps the
+                # positional ladder
+                "level_id": row.get("level_id")})
         return rows_out
 
     def _remember_conventions(self):
