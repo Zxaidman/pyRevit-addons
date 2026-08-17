@@ -1,4 +1,5 @@
 {
+  "advanced": {},
   "controls": {
     "cb_base_level": "00 GROUND LVL.",
     "cb_beam_family": "Concrete-Rectangular-Beam : .Default Rect.",
@@ -51,17 +52,22 @@
     "tb_colh_max": "20000",
     "tb_colh_min": "150",
     "tb_compare": "300",
+    "tb_concentric_tol": "60",
     "tb_face_reach": "900",
     "tb_face_size": "60",
     "tb_filter_transparency": "0",
-    "tb_footing_projection": "500",
+    "tb_fnd_min_area": "0.25",
+    "tb_footing_projection": "300",
     "tb_footing_thickness": "600",
     "tb_grade_beam": "M30",
     "tb_grade_column": "M40",
     "tb_grade_footing": "M40",
     "tb_grade_slab": "M30",
     "tb_grade_stair": "M25",
+    "tb_grid_snap": "300",
+    "tb_junction_tol": "200",
     "tb_markrad": "1300",
+    "tb_max_step": "3000",
     "tb_name_beam": "{w} X {d}",
     "tb_name_beam_width": "{w}",
     "tb_name_column": "{b} X {h}",
@@ -70,10 +76,13 @@
     "tb_name_footing": "{t} THK RCC FOOTING",
     "tb_name_grid": "{name}",
     "tb_name_level": "{n}th Floor Level",
+    "tb_name_raft": "{t} THK RCC RAFT",
     "tb_name_stair": "{r}R x {t}T x {w}W x {k}D",
     "tb_name_stair_waist": "{k}D",
     "tb_pair_max": "700",
     "tb_pair_min": "80",
+    "tb_pair_overlap": "150",
+    "tb_parallel_angle": "3",
     "tb_region": "1500",
     "tb_slab_chain": "150",
     "tb_slab_heal": "350",
@@ -96,8 +105,9 @@
     "tb_tread_min": "150"
   },
   "layers": {
+    "0": "unmapped",
     "A-ANNO-DIMS": "unmapped",
-    "A-DETL": "unmapped",
+    "A-CUTOUT": "unmapped",
     "A-FLOR": "slab_edge",
     "Boundary": "floor boundary",
     "Origin": "floor origin",
@@ -107,12 +117,13 @@
     "S-COLS-HDLN": "unmapped",
     "S-FND": "foundation",
     "S-FND-FOLD": "fold",
+    "S-FND-SUNK": "sunk",
     "S-GRID": "grid",
     "S-GRID-IDEN": "unmapped",
     "S-STRS": "stair",
     "S-STRS-ANNO": "unmapped"
   },
-  "schema": 1,
+  "schema": 2,
   "texts": {
     "A-FLOR-IDEN": "slab text",
     "G-ANNO-TEXT": "ignore",
@@ -122,5 +133,5 @@
     "S-GRID-IDEN": "grid text",
     "S-STRS-IDEN": "ignore"
   },
-  "version": "0.68.1"
+  "version": "0.71.0"
 }
