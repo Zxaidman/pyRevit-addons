@@ -180,6 +180,18 @@ planned, 0 skipped; **2 supports total**. Each raft's three folds pool into one
 The sunk bay gets **none** — `250 < 500`, no void — while still dropping: the
 corridor is cut and the dropped slab cast 500 thick at `-250`.
 
+**The corridor, third pass — the X-cross cutouts.** v0.69.5's step-note rule
+dissolved the corridor zone and the raft was then cast SOLID over the whole
+strip; the drawing crosses its north and south parts out (two diagonals
+corner-to-corner on `A-DETL`, the opening symbol — findings, "An X across a
+part means no concrete there"). An X-marked NESTED face is now a CUTOUT: never
+an element, excluded from the step-line stitch, its ring a hole of the plan
+containing it; and `split_profile` fuses tangent holes first, so the raft
+casts around ONE corridor hole with the sunk slab dropped into its middle.
+Measured: 9 outlines + 2 cutouts, the raft one piece with 7 holes
+(corridor + 6 folds), 18 foundation-level elements in all; the sweep gains
+`foundation_cutouts`.
+
 ---
 
 ## Phase 2 — the representation it was built from

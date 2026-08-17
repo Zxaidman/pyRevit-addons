@@ -257,6 +257,120 @@ class OutlinesThroughTheStepLayers(unittest.TestCase):
         self.assertEqual(len(plans[0]["steps"]), 1)
 
 
+def _cross(x0, y0, x1, y1, inset=0):
+    """The standard opening symbol: two diagonals corner-to-corner.
+
+    Drawn on a layer no category claims -- test10 puts its crosses on
+    "A-DETL" -- because the symbol is annotation, not linework. `inset` pulls
+    both strokes short of the corners, for the tests that prove short strokes
+    are not the symbol.
+    """
+    return [_Record("line",
+                    [(x0 + inset, y0 + inset), (x1 - inset, y1 - inset)],
+                    layers.CATEGORY_UNMAPPED),
+            _Record("line",
+                    [(x0 + inset, y1 - inset), (x1 - inset, y0 + inset)],
+                    layers.CATEGORY_UNMAPPED)]
+
+
+class AnXMarkedFaceIsACutout(unittest.TestCase):
+    """The corridor's north and south parts carry the opening symbol.
+
+    Measured on test10: each part holds TWO diagonal LINEs on "A-DETL"
+    spanning exactly corner-to-corner. The middle part between them is the
+    sunk bay. The raft was being cast SOLID over the crossed-out parts --
+    dissolving the corridor made the whole strip raft again -- and the user
+    found the filled corridor in Revit against a drawing that voids it.
+    """
+
+    def _nested(self, extras, texts=()):
+        """A raft drawn closed, a block recovered from loose lines inside it."""
+        records = ([_closed(0, 0, 30000, 30000)]
+                   + _loose(10000, 10000, 16000, 18000) + list(extras))
+        return foundation_plan.plan_foundations(
+            records, [_Text("F1_750MM THK", (5000, 5000))] + list(texts))
+
+    def test_two_corner_to_corner_diagonals_void_a_nested_face(self):
+        plans = self._nested(_cross(10000, 10000, 16000, 18000))
+        self.assertEqual(len(plans), 1)          # the block is never an element
+        self.assertEqual([_bbox_mm(h) for h in plans[0]["holes"]],
+                         [(6000, 8000)])         # only ever the hole
+        self.assertEqual(
+            foundation_plan.outlines(
+                [_closed(0, 0, 30000, 30000)]
+                + _loose(10000, 10000, 16000, 18000)
+                + _cross(10000, 10000, 16000, 18000)),
+            foundation_plan.outlines([_closed(0, 0, 30000, 30000)]))
+
+    def test_ONE_diagonal_is_not_the_symbol(self):
+        # a single slash is a section mark or a leader, not the opening cross
+        plans = self._nested(_cross(10000, 10000, 16000, 18000)[:1])
+        self.assertEqual(len(plans), 2)          # the block stays an element
+
+    def test_diagonals_short_of_the_corners_are_not_the_symbol(self):
+        # an X floating 200 mm inside the face belongs to whatever detail it
+        # is actually drawn over, and 200 is far outside the 50 mm snap
+        plans = self._nested(_cross(10000, 10000, 16000, 18000, inset=200))
+        self.assertEqual(len(plans), 2)
+
+    def test_a_TOP_LEVEL_face_with_an_X_keeps_being_an_element(self):
+        # nothing contains it, so the X cannot be "void this part of that":
+        # voiding a whole foundation on two loose lines would delete elements
+        # this pass owns on the strength of ones it does not
+        plans = foundation_plan.plan_foundations(
+            _loose(0, 0, 5200, 6650) + _cross(0, 0, 5200, 6650),
+            [_Text("F1_1200MM THK", (2600, 3300))])
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(plans[0]["thickness_mm"], 1200.0)
+        self.assertEqual(plans[0]["holes"], [])
+
+    def test_cutouts_reports_the_crossed_out_rings_for_the_sweep(self):
+        records = ([_closed(0, 0, 30000, 30000)]
+                   + _loose(10000, 10000, 16000, 18000)
+                   + _cross(10000, 10000, 16000, 18000))
+        got = foundation_plan.cutouts(records)
+        self.assertEqual([_bbox_mm(ring) for ring in got], [(6000, 8000)])
+
+
+class TheCrossedOutCorridor(unittest.TestCase):
+    """The redrawn test10 corridor read whole, at the drawing's coordinates.
+
+    The strip 10533..14033 divides into three: north (15950..21650) and south
+    (4350..10050) each crossed out on "A-DETL", the sunk bay (10050..15950)
+    between them. The right model: the raft is cast around ONE corridor-shaped
+    hole, the sunk slab drops into the middle of it, and the crossed-out parts
+    get nothing at all.
+    """
+
+    def _plans(self):
+        records = ([_closed(4933, -1650, 19633, 29100)] + _corridor_block()
+                   + _cross(10533, 15950, 14033, 21650)
+                   + _cross(10533, 4350, 14033, 10050))
+        return foundation_plan.plan_foundations(
+            records,
+            [_Text("F3_750MM THK", (12265, 25000)),
+             _Text("F3_500MM THK\n250MM SUNK", (12300, 13010))])
+
+    def test_the_crossed_out_parts_become_holes_in_the_raft(self):
+        plans = self._plans()
+        self.assertEqual(len(plans), 1)
+        self.assertEqual(sorted(_bbox_mm(h) for h in plans[0]["holes"]),
+                         [(3500, 5700), (3500, 5700)])
+
+    def test_the_raft_is_sized_by_its_plain_note_not_the_step_note(self):
+        # with the corridor cells gone, the sunk note lands in the raft's own
+        # ring, nearly at its centre -- and its 500 is the DROPPED slab's
+        # thickness, which must not size the 750 raft
+        self.assertEqual(self._plans()[0]["thickness_mm"], 750.0)
+
+    def test_the_sunk_bay_still_steps_the_raft(self):
+        raft = self._plans()[0]
+        self.assertEqual(len(raft["steps"]), 1)
+        self.assertEqual(raft["steps"][0]["step_kind"], "sunk")
+        self.assertEqual(raft["steps"][0]["step_mm"], 250.0)
+        self.assertEqual(raft["steps"][0]["thickness_mm"], 500.0)
+
+
 class SizingFromTheNote(unittest.TestCase):
     def test_the_note_inside_an_outline_names_and_sizes_it(self):
         plans = foundation_plan.plan_foundations(

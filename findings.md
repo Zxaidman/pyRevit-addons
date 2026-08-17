@@ -314,6 +314,49 @@ their raft's 750, but the sunk bay says 500 against a 750 raft, and only the
 note can say so. The dropped slab now takes its thickness from its paired
 note first, its host second.
 
+### An X across a part means no concrete there
+
+The step-note rule left the corridor half right. Dissolving the zone returned
+its strip to the raft — and the raft was then cast SOLID over the whole strip.
+The user found the filled corridor in Revit against a drawing that voids most
+of it: measured on test10, the strip's north part (10533,15950)–(14033,21650)
+and south part (10533,4350)–(14033,10050) each carry TWO diagonal LINEs on
+`A-DETL` spanning exactly corner-to-corner — the standard opening symbol —
+with the sunk bay between them. The right model: the raft has ONE
+corridor-shaped hole, the sunk slab drops into the middle of it, and the
+crossed-out parts get nothing.
+
+The rule: a face carrying the X is a CUTOUT — never an element, never a
+completer of neighbours through the step-line dissolve, only a hole in the
+plan whose ring contains it. Its boundaries:
+
+- **Both diagonals, corner-to-corner** (each end within 50 mm of its corner).
+  One slash is a section mark or a leader; an X floating short of the corners
+  belongs to whatever detail it is actually drawn over.
+- **The strokes are read from the full record set, any layer.** The cross is
+  annotation — `A-DETL` maps to no category — so the strokes prove themselves
+  by landing on a face's corners, not by where they live.
+- **Only a nested face voids.** A top-level outline with an X stays the
+  element it is: voiding a whole foundation on the strength of two loose
+  lines would delete elements this pass owns on ones it does not.
+- **Detection runs BEFORE the step-line dissolve.** The X spans the PART it
+  voids, never the merged whole; and with the crossed parts pulled out first,
+  the sunk bay between them is left bounded entirely by step linework, which
+  the existing refusal already declines to make an outline of. The bay then
+  steps the raft the ordinary way — cut, dropped 500 at −250, no support.
+
+Two consequences surfaced on the same drawing. With the corridor cells gone,
+the sunk note lands in the raft's own ring almost at its centre — so a plain
+note now outranks a step note in sizing (`_size_from`): a step note's THK is
+the dropped slab's thickness and must not size the 750 raft, while it still
+sizes the original F6, whose only note it is, because there the outline IS
+the dropped region. And the raft's profile then carries three tangent loops —
+north cutout, sunk opening, south cutout share edges — which Revit rejects
+wholesale, so `split_profile` fuses touching holes first (the same
+`_merged_holes` walk the collar pooling uses, rectilinear-only for the same
+reason): the raft casts as one piece around one corridor hole, seven holes in
+all with the six folds.
+
 ### A placed footing was never structural
 
 The user compared a placed footing with a hand-sketched twin of it: the

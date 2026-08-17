@@ -474,6 +474,67 @@ class AnOpeningAtTheBoundaryDividesTheOutline(unittest.TestCase):
         self.assertEqual(pieces, [])
 
 
+class TangentHolesFuseIntoOne(unittest.TestCase):
+    """Holes sharing an edge fuse before the profile is judged.
+
+    The corridor is the case: the raft's two crossed-out parts and the sunk
+    bay between them arrive as three rectangles tangent at y=10050 and
+    y=15950, and three loops sharing edges in one profile is a sketch Revit
+    rejects wholesale. The cast has ONE corridor hole.
+    """
+
+    def test_three_rectangles_in_a_row_sharing_edges_are_one_hole(self):
+        outer = _ring(0, 0, 30000, 30000)
+        pieces = fold_plan.split_profile(
+            outer, [_ring(5000, 5000, 10000, 10000),
+                    _ring(10000, 5000, 15000, 10000),
+                    _ring(15000, 5000, 20000, 10000)])
+        self.assertEqual(len(pieces), 1)
+        ring, holes = pieces[0]
+        self.assertEqual(_size_mm(ring), (30000, 30000))
+        self.assertEqual(len(holes), 1)
+        self.assertEqual(_size_mm(holes[0]), (15000, 5000))
+
+    def test_the_corridor_fuses_at_the_drawings_own_coordinates(self):
+        # north cutout, sunk bay, south cutout -- one strip, strictly inside
+        # the raft, so the raft stays one piece round one hole
+        outer = _ring(4933, -1650, 19633, 29100)
+        pieces = fold_plan.split_profile(
+            outer, [_ring(10533, 15950, 14033, 21650),
+                    _ring(10533, 10050, 14033, 15950),
+                    _ring(10533, 4350, 14033, 10050)])
+        self.assertEqual(len(pieces), 1)
+        ring, holes = pieces[0]
+        self.assertEqual(_size_mm(ring), (14700, 30750))
+        self.assertEqual(len(holes), 1)
+        self.assertEqual(_size_mm(holes[0]), (3500, 17300))
+
+    def test_holes_that_touch_nothing_come_back_as_themselves(self):
+        outer = _ring(0, 0, 30000, 30000)
+        pieces = fold_plan.split_profile(
+            outer, [_ring(5000, 5000, 8000, 8000),
+                    _ring(20000, 20000, 24000, 26000)])
+        self.assertEqual(len(pieces), 1)
+        _ring_, holes = pieces[0]
+        self.assertEqual(sorted(_size_mm(h) for h in holes),
+                         [(3000, 3000), (4000, 6000)])
+
+    def test_a_slanted_hole_passes_through_the_fusion_untouched(self):
+        # the fusion walks a rectilinear grid, which would hand a slanted ring
+        # back as a staircase -- so only the axis-aligned holes fuse and a
+        # slanted one is kept exactly as drawn
+        outer = _ring(0, 0, 30000, 30000)
+        diamond = [(_mm(10000), _mm(5000)), (_mm(15000), _mm(10000)),
+                   (_mm(10000), _mm(15000)), (_mm(5000), _mm(10000))]
+        pieces = fold_plan.split_profile(
+            outer, [diamond, _ring(18000, 5000, 22000, 9000),
+                    _ring(22000, 5000, 26000, 9000)])
+        self.assertEqual(len(pieces), 1)
+        _ring_, holes = pieces[0]
+        self.assertEqual(len(holes), 2)      # the two rectangles fused
+        self.assertIn(diamond, holes)
+
+
 class PairingAStepToItsDepth(unittest.TestCase):
     def test_each_region_takes_the_note_that_sits_inside_it(self):
         # test10's F3 rings hold THREE fold notes each, one per region;

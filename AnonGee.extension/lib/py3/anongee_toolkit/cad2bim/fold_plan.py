@@ -421,6 +421,14 @@ def split_profile(outer, holes):
     one-error run). The concrete truth is a north piece and a south piece with
     the dropped slab between them, and that is what this returns.
 
+    Holes that TOUCH each other fuse FIRST, before any of that is judged. The
+    corridor is why: its two crossed-out parts and the sunk bay between them
+    arrive as three rectangles sharing edges, and three tangent loops in one
+    profile is a sketch Revit rejects wholesale -- the cast has ONE corridor
+    hole, so that is what the profile must carry. Same `_merged_holes` walk the
+    collar pooling uses, and the same rectilinear-only stance: a slanted hole
+    would come back as a grid staircase, so it passes through untouched.
+
     Rectilinear, like the union above: cells of a compressed grid are covered
     when inside the outline and not inside a boundary-reaching hole, and each
     connected run of covered cells walks out as one piece. Interior holes are
@@ -428,7 +436,7 @@ def split_profile(outer, holes):
     subtraction itself created (a U-shaped cut closing round an island).
     """
     inside, touching = [], []
-    for hole in holes or []:
+    for hole in _fused(holes or []):
         if _strictly_inside(hole, outer):
             inside.append(hole)
         else:
@@ -465,6 +473,36 @@ def split_profile(outer, holes):
                 piece_holes.append(hole)
                 break
     return pieces
+
+
+def _fused(holes):
+    """The holes with shared edges, overlaps and duplicates dissolved.
+
+    Only the rectilinear ones run through the union -- the grid is exact for
+    those and a staircase approximation for anything slanted, so a slanted
+    hole is handed back exactly as drawn. Holes that touch nothing come back
+    as themselves (each is its own connected piece of the walk).
+    """
+    straight = [hole for hole in holes if _rectilinear(hole)]
+    if len(straight) < 2:
+        return list(holes)
+    slanted = [hole for hole in holes if not _rectilinear(hole)]
+    return _merged_holes(straight) + slanted
+
+
+def _rectilinear(ring):
+    """True when every edge is axis-parallel -- what the grid walk is exact for."""
+    cleaned = _collinear_simplified(_dedup_ring(list(ring)))
+    count = len(cleaned)
+    if count < 3:
+        return False
+    for index in range(count):
+        a = cleaned[index]
+        b = cleaned[(index + 1) % count]
+        if (abs(a[0] - b[0]) > _TOUCH_TOL_FT
+                and abs(a[1] - b[1]) > _TOUCH_TOL_FT):
+            return False
+    return True
 
 
 def _strictly_inside(hole, outer):

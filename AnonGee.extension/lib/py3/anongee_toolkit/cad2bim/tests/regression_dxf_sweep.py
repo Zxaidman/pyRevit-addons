@@ -117,6 +117,9 @@ def _measure(path):
                         if layers.classify_text_layer(t.layer_key)
                         == layers.CATEGORY_FOUNDATION_TEXT]
     foundation_outlines = foundation_plan.outlines(result.records)
+    # The crossed-out faces: X-marked parts the raft is cast AROUND rather
+    # than over. test10 measures 2 -- the corridor's north and south parts.
+    foundation_cutouts = foundation_plan.cutouts(result.records)
     foundation_plans = foundation_plan.plan_foundations(result.records,
                                                         foundation_texts)
     regions = _regions_by_category(result.regions)
@@ -177,6 +180,7 @@ def _measure(path):
         "foundation_outlines": len(foundation_outlines),
         "foundation_outlines_drawn_closed": sum(
             1 for _r, _z, source in foundation_outlines if source == "drawn"),
+        "foundation_cutouts": len(foundation_cutouts),
         "foundation_texts": len(foundation_texts),
         "foundation_planned": len(foundation_plans),
         "foundation_planned_sized": sum(
