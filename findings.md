@@ -314,6 +314,22 @@ their raft's 750, but the sunk bay says 500 against a 750 raft, and only the
 note can say so. The dropped slab now takes its thickness from its paired
 note first, its host second.
 
+### A placed footing was never structural
+
+The user compared a placed footing with a hand-sketched twin of it: the
+placed one shows blank read-only Width/Length dimensions, the sketched one
+reports both -- and BOQ schedules read those fields. Autodesk's help pins the
+foundation slab's Width/Length to "if rectangular"; the twins differ not in
+their rectangles but in their ROLE. `Floor.Create` places a NON-structural
+floor, the Structure tab's tools place structural ones, and the foundation
+dimensions belong to the structural element. Every placed footing now sets
+FLOOR_PARAM_IS_STRUCTURAL -- which it should have carried anyway, or the
+analytical model is missing its foundations -- and hands Revit its sketch the
+way the rectangle tool draws one: counter-clockwise from the lowest-left
+corner. To be confirmed on the user's next Revit run; if Width/Length still
+stay blank, the fallback is schedulable parameters of our own, written from
+the rings this tool already measures exactly.
+
 ### A storey is not a step
 
 Test9's legend lists `T.O.S. +50MM`, `+400MM` and `+6250` together. The first

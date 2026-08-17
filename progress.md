@@ -303,6 +303,15 @@ pads, 6 fold drops, 2 pooled supports, 1 sunk slab at −250 — 18 elements, no
 phantom pieces. Tests 558 → 560; the sweep's foundation_planned/profiles move
 10→9/11→9 and outlines_divided 1→0, all the dissolved corridor.
 
+### v0.69.6 — placed footings become structural
+
+The Width/Length investigation (findings, "A placed footing was never
+structural"): `Floor.Create` defaults to non-structural, the hand-sketched
+twin is structural, and the foundation slab's read-only dimensions follow the
+structural element. Footings now set FLOOR_PARAM_IS_STRUCTURAL and normalise
+their sketch loops. Awaiting the user's Revit confirmation; the declared
+fallback is our own schedulable width/length parameters.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →
