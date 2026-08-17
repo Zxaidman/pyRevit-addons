@@ -140,8 +140,55 @@ def _system_family(floor_type):
         return None
 
 
+def _mark_structural(instance):
+    """Say the foundation is STRUCTURAL concrete, which the API default denies.
+
+    A floor placed through `Floor.Create` arrives non-structural; one sketched
+    through the Structure tab's tools arrives structural. The difference is
+    not cosmetic: the foundation slab's read-only Width/Length dimensions --
+    which the BOQ schedules read -- report only on the structural element, so
+    the user saw them blank on every placed footing and filled on a manually
+    sketched twin of it. A foundation that is not structural is wrong for the
+    analytical model anyway.
+    """
+    try:
+        parameter = instance.get_Parameter(
+            BuiltInParameter.FLOOR_PARAM_IS_STRUCTURAL)
+    except Exception:
+        parameter = None
+    if parameter is not None and not parameter.IsReadOnly:
+        try:
+            parameter.Set(1)
+            return None
+        except Exception:
+            pass
+    return "could not mark a footing as structural"
+
+
+def _oriented(ring):
+    """The ring counter-clockwise, starting at its lowest-leftmost corner.
+
+    Revit recognises a rectangle in the sketch before it reports Width and
+    Length; handing it the loop the way its own rectangle tool draws one --
+    a deterministic corner, a consistent direction -- removes the one
+    difference left between a placed footing and a hand-sketched twin.
+    """
+    ordered = list(ring)
+    area = 0.0
+    count = len(ordered)
+    for index in range(count):
+        x1, y1 = ordered[index][0], ordered[index][1]
+        x2, y2 = ordered[(index + 1) % count][0], ordered[(index + 1) % count][1]
+        area += x1 * y2 - x2 * y1
+    if area < 0:
+        ordered.reverse()
+    start = min(range(count), key=lambda i: (ordered[i][1], ordered[i][0]))
+    return ordered[start:] + ordered[:start]
+
+
 def _curve_loop(ring):
     loop = CurveLoop()
+    ring = _oriented(ring)
     count = len(ring)
     for index in range(count):
         a = ring[index]
@@ -224,6 +271,9 @@ def _place_steps(doc, steps, base_type, level, cache, result):
                     # hollow cut out of the one slab
                     loops.Add(_curve_loop([(p[0], p[1]) for p in hole]))
                 instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+                structural = _mark_structural(instance)
+                if structural:
+                    result["skipped"].append(structural)
                 problem = _offset(instance, offset)
                 if problem:
                     result["skipped"].append(problem)
@@ -305,6 +355,9 @@ def place_footings(doc, sections, base_type_id, level_id, projection_mm=300.0,
             for hole in holes:
                 loops.Add(_curve_loop([(p[0], p[1]) for p in hole]))
             instance = Floor.Create(doc, loops, floor_type.Id, level.Id)
+            structural = _mark_structural(instance)
+            if structural:
+                result["skipped"].append(structural)
             _zero_offset(instance)
             if mark:
                 set_element_mark(instance, mark)
