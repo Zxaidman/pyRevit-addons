@@ -52,7 +52,11 @@ _FT = 1.0 / _MM
 _BASELINE = "slab_fingerprints"
 
 _EXPORT_NAME = re.compile(r"^(\d+)\.(\d+)\.(\d+)_(.*)_with_textmode\.json$")
-_KIND_PREFIX = re.compile(r"^(slab|beam|stair|Layout)_", re.IGNORECASE)
+# Every element word _export_name can emit, or a new word splits one drawing
+# into two corpus entries: the 0.71.0 "footing_test10" export registered as a
+# NEW drawing instead of test10's newest measurement.
+_KIND_PREFIX = re.compile(r"^(slab|beam|stair|footing|column|grid|Layout)_",
+                          re.IGNORECASE)
 
 
 def _corpus():
