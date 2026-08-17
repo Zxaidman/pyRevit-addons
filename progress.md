@@ -363,6 +363,18 @@ footing template (templates of their own are a later item). The Naming tab
 gains the "Raft (t)" row; static checks pin the Revit-side routing the same
 way P1.6 pinned the call sites.
 
+**v0.71.1 — the storey Level pick means TOP, not base.** v0.70.4 shipped the
+Multi-storey table's per-row Level as the storey's BASE; for one version the
+pick landed a storey too high. The user's convention is the opposite:
+structural elements are drawn below the slab level they support, on the model
+and on site, so a storey plan titled "Ground Floor" holds the structure whose
+TOP is Ground Floor. The pick now lands as the top; the base is the nearest
+model level below it by elevation (test10: the Foundation Level under Ground
+Floor), and a pick with nothing below gets a base CREATED one storey height
+down, through the ladder's own Level.Create/naming path. "(auto)" rows keep
+the positional ladder, and propose_level's name match is unchanged — what it
+proposes just lands as the top. Tests 640 → 642.
+
 **Advanced settings, gated and persistent.** New Revit-free `advanced.py`: a
 REGISTRY of 19 module tunables (fold_plan probe/same-area, footing_plan depth
 step/factors, slab_graph heal/face-area/arc/chamfer/coverage/joint/cell,

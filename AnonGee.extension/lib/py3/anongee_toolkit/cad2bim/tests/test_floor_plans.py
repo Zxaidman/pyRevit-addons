@@ -103,7 +103,8 @@ class ProposeLevel(unittest.TestCase):
     either name contains the other (case and spacing ignored), else on the
     storey number both state. It only ever proposes when exactly ONE level
     matches -- a wrong level placed silently is worse than a row left on
-    "(auto)".
+    "(auto)". What it proposes lands as that storey's TOP (structure is drawn
+    below the slab it supports); the matching itself knows nothing of that.
     """
 
     def test_the_level_name_inside_the_title(self):
@@ -433,8 +434,9 @@ class PerStoreySettings(unittest.TestCase):
         self.assertEqual(regions[1].repeat, 5)
 
     def test_the_level_pick_rides_with_its_storey(self):
-        # the id is opaque here (a Revit ElementId in the dialog); this module
-        # only keeps it with the storey, and a row without one stays positional
+        # the id is opaque here (a Revit ElementId in the dialog) and means
+        # the storey's TOP; this module only keeps it with the storey, and a
+        # row without one stays positional
         regions = floor_plans.apply_storey_settings(
             self._regions(),
             [{"label": "GROUND", "plan": 0, "level_id": "level-9"},

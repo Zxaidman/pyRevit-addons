@@ -632,7 +632,7 @@ class StoreyTableIsSelectable(unittest.TestCase):
 
 
 class StoreyRowsCarryTheirLevel(unittest.TestCase):
-    """Each storey row says which MODEL level it builds on.
+    """Each storey row says which MODEL level it builds UP TO.
 
     The level was purely positional -- _storey_level_pairs walked upward from
     cb_base_level -- so a drawing whose plans belong to existing named levels
@@ -641,6 +641,11 @@ class StoreyRowsCarryTheirLevel(unittest.TestCase):
     ends of the wire are asserted directly: the combo exists, the choice is
     emitted under "level_id", the proposal comes from the (offline-tested)
     matcher in floor_plans, and the run pipeline actually reads the key.
+
+    The pick means the storey's TOP: structure is drawn below the slab it
+    supports, on the model as on site, so a plan titled "Ground Floor" holds
+    the storey that ENDS there. (v0.70.4 shipped it as the BASE for one
+    version -- the user's convention is the opposite.)
     """
 
     def test_the_row_builder_creates_the_level_combo(self):
@@ -669,11 +674,32 @@ class StoreyRowsCarryTheirLevel(unittest.TestCase):
         self.assertIn('"level_id": saved.get("level_id")', block)
 
     def test_an_explicit_level_reaches_the_ladder(self):
-        # script.py pins a picked level as that storey's BASE; "(auto)" rows
+        # script.py pins a picked level as that storey's TOP; "(auto)" rows
         # keep the positional walk
         block = _script_source().split("def _storey_level_pairs(", 1)[1].split(
             "\ndef ", 1)[0]
         self.assertIn('getattr(region, "level_id", None)', block)
+
+    def test_a_pick_is_the_storey_top_not_its_base(self):
+        # the pair for a pinned row reads (level below, picked level) -- the
+        # v0.70.4 shape (pick, next level up) must not come back
+        block = _script_source().split("def _storey_level_pairs(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("all_levels[position - 1].Id", block)
+        self.assertIn("all_levels[position].Id", block)
+        self.assertNotIn("all_levels[position + 1]", block)
+
+    def test_a_bottom_of_model_pick_gets_a_base_created_below(self):
+        # a picked level with nothing under it (test10 without its Foundation
+        # Level) gets a base MADE below -- top elevation minus that row's own
+        # storey height, through the same Level.Create/naming path as the
+        # ladder's rungs
+        block = _script_source().split("def _storey_level_pairs(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("existing[0].Elevation - config.mm_to_ft(below_mm)", block)
+        self.assertIn("base_below = Level.Create(doc, elevation)", block)
+        self.assertIn("naming.level_name(0, elevation * config.MM_PER_FT)",
+                      block)
 
 
 class LevelNamesReachTheBuilder(unittest.TestCase):

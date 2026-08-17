@@ -962,9 +962,10 @@ class CadToBimWindow(object):
         self._storey_rows = []
         level_names = [label for label, _level_id in self._level_options]
         for index in range(len(self._storey_plans)):
-            # a plan titled like a model level starts on that level ("Ground
-            # Floor Level" <-> "Ground Floor"); every other row starts on
-            # "(auto)" and climbs the ladder exactly as before
+            # a plan titled like a model level TOPS OUT at that level ("Ground
+            # Floor Level" <-> "Ground Floor" -- its structure hangs below the
+            # slab it supports); every other row starts on "(auto)" and climbs
+            # the ladder exactly as before
             proposed = floor_plans.propose_level(
                 self._storey_plans[index].get("label"), level_names)
             self._storey_rows.append({"plan": index, "height_mm": None,
@@ -1024,8 +1025,9 @@ class CadToBimWindow(object):
             WpfGrid.SetColumn(plan_combo, 2)
             grid.Children.Add(plan_combo)
 
-            # which MODEL level this storey builds on: "(auto)" keeps the
-            # positional ladder, a named level pins the storey's base to it
+            # which MODEL level this storey builds UP TO: "(auto)" keeps the
+            # positional ladder, a named level pins the storey's TOP to it
+            # (structure hangs below its slab, so the base is the level under)
             level_combo = ComboBox()
             level_combo.Height = 22
             level_combo.Margin = Thickness(0, 1, 8, 1)
@@ -1033,9 +1035,10 @@ class CadToBimWindow(object):
             for label, _level_id in self._level_options:
                 level_combo.Items.Add(label)
             level_combo.SelectedIndex = self._level_index(row.get("level_id"))
-            level_combo.ToolTip = ("The model level this storey's base sits "
-                                   "on; (auto) follows the row order upward "
-                                   "from the base level")
+            level_combo.ToolTip = ("The model level this storey's TOP reaches "
+                                   "-- its structure is built down to the "
+                                   "level below; (auto) follows the row order "
+                                   "upward from the base level")
             WpfGrid.SetColumn(level_combo, 3)
             grid.Children.Add(level_combo)
 
@@ -1185,8 +1188,8 @@ class CadToBimWindow(object):
                 "include": bool(row.get("include", True)),
                 "height_mm": row.get("height_mm"),
                 "repeat": int(row.get("repeat") or 1),
-                # the MODEL level this storey builds on; None keeps the
-                # positional ladder
+                # the MODEL level this storey builds UP TO (its TOP); None
+                # keeps the positional ladder
                 "level_id": row.get("level_id")})
         return rows_out
 

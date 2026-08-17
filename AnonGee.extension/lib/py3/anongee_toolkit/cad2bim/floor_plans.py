@@ -105,9 +105,10 @@ class FloorRegion(object):
         # this storey's own floor-to-floor height; None means the tab's default.
         # NOT height_mm -- that property is the boundary BOX's height on the sheet.
         self.storey_height_mm = storey_height_mm
-        # the MODEL level this storey builds on (the dialog's per-row Level
-        # pick, an opaque id this module never reads); None keeps the
-        # positional ladder the run has always used.
+        # the MODEL level this storey builds UP TO -- its TOP, since structure
+        # hangs below the slab it supports (the dialog's per-row Level pick,
+        # an opaque id this module never reads); None keeps the positional
+        # ladder the run has always used.
         self.level_id = level_id
 
     @property
@@ -221,10 +222,11 @@ def _squash(text):
 def propose_level(title, level_names):
     """The model level a plan title names, or None when no single one does.
 
-    Feeds the Multi-storey tab's per-row Level combo: "Ground Floor Level"
-    <-> "Ground Floor" match on the words (either name containing the other,
-    case and spacing ignored), and "1st Floor Plan" <-> "Level 1" match on
-    the storey number both state. A proposal is only made when EXACTLY ONE
+    Feeds the Multi-storey tab's per-row Level combo -- the proposal lands as
+    that storey's TOP, since structure is drawn below the slab it supports.
+    "Ground Floor Level" <-> "Ground Floor" match on the words (either name
+    containing the other, case and spacing ignored), and "1st Floor Plan" <->
+    "Level 1" match on the storey number both state. A proposal is only made when EXACTLY ONE
     level matches -- a level placed on the wrong storey silently is worse
     than a row left on "(auto)".
     """
