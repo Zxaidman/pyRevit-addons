@@ -973,7 +973,8 @@ def _export_name(cad_path, selections, storey_label=None):
     """Default export file name (user convention):
     [version]_[main element]_[testN from the CAD name]_[textmode].json
     e.g. "0.44.0_slab_test1_with_textmode.json"."""
-    element = ("stair" if selections.get("create_stairs")
+    element = ("footing" if selections.get("create_footings")
+               else "stair" if selections.get("create_stairs")
                else "slab" if selections.get("create_slabs")
                else "beam" if selections.get("create_beams")
                else "column" if selections.get("create_columns")
