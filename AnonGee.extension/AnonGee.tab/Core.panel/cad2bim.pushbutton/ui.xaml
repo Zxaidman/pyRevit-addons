@@ -8,6 +8,16 @@
         Background="White"
         UseLayoutRounding="True">
 
+    <Window.Resources>
+        <!-- Guide/help prose. One keyed style so the readable floor is set in
+             ONE place; inputs and buttons are deliberately not styled here. -->
+        <Style x:Key="HelpText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="Gray"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Resources>
+
     <DockPanel LastChildFill="True">
 
         <!-- Header -->
@@ -97,13 +107,65 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Elements -->
-            <TabItem Header="Elements">
+            <!-- TAB: Build (element-wise sub-tabs; Foundations and Stairs are
+                 sub-tabs here, not top-level tabs) -->
+            <TabItem Header="Build">
+            <TabControl Margin="4">
+
+            <!-- SUB-TAB: Build > General -->
+            <TabItem Header="General">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
-                        <TextBlock Text="Structural elements" FontWeight="Bold" Margin="0,0,0,4"/>
-                        <CheckBox x:Name="chk_grids"   Content="Create grids (from grid lines)" IsChecked="True"/>
-                        <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True" Margin="0,6,0,0"/>
+                        <TextBlock Text="Shared by every element" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Name parameter" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Column="1" x:Name="cb_name_param" Height="22" Margin="0,1"
+                                       IsEditable="True"
+                                       ToolTip="The instance parameter the CAD mark is written into - pick one or type any editable text parameter"/>
+                        </Grid>
+                        <TextBlock Text="Columns, beams and slabs write their CAD mark here. Type any editable text parameter name; Mark is used when the chosen one is missing on a family."
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,8"/>
+                        <Grid Margin="0,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Base level" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_base_level" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_top_level" Height="22" Margin="0,1"/>
+                        </Grid>
+                        <TextBlock Text="The level pair is shared by every element in the run, architectural ones included."
+                                   Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
+                        <Separator Margin="0,10,0,6"/>
+                        <TextBlock Text="Architectural walls and roofs are not built yet."
+                                   Style="{StaticResource HelpText}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SUB-TAB: Build > Grids -->
+            <TabItem Header="Grids">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <CheckBox x:Name="chk_grids" Content="Create grids (from grid lines)" IsChecked="True"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SUB-TAB: Build > Columns -->
+            <TabItem Header="Columns">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <CheckBox x:Name="chk_columns" Content="Create columns (from column outlines)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -112,21 +174,23 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Column family" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="0" Text="Round family" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="1" Grid.Column="1" x:Name="cb_circular_family" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Base level" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="2" Grid.Column="1" x:Name="cb_base_level" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Top level" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="3" Grid.Column="1" x:Name="cb_top_level" Height="22" Margin="0,1"/>
                         </Grid>
-                        <TextBlock Text="The level pair is shared by every element in the run, architectural ones included."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
-                        <CheckBox x:Name="chk_beams"   Content="Create beams (from beam outlines)" IsChecked="True" Margin="0,6,0,0"/>
+                        <TextBlock Text="Base and top level for the columns are picked on the General sub-tab; they are shared by every element in the run."
+                                   Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SUB-TAB: Build > Beams -->
+            <TabItem Header="Beams">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <CheckBox x:Name="chk_beams" Content="Create beams (from beam outlines)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -139,9 +203,17 @@
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Beam family" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_beam_family" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Placed at the columns' top level. Depth from text marks where found, else from the chosen type."
-                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
+                                       Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_slabs"   Content="Create slabs (from slab outline or beam layout)" IsChecked="True" Margin="0,6,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- SUB-TAB: Build > Slabs -->
+            <TabItem Header="Slabs">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Orientation="Vertical" Margin="6">
+                        <CheckBox x:Name="chk_slabs" Content="Create slabs (from slab outline or beam layout)" IsChecked="True"/>
                         <Grid Margin="20,2,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -154,27 +226,13 @@
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Floor type" VerticalAlignment="Center"/>
                             <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_floor_type" Height="22" Margin="0,1"/>
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
-                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
+                                       Style="{StaticResource HelpText}" Margin="0,1,0,0"/>
                         </Grid>
-
-                        <Separator Margin="0,10,0,6"/>
-                        <Grid Margin="0,0,0,4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="120"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="Name parameter" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Column="1" x:Name="cb_name_param" Height="22" Margin="0,1"
-                                       IsEditable="True"
-                                       ToolTip="The instance parameter the CAD mark is written into - pick one or type any editable text parameter"/>
-                        </Grid>
-                        <TextBlock Text="Columns, beams and slabs write their CAD mark here. Type any editable text parameter name; Mark is used when the chosen one is missing on a family."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Foundations -->
+            <!-- SUB-TAB: Build > Foundations -->
             <TabItem Header="Foundations">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -204,16 +262,16 @@
                             <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_fnd_min_area" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="The drawing's own foundations come first: closed outlines on the foundation layer (mapped on the Layers tab) are built exactly as drawn -- pads or whole rafts -- each sized and named by the note inside it, read from the text layer routed to &quot;foundation text&quot; on the Layers tab. A fold or sunk region inside an outline steps it: the parent is cut around the region, a slab drops in at the step depth, and a support fills the vertical face between the two soffits. A step deeper than the max step is a storey, not a step, and is refused -- the console names the outline it was refused from. An outline recovered from loose linework must reach the min area; below it is a junction sliver, not a foundation (a labelled pile cap is small, a sliver is smaller)."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
                         <TextBlock Text="With no drawn outlines the pads are INVENTED from the columns: one per column, sketched as a Structural Foundation floor on the columns' BASE level at ZERO offset, sized column + 2 x min projection and turned to the column's long axis. Pads that OVERLAP fuse into one combined footing. Depth is the figure above at one square metre and scales with the pad's area (50mm steps, half to twice). In a multi-storey run only the LOWEST storey builds them."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
                         <TextBlock Text="An outline is only trusted when one of them carries a foundation note, and the notes only arrive through the &quot;foundation text&quot; routing -- a drawing whose foundation text layer is not routed falls back to the invented pads SILENTLY."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="20,4,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Stairs -->
+            <!-- SUB-TAB: Build > Stairs -->
             <TabItem Header="Stairs">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -238,10 +296,10 @@
                                     Width="200" Height="24"
                                     ToolTip="Closes this window, lets you draw one closed outline per stair with Revit's detail lines, then comes back"/>
                             <TextBlock x:Name="stair_outline_text" Text="no outlines drawn"
-                                       VerticalAlignment="Center" Margin="10,0,0,0" FontSize="10" Foreground="Gray"/>
+                                       VerticalAlignment="Center" Margin="10,0,0,0" Style="{StaticResource HelpText}"/>
                         </StackPanel>
                         <TextBlock Text="Auto tries the drawn stair layer first (riser lines give the exact runs, treads, widths and counts) and falls back to the generic shape below; the other sources force one path. &quot;Pick detail lines in Revit&quot; closes this window and lets you select the detail lines you drew around each stair -- they snap to the CAD link and the model, so the outline is exact and can be any shape."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,6"/>
 
                         <TextBlock Text="Shape (used when the CAD has no stair linework)" FontWeight="Bold" Margin="0,2,0,4"/>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
@@ -323,12 +381,12 @@
                             <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_stair_waist" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="Riser count defaults to storey / riser rounded up (20 for 3000 / 150) and refreshes when the levels change; edit it to override. Landing depth 0 = run width. A DN/UP note picks the landing end; the arrival landing at the top spans the parallel flights like the half landing."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
-                        <Separator Margin="0,10,0,6"/>
-                        <TextBlock Text="Architectural walls and roofs are not built yet."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
+            </TabItem>
+
+            </TabControl>
             </TabItem>
 
             <!-- TAB: Multi-storey -->
@@ -337,7 +395,7 @@
                     <StackPanel Orientation="Vertical" Margin="6">
                         <CheckBox x:Name="chk_multistorey" Content="This DXF holds several floor plans -- build them as storeys" IsChecked="False"/>
                         <TextBlock Text="Draw one rectangle around each floor plan on a BOUNDARY layer, and one marker inside each rectangle on an ORIGIN layer. Every plan is moved so its marker lands on the model origin, so the storeys stack instead of sitting side by side. Pick the two layers below -- any names work."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,6"/>
+                                   Style="{StaticResource HelpText}" Margin="20,2,0,6"/>
                         <Grid Margin="20,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="120"/>
@@ -356,12 +414,12 @@
                             <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_storey_height" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="Storeys are ordered by the plan title inside each rectangle (GROUND FLOOR PLAN, LEVEL 2, TERRACE) and fall back to the sheet layout -- top row first, then left to right. The lowest storey builds onto the chosen base level and each one above it onto the next level up; levels are created at the storey height when the model runs out of them."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,6,0,0"/>
-                        <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="10" Margin="20,6,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="20,6,0,0"/>
+                        <TextBlock x:Name="multistorey_preview" Text="" TextWrapping="Wrap" FontSize="12" Margin="20,6,0,0"/>
 
                         <TextBlock Text="Detected storeys" FontWeight="Bold" Margin="20,10,0,2"/>
                         <TextBlock Text="One row per storey, BOTTOM-UP: the first row is built first, on the base level. Plan is which detected floor drawing that storey uses -- pick the same plan on several rows to repeat a typical floor. Height is that storey's floor-to-floor rise (blank uses the storey height above); Repeat is how many storeys one row builds, auto-filled from a title like &quot;TYPICAL FLOOR PLAN (2ND TO 8TH FLOOR)&quot;. Click a row to select it, then use the buttons below to move, add or remove that storey."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,0,0,4"/>
+                                   Style="{StaticResource HelpText}" Margin="20,0,0,4"/>
                         <Grid Margin="26,0,0,2">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="40"/>
@@ -386,7 +444,7 @@
                             <Button x:Name="btn_storey_add" Content="Add storey" Width="92" Height="24" Margin="6,0,0,0"/>
                             <Button x:Name="btn_storey_remove" Content="Remove" Width="82" Height="24" Margin="6,0,0,0"/>
                             <TextBlock x:Name="storey_selection_text" VerticalAlignment="Center"
-                                       Margin="10,0,0,0" FontSize="10" Foreground="Gray"/>
+                                       Margin="10,0,0,0" Style="{StaticResource HelpText}"/>
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
@@ -398,7 +456,7 @@
                     <StackPanel Orientation="Vertical" Margin="6">
 
                         <TextBlock Text="Grouped by the element each number affects. Everything is millimetres unless a row says otherwise."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,6"/>
 
                         <TextBlock Text="GENERAL" FontWeight="Bold" Margin="0,0,0,2"/>
                         <Grid>
@@ -419,7 +477,7 @@
                             <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_grid_snap" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="Grid snap distance is how far a text-corrected column centre may move to land on a grid line (columns sit on grid intersections)."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
 
                         <TextBlock Text="COLUMNS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -474,9 +532,9 @@
                             <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_face_size" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="Region max side also gates the footing fallback: a region wider than this reads as a lift or stair core, not a column, so no pad is invented under it."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
                         <TextBlock Text="A COMBINED column -- a wall-column carrying several columns, drawn as one merged outline -- is recovered from the faces of its linework, but only where a size label agrees with what was walked. Label reach is how far outside a member its label may sit; size match is how far the drawn size may differ from the labelled one."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
 
                         <TextBlock Text="BEAMS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -528,7 +586,7 @@
                             <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_std_beams" Height="22" Margin="0,1,8,1"/>
                         </Grid>
                         <TextBlock Text="A drawn beam is two parallel lines: they must run alongside each other for at least the pair min overlap and lean no more than the parallel angle. An arc centred within the junction radius of a round column is a junction fillet, not a beam edge; two arcs whose centres sit within the concentric tolerance are the two edges of one curved beam."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
 
                         <TextBlock Text="SLABS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -557,7 +615,7 @@
                             <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_slab_note_area" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="Node weld distance decides when two boundary points are the same junction; edge heal closes small gaps; min corner step is the smallest jog that is real geometry rather than drafting noise. Min noted bay area is the smallest slab recovered from the beam graph for a thickness note whose outline was never drawn."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
 
                         <TextBlock Text="STAIRCASE" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -581,7 +639,7 @@
                             <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_arrival_merge" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="The drawn tread range is what a riser spacing must fall inside to count as a flight; stair cluster gap groups drawn stair lines into one staircase."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
 
                     </StackPanel>
                 </ScrollViewer>
@@ -594,7 +652,7 @@
 
                         <TextBlock Text="Materials" FontWeight="Bold" Margin="0,0,0,2"/>
                         <TextBlock Text="Written onto both the TYPE and the INSTANCE of everything this run creates -- a family may expose its material on either. A floor (and a foundation pad) takes it on its structural layer; a stair on its tread/riser/landing/support parameters. Leave a row as (unchanged) to keep whatever the family already has."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,4"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -620,8 +678,8 @@
                         </Grid>
 
                         <TextBlock Text="Concrete grade" FontWeight="Bold" Margin="0,10,0,2"/>
-                        <TextBlock Text="Written to the parameter named below on every element this run creates. Leave a grade blank to write nothing for that element. Tick &quot;append to the name&quot; to add it to the mark instead of a parameter of its own, so C12 becomes C12 (M30) in whichever parameter the Elements tab names."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
+                        <TextBlock Text="Written to the parameter named below on every element this run creates. Leave a grade blank to write nothing for that element. Tick &quot;append to the name&quot; to add it to the mark instead of a parameter of its own, so C12 becomes C12 (M30) in whichever parameter the Build tab names."
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,4"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="92"/>
@@ -656,7 +714,7 @@
                         <TextBlock Text="View filters" FontWeight="Bold" Margin="0,0,0,2"/>
                         <CheckBox x:Name="chk_view_filters" Content="Colour what was built in every open view (one filter per element kind)" IsChecked="True"/>
                         <TextBlock Text="Adds a reusable cad2bim view filter per category, in light tints -- columns blue, beams terracotta, slabs green, stairs violet, footings sand, grids grey -- to each view you have open. Views driven by a template are left alone; the template owns their filters."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,4"/>
+                                   Style="{StaticResource HelpText}" Margin="20,1,0,4"/>
                         <Grid Margin="20,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="130"/>
@@ -669,7 +727,7 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Surface transparency" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_filter_transparency" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="0 = solid fill, 100 = invisible" VerticalAlignment="Center" FontSize="10" Foreground="Gray"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="0 = solid fill, 100 = invisible" VerticalAlignment="Center" Style="{StaticResource HelpText}"/>
                             <CheckBox  Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" x:Name="chk_filter_lines"
                                        Content="Colour the LINES too (otherwise only the patterns are coloured)"
                                        Margin="0,4,0,0"/>
@@ -679,7 +737,7 @@
                         <TextBlock Text="Output" FontWeight="Bold" Margin="0,0,0,2"/>
                         <CheckBox x:Name="chk_export" Content="Export parsed result to JSON (compact)" IsChecked="True"/>
                         <TextBlock Text="A multi-storey run writes ONE file with a section per storey."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,4"/>
+                                   Style="{StaticResource HelpText}" Margin="20,1,0,4"/>
                         <Grid Margin="20,0,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="230"/>
@@ -692,7 +750,7 @@
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_compare" Height="22" Margin="0,1"/>
                         </Grid>
                         <TextBlock Text="How close a Revit-imported record and its raw-DXF twin must sit to count as the same member in the import-fidelity report. It changes what the console says, never what is built."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,0"/>
+                                   Style="{StaticResource HelpText}" Margin="20,2,0,0"/>
 
                     </StackPanel>
                 </ScrollViewer>
@@ -704,7 +762,7 @@
 
                         <TextBlock Text="Auto-created family type names" FontWeight="Bold" Margin="0,0,0,2"/>
                         <TextBlock Text="When a size is not already in the model this tool duplicates the picked family and names the new type from these templates; levels this run creates and grids it names follow the same rule. Sizes are whole millimetres. Level takes {n} {e} {label} (index, elevation, plan title) and Grid takes {name} (the CAD bubble, or the A/B/1/2 convention). These are remembered between Revit sessions, along with the standard sizes on the Tolerances tab."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
+                                   Style="{StaticResource HelpText}" Margin="0,0,0,6"/>
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="150"/>
@@ -770,13 +828,13 @@
 
                         <CheckBox x:Name="chk_level_follow" IsChecked="True" Margin="0,10,0,0"
                                   Content="Name new levels after the model's own levels, not the template above"/>
-                        <TextBlock x:Name="lbl_level_follow" TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,0"
+                        <TextBlock x:Name="lbl_level_follow" Style="{StaticResource HelpText}" Margin="20,2,0,0"
                                    Text="A model whose levels are already named to a convention -- 00 GROUND LVL, 01 1ST FLOOR LVL., 02 2ND FLOOR LVL. -- gets the next line of that list (03 3RD FLOOR LVL.). Untick to use the Level template above, where {n} is the level number, {o} the same number as 1st/2nd/3rd, {e} its elevation in mm and {label} the plan title the storey came from."/>
 
                         <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
                             <Button x:Name="btn_name_defaults" Content="Restore defaults" Width="130" Height="24"/>
                             <TextBlock x:Name="naming_saved_text" VerticalAlignment="Center" Margin="10,0,0,0"
-                                       FontSize="10" Foreground="Gray"/>
+                                       Style="{StaticResource HelpText}"/>
                         </StackPanel>
 
                     </StackPanel>

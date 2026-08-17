@@ -6,8 +6,11 @@ the model -- they gather the user's choices into `self.result` and close, and
 every model write happens afterwards on the Revit API thread. That separation is
 what lets the whole run be replayed offline from an exported JSON.
 
-The main dialog's tabs are its structure: Layers, Elements, Foundations,
-Stairs, Multi-storey, Tolerances, Output & Graphics, Naming. Two of them
+The main dialog's tabs are its structure: Layers, Build, Multi-storey,
+Tolerances, Output & Graphics, Naming -- with Build split element-wise into
+General, Grids, Columns, Beams, Slabs, Foundations and Stairs sub-tabs (a
+nested TabControl; FindName resolves per window, so the bindings below never
+care about the nesting). Two of the tabs
 carry state that outlives the run -- the naming templates and the standard sizes
 are office conventions kept in the preferences file, and the whole dialog is
 snapshotted so the next session opens where this one left off.
@@ -380,7 +383,8 @@ class CadToBimWindow(object):
             self.chk_stairs.IsEnabled = False
             self.chk_stairs.Content = "Create staircases (the model has no stair type)"
 
-        # Stairs tab live sync: floor height follows the level picks; an
+        # Build > Stairs sub-tab live sync: floor height follows the level
+        # picks (Build > General); an
         # ABSOLUTE riser count drives the riser height (storey / count)
         self.cb_base_level.SelectionChanged += self._on_stair_sync
         self.cb_top_level.SelectionChanged += self._on_stair_sync
@@ -634,7 +638,7 @@ class CadToBimWindow(object):
                     int(_math.ceil(storey / riser - 1e-9)))
 
     def _stair_shape(self):
-        """The generic stair shape picked on the Stairs tab (U by default)."""
+        """The generic stair shape picked on Build > Stairs (U by default)."""
         for button, shape in self.shape_buttons:
             if button.IsChecked:
                 return shape
