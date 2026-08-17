@@ -38,18 +38,20 @@ def _xaml_names(*paths):
 
 
 def _tab_homes():
-    """{x:Name: tab header} for every named control under a TabItem.
+    """{x:Name: tab path} for every named control under a TabItem.
 
     Which tab a control sits on is invisible to FindName -- WPF resolves names
     per window -- so a control pasted onto the wrong tab still binds and still
     runs. Only the user sees the difference, which makes the tab a thing worth
-    asserting."""
+    asserting. A control under a nested TabItem records the whole path, e.g.
+    "Build > Foundations"."""
     key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
     homes = {}
 
     def walk(element, header):
         if element.tag.endswith("TabItem"):
-            header = element.get("Header")
+            own = element.get("Header")
+            header = "%s > %s" % (header, own) if header else own
         name = element.get(key)
         if name and header:
             homes[name] = header
@@ -57,6 +59,20 @@ def _tab_homes():
             walk(child, header)
     walk(ET.parse(_XAML).getroot(), None)
     return homes
+
+
+def _tab_outline():
+    """[(top-level tab header, [sub-tab headers])], in document order."""
+    def tabs_under(element):
+        found = []
+        for child in element:
+            if child.tag.endswith("TabItem"):
+                found.append((child.get("Header"),
+                              [header for header, _ in tabs_under(child)]))
+            else:
+                found.extend(tabs_under(child))
+        return found
+    return tabs_under(ET.parse(_XAML).getroot())
 
 
 def _script_source():
@@ -206,32 +222,43 @@ class MaterialAndFootingControls(unittest.TestCase):
         for kind in kinds:
             self.assertIn("cb_mat_{0}".format(kind), names)
 
-    def test_the_footing_row_lives_on_the_foundations_tab(self):
+    def test_the_footing_row_lives_on_the_foundations_sub_tab(self):
+        # Foundations is no longer a top-level tab: it lives inside Build
         homes = _tab_homes()
         for control in ("chk_footings", "cb_footing_family",
                         "tb_footing_projection", "tb_footing_thickness",
                         "tb_max_step", "tb_fnd_min_area"):
-            self.assertEqual(homes.get(control), "Foundations",
+            self.assertEqual(homes.get(control), "Build > Foundations",
                              "%s sits on %r" % (control, homes.get(control)))
         self.assertEqual(homes.get("chk_view_filters"), "Output & Graphics")
 
 
 class TheDialogTabSet(unittest.TestCase):
-    """The restructure's contract: eight tabs, every moved control on its new one.
+    """The restructure's contract: six top-level tabs, Build split element-wise.
 
-    Settings files restore controls BY NAME, so moving a node between tabs is
-    free -- but a control moved by copy-paste is easily left behind in the old
-    tab too, and a duplicated x:Name is something XamlReader only refuses at
-    runtime, in Revit, exactly where these checks exist not to look.
+    Foundations and Stairs are NOT top-level tabs any more -- they are sub-tabs
+    of Build, beside one sub-tab per element kind. Settings files restore
+    controls BY NAME, so moving a node between tabs is free -- but a control
+    moved by copy-paste is easily left behind in the old tab too, and a
+    duplicated x:Name is something XamlReader only refuses at runtime, in
+    Revit, exactly where these checks exist not to look.
     """
 
-    _TABS = ["Layers", "Elements", "Foundations", "Stairs", "Multi-storey",
-             "Tolerances", "Output & Graphics", "Naming"]
+    _TABS = ["Layers", "Build", "Multi-storey", "Tolerances",
+             "Output & Graphics", "Naming"]
+    _BUILD = ["General", "Grids", "Columns", "Beams", "Slabs",
+              "Foundations", "Stairs"]
 
-    def test_the_eight_tabs_in_order(self):
-        headers = [el.get("Header") for el in ET.parse(_XAML).iter()
-                   if el.tag.endswith("TabItem")]
-        self.assertEqual(headers, self._TABS)
+    def test_the_six_top_level_tabs_in_order(self):
+        self.assertEqual([header for header, _ in _tab_outline()], self._TABS)
+
+    def test_build_carries_the_element_sub_tabs_in_order(self):
+        outline = dict(_tab_outline())
+        self.assertEqual(outline.get("Build"), self._BUILD)
+        for header, sub_tabs in _tab_outline():
+            if header != "Build":
+                self.assertEqual(sub_tabs, [],
+                                 "%s grew sub-tabs: %s" % (header, sub_tabs))
 
     def test_no_name_is_declared_twice(self):
         key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
@@ -244,13 +271,85 @@ class TheDialogTabSet(unittest.TestCase):
 
     def test_the_moved_controls_landed_where_the_layout_says(self):
         homes = _tab_homes()
-        for control, tab in (("chk_stairs", "Stairs"),
-                             ("chk_export", "Output & Graphics"),
-                             ("tb_compare", "Output & Graphics"),
-                             ("tb_grid_snap", "Tolerances"),
-                             ("cb_name_param", "Elements")):
+        for control, tab in (
+                # run-wide picks: the level pair serves columns, beams, slabs,
+                # stairs and footings alike, so it lives on Build > General
+                ("cb_name_param", "Build > General"),
+                ("cb_base_level", "Build > General"),
+                ("cb_top_level", "Build > General"),
+                ("chk_grids", "Build > Grids"),
+                ("chk_columns", "Build > Columns"),
+                ("cb_family", "Build > Columns"),
+                ("cb_circular_family", "Build > Columns"),
+                ("chk_beams", "Build > Beams"),
+                ("cb_beam_family", "Build > Beams"),
+                ("chk_slabs", "Build > Slabs"),
+                ("cb_floor_type", "Build > Slabs"),
+                ("chk_stairs", "Build > Stairs"),
+                ("cb_stair_type", "Build > Stairs"),
+                ("chk_export", "Output & Graphics"),
+                ("tb_compare", "Output & Graphics"),
+                ("tb_grid_snap", "Tolerances")):
             self.assertEqual(homes.get(control), tab,
                              "%s sits on %r" % (control, homes.get(control)))
+
+
+class HelpProseIsReadable(unittest.TestCase):
+    """The guide notes were FontSize 10 -- too small to read, the user said.
+
+    They now share ONE keyed style, so the readable floor is asserted in one
+    place: the style itself carries at least 12, and the long gray notes
+    actually reference it instead of pinning their own small size back on.
+    Inputs and buttons are deliberately left unstyled (brand styling comes
+    later), so only TextBlock prose is checked here.
+    """
+
+    _WPF = "{http://schemas.microsoft.com/winfx/2006/xaml/presentation}"
+    _KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
+    _STYLE = "{StaticResource HelpText}"
+
+    def _style(self):
+        for style in ET.parse(_XAML).iter(self._WPF + "Style"):
+            if style.get(self._KEY) == "HelpText":
+                return style
+        self.fail("ui.xaml has no HelpText style in Window.Resources")
+
+    def test_the_help_style_is_at_least_font_size_12(self):
+        style = self._style()
+        self.assertEqual(style.get("TargetType"), "TextBlock")
+        sizes = [float(setter.get("Value")) for setter in style
+                 if setter.get("Property") == "FontSize"]
+        self.assertEqual(len(sizes), 1, "the style sets FontSize once")
+        self.assertGreaterEqual(sizes[0], 12.0)
+
+    def test_every_long_note_uses_the_style_not_its_own_small_font(self):
+        # anything long enough to be prose (a label never reaches 80 chars)
+        # must carry the style and must not pin a FontSize of its own
+        styled = 0
+        for element in ET.parse(_XAML).iter(self._WPF + "TextBlock"):
+            text = element.get("Text") or ""
+            if len(text) < 80:
+                continue
+            self.assertEqual(element.get("Style"), self._STYLE,
+                             "unstyled help prose: %r..." % text[:48])
+            self.assertIsNone(element.get("FontSize"),
+                              "prose pins its own size: %r..." % text[:48])
+            styled += 1
+        self.assertGreater(styled, 20, "the prose sweep found almost nothing")
+
+    def test_the_known_guide_notes_are_spot_checked(self):
+        # two the user actually complained about: the foundation prose and the
+        # walls one-liner (now on Build > General)
+        tree = ET.parse(_XAML)
+        walls = [el for el in tree.iter(self._WPF + "TextBlock")
+                 if (el.get("Text") or "").startswith(
+                     "Architectural walls and roofs are not built yet")]
+        self.assertEqual(len(walls), 1, "the walls note appears once")
+        self.assertEqual(walls[0].get("Style"), self._STYLE)
+        foundation = [el for el in tree.iter(self._WPF + "TextBlock")
+                      if "invented pads SILENTLY" in (el.get("Text") or "")]
+        self.assertEqual(len(foundation), 1)
+        self.assertEqual(foundation[0].get("Style"), self._STYLE)
 
 
 class TheNewTolerancesAreWired(unittest.TestCase):

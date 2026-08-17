@@ -533,7 +533,7 @@ def main():
     stair_layout.apply_tolerances(tolerances)
     foundation_plan.apply_tolerances(tolerances)
     # every element writes its CAD mark into the parameter chosen on the
-    # Elements tab (Mark stays the fallback when a family lacks it)
+    # Build > General sub-tab (Mark stays the fallback when a family lacks it)
     compat.set_name_parameter(selections.get("name_parameter"))
     # every auto-created family type is named from the Naming tab's templates
     naming.apply(selections.get("naming"))
