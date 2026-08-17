@@ -26,7 +26,30 @@ _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")
 _ADV_XAML = os.path.join(_BUTTON, "advanced.xaml")
 
+_RESOURCES = os.path.normpath(os.path.join(
+    _HERE, "..", "..", "..", "..", "..", "Resources"))
+
 _FIND = re.compile(r'\bfind\(\s*"([A-Za-z_][A-Za-z0-9_]*)"\s*\)')
+
+
+def _body_iter(path):
+    """Every element OUTSIDE Window.Resources -- the dialog's real controls.
+
+    The dialogs inline the AnonGee theme under Window.Resources (Brand
+    Guidelines 12.3 / 12.7.B), and its ControlTemplates carry part names
+    (PART_*, Bg, Stroke, Bd...) that live in their own WPF namescopes: they
+    are not dialog controls, FindName never resolves them, and the same part
+    name legitimately repeats across templates. Scans about the dialog's OWN
+    controls therefore walk the body only.
+    """
+    def walk(element):
+        for child in element:
+            if child.tag.endswith("Window.Resources"):
+                continue
+            yield child
+            for grandchild in walk(child):
+                yield grandchild
+    return walk(ET.parse(path).getroot())
 
 
 def _xaml_names(*paths):
@@ -34,7 +57,7 @@ def _xaml_names(*paths):
     key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
     names = set()
     for path in (paths or (_XAML, _LINK_XAML, _ADV_XAML)):
-        names.update(el.get(key) for el in ET.parse(path).iter() if el.get(key))
+        names.update(el.get(key) for el in _body_iter(path) if el.get(key))
     return names
 
 
@@ -263,9 +286,11 @@ class TheDialogTabSet(unittest.TestCase):
                                  "%s grew sub-tabs: %s" % (header, sub_tabs))
 
     def test_no_name_is_declared_twice(self):
+        # body only: the inlined theme's template part names repeat by design
+        # and live in per-template namescopes XamlReader never complains about
         key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
         for path in (_XAML, _LINK_XAML, _ADV_XAML):
-            names = [el.get(key) for el in ET.parse(path).iter() if el.get(key)]
+            names = [el.get(key) for el in _body_iter(path) if el.get(key)]
             doubled = sorted(name for name in set(names)
                              if names.count(name) > 1)
             self.assertEqual(doubled, [], "%s declares twice: %s"
@@ -303,15 +328,16 @@ class TheDialogTabSet(unittest.TestCase):
 class HelpProseIsReadable(unittest.TestCase):
     """The guide notes were FontSize 10 -- too small to read, the user said.
 
-    They now share ONE keyed style, so the readable floor is asserted in one
-    place: the style itself carries at least 12, and the long gray notes
-    actually reference it instead of pinning their own small size back on.
-    Inputs and buttons are deliberately left unstyled (brand styling comes
-    later), so only TextBlock prose is checked here.
+    They share ONE keyed style, so the readable floor is asserted in one
+    place. Since the brand pass, HelpText is no longer ad hoc: it derives
+    from the guideline TextBody style (AnonGee Brand Guidelines section 4.4)
+    and takes its size from a local FontSizeHelp token -- which must still
+    honour the user's floor of 12, above the suite-wide FontSizeBody.
     """
 
     _WPF = "{http://schemas.microsoft.com/winfx/2006/xaml/presentation}"
     _KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
+    _SYS = "{clr-namespace:System;assembly=mscorlib}"
     _STYLE = "{StaticResource HelpText}"
 
     def _style(self):
@@ -320,13 +346,31 @@ class HelpProseIsReadable(unittest.TestCase):
                 return style
         self.fail("ui.xaml has no HelpText style in Window.Resources")
 
-    def test_the_help_style_is_at_least_font_size_12(self):
+    def _resolve_size(self, value):
+        """A FontSize setter value as a number, following one token hop."""
+        match = re.match(r"\{StaticResource ([A-Za-z0-9_]+)\}", value or "")
+        if not match:
+            return float(value)
+        for double in ET.parse(_XAML).iter(self._SYS + "Double"):
+            if double.get(self._KEY) == match.group(1):
+                return float(double.text)
+        self.fail("FontSize token %r is not declared" % match.group(1))
+
+    def test_the_help_style_is_tokenized_and_at_least_font_size_12(self):
         style = self._style()
         self.assertEqual(style.get("TargetType"), "TextBlock")
-        sizes = [float(setter.get("Value")) for setter in style
+        # the brand pass: HelpText derives from the guideline TextBody style
+        self.assertEqual(style.get("BasedOn"), "{StaticResource TextBody}",
+                         "HelpText no longer derives from TextBody")
+        sizes = [setter.get("Value") for setter in style
                  if setter.get("Property") == "FontSize"]
         self.assertEqual(len(sizes), 1, "the style sets FontSize once")
-        self.assertGreaterEqual(sizes[0], 12.0)
+        self.assertGreaterEqual(self._resolve_size(sizes[0]), 12.0)
+        # ...and sets nothing else inline: colour and font come from TextBody
+        others = [setter.get("Property") for setter in style
+                  if setter.get("Property") != "FontSize"]
+        self.assertEqual(others, [],
+                         "HelpText re-pins what TextBody owns: %s" % others)
 
     def test_every_long_note_uses_the_style_not_its_own_small_font(self):
         # anything long enough to be prose (a label never reaches 80 chars)
@@ -929,14 +973,13 @@ class SettingsSaveAndLoad(unittest.TestCase):
 
     def test_every_saveable_xaml_control_is_a_kind_capture_understands(self):
         """A control type _control_value cannot read saves as nothing at all."""
-        import xml.etree.ElementTree as Tree
         known = ("TextBox", "CheckBox", "RadioButton", "ComboBox", "Slider",
                  "TextBlock", "ListBox", "Button", "StackPanel", "Grid",
                  "Border", "Expander", "TabItem", "ScrollViewer", "Window",
                  "Separator", "Label")
         key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
         unknown = []
-        for element in Tree.parse(_XAML).iter():
+        for element in _body_iter(_XAML):
             name = element.get(key)
             if not name:
                 continue
@@ -946,6 +989,155 @@ class SettingsSaveAndLoad(unittest.TestCase):
         self.assertEqual(unknown, [],
                          "settings cannot read these control types: %s"
                          % unknown)
+
+
+class TheDialogsSpeakTheTheme(unittest.TestCase):
+    """Brand pass: tokens, not hex (AnonGee Brand Guidelines 3 / 12.3 / 13.4).
+
+    The dialogs inline the shared theme under Window.Resources -- the one
+    strategy that survives Revit's pyRevit sandbox (12.7.B; runtime-merged
+    dictionaries fail to resolve there). Two things keep the copies honest:
+    a colour literal may exist ONLY on the token primitives themselves, and
+    any token that also exists in the shared Resources/*.xaml dictionaries
+    must carry the same value -- an inline copy that drifts is a defect
+    (12.3). The last two checks pin the template rules that crash or fail
+    silently inside Revit: no resource reference on the root Window element
+    (12.7.A) and PART_EditableTextBox wherever an editable ComboBox gets a
+    custom template (12.7.C).
+    """
+
+    _DIALOGS = (_XAML, _LINK_XAML, _ADV_XAML)
+    _WPF = "{http://schemas.microsoft.com/winfx/2006/xaml/presentation}"
+    _KEY = "{http://schemas.microsoft.com/winfx/2006/xaml}Key"
+    _NAME = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+    _HEX = re.compile(r"#[0-9A-Fa-f]{3,8}\b")
+    _REF = re.compile(r"\{StaticResource\s+([A-Za-z0-9_]+)\}")
+    # the tiers that may carry a literal colour: Tier-1 primitives and the
+    # elevation shadows (13.1); everything else must reference a token key
+    _PRIMITIVES = ("Color", "SolidColorBrush", "GradientStop",
+                   "DropShadowEffect")
+
+    def _tokens(self, path):
+        """{key: value} for every primitive token a dictionary declares."""
+        out = {}
+        for element in ET.parse(path).iter():
+            key = element.get(self._KEY)
+            if not key:
+                continue
+            tag = element.tag.rsplit("}", 1)[-1]
+            if tag == "SolidColorBrush":
+                out[key] = ("Brush", (element.get("Color") or "").strip())
+            elif tag == "Color":
+                out[key] = ("Color", (element.text or "").strip())
+            elif tag == "Double":
+                out[key] = ("Double", (element.text or "").strip())
+            elif tag == "FontFamily":
+                out[key] = ("FontFamily", (element.text or "").strip())
+        return out
+
+    def test_hex_literals_live_only_on_token_primitives(self):
+        for path in self._DIALOGS:
+            for element in ET.parse(path).iter():
+                tag = element.tag.rsplit("}", 1)[-1]
+                if tag in self._PRIMITIVES:
+                    continue
+                for attribute, value in element.attrib.items():
+                    self.assertIsNone(
+                        self._HEX.search(value),
+                        "%s hardcodes %r as %s on <%s> -- use a theme token"
+                        % (os.path.basename(path), value, attribute, tag))
+
+    def test_every_referenced_token_is_declared_before_use(self):
+        # XamlReader resolves StaticResource eagerly, so a key referenced
+        # above its declaration (or never declared) dies at parse time in
+        # Revit -- exactly where these checks exist not to look
+        for path in self._DIALOGS:
+            with open(path, "rb") as handle:
+                source = handle.read().decode("utf-8")
+            for match in self._REF.finditer(source):
+                token = match.group(1)
+                declared = source.find('x:Key="%s"' % token)
+                self.assertGreaterEqual(
+                    declared, 0, "%s references undeclared token %r"
+                    % (os.path.basename(path), token))
+                self.assertLess(
+                    declared, match.start(),
+                    "%s references %r above its declaration"
+                    % (os.path.basename(path), token))
+
+    def test_the_inline_tokens_match_the_shared_dictionaries(self):
+        # 12.3: an inline copy is verbatim -- same key, same value as
+        # Resources/*.xaml; a hand-edited variant is a defect
+        shared = {}
+        for name in ("Colors.xaml", "Typography.xaml"):
+            shared.update(self._tokens(os.path.join(_RESOURCES, name)))
+        for path in self._DIALOGS:
+            for key, value in self._tokens(path).items():
+                if key not in shared:
+                    continue   # local additions (FontSizeHelp) are fine
+                self.assertEqual(
+                    value, shared[key],
+                    "%s drifts from Resources/ on %r: %r != %r"
+                    % (os.path.basename(path), key, value, shared[key]))
+
+    def test_the_dialogs_actually_wear_the_brand(self):
+        # each dialog carries the charcoal header band, the 3px Vivid Red
+        # rule and a primary action -- the section 12.6 window anatomy
+        for path in self._DIALOGS:
+            with open(path, "rb") as handle:
+                source = handle.read().decode("utf-8")
+            for token in ("BrushCharcoalBlack", "BrushVividRed",
+                          "ButtonPrimary", "TextH2OnDark"):
+                self.assertIn("{StaticResource %s}" % token, source,
+                              "%s never uses %s"
+                              % (os.path.basename(path), token))
+
+    def test_no_resource_reference_on_the_root_window(self):
+        # 12.7.A: XamlReader resolves root Window attributes BEFORE
+        # Window.Resources is parsed; a reference there throws in Revit
+        for path in self._DIALOGS:
+            root = ET.parse(path).getroot()
+            self.assertTrue(root.tag.endswith("Window"))
+            for attribute, value in root.attrib.items():
+                self.assertNotIn("{StaticResource", value,
+                                 "%s: StaticResource on root %s"
+                                 % (os.path.basename(path), attribute))
+                self.assertNotIn("{DynamicResource", value,
+                                 "%s: DynamicResource on root %s"
+                                 % (os.path.basename(path), attribute))
+
+    def _input_combo_template_names(self, path):
+        """x:Names inside the InputComboBox style, or None if no such style."""
+        for style in ET.parse(path).iter(self._WPF + "Style"):
+            if style.get(self._KEY) != "InputComboBox":
+                continue
+            return set(el.get(self._NAME) for el in style.iter()
+                       if el.get(self._NAME))
+        return None
+
+    def test_editable_combos_get_the_editable_template(self):
+        # 12.7.C: an editable ComboBox whose template lacks
+        # PART_EditableTextBox renders but silently refuses typed input
+        for path in self._DIALOGS:
+            editable = [el for el in _body_iter(path)
+                        if el.tag == self._WPF + "ComboBox"
+                        and el.get("IsEditable") == "True"]
+            if not editable:
+                continue
+            names = self._input_combo_template_names(path)
+            self.assertIsNotNone(names, "%s has editable combos but no "
+                                 "InputComboBox style"
+                                 % os.path.basename(path))
+            for part in ("PART_EditableTextBox", "PART_Popup"):
+                self.assertIn(part, names,
+                              "%s: InputComboBox template lacks %s"
+                              % (os.path.basename(path), part))
+            for combo in editable:
+                self.assertEqual(combo.get("Style"),
+                                 "{StaticResource InputComboBox}",
+                                 "editable combo %r does not wear the "
+                                 "editable-capable template"
+                                 % combo.get(self._NAME))
 
 
 if __name__ == "__main__":

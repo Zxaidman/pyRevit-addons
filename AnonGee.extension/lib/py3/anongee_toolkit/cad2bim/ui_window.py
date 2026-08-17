@@ -66,22 +66,55 @@ _CONTROL_NAMES = None
 
 
 def _control_names():
-    """Every x:Name in ui.xaml, read once.
+    """Every x:Name in ui.xaml's BODY, read once.
 
     The saved-settings pass needs the list of controls, and the XAML file is the
     only place that HAS the list -- WPF gives no enumeration of named elements.
     Reading the same file the window was built from means a control added to the
     dialog tomorrow is saved and restored without touching this code.
+
+    Window.Resources is skipped: it carries the inlined AnonGee theme (Brand
+    Guidelines 12.3 / 12.7.B), whose ControlTemplate part names (PART_*, Bg,
+    Stroke) live in template namescopes -- FindName never resolves them and
+    they are not settings.
     """
     global _CONTROL_NAMES
     if _CONTROL_NAMES is None:
         try:
-            tree = ElementTree.parse(_XAML)
-            _CONTROL_NAMES = [element.get(_XAML_NAME_KEY) for element in tree.iter()
-                              if element.get(_XAML_NAME_KEY)]
+            names = []
+
+            def walk(element):
+                for child in element:
+                    if child.tag.endswith("Window.Resources"):
+                        continue
+                    name = child.get(_XAML_NAME_KEY)
+                    if name:
+                        names.append(name)
+                    walk(child)
+            walk(ElementTree.parse(_XAML).getroot())
+            _CONTROL_NAMES = names
         except Exception:
             _CONTROL_NAMES = []      # settings are a convenience, never a blocker
     return _CONTROL_NAMES
+
+
+def _theme_style(window, key):
+    """A keyed style from the window's inlined theme dictionary, or None.
+
+    The dialogs inline the AnonGee theme under Window.Resources (Brand
+    Guidelines 12.3 strategy 2 / 12.7.B), so rows BUILT in code fetch the
+    same keyed styles the declared controls wear. A missing key styles
+    nothing rather than failing the dialog.
+    """
+    try:
+        return window.TryFindResource(key)
+    except Exception:
+        return None
+
+
+def _apply_style(control, style):
+    if style is not None:
+        control.Style = style
 
 
 class LinkOptionsDialog(object):
@@ -167,9 +200,14 @@ class AdvancedSettingsDialog(object):
         self.btn_adv_cancel.Click += self.on_cancel
 
     def _row(self, entry, value):
-        """label | value box | unit | the effect sentence."""
+        """label | value box | unit | the effect sentence.
+
+        Code-built, so the rows fetch their styles from the inlined theme by
+        key -- the same TextLabel / InputTextBox / HelpText the declared
+        dialogs wear (Brand Guidelines 12.3).
+        """
         row = WpfGrid()
-        row.Margin = Thickness(0, 3, 0, 3)
+        row.Margin = Thickness(0, 4, 0, 4)
         for width in (170, 70, 76, None):          # None -> star column
             column = ColumnDefinition()
             column.Width = (GridLength(1, GridUnitType.Star) if width is None
@@ -177,28 +215,36 @@ class AdvancedSettingsDialog(object):
             row.ColumnDefinitions.Add(column)
 
         label = TextBlock()
+        _apply_style(label, _theme_style(self.window, "TextLabel"))
         label.Text = entry.label
         label.VerticalAlignment = VerticalAlignment.Center
         WpfGrid.SetColumn(label, 0)
 
         box = TextBox()
-        box.Height = 22.0
+        _apply_style(box, _theme_style(self.window, "InputTextBox"))
         box.Text = "{0:g}".format(value)
         box.VerticalAlignment = VerticalAlignment.Center
         WpfGrid.SetColumn(box, 1)
         self._boxes[entry.key] = box
 
         unit = TextBlock()
+        _apply_style(unit, _theme_style(self.window, "TextCaption"))
         unit.Text = entry.unit
         unit.VerticalAlignment = VerticalAlignment.Center
-        unit.Margin = Thickness(6, 0, 6, 0)
+        unit.Margin = Thickness(8, 0, 8, 0)
         WpfGrid.SetColumn(unit, 2)
 
         effect = TextBlock()
+        # help prose: the tokenized HelpText style (readable floor >= 12);
+        # the literal fallback keeps the sentence legible if the key is gone
+        help_style = _theme_style(self.window, "HelpText")
+        if help_style is not None:
+            _apply_style(effect, help_style)
+        else:
+            effect.FontSize = 12.0
+            effect.Foreground = Brushes.Gray
         effect.Text = entry.effect
         effect.TextWrapping = TextWrapping.Wrap
-        effect.FontSize = 12.0
-        effect.Foreground = Brushes.Gray
         effect.VerticalAlignment = VerticalAlignment.Center
         WpfGrid.SetColumn(effect, 3)
 
@@ -535,9 +581,12 @@ class CadToBimWindow(object):
     def _build_rows(self, panel, layer_rows, categories, default_mapping, combo_store):
         """One row per layer: name, count, category combo. Appends (layer, combo)
         to combo_store so the caller can read the chosen mapping back."""
+        label_style = _theme_style(self.window, "TextLabel")
+        caption_style = _theme_style(self.window, "TextCaption")
+        combo_style = _theme_style(self.window, "InputComboBox")
         for layer, count in layer_rows:
             row = WpfGrid()
-            row.Margin = Thickness(0, 1, 0, 1)
+            row.Margin = Thickness(0, 2, 0, 2)
             for width in (None, 70, 180):   # None -> star column
                 column = ColumnDefinition()
                 column.Width = (GridLength(1, GridUnitType.Star) if width is None
@@ -545,17 +594,19 @@ class CadToBimWindow(object):
                 row.ColumnDefinitions.Add(column)
 
             name_block = TextBlock()
+            _apply_style(name_block, label_style)
             name_block.Text = layer
             name_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(name_block, 0)
 
             count_block = TextBlock()
+            _apply_style(count_block, caption_style)
             count_block.Text = str(count)
             count_block.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(count_block, 1)
 
             combo = ComboBox()
-            combo.Height = 22.0
+            _apply_style(combo, combo_style)
             for category in categories:
                 combo.Items.Add(category)
             combo.SelectedItem = default_mapping.get(layer)
@@ -995,6 +1046,9 @@ class CadToBimWindow(object):
         keep = self.storey_rows.SelectedIndex
         self.storey_rows.Items.Clear()
         self._storey_boxes = []
+        body_style = _theme_style(self.window, "TextBody")
+        combo_style = _theme_style(self.window, "InputComboBox")
+        box_style = _theme_style(self.window, "InputTextBox")
         for position, row in enumerate(self._storey_rows):
             grid = WpfGrid()
             for width in (40.0, 30.0, 0.0, 110.0, 70.0, 52.0):
@@ -1010,14 +1064,15 @@ class CadToBimWindow(object):
             grid.Children.Add(include)
 
             number = TextBlock()
+            _apply_style(number, body_style)
             number.Text = str(position + 1)
             number.VerticalAlignment = VerticalAlignment.Center
             WpfGrid.SetColumn(number, 1)
             grid.Children.Add(number)
 
             plan_combo = ComboBox()
-            plan_combo.Height = 22
-            plan_combo.Margin = Thickness(0, 1, 8, 1)
+            _apply_style(plan_combo, combo_style)
+            plan_combo.Margin = Thickness(0, 2, 8, 2)
             for index in range(len(self._storey_plans)):
                 plan_combo.Items.Add(self._plan_label(index))
             plan_combo.SelectedIndex = min(row.get("plan") or 0,
@@ -1029,8 +1084,8 @@ class CadToBimWindow(object):
             # positional ladder, a named level pins the storey's TOP to it
             # (structure hangs below its slab, so the base is the level under)
             level_combo = ComboBox()
-            level_combo.Height = 22
-            level_combo.Margin = Thickness(0, 1, 8, 1)
+            _apply_style(level_combo, combo_style)
+            level_combo.Margin = Thickness(0, 2, 8, 2)
             level_combo.Items.Add("(auto)")
             for label, _level_id in self._level_options:
                 level_combo.Items.Add(label)
@@ -1043,23 +1098,23 @@ class CadToBimWindow(object):
             grid.Children.Add(level_combo)
 
             height = TextBox()
-            height.Height = 22
-            height.Margin = Thickness(0, 1, 8, 1)
+            _apply_style(height, box_style)
+            height.Margin = Thickness(0, 2, 8, 2)
             height.Text = ("" if row.get("height_mm") is None
                            else "{0:g}".format(row["height_mm"]))
             WpfGrid.SetColumn(height, 4)
             grid.Children.Add(height)
 
             repeat = TextBox()
-            repeat.Height = 22
-            repeat.Margin = Thickness(0, 1, 0, 1)
+            _apply_style(repeat, box_style)
+            repeat.Margin = Thickness(0, 2, 0, 2)
             repeat.Text = str(int(row.get("repeat") or 1))
             WpfGrid.SetColumn(repeat, 5)
             grid.Children.Add(repeat)
 
             item = ListBoxItem()
             item.Content = grid
-            item.Padding = Thickness(2, 1, 2, 1)
+            item.Padding = Thickness(4, 2, 4, 2)
             # PREVIEW: the tunnelling event reaches the row before the combo box
             # or text box inside it can handle the click, so clicking anywhere
             # on a row selects it

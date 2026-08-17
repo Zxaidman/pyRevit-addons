@@ -78,7 +78,14 @@ def _rollback_alert(label, tstatus, gstatus):
 
 
 def _load_window(xaml_path):
-    """Load a WPF Window from a .xaml file via XamlReader (CPython3-safe)."""
+    """Load a WPF Window from a .xaml file via XamlReader (CPython3-safe).
+
+    No theme is merged here on purpose: each dialog inlines the AnonGee
+    theme verbatim under its own Window.Resources (Brand Guidelines 12.3
+    strategy 2), because runtime-injected merged dictionaries do not resolve
+    inside Revit's pyRevit sandbox (12.7.B). Code-built rows reach the same
+    tokens through ui_window._theme_style.
+    """
     stream = FileStream(xaml_path, FileMode.Open, FileAccess.Read)
     try:
         return XamlReader.Load(stream)
