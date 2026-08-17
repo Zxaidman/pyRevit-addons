@@ -37,6 +37,28 @@ def _xaml_names(*paths):
     return names
 
 
+def _tab_homes():
+    """{x:Name: tab header} for every named control under a TabItem.
+
+    Which tab a control sits on is invisible to FindName -- WPF resolves names
+    per window -- so a control pasted onto the wrong tab still binds and still
+    runs. Only the user sees the difference, which makes the tab a thing worth
+    asserting."""
+    key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+    homes = {}
+
+    def walk(element, header):
+        if element.tag.endswith("TabItem"):
+            header = element.get("Header")
+        name = element.get(key)
+        if name and header:
+            homes[name] = header
+        for child in element:
+            walk(child, header)
+    walk(ET.parse(_XAML).getroot(), None)
+    return homes
+
+
 def _script_source():
     """The pushbutton itself -- the run pipeline and its entry point."""
     with open(_SCRIPT, "rb") as handle:
@@ -184,12 +206,126 @@ class MaterialAndFootingControls(unittest.TestCase):
         for kind in kinds:
             self.assertIn("cb_mat_{0}".format(kind), names)
 
-    def test_the_footing_row_is_on_the_structure_tab(self):
-        names = _xaml_names(_XAML)
+    def test_the_footing_row_lives_on_the_foundations_tab(self):
+        homes = _tab_homes()
         for control in ("chk_footings", "cb_footing_family",
                         "tb_footing_projection", "tb_footing_thickness",
-                        "chk_view_filters"):
+                        "tb_max_step", "tb_fnd_min_area"):
+            self.assertEqual(homes.get(control), "Foundations",
+                             "%s sits on %r" % (control, homes.get(control)))
+        self.assertEqual(homes.get("chk_view_filters"), "Output & Graphics")
+
+
+class TheDialogTabSet(unittest.TestCase):
+    """The restructure's contract: eight tabs, every moved control on its new one.
+
+    Settings files restore controls BY NAME, so moving a node between tabs is
+    free -- but a control moved by copy-paste is easily left behind in the old
+    tab too, and a duplicated x:Name is something XamlReader only refuses at
+    runtime, in Revit, exactly where these checks exist not to look.
+    """
+
+    _TABS = ["Layers", "Elements", "Foundations", "Stairs", "Multi-storey",
+             "Tolerances", "Output & Graphics", "Naming"]
+
+    def test_the_eight_tabs_in_order(self):
+        headers = [el.get("Header") for el in ET.parse(_XAML).iter()
+                   if el.tag.endswith("TabItem")]
+        self.assertEqual(headers, self._TABS)
+
+    def test_no_name_is_declared_twice(self):
+        key = "{http://schemas.microsoft.com/winfx/2006/xaml}Name"
+        for path in (_XAML, _LINK_XAML):
+            names = [el.get(key) for el in ET.parse(path).iter() if el.get(key)]
+            doubled = sorted(name for name in set(names)
+                             if names.count(name) > 1)
+            self.assertEqual(doubled, [], "%s declares twice: %s"
+                             % (os.path.basename(path), doubled))
+
+    def test_the_moved_controls_landed_where_the_layout_says(self):
+        homes = _tab_homes()
+        for control, tab in (("chk_stairs", "Stairs"),
+                             ("chk_export", "Output & Graphics"),
+                             ("tb_compare", "Output & Graphics"),
+                             ("tb_grid_snap", "Tolerances"),
+                             ("cb_name_param", "Elements")):
+            self.assertEqual(homes.get(control), tab,
+                             "%s sits on %r" % (control, homes.get(control)))
+
+
+class TheNewTolerancesAreWired(unittest.TestCase):
+    """A box on the dialog is only real once it is seeded AND read back out.
+
+    max_step_mm is the cautionary tale: run_builders read it from the
+    tolerances dict since the fold planner landed, and nothing ever put it
+    there -- no box, no _read_tolerances key, a dead wire the fixture runs
+    could not see because the default happened to match. These checks tie
+    each new key to a control at both ends.
+    """
+
+    _WIRES = {  # x:Name -> the tolerances key its box feeds
+        "tb_grid_snap": "grid_snap_mm",
+        "tb_pair_overlap": "pair_min_overlap_mm",
+        "tb_parallel_angle": "parallel_angle_deg",
+        "tb_junction_tol": "junction_tol_mm",
+        "tb_concentric_tol": "concentric_tol_mm",
+        "tb_max_step": "max_step_mm",
+        "tb_fnd_min_area": "foundation_min_area_m2",
+    }
+
+    def test_each_box_is_in_the_xaml(self):
+        names = _xaml_names(_XAML)
+        for control in self._WIRES:
             self.assertIn(control, names)
+
+    def test_each_box_is_seeded_from_the_defaults(self):
+        block = _window_source().split("def _init_tolerances(", 1)[1].split(
+            "\n    def ", 1)[0]
+        for control in self._WIRES:
+            self.assertIn("self.{0}.Text".format(control), block,
+                          "%s is never seeded" % control)
+
+    def test_each_key_is_emitted_from_its_box(self):
+        block = _window_source().split("def _read_tolerances(", 1)[1].split(
+            "\n    def ", 1)[0]
+        keys = re.findall(r'"([a-z0-9_]+)":\s*self\._read_(?:float|int)\(',
+                          block)
+        for control, key in self._WIRES.items():
+            self.assertIn(key, keys, "%s is not read from a control" % key)
+            self.assertIn("self.{0}".format(control), block)
+
+    def test_the_dead_wire_is_live_at_both_ends(self):
+        # the consumers already read these keys off the tolerances dict; what
+        # was missing was the dialog EMITTING them
+        self.assertIn('.get("max_step_mm")', _builders_source())
+        window = _window_source()
+        self.assertIn('"max_step_mm": self._read_float(', window)
+        self.assertIn('"foundation_min_area_m2": self._read_float(', window)
+
+
+class TheDrawStairsRoundTripKeepsTheWholeDialog(unittest.TestCase):
+    """Closing the window to draw outlines must not cost the user's settings.
+
+    _apply_preset used to re-enumerate the dialog by hand and put back only
+    the ~45 values it happened to name; every control added since fell to its
+    default on reopen. The preset now carries the same snapshot a settings
+    file does, restored through the same path, so the two cannot drift apart
+    again.
+    """
+
+    def test_collect_carries_the_snapshot(self):
+        block = _window_source().split("def _collect(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn('"preset_payload": self._capture_settings()', block)
+
+    def test_the_preset_lands_through_the_settings_path(self):
+        block = _window_source().split("def _apply_preset(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn('preset.get("preset_payload")', block)
+        self.assertIn("self._restore_controls(", block)
+        # the live parts the snapshot cannot carry keep their special handling
+        self.assertIn('preset.get("storey_settings")', block)
+        self.assertIn("self._show_outline_count()", block)
 
 
 class OutcomesReachTheExportClean(unittest.TestCase):

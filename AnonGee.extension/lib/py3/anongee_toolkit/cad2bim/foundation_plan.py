@@ -83,6 +83,19 @@ _MIN_AREA_M2 = 0.25
 _STEP_CATEGORIES = (CATEGORY_FOLD, CATEGORY_SUNK)
 
 
+def apply_tolerances(tolerances):
+    """Override the module's tunables from the dialog's Foundations tab.
+
+    The pushbutton calls this once per run; anything absent keeps its default,
+    so the offline tests and replays are unaffected.
+    """
+    global _MIN_AREA_M2
+    if not tolerances:
+        return
+    _MIN_AREA_M2 = float(tolerances.get("foundation_min_area_m2",
+                                        _MIN_AREA_M2))
+
+
 def outlines(records, category=CATEGORY_FOUNDATION):
     """[(ring, z, source)] -- every closed foundation outline on the plan.
 

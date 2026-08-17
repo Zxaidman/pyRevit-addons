@@ -312,6 +312,34 @@ structural element. Footings now set FLOOR_PARAM_IS_STRUCTURAL and normalise
 their sketch loops. Awaiting the user's Revit confirmation; the declared
 fallback is our own schedulable width/length parameters.
 
+### v0.70.0 — the dialog redesigned on the audit's findings
+
+A full audit of the configuration surface (config keys, module constants,
+every control and consumer) drove two commits. v0.69.7 fixed its four plain
+defects; v0.70.0 is the redesign the user asked for:
+
+Eight tabs, each owning its subject: Layers / Elements / **Foundations**
+(new — the footing controls that lived under "Structure", plus the fold-vs-
+storey threshold and the minimum outline area, neither of which had a control
+at all) / Stairs (Architecture and Staircase merged) / Multi-storey /
+Tolerances (gaining the five formerly-unreachable knobs: grid snap, beam pair
+overlap, parallel angle, junction and concentric arc tolerances) / Output &
+Graphics (materials, grades, filters, JSON export, the compare diagnostic) /
+Naming. Every existing control keeps its x:Name, so saved settings files
+restore unchanged.
+
+The draw-stairs round trip now carries the WHOLE dialog through
+`preset_payload` — it used to silently revert ~45 controls (every tolerance,
+limit, material, grade and footing box) to the previous session's snapshot.
+
+Tests 560 → 569, including: eight-tabs-in-order pinned, per-control tab
+homes asserted, the seven new tolerance keys seeded-and-emitted (the
+max_step_mm dead wire can never come back), and the round-trip payload.
+Regression gate green with every baseline untouched.
+
+Still open before the phase closes: brand-guidelines styling, after the user
+reviews the layout in Revit.
+
 ### Open
 
 - P2.4: legend-driven mapping for Test9-style drawings (swatch pattern →

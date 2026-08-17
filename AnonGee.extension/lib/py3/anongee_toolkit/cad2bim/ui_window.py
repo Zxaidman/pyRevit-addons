@@ -6,8 +6,8 @@ the model -- they gather the user's choices into `self.result` and close, and
 every model write happens afterwards on the Revit API thread. That separation is
 what lets the whole run be replayed offline from an exported JSON.
 
-The main dialog's tabs are its structure: Layers, Structure, Architecture,
-Staircase, Multi-storey, Tolerances, Materials & Graphics, Naming. Two of them
+The main dialog's tabs are its structure: Layers, Elements, Foundations,
+Stairs, Multi-storey, Tolerances, Output & Graphics, Naming. Two of them
 carry state that outlives the run -- the naming templates and the standard sizes
 are office conventions kept in the preferences file, and the whole dialog is
 snapshotted so the next session opens where this one left off.
@@ -216,6 +216,8 @@ class CadToBimWindow(object):
         self.cb_footing_family = find("cb_footing_family")
         self.tb_footing_projection = find("tb_footing_projection")
         self.tb_footing_thickness = find("tb_footing_thickness")
+        self.tb_max_step = find("tb_max_step")
+        self.tb_fnd_min_area = find("tb_fnd_min_area")
         self._footing_ids = {}
         for label, symbol_id in (footing_type_options or []):
             self.cb_footing_family.Items.Add(label)
@@ -336,11 +338,16 @@ class CadToBimWindow(object):
         self.tb_snap = find("tb_snap")
         self.tb_markrad = find("tb_markrad")
         self.tb_compare = find("tb_compare")
+        self.tb_grid_snap = find("tb_grid_snap")
         self.tb_region = find("tb_region")
         self.tb_circ_min = find("tb_circ_min")
         self.tb_circ_max = find("tb_circ_max")
         self.tb_pair_min = find("tb_pair_min")
         self.tb_pair_max = find("tb_pair_max")
+        self.tb_pair_overlap = find("tb_pair_overlap")
+        self.tb_parallel_angle = find("tb_parallel_angle")
+        self.tb_junction_tol = find("tb_junction_tol")
+        self.tb_concentric_tol = find("tb_concentric_tol")
         self.tb_slab_snap = find("tb_slab_snap")
         self.tb_slab_heal = find("tb_slab_heal")
         self.tb_slab_chain = find("tb_slab_chain")
@@ -373,7 +380,7 @@ class CadToBimWindow(object):
             self.chk_stairs.IsEnabled = False
             self.chk_stairs.Content = "Create staircases (the model has no stair type)"
 
-        # Staircase tab live sync: floor height follows the level picks; an
+        # Stairs tab live sync: floor height follows the level picks; an
         # ABSOLUTE riser count drives the riser height (storey / count)
         self.cb_base_level.SelectionChanged += self._on_stair_sync
         self.cb_top_level.SelectionChanged += self._on_stair_sync
@@ -389,7 +396,7 @@ class CadToBimWindow(object):
         # last run's dialog, restored before the preset so the round trip
         # through "draw stair outlines" still wins
         if saved_settings:
-            landed = self._apply_settings(saved_settings)
+            landed = self._restore_controls(saved_settings)
             if landed:
                 self.status_text.Text = ("{0} setting(s) restored from the last "
                                          "run".format(landed))
@@ -479,16 +486,21 @@ class CadToBimWindow(object):
         textbox.LostFocus += on_text
 
     def _init_tolerances(self):
-        """Seed the Units & Tolerances fields from config defaults (mm)."""
+        """Seed every tunable box from config defaults (mm unless it says not)."""
         d = config.DEFAULTS
         self.tb_snap.Text = str(int(d["snap_tol_mm"]))
         self.tb_markrad.Text = str(int(d["mark_radius_mm"]))
         self.tb_compare.Text = str(int(d["compare_tol_mm"]))
+        self.tb_grid_snap.Text = str(int(d["grid_snap_mm"]))
         self.tb_region.Text = str(int(d["col_region_max_side_mm"]))
         self.tb_circ_min.Text = str(int(d["circle_min_dia_mm"]))
         self.tb_circ_max.Text = str(int(d["circle_max_dia_mm"]))
         self.tb_pair_min.Text = str(int(d["pair_min_width_mm"]))
         self.tb_pair_max.Text = str(int(d["pair_max_width_mm"]))
+        self.tb_pair_overlap.Text = str(int(d["pair_min_overlap_mm"]))
+        self.tb_parallel_angle.Text = "{0:g}".format(d["parallel_angle_deg"])
+        self.tb_junction_tol.Text = str(int(d["junction_tol_mm"]))
+        self.tb_concentric_tol.Text = str(int(d["concentric_tol_mm"]))
         self.tb_slab_snap.Text = str(int(d["slab_snap_mm"]))
         self.tb_slab_heal.Text = str(int(d["slab_heal_mm"]))
         self.tb_slab_chain.Text = str(int(d["slab_chain_mm"]))
@@ -517,6 +529,8 @@ class CadToBimWindow(object):
         self.tb_face_size.Text = str(int(d["face_size_tol_mm"]))
         self.tb_footing_projection.Text = str(int(d["footing_projection_mm"]))
         self.tb_footing_thickness.Text = str(int(d["footing_thickness_mm"]))
+        self.tb_max_step.Text = str(int(d["max_step_mm"]))
+        self.tb_fnd_min_area.Text = str(d["foundation_min_area_m2"])
         self.tb_filter_transparency.Text = str(int(d["filter_transparency"]))
 
     def _read_int(self, textbox, fallback):
@@ -537,11 +551,23 @@ class CadToBimWindow(object):
             "snap_tol_mm": self._read_float(self.tb_snap, d["snap_tol_mm"]),
             "mark_radius_mm": self._read_float(self.tb_markrad, d["mark_radius_mm"]),
             "compare_tol_mm": self._read_float(self.tb_compare, d["compare_tol_mm"]),
+            "grid_snap_mm": self._read_float(self.tb_grid_snap, d["grid_snap_mm"]),
             "col_region_max_side_mm": self._read_float(self.tb_region, d["col_region_max_side_mm"]),
             "circle_min_dia_mm": self._read_float(self.tb_circ_min, d["circle_min_dia_mm"]),
             "circle_max_dia_mm": self._read_float(self.tb_circ_max, d["circle_max_dia_mm"]),
             "pair_min_width_mm": self._read_float(self.tb_pair_min, d["pair_min_width_mm"]),
             "pair_max_width_mm": self._read_float(self.tb_pair_max, d["pair_max_width_mm"]),
+            "pair_min_overlap_mm": self._read_float(self.tb_pair_overlap,
+                                                    d["pair_min_overlap_mm"]),
+            "parallel_angle_deg": self._read_float(self.tb_parallel_angle,
+                                                   d["parallel_angle_deg"]),
+            "junction_tol_mm": self._read_float(self.tb_junction_tol,
+                                                d["junction_tol_mm"]),
+            "concentric_tol_mm": self._read_float(self.tb_concentric_tol,
+                                                  d["concentric_tol_mm"]),
+            "max_step_mm": self._read_float(self.tb_max_step, d["max_step_mm"]),
+            "foundation_min_area_m2": self._read_float(
+                self.tb_fnd_min_area, d["foundation_min_area_m2"]),
             "slab_snap_mm": self._read_float(self.tb_slab_snap, d["slab_snap_mm"]),
             "slab_heal_mm": self._read_float(self.tb_slab_heal, d["slab_heal_mm"]),
             "slab_chain_mm": self._read_float(self.tb_slab_chain, d["slab_chain_mm"]),
@@ -608,7 +634,7 @@ class CadToBimWindow(object):
                     int(_math.ceil(storey / riser - 1e-9)))
 
     def _stair_shape(self):
-        """The generic stair shape picked on the Staircase tab (U by default)."""
+        """The generic stair shape picked on the Stairs tab (U by default)."""
         for button, shape in self.shape_buttons:
             if button.IsChecked:
                 return shape
@@ -746,78 +772,26 @@ class CadToBimWindow(object):
             "filter_colour_lines": bool(self.chk_filter_lines.IsChecked),
             "naming": self._read_naming(),
             "level_follow_existing": bool(self.chk_level_follow.IsChecked),
-
+            # the window itself, as a settings snapshot: the draw-stairs round
+            # trip restores from this, so every control survives the rebuild
+            "preset_payload": self._capture_settings(),
         }
 
     def _apply_preset(self, preset):
         """Put a previous run of this dialog back on screen.
 
         The window is rebuilt after the user draws stair outlines in the view,
-        so everything they had already chosen must come back with it. Anything
-        the preset does not name keeps the freshly computed default.
+        so everything they had already chosen must come back with it. The
+        preset carries the same snapshot a settings file does (the
+        "preset_payload" _collect takes as the window closes), and it lands
+        through the same restore path -- one code path, every control, instead
+        of a hand-kept list that forgets the boxes added since it was written.
+        Only what the snapshot cannot carry is re-applied here: the storey
+        table (its rows are rebuilt from the drawing, then reshaped from the
+        preset) and the drawn-outline count. What detection answers from the
+        drawing itself (settings.DETECTED_NAMES) stays with the drawing.
         """
-        def combo(control, ids, wanted):
-            if wanted is None:
-                return
-            for label, element_id in ids.items():
-                if element_id == wanted:
-                    control.SelectedItem = label
-                    return
-
-        for layer, control in self._combos:
-            value = (preset.get("mapping") or {}).get(layer)
-            if value:
-                control.SelectedItem = value
-        for layer, control in self._text_combos:
-            value = (preset.get("text_mapping") or {}).get(layer)
-            if value:
-                control.SelectedItem = value
-        for key, box in (("create_grids", self.chk_grids),
-                         ("create_columns", self.chk_columns),
-                         ("create_beams", self.chk_beams),
-                         ("create_slabs", self.chk_slabs),
-                         ("create_stairs", self.chk_stairs),
-                         ("export", self.chk_export),
-                         ("create_footings", self.chk_footings),
-                         ("view_filters", self.chk_view_filters),
-                         ("filter_colour_lines", self.chk_filter_lines),
-                         ("grade_in_mark", self.chk_grade_in_mark),
-                         ("multistorey", self.chk_multistorey)):
-            if key in preset and box.IsEnabled:
-                box.IsChecked = bool(preset[key])
-        combo(self.cb_family, self._family_ids, preset.get("column_family_id"))
-        combo(self.cb_circular_family, self._family_ids,
-              preset.get("circular_family_id"))
-        combo(self.cb_beam_family, self._beam_ids, preset.get("beam_family_id"))
-        combo(self.cb_floor_type, self._floor_ids, preset.get("floor_type_id"))
-        combo(self.cb_stair_type, self._stair_ids, preset.get("stair_type_id"))
-        combo(self.cb_base_level, self._level_ids, preset.get("base_level_id"))
-        combo(self.cb_top_level, self._level_ids, preset.get("top_level_id"))
-        if preset.get("name_parameter"):
-            self.cb_name_param.Text = preset["name_parameter"]
-        source = preset.get("stair_source")
-        if source:
-            self.cb_stair_source.SelectedIndex = {
-                "auto": 0, "linework": 1, "text": 2, "region": 3}.get(source, 0)
-        shape = (preset.get("stair_params") or {}).get("shape")
-        for radio, value in self.shape_buttons:
-            if value == shape:
-                radio.IsChecked = True
-        params = preset.get("stair_params") or {}
-        for key, box in (("riser_count", self.tb_stair_count),
-                         ("riser_mm", self.tb_stair_riser),
-                         ("tread_mm", self.tb_stair_tread),
-                         ("run_width_mm", self.tb_stair_width),
-                         ("landing_mm", self.tb_stair_landing),
-                         ("waist_mm", self.tb_stair_waist)):
-            if params.get(key) is not None:
-                box.Text = "{0:g}".format(params[key])
-        for name in ("boundary_layer", "origin_layer"):
-            wanted = preset.get(name)
-            control = (self.cb_boundary_layer if name == "boundary_layer"
-                       else self.cb_origin_layer)
-            if wanted:
-                control.SelectedItem = wanted
+        self._restore_controls(preset.get("preset_payload") or {})
         saved_rows = preset.get("storey_settings") or []
         if saved_rows and self._storey_plans:
             self._storey_rows = [
@@ -828,12 +802,7 @@ class CadToBimWindow(object):
                  "include": saved.get("include", True)}
                 for saved in saved_rows]
             self._refresh_storey_rows()
-        for key, box in self.name_boxes.items():
-            value = (preset.get("naming") or {}).get(key)
-            if value:
-                box.Text = value
-        self._show_naming_preview()
-        self._stair_sync()
+        self._show_outline_count()
 
     def _apply_detection(self):
         """Fill the Multi-storey tab from what auto-detection found in the DXF.
@@ -1104,12 +1073,15 @@ class CadToBimWindow(object):
         return settings.payload(values, layer_map, text_map,
                                 _version())
 
-    def _apply_settings(self, data):
-        """Put a saved settings dict back on the window. Returns how many landed.
+    def _restore_controls(self, data):
+        """Land a captured snapshot back on the window; returns how many took.
 
-        Layer mappings are restored by LAYER NAME, so a saved file helps on the
-        next drawing from the same office even when the layer list differs --
-        the layers it recognises are mapped, the rest keep their guess.
+        The one restore path: a settings file, the last session's dialog and
+        the draw-stairs preset all come through here, so they restore exactly
+        the same set of controls. Layer mappings are restored by LAYER NAME, so
+        a saved file helps on the next drawing from the same office even when
+        the layer list differs -- the layers it recognises are mapped, the rest
+        keep their guess.
         """
         controls, layer_map, text_map = settings.sections(data)
         landed = 0
@@ -1147,7 +1119,7 @@ class CadToBimWindow(object):
             self.status_text.Text = "not a cad2bim settings file: {0}".format(
                 os.path.basename(path))
             return
-        landed = self._apply_settings(data)
+        landed = self._restore_controls(data)
         self.status_text.Text = "{0} setting(s) loaded -- {1}".format(
             landed, settings.describe(data))
 

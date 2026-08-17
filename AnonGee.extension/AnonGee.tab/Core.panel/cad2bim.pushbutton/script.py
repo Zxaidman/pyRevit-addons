@@ -116,9 +116,9 @@ _drop_stale_modules()
 import anongee_clr                      # noqa: F401  (imported for its lifetime)
 
 from anongee_toolkit import cad2bim
-from anongee_toolkit.cad2bim import (compat, config, floor_plans, naming,
-                                     prefs, report, settings, slab_outlines,
-                                     stair_layout)
+from anongee_toolkit.cad2bim import (compat, config, floor_plans,
+                                     foundation_plan, naming, prefs, report,
+                                     settings, slab_outlines, stair_layout)
 from anongee_toolkit.cad2bim.geom import transform, compare
 from anongee_toolkit.cad2bim.classify import layers, marks
 from anongee_toolkit.cad2bim.readers import geometry_reader, dxf_reader, dxf_linker
@@ -527,12 +527,13 @@ def main():
     limits = selections.get("limits")
     standards = selections.get("standards")
     tolerances = selections.get("tolerances") or {}
-    # the Tolerances tab owns every tunable, including the ones that used to be
-    # module constants in the slab and stair geometry
+    # the dialog owns every tunable, including the ones that used to be module
+    # constants in the slab, stair and foundation geometry
     slab_outlines.apply_tolerances(tolerances)
     stair_layout.apply_tolerances(tolerances)
+    foundation_plan.apply_tolerances(tolerances)
     # every element writes its CAD mark into the parameter chosen on the
-    # Structure tab (Mark stays the fallback when a family lacks it)
+    # Elements tab (Mark stays the fallback when a family lacks it)
     compat.set_name_parameter(selections.get("name_parameter"))
     # every auto-created family type is named from the Naming tab's templates
     naming.apply(selections.get("naming"))
@@ -789,7 +790,8 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
     # merge grid-crossing-split pieces (E9), snapped to the grid intersection.
     mark_radius_ft = config.mm_to_ft(tolerances.get("mark_radius_mm",
                                                     config.DEFAULTS["mark_radius_mm"]))
-    grid_snap_ft = config.mm_to_ft(config.DEFAULTS["grid_snap_mm"])
+    grid_snap_ft = config.mm_to_ft(tolerances.get("grid_snap_mm",
+                                                  config.DEFAULTS["grid_snap_mm"]))
 
     # A fused lift/stair core (loose wall lines blobbed + greedily decomposed) mis-cuts
     # its shared corners, so each wall is the right thickness but offset along its length.

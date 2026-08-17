@@ -49,7 +49,7 @@
         <!-- Body: tabbed -->
         <TabControl Margin="8,4,8,4">
 
-            <!-- TAB 1: Layers -->
+            <!-- TAB: Layers -->
             <TabItem Header="Layers">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -97,8 +97,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Structure -->
-            <TabItem Header="Structure">
+            <!-- TAB: Elements -->
+            <TabItem Header="Elements">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
                         <TextBlock Text="Structural elements" FontWeight="Bold" Margin="0,0,0,4"/>
@@ -156,28 +156,6 @@
                             <TextBlock Grid.Row="1" Grid.Column="1" Text="Outline from the slab-edge layer, else from closed beam bays. Thickness from THK notes duplicates the type; placed at the top level."
                                        TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
                         </Grid>
-                        <CheckBox x:Name="chk_footings" Content="Create footings (foundation pad under each column)" IsChecked="True" Margin="0,6,0,0"/>
-                        <Grid Margin="20,2,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="92"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="70"/>
-                                <ColumnDefinition Width="70"/>
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Foundation type" VerticalAlignment="Center"/>
-                            <ComboBox  Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" x:Name="cb_footing_family" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Min projection" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_footing_projection" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Depth @1m2" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_footing_thickness" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Text="One pad per column, sketched as a Structural Foundation floor (the same Floor.Create the slabs use) on the columns' BASE level at ZERO offset. Sized column + 2 x min projection and turned to the column's long axis. Pads that OVERLAP fuse into one combined footing. Depth is the figure above at one square metre and scales with the pad's area (50mm steps, half to twice). In a multi-storey run only the LOWEST storey builds them."
-                                       TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,1,0,0"/>
-                        </Grid>
 
                         <Separator Margin="0,10,0,6"/>
                         <Grid Margin="0,0,0,4">
@@ -192,33 +170,55 @@
                         </Grid>
                         <TextBlock Text="Columns, beams and slabs write their CAD mark here. Type any editable text parameter name; Mark is used when the chosen one is missing on a family."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,6"/>
-                        <CheckBox x:Name="chk_export"  Content="Export parsed result to JSON (compact)" IsChecked="True"/>
-                        <TextBlock Text="A multi-storey run writes ONE file with a section per storey."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Architecture -->
-            <TabItem Header="Architecture">
+            <!-- TAB: Foundations -->
+            <TabItem Header="Foundations">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
-                        <TextBlock Text="Architectural elements" FontWeight="Bold" Margin="0,0,0,4"/>
-                        <CheckBox x:Name="chk_stairs"  Content="Create staircases" IsChecked="True"/>
-                        <TextBlock Text="Every staircase setting -- type, source, shape and dimensions -- lives on the Staircase tab. Staircases run on the same base-to-top level pair as the structure."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,0"/>
-                        <Separator Margin="0,10,0,6"/>
-                        <TextBlock Text="Architectural walls and roofs are not built yet -- when they land they appear here."
-                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray"/>
+                        <TextBlock Text="Foundations" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="chk_footings" Content="Create footings (drawn foundation outlines, else pads under the columns)" IsChecked="True"/>
+                        <Grid Margin="20,2,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="140"/>
+                                <ColumnDefinition Width="70"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Foundation type" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" x:Name="cb_footing_family" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Min projection" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_footing_projection" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Depth @1m2" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_footing_thickness" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Fold/sunk max step" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_max_step" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Min outline area (m2)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_fnd_min_area" Height="22" Margin="0,1"/>
+                        </Grid>
+                        <TextBlock Text="The drawing's own foundations come first: closed outlines on the foundation layer (mapped on the Layers tab) are built exactly as drawn -- pads or whole rafts -- each sized and named by the note inside it, read from the text layer routed to &quot;foundation text&quot; on the Layers tab. A fold or sunk region inside an outline steps it: the parent is cut around the region, a slab drops in at the step depth, and a support fills the vertical face between the two soffits. A step deeper than the max step is a storey, not a step, and is refused -- the console names the outline it was refused from. An outline recovered from loose linework must reach the min area; below it is a junction sliver, not a foundation (a labelled pile cap is small, a sliver is smaller)."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
+                        <TextBlock Text="With no drawn outlines the pads are INVENTED from the columns: one per column, sketched as a Structural Foundation floor on the columns' BASE level at ZERO offset, sized column + 2 x min projection and turned to the column's long axis. Pads that OVERLAP fuse into one combined footing. Depth is the figure above at one square metre and scales with the pad's area (50mm steps, half to twice). In a multi-storey run only the LOWEST storey builds them."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
+                        <TextBlock Text="An outline is only trusted when one of them carries a foundation note, and the notes only arrive through the &quot;foundation text&quot; routing -- a drawing whose foundation text layer is not routed falls back to the invented pads SILENTLY."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,4,0,0"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB: Staircase -->
-            <TabItem Header="Staircase">
+            <!-- TAB: Stairs -->
+            <TabItem Header="Stairs">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
                         <TextBlock Text="Staircase" FontWeight="Bold" Margin="0,0,0,4"/>
+                        <CheckBox x:Name="chk_stairs" Content="Create staircases" IsChecked="True" Margin="0,0,0,6"/>
                         <Grid Margin="0,0,0,6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
@@ -324,6 +324,9 @@
                         </Grid>
                         <TextBlock Text="Riser count defaults to storey / riser rounded up (20 for 3000 / 150) and refreshes when the levels change; edit it to override. Landing depth 0 = run width. A DN/UP note picks the landing end; the arrival landing at the top spans the parallel flights like the half landing."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
+                        <Separator Margin="0,10,0,6"/>
+                        <TextBlock Text="Architectural walls and roofs are not built yet."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray"/>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
@@ -389,7 +392,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- TAB 3: Units & Tolerances -->
+            <!-- TAB: Tolerances -->
             <TabItem Header="Tolerances">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
@@ -402,20 +405,21 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="160"/>
                                 <ColumnDefinition Width="80"/>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="80"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="24"/>
                                 <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Std snap tolerance" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_snap" Height="22" Margin="0,1,8,1"/>
-                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Text mark radius" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_markrad" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Compare match radius" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_compare" Height="22" Margin="0,1,8,1"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_snap" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Text mark radius" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_markrad" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Grid snap distance" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_grid_snap" Height="22" Margin="0,1"/>
                         </Grid>
+                        <TextBlock Text="Grid snap distance is how far a text-corrected column centre may move to land on a grid line (columns sit on grid intersections)."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
                         <TextBlock Text="COLUMNS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -469,6 +473,8 @@
                             <TextBlock Grid.Row="2" Grid.Column="2" Text="Combined size match" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_face_size" Height="22" Margin="0,1"/>
                         </Grid>
+                        <TextBlock Text="Region max side also gates the footing fallback: a region wider than this reads as a lift or stair core, not a column, so no pad is invented under it."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
                         <TextBlock Text="A COMBINED column -- a wall-column carrying several columns, drawn as one merged outline -- is recovered from the faces of its linework, but only where a size label agrees with what was walked. Label reach is how far outside a member its label may sit; size match is how far the drawn size may differ from the labelled one."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
@@ -503,14 +509,26 @@
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="24"/>
                                 <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
+                                <RowDefinition Height="24"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="0" Text="Pair width min" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_pair_min" Height="22" Margin="0,1,8,1"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="Pair width max" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="0" Grid.Column="3" x:Name="tb_pair_max" Height="22" Margin="0,1"/>
-                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Standard widths" VerticalAlignment="Center"/>
-                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_std_beams" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="0" Text="Pair min overlap" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="1" x:Name="tb_pair_overlap" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="1" Grid.Column="2" Text="Parallel angle (deg)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="1" Grid.Column="3" x:Name="tb_parallel_angle" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="0" Text="Arc junction radius" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="1" x:Name="tb_junction_tol" Height="22" Margin="0,1,8,1"/>
+                            <TextBlock Grid.Row="2" Grid.Column="2" Text="Concentric arc tolerance" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="2" Grid.Column="3" x:Name="tb_concentric_tol" Height="22" Margin="0,1"/>
+                            <TextBlock Grid.Row="3" Grid.Column="0" Text="Standard widths" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="3" Grid.Column="1" x:Name="tb_std_beams" Height="22" Margin="0,1,8,1"/>
                         </Grid>
+                        <TextBlock Text="A drawn beam is two parallel lines: they must run alongside each other for at least the pair min overlap and lean no more than the parallel angle. An arc centred within the junction radius of a round column is a junction fillet, not a beam edge; two arcs whose centres sit within the concentric tolerance are the two edges of one curved beam."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,4,0,0"/>
 
                         <TextBlock Text="SLABS" FontWeight="Bold" Margin="0,10,0,2"/>
                         <Grid>
@@ -569,7 +587,8 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Materials &amp; Graphics">
+            <!-- TAB: Output & Graphics -->
+            <TabItem Header="Output &amp; Graphics">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="6">
 
@@ -601,7 +620,7 @@
                         </Grid>
 
                         <TextBlock Text="Concrete grade" FontWeight="Bold" Margin="0,10,0,2"/>
-                        <TextBlock Text="Written to the parameter named below on every element this run creates. Leave a grade blank to write nothing for that element. Tick &quot;append to the name&quot; to add it to the mark instead of a parameter of its own, so C12 becomes C12 (M30) in whichever parameter the Structure tab names."
+                        <TextBlock Text="Written to the parameter named below on every element this run creates. Leave a grade blank to write nothing for that element. Tick &quot;append to the name&quot; to add it to the mark instead of a parameter of its own, so C12 becomes C12 (M30) in whichever parameter the Elements tab names."
                                    TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="0,0,0,4"/>
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
@@ -655,6 +674,25 @@
                                        Content="Colour the LINES too (otherwise only the patterns are coloured)"
                                        Margin="0,4,0,0"/>
                         </Grid>
+
+                        <Separator Margin="0,10,0,6"/>
+                        <TextBlock Text="Output" FontWeight="Bold" Margin="0,0,0,2"/>
+                        <CheckBox x:Name="chk_export" Content="Export parsed result to JSON (compact)" IsChecked="True"/>
+                        <TextBlock Text="A multi-storey run writes ONE file with a section per storey."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,1,0,4"/>
+                        <Grid Margin="20,0,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="230"/>
+                                <ColumnDefinition Width="80"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="24"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Compare match radius (diagnostic only)" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="0" Grid.Column="1" x:Name="tb_compare" Height="22" Margin="0,1"/>
+                        </Grid>
+                        <TextBlock Text="How close a Revit-imported record and its raw-DXF twin must sit to count as the same member in the import-fidelity report. It changes what the console says, never what is built."
+                                   TextWrapping="Wrap" FontSize="10" Foreground="Gray" Margin="20,2,0,0"/>
 
                     </StackPanel>
                 </ScrollViewer>

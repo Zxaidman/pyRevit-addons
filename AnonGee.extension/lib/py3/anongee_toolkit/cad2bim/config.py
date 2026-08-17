@@ -6,9 +6,9 @@ All values are millimetres (or degrees) unless noted. Pure geometric epsilons
 that are NOT user knobs (collinearity ~1e-4 ft, zero-length guards ~1e-12) stay
 in shapes.py on purpose -- they are numerical stability constants, not settings.
 
-The UI "Units & Tolerances" tab reads DEFAULTS, lets the user edit them, and
-passes the edited dict back through build_* so a run can be tuned without code
-changes.
+The UI reads DEFAULTS (most rows sit on its Tolerances tab, the rest beside
+the element they tune), lets the user edit them, and passes the edited dict
+back through build_* so a run can be tuned without code changes.
 """
 
 MM_PER_FT = 304.8
@@ -29,7 +29,8 @@ DEFAULTS = {
     "col_h_min_mm": 150,
     "col_h_max_mm": 20000,
 
-    # --- snapping & matching (mm) -------------------------------------------
+    # --- snapping & matching (mm; the Tolerances tab's GENERAL group, except
+    #     compare_tol_mm, which sits with the export on Output & Graphics) ----
     "snap_tol_mm": 60.0,          # snap a measured size to a standard within this
     "mark_radius_mm": 1300.0,     # a size label this close to a member sizes it
                                   # (labels sit offset from the column, ~1.1 m)
@@ -41,7 +42,7 @@ DEFAULTS = {
     "circle_min_dia_mm": 150.0,
     "circle_max_dia_mm": 2000.0,
 
-    # --- beams (parallel-line pairing + arc handling) -----------------------
+    # --- beams (parallel-line pairing + arc handling; Tolerances tab) -------
     "pair_min_width_mm": 80.0,
     "pair_max_width_mm": 700.0,
     "pair_min_overlap_mm": 150.0,
@@ -49,7 +50,7 @@ DEFAULTS = {
     "junction_tol_mm": 200.0,     # arc centred this close to a round column = junction
     "concentric_tol_mm": 60.0,    # two arcs sharing a centre this closely = concentric
 
-    # --- staircase (generic dog-leg from the dialog's Staircase tab, mm) -----
+    # --- staircase (generic dog-leg from the dialog's Stairs tab, mm) --------
     "stair_riser_mm": 150.0,      # target MAX riser height; count = storey / this
     "stair_tread_mm": 300.0,      # tread depth (the fixtures' riser spacing)
     "stair_run_width_mm": 1250.0, # width of each run
@@ -79,11 +80,15 @@ DEFAULTS = {
                          "300x600, 400x400, 400x600, 450x600, 600x600"),
     "standard_beam_widths": "200, 230, 250, 300, 350, 400, 450",
 
-    # --- footings (Structure tab) -------------------------------------------
+    # --- foundations (Foundations tab) --------------------------------------
     "footing_projection_mm": 300.0,   # MINIMUM reach past the column, every side
     "footing_thickness_mm": 600.0,    # depth at 1 m2; a pad scales from its area
+    "max_step_mm": 3000.0,            # a fold/sunk step deeper than this is a
+                                      # storey, not a step, and is refused
+    "foundation_min_area_m2": 0.25,   # smallest linework face that is an outline
+                                      # (a pile cap is small; a sliver is smaller)
 
-    # --- view filters (Materials & Graphics tab) ----------------------------
+    # --- view filters (Output & Graphics tab) -------------------------------
     "filter_transparency": 0,     # 0 = solid fill; the fill is what identifies
 
     # --- staircase tolerances (exposed on the Tolerances tab) ---------------
