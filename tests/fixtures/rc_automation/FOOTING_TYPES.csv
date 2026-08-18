@@ -1,0 +1,8 @@
+PROJECT,Riverside Tower
+UNITS,mm
+STANDARD,BS 8666:2020
+,
+TypeMark,Length,Width,Thickness,CoverTop,CoverBottom,CoverSide,Concrete,Comments
+F1,3000,3000,900,50,75,50,C32/40,Typical internal pad
+F2,2400,2400,750,50,75,50,C32/40,
+F3,4500,3000,1050,50,75,50,C32/40,Under twin columns

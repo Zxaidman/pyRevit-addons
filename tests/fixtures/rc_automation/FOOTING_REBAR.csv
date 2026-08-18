@@ -1,0 +1,11 @@
+TypeMark,Layer,Direction,BarType,Diameter,Count,Spacing,ShapeCode,EndCover,Comments
+F1,B1,X,T16,16,15,200,21,50,Bottom outer mat
+F1,B2,Y,T16,16,15,200,21,50,
+F1,T1,X,T12,12,,250,00,50,Top mat
+F1,T2,Y,T12,12,,250,00,50,
+F2,B1,X,T16,16,12,200,21,50,
+F2,B2,Y,T16,16,12,200,21,50,
+F3,B1,X,T20,20,22,200,21,50,
+F3,B2,Y,T20,20,15,200,21,50,
+F3,T1,X,T16,16,,250,00,50,
+F3,T2,Y,T16,16,,250,00,50,

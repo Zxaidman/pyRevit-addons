@@ -1,0 +1,4 @@
+TypeMark,Width,Depth,Cover,Concrete,Comments
+C1,300,600,40,C32/40,Perimeter column
+C2,400,400,40,C32/40,
+C3,300,300,40,C32/40,Internal

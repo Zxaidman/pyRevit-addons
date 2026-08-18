@@ -177,6 +177,14 @@ python -m unittest discover -s tests -v
 - every interactive control carries a tooltip;
 - the tool's version agrees across `__init__.py`, `bundle.yaml`, `CHANGELOG.md` and the window header.
 
+`tests/test_rc_automation.py` covers the RC Automation workbook layer — cell
+coercion, header detection beneath a title block, column-name aliases, and every
+validation rule the schedule is held to before a transaction is opened. It also
+holds `anongee_toolkit/rc_automation/standards.py` to the BS 8666:2020 module the
+BBS Generator ships, so the bar sizes and shape codes in the two cannot drift
+apart. The sample schedule it reads is in `tests/fixtures/rc_automation/`, one
+CSV per sheet, and doubles as the worked example of the workbook format.
+
 ### Project Structure
 
 ```
