@@ -418,32 +418,38 @@ def main():
     # which left multi-storey runs without an origin and every storey shifted.
     layer_counts = report.build_layer_counts(revit_result.records)
     dxf_counts = report.build_layer_counts(dxf_result.records)
-    # HATCH-only layers get a row too. A hatch is a region, not a record, so a
-    # layer carrying nothing else (Project1's COLUMN HATCH_ASC, test9's legend
-    # swatches) had no row, no combo, and no route to fold/sunk -- the P2
-    # categories were unreachable exactly where they are needed.
-    region_counts = {}
-    for region in dxf_result.regions:
-        region_counts[region.layer_key] = region_counts.get(region.layer_key,
-                                                            0) + 1
-    names = sorted(set(layer_counts) | set(dxf_counts) | set(region_counts))
+    names = sorted(set(layer_counts) | set(dxf_counts))
     layer_rows = []
     for name in names:
         revit_n = layer_counts.get(name, {}).get("count", 0)
         dxf_n = dxf_counts.get(name, {}).get("count", 0)
-        layer_rows.append((name, revit_n or dxf_n or region_counts.get(name, 0)))
+        layer_rows.append((name, revit_n or dxf_n))
     dxf_only = [name for name in names if not layer_counts.get(name)]
     if dxf_only:
         _say("Layers present in the DXF but not in the Revit link (still "
              "mappable): {0}".format(", ".join(dxf_only)))
     default_mapping = layers.build_default_mapping(names)
+    # HATCH layers get a mapping OF THEIR OWN, apart from geometry and text
+    # (the user's explicit instruction). A hatch is a region meaning -- column
+    # fill / fold / sunk / cutout -- not an element category, and v0.69.7's
+    # merge of hatch-only layers into the GEOMETRY rows meant routing a hatch
+    # could re-route linework on the same layer. The rows come ONLY from
+    # dxf_result.regions (the Revit API cannot read a hatch inside a link).
+    region_counts = {}
+    for region in dxf_result.regions:
+        region_counts[region.layer_key] = region_counts.get(region.layer_key,
+                                                            0) + 1
+    hatch_names = sorted(region_counts)
+    hatch_rows = [(name, region_counts[name]) for name in hatch_names]
+    default_hatch_mapping = layers.build_default_hatch_mapping(hatch_names)
     # The LEGEND, if the drawing carries one (test9's convention): swatch
     # pattern -> legend text -> meaning, inherited by every plan hatch of the
     # pattern. The result is a PROPOSAL into the dialog, never a silent
-    # application -- it overrides the name-convention default for its layers,
-    # the rows are marked, and the user can still change them. Regions and
-    # texts are already through the affine here, so the pairing distances are
-    # real millimetres.
+    # application -- it overrides the hatch convention's default for its
+    # layers (a legend describes HATCHES, so it seeds the hatch mapping, not
+    # the geometry one), the rows are marked, and the user can still change
+    # them. Regions and texts are already through the affine here, so the
+    # pairing distances are real millimetres.
     legend_notes = {}
     legend_entries = legend.read(dxf_result.regions, dxf_result.texts)
     if legend_entries:
@@ -452,7 +458,7 @@ def main():
             len(legend_entries),
             "y" if len(legend_entries) == 1 else "ies"))
         for layer_name in sorted(proposal["mapping"]):
-            default_mapping[layer_name] = proposal["mapping"][layer_name]
+            default_hatch_mapping[layer_name] = proposal["mapping"][layer_name]
             legend_notes[layer_name] = proposal["rows"][layer_name]
             _say("  legend: {0} {1}".format(layer_name,
                                             proposal["rows"][layer_name]))
@@ -525,7 +531,11 @@ def main():
                                 footing_type_options=footing_type_options,
                                 material_options=material_options,
                                 saved_settings=saved_settings,
-                                layer_notes=legend_notes)
+                                hatch_layer_rows=hatch_rows,
+                                hatch_categories=list(
+                                    layers.HATCH_CATEGORIES),
+                                default_hatch_mapping=default_hatch_mapping,
+                                hatch_notes=legend_notes)
         window.show()
         if not window.result:
             return   # cancelled -- nothing was flushed, console stays closed
@@ -543,9 +553,11 @@ def main():
     # the DXF records carry the markers a Revit import drops, so they get the
     # SAME mapping -- otherwise a DXF-only layer stays uncategorised
     layers.apply_mapping(dxf_result.records, selections["mapping"])
-    # ...and so do the hatches, which is what tells a fold region from a sunk
-    # one and both from the column fill on the layer next to them.
-    layers.apply_mapping(dxf_result.regions, selections["mapping"])
+    # ...and the hatches take THEIR OWN mapping -- the third table on the
+    # Layers tab -- which is what tells a fold region from a sunk one and
+    # both from the column fill, without ever consulting (or disturbing) the
+    # geometry mapping for the layer of the same name.
+    layers.apply_mapping(dxf_result.regions, selections["hatch_mapping"])
     # The Multi-storey tab picks the boundary/origin layers BY NAME (they differ
     # per drawing), so route them here -- after the layer table, so an explicit
     # pick always wins over the naming convention.

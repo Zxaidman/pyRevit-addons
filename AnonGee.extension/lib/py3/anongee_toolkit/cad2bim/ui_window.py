@@ -295,10 +295,13 @@ class CadToBimWindow(object):
                  stair_regions=None, preset=None, storey_detection=None,
                  saved_naming=None, saved_standards=None,
                  footing_type_options=None, material_options=None,
-                 saved_settings=None, layer_notes=None):
+                 saved_settings=None, layer_notes=None,
+                 hatch_layer_rows=None, hatch_categories=None,
+                 default_hatch_mapping=None, hatch_notes=None):
         self.result = None
         self._combos = []
         self._text_combos = []
+        self._hatch_combos = []
         saved_naming = saved_naming or naming.DEFAULTS
         saved_standards = saved_standards or {}
         self._saved_standards = saved_standards
@@ -313,6 +316,13 @@ class CadToBimWindow(object):
         self._build_rows(find("text_rows"), text_layer_rows or [],
                          text_categories or [], default_text_mapping or {},
                          self._text_combos)
+        # HATCH layers get a table OF THEIR OWN: a hatch is a region meaning
+        # (column fill / fold / sunk / cutout), not an element category, so
+        # routing one can never re-route the linework on a like-named layer.
+        # The LEGEND proposals seed THIS mapping and mark THESE rows.
+        self._build_rows(find("hatch_rows"), hatch_layer_rows or [],
+                         hatch_categories or [], default_hatch_mapping or {},
+                         self._hatch_combos, row_notes=hatch_notes)
 
         self.cb_family = find("cb_family")
         self.cb_circular_family = find("cb_circular_family")
@@ -862,11 +872,16 @@ class CadToBimWindow(object):
         text_mapping = {}
         for layer, combo in self._text_combos:
             text_mapping[layer] = combo.SelectedItem or layers.CATEGORY_TEXT_IGNORE
-        self.result = self._collect(mapping=mapping, text_mapping=text_mapping)
+        hatch_mapping = {}
+        for layer, combo in self._hatch_combos:
+            hatch_mapping[layer] = combo.SelectedItem or layers.CATEGORY_UNMAPPED
+        self.result = self._collect(mapping=mapping, text_mapping=text_mapping,
+                                    hatch_mapping=hatch_mapping)
         self._remember_conventions()
         self.window.Close()
 
-    def _collect(self, mapping=None, text_mapping=None, action=None):
+    def _collect(self, mapping=None, text_mapping=None, hatch_mapping=None,
+                 action=None):
         """Every dialog value as one dict -- shared by Run and the draw button
         so re-opening the window restores exactly what was on screen."""
         if mapping is None:
@@ -878,11 +893,17 @@ class CadToBimWindow(object):
             for layer, combo in self._text_combos:
                 text_mapping[layer] = (combo.SelectedItem
                                        or layers.CATEGORY_TEXT_IGNORE)
+        if hatch_mapping is None:
+            hatch_mapping = {}
+            for layer, combo in self._hatch_combos:
+                hatch_mapping[layer] = (combo.SelectedItem
+                                        or layers.CATEGORY_UNMAPPED)
         return {
             "action": action,
             "stair_regions": list(self.stair_regions),
             "mapping": mapping,
             "text_mapping": text_mapping,
+            "hatch_mapping": hatch_mapping,
             "create_grids": bool(self.chk_grids.IsChecked),
             "create_columns": bool(self.chk_columns.IsChecked),
             "create_beams": bool(self.chk_beams.IsChecked),
@@ -1258,9 +1279,13 @@ class CadToBimWindow(object):
         text_map = dict((layer, str(combo.SelectedItem))
                         for layer, combo in self._text_combos
                         if combo.SelectedItem is not None)
+        hatch_map = dict((layer, str(combo.SelectedItem))
+                         for layer, combo in self._hatch_combos
+                         if combo.SelectedItem is not None)
         return settings.payload(values, layer_map, text_map,
                                 _version(),
-                                advanced=dict(self._advanced_values))
+                                advanced=dict(self._advanced_values),
+                                hatches=hatch_map)
 
     def _restore_controls(self, data):
         """Land a captured snapshot back on the window; returns how many took.
@@ -1279,8 +1304,13 @@ class CadToBimWindow(object):
                 continue
             if _set_control_value(self.window.FindName(name), value):
                 landed += 1
+        # the hatch table restores like the other two: by LAYER NAME, and a
+        # file older than schema 3 carries no section, so it lands nothing
+        # and the convention's guess stands
         for store, saved in ((self._combos, layer_map),
-                             (self._text_combos, text_map)):
+                             (self._text_combos, text_map),
+                             (self._hatch_combos,
+                              settings.hatch_mappings(data))):
             for layer, combo in store:
                 index = settings.pick_index(combo.Items, saved.get(layer))
                 if index >= 0:

@@ -6,11 +6,12 @@ sizes. Everything else was rebuilt from defaults on every Revit session, so a
 user who had tuned twenty boxes had to tune them again the next morning. This
 module snapshots every named control in the window instead:
 
-    {"schema": 2, "version": "0.67.0",
+    {"schema": 3, "version": "0.67.0",
      "controls": {"tb_slab_step": "20", "chk_beams": True,
                   "cb_floor_type": "Generic 150mm"},
      "layers": {"S-COLS": "Column", ...},
      "texts":  {"S-TEXT": "Column mark", ...},
+     "hatches": {"S-FND-FOLD": "fold", ...},
      "advanced": {"beam_heal_mm": 400.0, ...}}
 
 Two rules make the snapshot safe to reload into a DIFFERENT model:
@@ -29,12 +30,14 @@ it testable and keeps the file format independent of the dialog's plumbing.
 import json
 import os
 
-# 2 added the OPTIONAL "advanced" section (module-constant overrides). The
-# number is a statement of what a file may carry, not a gate: every reader
-# here takes what it recognises and ignores the rest, so a schema-1 file loads
-# unchanged (its advanced section simply reads as empty) and a schema-2 file
-# in old hands restores everything but the section it does not know.
-SCHEMA = 2
+# 2 added the OPTIONAL "advanced" section (module-constant overrides);
+# 3 added the OPTIONAL "hatches" section (the hatch layers' own mapping,
+# apart from geometry and text). The number is a statement of what a file may
+# carry, not a gate: every reader here takes what it recognises and ignores
+# the rest, so a schema-1 or -2 file loads unchanged (its hatch mapping
+# simply reads as empty) and a schema-3 file in old hands restores
+# everything but the sections it does not know.
+SCHEMA = 3
 
 # Controls the dialog OWNS: read-only text it computes, or a list whose contents
 # come from the drawing. Restoring these would either be a no-op or a lie.
@@ -42,7 +45,7 @@ SKIP_NAMES = frozenset((
     "version_text", "source_text", "status_text",
     "naming_saved_text", "settings_text", "storey_selection_text",
     "multistorey_preview", "stair_outline_text", "stair_floor_text",
-    "layer_rows", "text_rows", "storey_rows",
+    "layer_rows", "text_rows", "hatch_rows", "storey_rows",
     "link_version_text", "tb_active_view",
 ))
 
@@ -93,18 +96,22 @@ def pick_index(items, wanted):
     return starts[0] if len(starts) == 1 else -1
 
 
-def payload(controls, layers=None, texts=None, version="", advanced=None):
+def payload(controls, layers=None, texts=None, version="", advanced=None,
+            hatches=None):
     """A complete settings dict, ready for `write()` or `prefs`.
 
     `advanced` is the Advanced window's overrides ({key: number}); it rides
     the file so a settings file is the WHOLE run, not the whole run minus the
-    values that bite hardest when they silently differ.
+    values that bite hardest when they silently differ. `hatches` is the
+    hatch layers' own mapping ({hatch_layer: region meaning}) -- the third
+    table on the Layers tab, apart from geometry and text.
     """
     return {"schema": SCHEMA,
             "version": version or "",
             "controls": dict(controls or {}),
             "layers": dict(layers or {}),
             "texts": dict(texts or {}),
+            "hatches": dict(hatches or {}),
             "advanced": dict(advanced or {})}
 
 
@@ -135,12 +142,25 @@ def advanced_overrides(data):
     return dict(section) if isinstance(section, dict) else {}
 
 
+def hatch_mappings(data):
+    """The saved hatch-layer mapping, or {} -- a file older than schema 3
+    has none and loads unchanged (its hatch table keeps the convention's
+    guess). Kept OUT of `sections()` for the same reason the advanced
+    section is: the three-tuple callers keep their shape.
+    """
+    if not isinstance(data, dict):
+        return {}
+    section = data.get("hatches")
+    return dict(section) if isinstance(section, dict) else {}
+
+
 def describe(data):
     """One line about a saved file, for the dialog's status text."""
     controls, layers, texts = sections(data)
     version = (data or {}).get("version") or "?"
     return "{0} setting(s), {1} layer(s) -- saved by v{2}".format(
-        len(controls), len(layers) + len(texts), version)
+        len(controls), len(layers) + len(texts) + len(hatch_mappings(data)),
+        version)
 
 
 def read(path):

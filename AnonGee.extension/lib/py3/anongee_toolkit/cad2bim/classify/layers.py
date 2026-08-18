@@ -39,12 +39,14 @@ CATEGORY_FOLD = "fold"
 CATEGORY_SUNK = "sunk"
 # A CUTOUT region is a hole: no concrete where it sits, never an element of
 # its own -- the hatch-region cousin of the X-marked face (foundation_plan).
-# No convention pattern routes here on purpose: the corpus reaches it through
-# a LEGEND proposal (test9's ASPHALT hatches, "HATCH INDICATE CUTOUT FOR DOOR
-# ABOVE", all on PI_SHEAR WALL CUTOUT) or an explicit pick in the dialog. A
-# name rule would also re-route test9's shear-wall-named layers away from the
-# wall passes behind the user's back, which is exactly what a proposal into
-# the dialog exists to avoid.
+# No GEOMETRY convention pattern routes here on purpose: a name rule would
+# re-route test9's shear-wall-named layers away from the wall passes behind
+# the user's back. Linework reaches it only through an explicit pick in the
+# dialog. HATCHES are different -- they have a mapping of their own
+# (_HATCH_CONVENTION below), where a cutout token is safe because routing a
+# hatch layer never moves linework -- and the LEGEND proposal (test9's
+# ASPHALT hatches, "HATCH INDICATE CUTOUT FOR DOOR ABOVE", all on
+# PI_SHEAR WALL CUTOUT) seeds that hatch mapping too.
 CATEGORY_CUTOUT = "cutout"
 CATEGORY_UNMAPPED = "unmapped"
 
@@ -148,6 +150,59 @@ def classify_text_layer(layer_name):
 def build_default_text_mapping(layer_keys):
     """Pre-fill {text_layer: text_category} from the convention for the dialog."""
     return dict((key, classify_text_layer(key)) for key in layer_keys)
+
+
+# HATCH layers get a mapping OF THEIR OWN, apart from geometry and text (the
+# user's explicit instruction). A hatch is a REGION -- a meaning painted over
+# an area -- so its categories are the region meanings only: the column fill
+# (test10's S-COLS carries 330 of them, test9's PI_COLUMN HATCH 106), the
+# fold/sunk step regions, and the cutout hole. Everything else is unmapped.
+# Keeping the list this short is the point: routing a hatch layer can never
+# re-route the LINEWORK on a like-named layer, which is exactly what the
+# geometry table's cutout comment feared -- and why the hatch convention MAY
+# carry a cutout token where the geometry convention deliberately does not
+# (test9's PI_SHEAR WALL CUTOUT hatches route to cutout by name without
+# touching the shear-wall linework passes).
+HATCH_CATEGORIES = (
+    CATEGORY_COLUMN, CATEGORY_FOLD, CATEGORY_SUNK, CATEGORY_CUTOUT,
+    CATEGORY_UNMAPPED,
+)
+
+# Order matters, like DEFAULT_CONVENTION: the step tokens go before the
+# column-fill token so "S-FND-FOLD"-style names can never be swallowed by a
+# broader pattern, and cutout goes before "col" so a "COLUMN CUTOUT" style
+# name reads as the hole it marks.
+_HATCH_CONVENTION = (
+    (r"fold", CATEGORY_FOLD),
+    (r"sunk|sink", CATEGORY_SUNK),
+    (r"cut[\s_-]*out", CATEGORY_CUTOUT),
+    (r"col", CATEGORY_COLUMN),
+)
+
+
+def classify_hatch_layer(layer_name):
+    """Default routing for a HATCH layer: column fill / fold / sunk / cutout,
+    or unmapped.
+
+    Same precedence stance as classify_layer: the annotation exclusions run
+    first (a hatch on an -IDEN or -ANNO layer is decoration, not a region
+    meaning), then the hatch convention, then unmapped.
+    """
+    if not layer_name:
+        return CATEGORY_UNMAPPED
+    text = layer_name.lower()
+    for pattern in EXCLUSION_PATTERNS:
+        if re.search(pattern, text):
+            return CATEGORY_UNMAPPED
+    for pattern, category in _HATCH_CONVENTION:
+        if re.search(pattern, text):
+            return category
+    return CATEGORY_UNMAPPED
+
+
+def build_default_hatch_mapping(layer_keys):
+    """Pre-fill {hatch_layer: region meaning} from the convention for the dialog."""
+    return dict((key, classify_hatch_layer(key)) for key in layer_keys)
 
 
 def classify_layer(layer_name, overrides=None):

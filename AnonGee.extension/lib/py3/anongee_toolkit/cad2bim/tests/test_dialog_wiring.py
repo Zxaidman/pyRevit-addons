@@ -469,18 +469,23 @@ class TheLegendProposalReachesTheDialog(unittest.TestCase):
                       script)
         self.assertIn("legend.propose(legend_entries, dxf_result.regions)",
                       script)
-        # the proposal OVERRIDES the name-convention default for its layers --
-        # that override, sitting in the editable table, IS the proposal...
-        self.assertIn('default_mapping[layer_name] = '
+        # the proposal OVERRIDES the hatch convention's default for its
+        # layers -- a legend describes HATCHES, so it seeds the HATCH
+        # mapping, never the geometry one -- and that override, sitting in
+        # the editable hatch table, IS the proposal...
+        self.assertIn('default_hatch_mapping[layer_name] = '
                       'proposal["mapping"][layer_name]', script)
-        # ...the marked rows ride into the window, and the console says so
-        self.assertIn("layer_notes=legend_notes", script)
+        self.assertNotIn('default_mapping[layer_name] = '
+                         'proposal["mapping"][layer_name]', script)
+        # ...the marked rows ride into the window's HATCH table, and the
+        # console says so
+        self.assertIn("hatch_notes=legend_notes", script)
         self.assertIn('_say("  legend:', script)
 
     def test_the_window_marks_the_proposed_rows(self):
         window = _window_source()
-        self.assertIn("layer_notes=None", window)
-        self.assertIn("row_notes=layer_notes", window)
+        self.assertIn("hatch_notes=None", window)
+        self.assertIn("row_notes=hatch_notes", window)
         block = window.split("def _build_rows(", 1)[1].split("\n    def ",
                                                              1)[0]
         self.assertIn("row_notes", block)
@@ -493,6 +498,59 @@ class TheLegendProposalReachesTheDialog(unittest.TestCase):
         self.assertIn("foundation_plan.plan_foundations(records or [], "
                       "texts or [],", _builders_source())
         self.assertIn("regions=regions or []", _builders_source())
+
+
+class TheHatchLayersHaveTheirOwnTable(unittest.TestCase):
+    """Hatches map on their own table, apart from geometry and text.
+
+    v0.69.7 merged hatch-only layers into the GEOMETRY rows, so routing a
+    hatch could re-route the linework on a like-named layer. The third table
+    undoes that: hatch rows come only from the regions, carry the hatch
+    categories, and the regions are stamped from selections["hatch_mapping"]
+    -- never from the geometry mapping. Each wire here degrades silently if
+    cut, which is why it is pinned as text like the tolerance wires.
+    """
+
+    def test_the_third_table_sits_on_the_layers_tab(self):
+        self.assertIn("hatch_rows", _xaml_names(_XAML))
+        self.assertEqual(_tab_homes().get("hatch_rows"), "Layers")
+
+    def test_the_window_builds_and_reads_the_table(self):
+        window = _window_source()
+        self.assertIn('find("hatch_rows")', window)
+        self.assertIn("self._hatch_combos", window)
+        # emitted under its own key, with the same unmapped fallback the
+        # geometry table uses
+        collect = window.split("def _collect(", 1)[1].split("\n    def ",
+                                                            1)[0]
+        self.assertIn('"hatch_mapping": hatch_mapping', collect)
+
+    def test_the_rows_are_built_from_the_regions_only(self):
+        script = _script_source()
+        self.assertIn("layers.build_default_hatch_mapping(hatch_names)",
+                      script)
+        self.assertIn("layers.HATCH_CATEGORIES", script)
+        # ...and the geometry rows are records-only again: the v0.69.7 merge
+        # of region counts into the geometry table is gone
+        self.assertNotIn("| set(region_counts)", script)
+
+    def test_the_regions_never_consult_the_geometry_mapping(self):
+        script = _script_source()
+        self.assertIn('layers.apply_mapping(dxf_result.regions, '
+                      'selections["hatch_mapping"])', script)
+        self.assertNotIn('apply_mapping(dxf_result.regions, '
+                         'selections["mapping"])', script)
+
+    def test_the_mapping_is_persisted_and_restored(self):
+        window = _window_source()
+        capture = window.split("def _capture_settings(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("self._hatch_combos", capture)
+        self.assertIn("hatches=hatch_map", capture)
+        restore = window.split("def _restore_controls(", 1)[1].split(
+            "\n    def ", 1)[0]
+        self.assertIn("settings.hatch_mappings(data)", restore)
+        self.assertIn("self._hatch_combos", restore)
 
 
 class TheDrawStairsRoundTripKeepsTheWholeDialog(unittest.TestCase):

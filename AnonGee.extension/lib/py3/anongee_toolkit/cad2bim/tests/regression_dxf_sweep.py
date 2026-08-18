@@ -132,11 +132,14 @@ def _measure(path):
     legend_entries = legend.read(result.regions, result.texts)
     legend_proposals = legend.propose(legend_entries, result.regions)
     # FOLDS AND SUNK BAYS. The hatches are classified the way the pipeline
-    # classifies them, then stepped against the outlines they sit in. test10 is
-    # the case: six folds inside two F3 rafts, and one sunk strip that IS its
-    # own F6 outline and therefore needs no support at all.
-    for region in result.regions:
-        region.category = layers.classify_layer(region.layer_key)
+    # classifies them -- through the HATCH mapping's own default, apart from
+    # geometry and text -- then stepped against the outlines they sit in.
+    # test10 is the case: six folds inside two F3 rafts, and one sunk strip
+    # that IS its own F6 outline and therefore needs no support at all.
+    layers.apply_mapping(
+        result.regions,
+        layers.build_default_hatch_mapping(
+            [r.layer_key for r in result.regions]))
     steps = fold_plan.plan_steps(foundation_plans, result.regions)
     # The PROFILES the builder would hand Floor.Create, assembled the same
     # way: step openings and nested outlines as holes, then split wherever an
@@ -214,13 +217,13 @@ def _measure(path):
 def _regions_by_category(regions):
     """{category: count} for the hatches the reader kept out of `records`.
 
-    Regions are classified here rather than in the pipeline because nothing
-    downstream consumes them yet -- this is what pins the P1.1 reader against
-    drift until P2 places the folds.
+    Classified through the HATCH convention (classify_hatch_layer), the way
+    the pipeline now routes regions -- hatches map on their own table, apart
+    from geometry and text.
     """
     counts = {}
     for region in (regions or []):
-        category = layers.classify_layer(region.layer_key)
+        category = layers.classify_hatch_layer(region.layer_key)
         counts[category] = counts.get(category, 0) + 1
     return counts
 

@@ -806,6 +806,26 @@
                                 <StackPanel x:Name="text_rows" Orientation="Vertical"/>
                             </ScrollViewer>
                         </Border>
+
+                        <TextBlock Text="Hatch layers -> region meaning" Style="{StaticResource TextH3}"
+                                   Margin="0,8,0,4"/>
+                        <Grid Margin="0,4,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="70"/>
+                                <ColumnDefinition Width="180"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Hatch layer" Style="{StaticResource TextCaption}"/>
+                            <TextBlock Grid.Column="1" Text="Regions" Style="{StaticResource TextCaption}"/>
+                            <TextBlock Grid.Column="2" Text="Meaning" Style="{StaticResource TextCaption}"/>
+                        </Grid>
+                        <Border BorderBrush="{StaticResource BrushLightBorder}" BorderThickness="1"
+                                CornerRadius="5" Background="{StaticResource BrushPureWhite}"
+                                Padding="8" MaxHeight="170">
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel x:Name="hatch_rows" Orientation="Vertical"/>
+                            </ScrollViewer>
+                        </Border>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

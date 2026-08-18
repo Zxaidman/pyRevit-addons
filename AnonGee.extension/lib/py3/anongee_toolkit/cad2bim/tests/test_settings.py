@@ -33,7 +33,8 @@ class WhatGetsSaved(unittest.TestCase):
     def test_computed_text_and_buttons_are_not(self):
         for name in ("version_text", "source_text", "status_text",
                      "multistorey_preview", "lbl_name_floor",
-                     "btn_run", "storey_rows", "layer_rows"):
+                     "btn_run", "storey_rows", "layer_rows", "text_rows",
+                     "hatch_rows"):
             self.assertFalse(settings.saveable(name), name)
 
     def test_detected_controls_are_saved_but_never_restored(self):
@@ -123,6 +124,40 @@ class PayloadShape(unittest.TestCase):
         for junk in (None, [], "text", {"advanced": "not a dict"},
                      {"advanced": None}, {"advanced": [1, 2]}):
             self.assertEqual(settings.advanced_overrides(junk), {}, repr(junk))
+
+    def test_payload_carries_the_hatch_mapping_in_its_own_section(self):
+        # hatches map on their own table, apart from geometry and text, so
+        # the file keeps them apart too
+        data = settings.payload({"a": 1}, {"S-COLS": "column"},
+                                {"S-COLS-IDEN": "column text"},
+                                hatches={"S-FND-FOLD": "fold"})
+        self.assertEqual(data["hatches"], {"S-FND-FOLD": "fold"})
+        self.assertEqual(settings.hatch_mappings(data),
+                         {"S-FND-FOLD": "fold"})
+        # ...and the three-tuple sections keep their shape (the advanced
+        # precedent): the hatch section rides its own accessor
+        self.assertEqual(settings.sections(data),
+                         ({"a": 1}, {"S-COLS": "column"},
+                          {"S-COLS-IDEN": "column text"}))
+
+    def test_a_file_older_than_schema_3_loads_unchanged(self):
+        # no hatches section: the mapping reads as empty, so the dialog's
+        # convention guess stands, and everything else restores as it did
+        old = {"schema": 2, "version": "0.73.1",
+               "controls": {"chk_beams": True},
+               "layers": {"S-COLS": "column"}, "texts": {},
+               "advanced": {"beam_heal_mm": 400.0}}
+        controls, layers, texts = settings.sections(old)
+        self.assertEqual(controls, {"chk_beams": True})
+        self.assertEqual(layers, {"S-COLS": "column"})
+        self.assertEqual(settings.hatch_mappings(old), {})
+        self.assertEqual(settings.advanced_overrides(old),
+                         {"beam_heal_mm": 400.0})
+
+    def test_hatch_mappings_of_rubbish_is_an_empty_dict(self):
+        for junk in (None, [], "text", {"hatches": "not a dict"},
+                     {"hatches": None}, {"hatches": [1, 2]}):
+            self.assertEqual(settings.hatch_mappings(junk), {}, repr(junk))
 
     def test_describe_counts_both_layer_maps(self):
         text = settings.describe(settings.payload(

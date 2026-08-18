@@ -66,6 +66,68 @@ class NewLayerCategories(unittest.TestCase):
         self.assertIn(layers.CATEGORY_FOUNDATION_TEXT, layers.TEXT_CATEGORIES)
 
 
+class TheHatchLayersHaveTheirOwnConvention(unittest.TestCase):
+    """Hatches map on their own table, apart from geometry and text.
+
+    classify_hatch_layer routes a HATCH layer to a region meaning -- column
+    fill / fold / sunk / cutout -- and nothing else. Every layer name here is
+    a real one from the corpus.
+    """
+
+    def test_the_step_layers_route_as_they_do_in_geometry(self):
+        # test10's convention: the tokens carry over, so the sweep's fold and
+        # sunk counts must not move when regions switch to this convention
+        self.assertEqual(layers.classify_hatch_layer("S-FND-FOLD"),
+                         layers.CATEGORY_FOLD)
+        self.assertEqual(layers.classify_hatch_layer("S-FND-SUNK"),
+                         layers.CATEGORY_SUNK)
+
+    def test_a_column_fill_layer_is_a_column_region(self):
+        # test10's S-COLS carries 330 column fills, test9's PI_COLUMN HATCH
+        # 106, Project1's COLUMN HATCH_ASC 218
+        for name in ("S-COLS", "PI_COLUMN HATCH", "COLUMN HATCH_ASC"):
+            self.assertEqual(layers.classify_hatch_layer(name),
+                             layers.CATEGORY_COLUMN, name)
+
+    def test_a_cutout_layer_routes_by_name_here_and_only_here(self):
+        # the GEOMETRY convention deliberately has no cutout token (it would
+        # re-route test9's shear-wall linework); the hatch convention may
+        # carry one because routing a hatch layer never moves linework
+        self.assertEqual(layers.classify_hatch_layer("PI_SHEAR WALL CUTOUT"),
+                         layers.CATEGORY_CUTOUT)
+        self.assertEqual(layers.classify_layer("PI_SHEAR WALL CUTOUT"),
+                         layers.CATEGORY_STRUCT_WALL)
+
+    def test_everything_else_is_unmapped(self):
+        # geometry categories a hatch cannot be: a wall hatch, a slab hatch,
+        # a plain hatch layer, the empty name
+        for name in ("PI_RETAINING WALL HATCH", "PT SLAB HATCH", "PI_HATCH",
+                     "SYMBOL", ".", "0", "", None):
+            self.assertEqual(layers.classify_hatch_layer(name),
+                             layers.CATEGORY_UNMAPPED, repr(name))
+
+    def test_an_annotation_layer_is_excluded_first(self):
+        # the exclusions run first, as in classify_layer: a hatch on an
+        # -IDEN or -ANNO layer is decoration, whatever else the name says
+        self.assertEqual(layers.classify_hatch_layer("S-COLS-IDEN"),
+                         layers.CATEGORY_UNMAPPED)
+
+    def test_the_hatch_category_list_is_the_dialogs_and_ends_unmapped(self):
+        # _build_rows falls back to the LAST item when a default is missing
+        self.assertEqual(layers.HATCH_CATEGORIES,
+                         (layers.CATEGORY_COLUMN, layers.CATEGORY_FOLD,
+                          layers.CATEGORY_SUNK, layers.CATEGORY_CUTOUT,
+                          layers.CATEGORY_UNMAPPED))
+
+    def test_the_default_hatch_mapping_covers_every_key(self):
+        mapping = layers.build_default_hatch_mapping(
+            ["S-FND-FOLD", "S-COLS", "PI_HATCH"])
+        self.assertEqual(mapping,
+                         {"S-FND-FOLD": layers.CATEGORY_FOLD,
+                          "S-COLS": layers.CATEGORY_COLUMN,
+                          "PI_HATCH": layers.CATEGORY_UNMAPPED})
+
+
 class TheRestOfTheCorpusIsUntouched(unittest.TestCase):
     """Every layer name in the 17 fixtures that could plausibly collide with the
     new patterns. If one of these moves, so does every regression baseline."""

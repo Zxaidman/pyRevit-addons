@@ -361,9 +361,13 @@ class TheTest9Legend(unittest.TestCase):
         proposal = legend.propose(entries, result.regions)
         self.assertEqual(proposal["mapping"],
                          {"PI_SHEAR WALL CUTOUT": layers.CATEGORY_CUTOUT})
-        # ...overriding the name-convention default, which reads "shear" and
-        # says structural wall. That is exactly why it is a marked proposal
-        # in the dialog and not a silent application.
+        # The proposal seeds the HATCH mapping -- hatches map on their own
+        # table -- whose convention already agrees (the cutout token is safe
+        # there: routing a hatch layer never moves linework). The GEOMETRY
+        # convention still reads "shear" and says structural wall, and the
+        # proposal never touches it, so the wall linework stays a wall.
+        self.assertEqual(layers.classify_hatch_layer("PI_SHEAR WALL CUTOUT"),
+                         layers.CATEGORY_CUTOUT)
         self.assertEqual(layers.classify_layer("PI_SHEAR WALL CUTOUT"),
                          layers.CATEGORY_STRUCT_WALL)
         # Three towers, three legends: ZIGZAG, STARS and SOLID all mean

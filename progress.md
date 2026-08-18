@@ -445,6 +445,33 @@ Tests 632 → 664 (26 legend, 3 cutout-region, 3 dialog-wiring pins); sweep
 gains `legend_entries` / `legend_proposals` (test9: 14 / 1, all else 0 —
 the re-blessed baseline moved exactly those 34 lines); full gate green.
 
+### Session 2026-08-18 — v0.74.0, hatches map on their own table
+
+**The user's explicit instruction: HATCH layers get a mapping of their own,
+apart from geometry and text.** v0.69.7 had merged hatch-only layers into
+the GEOMETRY rows, so routing a hatch could re-route linework on a
+like-named layer. Now the Layers tab carries a third table ("Hatch layers →
+region meaning", `hatch_rows`, same brand-styled row builder), fed ONLY
+from `dxf_result.regions`; the geometry rows are records-only again.
+`classify/layers.py` gains `HATCH_CATEGORIES` (column fill / fold / sunk /
+cutout / unmapped), `classify_hatch_layer` (exclusions first, then
+fold/sunk/cutout/col tokens — a cutout token is SAFE here because routing a
+hatch layer never moves linework, the exact fear that kept it out of the
+geometry convention) and `build_default_hatch_mapping`; `classify_layer` is
+untouched. LEGEND proposals seed the HATCH mapping now (a legend describes
+hatches) and their `*`-marked rows moved with them; the run applies
+`selections["hatch_mapping"]` to regions — regions never consult the
+geometry mapping. Settings schema 2 → 3 adds the optional `"hatches"`
+section (own accessor `hatch_mappings()`, the advanced precedent: the
+`sections()` three-tuple keeps its shape; older files load unchanged) and
+the draw-stairs preset round-trips it via the same capture/restore path.
+The sweep classifies regions through the hatch convention now.
+
+Tests 664 → 679 (7 hatch-convention, 5 hatch-table wiring, 3 settings);
+full gate green with NO baseline movement — fold 6 / sunk 1 (test10) and
+every other count identical, the fold/sunk/cutout/col tokens carry over
+exactly.
+
 ### Open
 
 - P2.4 remainder: `legend.legend_steps()` has no consumer yet (legend-driven
