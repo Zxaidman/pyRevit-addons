@@ -297,7 +297,8 @@ class CadToBimWindow(object):
                  footing_type_options=None, material_options=None,
                  saved_settings=None, layer_notes=None,
                  hatch_layer_rows=None, hatch_categories=None,
-                 default_hatch_mapping=None, hatch_notes=None):
+                 default_hatch_mapping=None, hatch_notes=None,
+                 wall_type_options=None):
         self.result = None
         self._combos = []
         self._text_combos = []
@@ -391,6 +392,26 @@ class CadToBimWindow(object):
             self.chk_footings.IsEnabled = False
             self.chk_footings.Content = ("Create footings (the model has no "
                                          "floor/foundation type)")
+        # Walls: the two kinds place against their OWN base types -- a shear
+        # wall and a brick partition are different assemblies -- so Structure
+        # and Architecture each carry a picker over the same wall-type list.
+        self.chk_struct_walls = find("chk_struct_walls")
+        self.chk_arch_walls = find("chk_arch_walls")
+        self.cb_struct_wall_type = find("cb_struct_wall_type")
+        self.cb_arch_wall_type = find("cb_arch_wall_type")
+        self._wall_ids = self._fill_combo(self.cb_struct_wall_type,
+                                          wall_type_options or [])
+        self._fill_combo(self.cb_arch_wall_type, wall_type_options or [])
+        _select_containing(self.cb_struct_wall_type, ["rcc", "conc", "retain"])
+        _select_containing(self.cb_arch_wall_type, ["brick", "block"])
+        if not self._wall_ids:
+            for checkbox, label in (
+                    (self.chk_struct_walls, "Create structural walls"),
+                    (self.chk_arch_walls, "Create architectural walls")):
+                checkbox.IsChecked = False
+                checkbox.IsEnabled = False
+                checkbox.Content = ("{0} (the model has no wall "
+                                    "type)".format(label))
         # Materials: one picker per element kind, "(unchanged)" leaving the
         # family's own material alone
         self.material_combos = {}
@@ -495,7 +516,9 @@ class CadToBimWindow(object):
                              ("level", "level"),
                              ("grid", "grid"),
                              ("footing", "footing"),
-                             ("raft", "raft")):
+                             ("raft", "raft"),
+                             ("wall_struct", "wall_struct"),
+                             ("wall_arch", "wall_arch")):
             box = find("tb_name_{0}".format(control))
             box.Text = saved_naming.get(key, naming.DEFAULTS[key])
             box.TextChanged += self.on_naming_changed
@@ -950,6 +973,15 @@ class CadToBimWindow(object):
                 "column": report.parse_standard_sizes(self.tb_std_columns.Text),
                 "beam_widths": report.parse_standard_widths(self.tb_std_beams.Text),
             },
+            # the wall kinds tick and pick apart -- Structure owns the
+            # structural pair, Architecture the arch pair -- but both place
+            # through one _create_walls pass on the run side
+            "create_struct_walls": bool(self.chk_struct_walls.IsChecked),
+            "create_arch_walls": bool(self.chk_arch_walls.IsChecked),
+            "struct_wall_type_id": self._wall_ids.get(
+                self.cb_struct_wall_type.SelectedItem),
+            "arch_wall_type_id": self._wall_ids.get(
+                self.cb_arch_wall_type.SelectedItem),
             "create_footings": bool(self.chk_footings.IsChecked),
             "footing_symbol_id": self._footing_ids.get(
                 self.cb_footing_family.SelectedItem),

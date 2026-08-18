@@ -513,14 +513,65 @@ baseline moved exactly those 102 lines and nothing else — the rcc move
 shifts records between two categories the sweep never counted, and legs 1
 and 3 re-recorded byte-identical. Full gate green.
 
+### Session 2026-08-18 (evening) — v0.76.0, the wall builder (P3b)
+
+**The Revit half of the walls, on top of P3a's untouched planner.**
+`builders/walls.py` places one line-based `Wall.Create` per planned
+centreline. Width lives in the TYPE — a wall has no width parameter — so the
+picked base type duplicates per (kind, width) and its CORE layer resizes
+through the compound structure, the floor builders' per-thickness pattern
+with the kind in the cache key because a 200 shear wall and a 200 partition
+are two types with two names. A structure that REFUSES the width (membrane
+layer, curtain/stacked base with no compound structure) is a red console
+error and the wall still places at the base type's own width: a wall
+standing where the drawing shows one, named wrong in red, beats a silent
+gap — the 0.5.3 fall-back-and-report rule. Tops follow the roadmap
+convention: `Wall.Create` only takes an unconnected height, so the top
+CONSTRAINT (WALL_HEIGHT_TYPE, offsets zeroed) is attached after placement
+the way columns attach FAMILY_TOP_LEVEL_PARAM — structural walls rise
+base-to-top like columns, arch walls run base to the level above (the same
+pair, per storey), both standing at the storey height unconnected when no
+top exists. The `structural` bool on Create is the kind, for the same
+reason footings set FLOOR_PARAM_IS_STRUCTURAL.
+
+**One planning pass, two kinds, one guarded transaction.**
+`run_builders._create_walls` calls `plan_walls` once with the dialog's
+tolerances, splits the segments by kind, and places each kind against its
+OWN base type; the planner's refusals (door cutouts, end caps, partnerless
+faces) print grouped by reason — 27 jamb skips are one line, not 27 — and
+errors go through `_say_error` in red like every creator since v0.69.3.
+Walls are step 8 of the build (footings 9, materials 10), per storey like
+everything vertical.
+
+**The dialog's Architecture tab earns its keep.** Structure gains the
+structural-wall group (create tick + base type picker over the model's
+WallTypes, basic first, curtain/stacked labelled); Architecture gets its
+first real content — the arch group and a roofs note where the P3
+placeholder stood. Naming gains the two rows the user's separate-templates
+rule demands: "RCC WALL {t} THK" and "BRICK WALL {t} THK", {t} REQUIRED in
+both (the raft precedent: a collision is a silent reuse, widths are
+MEASURED off the drawing, and test8 draws 100/150/250 on one plan).
+Selections gain create_struct_walls / create_arch_walls /
+struct_wall_type_id / arch_wall_type_id; settings, preset round trip and
+the last-session restore all ride the name-driven capture — NO schema
+change, and a file from before the controls loads unchanged.
+
+Tests 701 → 714 (10 wall wiring pins in the foundation-links style, 2
+naming, 1 settings; the spot-check moved from the retired placeholder to
+the roofs note). Full gate green with ZERO baseline movement — P3b touches
+no planning code, and the three legs re-ran byte-identical against the
+committed baselines. The two deferred decisions are recorded as P3c in
+task_plan.md: the core-recovery walls stay thin columns (column counts
+held), and the both-conventions wall builds twice until the user's Revit
+run says which side wins.
+
 ### Open
 
-- P3b: the wall BUILDER — `DB.Wall` placement, dialog rows, run_builders
-  wiring. Two decisions recorded for it in task_plan.md: when the
-  core-wall-as-column placement moves over (column counts hold until then),
-  and which convention wins where one wall is drawn on both (test8's 250
-  S-RCC-WALL quad carries a 150 arch trace 50 mm off its centreline; both
-  plan today, findings #12).
+- P3b awaits the user's Revit validation (v0.76.0). P3c then takes the two
+  recorded decisions: when the core-wall-as-column placement moves over
+  (column counts hold until then), and which convention wins where one wall
+  is drawn on both (test8's 250 S-RCC-WALL quad carries a 150 arch trace
+  50 mm off its centreline; both plan AND both build today, findings #12).
 - P2.4 remainder: `legend.legend_steps()` has no consumer yet (legend-driven
   slab stepping is P2-on-slabs), and a per-tower legend read — each block is
   internally coherent — needs the multi-storey split to run before the

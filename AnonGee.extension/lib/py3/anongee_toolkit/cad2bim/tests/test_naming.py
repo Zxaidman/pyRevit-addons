@@ -41,6 +41,8 @@ class DefaultNames(unittest.TestCase):
         self.assertEqual(naming.grid_name("A"), "A")
         self.assertEqual(naming.footing_type_name(600), "PAD 600 THK")
         self.assertEqual(naming.raft_type_name(750), "RAFT 750 THK")
+        self.assertEqual(naming.struct_wall_type_name(250), "RCC WALL 250 THK")
+        self.assertEqual(naming.arch_wall_type_name(150), "BRICK WALL 150 THK")
 
     def test_sizes_are_whole_millimetres(self):
         # a float size must never leak "400.0" into a type name
@@ -145,6 +147,29 @@ class CustomTemplates(unittest.TestCase):
         self.assertIn("{t}", problem)
         self.assertIsNone(naming.validate("raft", "RAFT {t} THK"))
         self.assertIsNone(naming.validate("raft", "MAT-{t:04d}"))
+
+    def test_walls_take_a_convention_per_kind(self):
+        # the user's standing rule from the footing/raft pair: SEPARATE
+        # templates per element kind -- a shear wall and a brick partition
+        # are named apart, whatever their widths
+        naming.apply({"wall_struct": "SW {t}", "wall_arch": "BWK {t}"})
+        self.assertEqual(naming.struct_wall_type_name(230), "SW 230")
+        self.assertEqual(naming.arch_wall_type_name(115), "BWK 115")
+        # untouched siblings keep their defaults
+        naming.apply({"wall_struct": "SW {t}"})
+        self.assertEqual(naming.arch_wall_type_name(150), "BRICK WALL 150 THK")
+
+    def test_a_wall_template_that_drops_the_width_is_refused(self):
+        # a wall's width is MEASURED off the drawing and several widths per
+        # drawing is the normal case (test8 draws 100/150/250 on one plan);
+        # a collision being a silent reuse, dropping {t} would cast every
+        # 250 wall at 150 -- both templates are new, so the trap is closed
+        # from day one exactly as the raft's was
+        for key in ("wall_struct", "wall_arch"):
+            problem = naming.validate(key, "RCC WALL")
+            self.assertIsNotNone(problem, key)
+            self.assertIn("{t}", problem)
+            self.assertIsNone(naming.validate(key, "W-{t:04d}"))
 
 
 class LevelNames(unittest.TestCase):

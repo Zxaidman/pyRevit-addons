@@ -22,6 +22,9 @@ _SCRIPT = os.path.join(_BUTTON, "script.py")
 _WINDOW = os.path.normpath(os.path.join(_HERE, "..", "ui_window.py"))
 # ...and the element-creation drivers moved beside them
 _BUILDERS = os.path.normpath(os.path.join(_HERE, "..", "run_builders.py"))
+# the wall builder itself: imports Revit at module level, so text-only here
+_WALLS_BUILDER = os.path.normpath(os.path.join(_HERE, "..", "builders",
+                                               "walls.py"))
 _XAML = os.path.join(_BUTTON, "ui.xaml")
 _LINK_XAML = os.path.join(_BUTTON, "link_options.xaml")
 _ADV_XAML = os.path.join(_BUTTON, "advanced.xaml")
@@ -190,7 +193,8 @@ class NamingTabControls(unittest.TestCase):
                 "beam_sized": "beam", "beam_width": "beam_width",
                 "floor": "floor", "stair": "stair",
                 "stair_waist": "stair_waist", "level": "level",
-                "grid": "grid", "footing": "footing", "raft": "raft"}
+                "grid": "grid", "footing": "footing", "raft": "raft",
+                "wall_struct": "wall_struct", "wall_arch": "wall_arch"}
 
     def test_one_box_and_one_preview_per_template(self):
         names = _xaml_names(_XAML)
@@ -388,14 +392,15 @@ class HelpProseIsReadable(unittest.TestCase):
         self.assertGreater(styled, 20, "the prose sweep found almost nothing")
 
     def test_the_known_guide_notes_are_spot_checked(self):
-        # two the user actually complained about: the foundation prose and the
-        # walls note (now the Build > Architecture placeholder)
+        # two the user actually complained about: the foundation prose and
+        # the Architecture tab's note (the P3 walls placeholder until v0.76.0,
+        # now the roofs note beside the wall controls that replaced it)
         tree = ET.parse(_XAML)
-        walls = [el for el in tree.iter(self._WPF + "TextBlock")
+        roofs = [el for el in tree.iter(self._WPF + "TextBlock")
                  if (el.get("Text") or "").startswith(
-                     "Architectural walls and roofs are not built yet")]
-        self.assertEqual(len(walls), 1, "the walls note appears once")
-        self.assertEqual(walls[0].get("Style"), self._STYLE)
+                     "Roofs are not built yet")]
+        self.assertEqual(len(roofs), 1, "the roofs note appears once")
+        self.assertEqual(roofs[0].get("Style"), self._STYLE)
         foundation = [el for el in tree.iter(self._WPF + "TextBlock")
                       if "invented pads SILENTLY" in (el.get("Text") or "")]
         self.assertEqual(len(foundation), 1)
@@ -741,6 +746,147 @@ class TheDrawnFoundationsReachTheBuilder(unittest.TestCase):
                    and isinstance(node.value, str))
         self.assertIn("tolerances", read)
         self.assertNotIn("limits", read)
+
+
+class TheWallsReachTheBuilder(unittest.TestCase):
+    """The wall pass is Revit-side past the planner, so its wiring is static.
+
+    `wall_plan` is unit-tested offline (test_wall_plan) and the sweep counts
+    its segments; `builders/walls.py` imports Revit at module level, so no
+    offline harness can execute it. Every link below fails QUIETLY if cut:
+    drop the tolerances at the plan_walls call and the planner reads config
+    defaults over the user's boxes; drop a selections key and a whole wall
+    kind silently stops building; leave a combo unfilled and the type picker
+    is decoration. Pinned as text, the way the foundation links are.
+    """
+
+    def _function(self, source, name):
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.FunctionDef) and node.name == name:
+                return node
+        self.fail("no %s" % name)
+
+    def _call(self, node, name):
+        """The call to `name` (plain or dotted) inside `node`."""
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Call):
+                continue
+            func = inner.func
+            called = (func.id if isinstance(func, ast.Name)
+                      else getattr(func, "attr", None))
+            if called == name:
+                return inner
+        return None
+
+    def _walls_source(self):
+        with open(_WALLS_BUILDER, "rb") as handle:
+            return handle.read().decode("utf-8")
+
+    def test_each_kind_lives_on_its_own_discipline_tab(self):
+        # the user's tab set: structural walls belong to Structure, arch
+        # walls give Architecture its first real content
+        homes = _tab_homes()
+        for control, tab in (("chk_struct_walls", "Build > Structure"),
+                             ("cb_struct_wall_type", "Build > Structure"),
+                             ("chk_arch_walls", "Build > Architecture"),
+                             ("cb_arch_wall_type", "Build > Architecture"),
+                             ("tb_name_wall_struct", "Naming"),
+                             ("tb_name_wall_arch", "Naming")):
+            self.assertEqual(homes.get(control), tab,
+                             "%s sits on %r" % (control, homes.get(control)))
+
+    def test_the_pushbutton_offers_the_models_wall_types(self):
+        # mirrors how floor types reach the slab picker: one document scan,
+        # handed to the window by keyword
+        script = _script_source()
+        self.assertIn("walls.wall_types(doc)", script)
+        self.assertIn("wall_type_options=wall_type_options", script)
+
+    def test_the_window_fills_both_pickers_and_emits_the_selections(self):
+        window = _window_source()
+        self.assertIn('find("cb_struct_wall_type")', window)
+        self.assertIn('find("cb_arch_wall_type")', window)
+        collect = _window_source().split("def _collect(", 1)[1].split(
+            "\n    def ", 1)[0]
+        for key in ('"create_struct_walls"', '"create_arch_walls"',
+                    '"struct_wall_type_id"', '"arch_wall_type_id"'):
+            self.assertIn(key, collect,
+                          "%s never leaves the dialog" % key)
+
+    def test_the_storey_hands_its_records_to_the_wall_pass(self):
+        call = self._call(self._function(_script_source(),
+                                         "_build_one_storey"),
+                          "_create_walls")
+        self.assertIsNotNone(call, "_build_one_storey never creates walls")
+        # the records ride positionally: doc, records, selections
+        self.assertGreaterEqual(len(call.args), 2,
+                                "the wall pass is called without records")
+        records = call.args[1]
+        self.assertEqual(getattr(records, "attr", None), "records",
+                         "the second argument is not the storey's records: "
+                         "the planner would read an empty drawing")
+
+    def test_the_planner_gets_the_dialog_tolerances(self):
+        # plan_walls quietly falls back to config defaults without them --
+        # the user's pair-overlap and parallel-angle boxes would stop
+        # reaching the walls while still reaching the beams
+        call = self._call(self._function(_builders_source(), "_create_walls"),
+                          "plan_walls")
+        self.assertIsNotNone(call, "the wall pass never plans")
+        self.assertIn("tolerances", [k.arg for k in call.keywords],
+                      "plan_walls is called without the dialog tolerances")
+
+    def test_both_kinds_place_through_one_guarded_transaction(self):
+        block = _builders_source().split("def _create_walls(", 1)[1].split(
+            "\ndef ", 1)[0]
+        self.assertIn("txn_failures.attach_warning_swallower(transaction)",
+                      block)
+        self.assertIn("walls.place_walls(", block)
+        self.assertIn('structural=(kind == "structural")', block)
+        # errors print in red, apart from the skip/note lines (the v0.69.3
+        # convention every creator follows)
+        self.assertIn('_say_error("  wall: {0}".format(message))', block)
+
+    def test_place_walls_is_told_the_top_level_and_the_fallback_height(self):
+        call = self._call(self._function(_builders_source(), "_create_walls"),
+                          "place_walls")
+        self.assertIsNotNone(call)
+        passed = set(keyword.arg for keyword in call.keywords)
+        for argument in ("top_level_id", "height_mm", "structural"):
+            self.assertIn(argument, passed,
+                          "place_walls is called without %s" % argument)
+
+    def test_the_builder_sets_width_through_the_compound_structure(self):
+        # a wall has NO width parameter: the number lives in the type's
+        # compound structure, so the duplicate-and-resize is the whole
+        # mechanism -- and a structure that refuses the width must land in
+        # result["errors"], never raise out of the batch
+        source = self._walls_source()
+        for text in ("GetCompoundStructure", "SetLayerWidth",
+                     "SetCompoundStructure",
+                     'result["errors"].append(width_problem)'):
+            self.assertIn(text, source)
+
+    def test_the_builder_constrains_the_top_and_carries_the_kind(self):
+        # structural walls rise base-to-top like columns, arch walls run to
+        # the level above -- the constraint is WALL_HEIGHT_TYPE, attached
+        # after Create the way columns attach FAMILY_TOP_LEVEL_PARAM; and
+        # the `structural` bool on Wall.Create is what files the wall under
+        # structure for the analytical model
+        source = self._walls_source()
+        self.assertIn("WALL_HEIGHT_TYPE", source)
+        self.assertIn("Wall.Create(doc, line, wall_type.Id, base_level.Id,",
+                      source)
+        self.assertIn("height_ft, 0.0, False, structural)", source)
+
+    def test_the_type_cache_is_keyed_by_kind_and_width(self):
+        # a 200-wide shear wall and a 200-wide partition are two types with
+        # two names (the Naming tab's separate rows); a width-only key would
+        # hand one the other's type
+        source = self._walls_source()
+        self.assertIn("key = (kind, int(round(width_mm)))", source)
+        self.assertIn("naming.struct_wall_type_name(", source)
+        self.assertIn("naming.arch_wall_type_name(", source)
 
 
 class StoreyTableIsSelectable(unittest.TestCase):

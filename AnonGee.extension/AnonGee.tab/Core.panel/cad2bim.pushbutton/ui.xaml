@@ -922,7 +922,7 @@
                         </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Slabs">
+                        <GroupBox Header="Slabs" Margin="0,0,0,8">
                         <StackPanel Orientation="Vertical">
                         <CheckBox x:Name="chk_slabs" Content="Create slabs (from slab outline or beam layout)" IsChecked="True"/>
                         <Grid Margin="24,4,0,0">
@@ -941,18 +941,56 @@
                         </Grid>
                         </StackPanel>
                         </GroupBox>
+
+                        <GroupBox Header="Structural walls">
+                        <StackPanel Orientation="Vertical">
+                        <CheckBox x:Name="chk_struct_walls" Content="Create structural walls (RCC / shear / retaining wall layers)" IsChecked="True"/>
+                        <Grid Margin="24,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Base wall type" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_struct_wall_type" Style="{StaticResource InputComboBox}" Margin="0,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Centrelines come from the layers routed to &quot;structural wall&quot; on the Layers tab -- closed thin outlines as drawn, loose parallel faces paired across door gaps. Each measured width duplicates the base type per size (the Naming tab's structural-wall row); walls rise base-to-top like the columns, or stand at the storey height, unconnected, when the run has no top level."
+                                       Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
+                        </Grid>
+                        </StackPanel>
+                        </GroupBox>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <!-- SUB-TAB: Build > Architecture (a placeholder until the P3
-                 walls land; it exists so the tab set already has the home
-                 those elements will move into) -->
+            <!-- SUB-TAB: Build > Architecture (the P3 walls' home; roofs
+                 follow later on the roadmap) -->
             <TabItem Header="Architecture">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Orientation="Vertical" Margin="16,12">
                         <TextBlock Text="Architecture" Style="{StaticResource TextH3}" Margin="0,0,0,4"/>
-                        <TextBlock Text="Architectural walls and roofs are not built yet -- walls are on the roadmap (P3) and their options will live on this tab. Until then the run builds the structure only, ready for the architectural layers to be modelled on top of it."
+                        <GroupBox Header="Walls" Margin="0,0,0,8">
+                        <StackPanel Orientation="Vertical">
+                        <CheckBox x:Name="chk_arch_walls" Content="Create architectural walls (brick / partition / parapet layers)" IsChecked="True"/>
+                        <Grid Margin="24,4,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="92"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Base wall type" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
+                            <ComboBox  Grid.Row="0" Grid.Column="1" x:Name="cb_arch_wall_type" Style="{StaticResource InputComboBox}" Margin="0,2"/>
+                            <TextBlock Grid.Row="1" Grid.Column="1" Text="Centrelines come from the layers routed to &quot;arch wall&quot; on the Layers tab, read exactly as the structural ones are. Each measured width duplicates the base type per size (the Naming tab's arch-wall row); walls run from the base level to the level above, or stand at the storey height, unconnected, when the run has no top level. Door openings are left open -- a gap in a wall run is bridged only up to a door's width, and cutout-named layers are never walled shut."
+                                       Style="{StaticResource HelpText}" Margin="0,4,0,0"/>
+                        </Grid>
+                        </StackPanel>
+                        </GroupBox>
+                        <TextBlock Text="Roofs are not built yet -- they follow later on the roadmap, after the openings that need these walls as hosts. The run models the structure and the walls, ready for the remaining architectural layers on top."
                                    Style="{StaticResource HelpText}"/>
                     </StackPanel>
                 </ScrollViewer>
@@ -1515,6 +1553,8 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Grid.Column="1" Text="template" Style="{StaticResource TextCaption}"/>
                             <TextBlock Grid.Row="0" Grid.Column="2" Text="fields / preview" Style="{StaticResource TextCaption}" Margin="8,0,0,0"/>
@@ -1562,6 +1602,14 @@
                             <TextBlock Grid.Row="11" Grid.Column="0" Text="Raft (t)" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
                             <TextBox   Grid.Row="11" Grid.Column="1" x:Name="tb_name_raft" Style="{StaticResource InputTextBox}" Margin="0,2,8,2"/>
                             <TextBlock Grid.Row="11" Grid.Column="2" x:Name="lbl_name_raft" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Row="12" Grid.Column="0" Text="Structural wall (t)" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="12" Grid.Column="1" x:Name="tb_name_wall_struct" Style="{StaticResource InputTextBox}" Margin="0,2,8,2"/>
+                            <TextBlock Grid.Row="12" Grid.Column="2" x:Name="lbl_name_wall_struct" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
+
+                            <TextBlock Grid.Row="13" Grid.Column="0" Text="Arch wall (t)" Style="{StaticResource TextLabel}" VerticalAlignment="Center"/>
+                            <TextBox   Grid.Row="13" Grid.Column="1" x:Name="tb_name_wall_arch" Style="{StaticResource InputTextBox}" Margin="0,2,8,2"/>
+                            <TextBlock Grid.Row="13" Grid.Column="2" x:Name="lbl_name_wall_arch" Style="{StaticResource TextCaption}" VerticalAlignment="Center"/>
                         </Grid>
 
                         <CheckBox x:Name="chk_level_follow" IsChecked="True" Margin="0,16,0,0"

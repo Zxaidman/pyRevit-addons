@@ -25,9 +25,10 @@ from Autodesk.Revit.DB import Transaction, TransactionGroup
 
 import re
 
-from . import config, fold_plan, foundation_plan, naming, report, slab_outlines
+from . import (config, fold_plan, foundation_plan, naming, report,
+               slab_outlines, wall_plan)
 from .builders import (columns, beams, footings, grids, materials, slabs,
-                       txn_failures, view_filters)
+                       txn_failures, view_filters, walls)
 from . import stair_layout
 from .classify import layers
 from .builders import stairs
@@ -323,6 +324,103 @@ def _create_footings(doc, sections, selections, records=None, texts=None,
             _IDS: result["created"],
             "error_details": [str(e)[:220] for e in result["errors"][:8]],
             "skip_details": _skip_details(result["skipped"])}
+
+
+def _create_walls(doc, records, selections):
+    """The walls, from the centrelines the offline planner reads per storey.
+
+    ONE planning pass feeds BOTH kinds: `wall_plan.plan_walls` is Revit-free,
+    splits its segments into "structural" and "arch" by the layer routing, and
+    reports everything it declines (door-cutout quads, end caps, faces with no
+    partner), so the console can say why a drawn line built nothing. Each kind
+    then places against its OWN base type -- a shear wall and a brick
+    partition are different assemblies with different names.
+
+    Where the drawing carries the SAME wall on both conventions (test8's 250
+    S-RCC-WALL quad with a 150 arch trace 50 mm off its centreline, findings
+    #12), both still build: which convention wins is a decision recorded in
+    task_plan.md against the user's Revit run of this pass, not guessed here.
+    """
+    from Autodesk.Revit.DB import Transaction, TransactionGroup
+    want = {"structural": bool(selections.get("create_struct_walls")),
+            "arch": bool(selections.get("create_arch_walls"))}
+    type_ids = {"structural": selections.get("struct_wall_type_id"),
+                "arch": selections.get("arch_wall_type_id")}
+    base_id = selections.get("base_level_id")
+    if base_id is None:
+        _say("Walls -- skipped (no base level chosen).")
+        return {"created": 0, "skipped": 0, "errors": 0}
+
+    plan = wall_plan.plan_walls(records or [],
+                                tolerances=selections.get("tolerances"))
+    pools = {"structural": [], "arch": []}
+    for segment in plan["segments"]:
+        if segment["kind"] in pools:
+            pools[segment["kind"]].append(segment)
+    # the planner's refusals, grouped the way the export groups skips -- a
+    # drawing with 27 doors declines 27 jamb pairs for one reason, not 27
+    planner_skips = ["{0} [{1}]".format(entry.get("reason"),
+                                        entry.get("layer"))
+                     for entry in plan["skipped"]]
+    for detail in _skip_details(planner_skips):
+        _say("  wall: {0} x {1}".format(detail["count"], detail["reason"]))
+    build = [(kind, pools[kind]) for kind in ("structural", "arch")
+             if want[kind] and pools[kind]]
+    if not build:
+        _say("Walls -- no wall segments planned on the routed wall layers.")
+        return {"created": 0, "skipped": len(plan["skipped"]), "errors": 0,
+                "skip_details": _skip_details(planner_skips)}
+
+    group = TransactionGroup(doc, "CAD to BIM: Walls")
+    transaction = Transaction(doc, "Create walls")
+    group.Start()
+    transaction.Start()
+    try:
+        txn_failures.attach_warning_swallower(transaction)
+        result = {"created": [], "skipped": [], "errors": [], "notes": []}
+        for kind, segments in build:
+            if type_ids[kind] is None:
+                _say("  {0} walls skipped: no base wall type selected".format(
+                    kind))
+                continue
+            outcome = walls.place_walls(
+                doc, segments, type_ids[kind], base_id,
+                top_level_id=selections.get("top_level_id"),
+                height_mm=selections.get("storey_height_mm"),
+                structural=(kind == "structural"))
+            for key in ("created", "skipped", "errors", "notes"):
+                result[key] = result[key] + outcome[key]
+        tstatus = transaction.Commit()
+        gstatus = group.Assimilate()
+    except Exception as creation_error:
+        if transaction.HasStarted() and not transaction.HasEnded():
+            transaction.RollBack()
+        if group.HasStarted() and not group.HasEnded():
+            group.RollBack()
+        _error("Wall creation failed", "Wall creation failed.",
+               str(creation_error))
+        return {"created": 0, "skipped": 0, "errors": 1}
+
+    if not _persisted(tstatus, gstatus):
+        _rollback_alert("Walls", tstatus, gstatus)
+        return {"created": 0, "skipped": 0, "errors": 0, "rolled_back": True}
+
+    _say("Walls -- planned: {0} structural + {1} arch, created: {2}, "
+         "skipped: {3}, errors: {4}".format(
+             len(pools["structural"]), len(pools["arch"]),
+             len(result["created"]),
+             len(result["skipped"]) + len(plan["skipped"]),
+             len(result["errors"])))
+    for message in result["errors"]:
+        _say_error("  wall: {0}".format(message))
+    for message in result["skipped"] + result.get("notes", []):
+        _say("  wall: {0}".format(message))
+    return {"created": len(result["created"]),
+            "skipped": len(result["skipped"]) + len(plan["skipped"]),
+            "errors": len(result["errors"]),
+            _IDS: result["created"],
+            "error_details": [str(e)[:220] for e in result["errors"][:8]],
+            "skip_details": _skip_details(result["skipped"] + planner_skips)}
 
 
 def _colour_open_views(doc, uidoc, selections):

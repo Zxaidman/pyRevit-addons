@@ -268,8 +268,9 @@ which of the two drives the support's offset.
 
 ## Phase 3 — walls as real `DB.Wall`
 
-**Status:** P3a (the Revit-free plan) shipped as v0.75.0; P3b (builder + dialog)
-open.
+**Status:** P3a (the Revit-free plan) shipped as v0.75.0; P3b (builder +
+dialog) shipped as v0.76.0, awaiting the user's Revit validation. P3c holds
+the two deferred decisions below.
 
 - [x] 3a.1 Classification: `rcc` token added to the structural-wall row, so
       test8's `S-RCC-WALL` (29 records) stops reading as an arch wall.
@@ -299,15 +300,40 @@ band set 90..520. Collinear face gaps: 150–200 (crossing walls), 750–1310
 set 1300. Planned: Project1 17 segments / 11 skips, test8 178 / 110, test9
 19 / 39 (10 of those the door cutouts, 3 the zero-length stone lines).
 
-- [ ] 3b Builder + dialog: `builders/walls.py` placing `DB.Wall` from the
-      plan (structural rise base-to-top like columns; arch walls sit on
-      beams per the roadmap), wall rows in the dialog, run_builders wiring,
-      export/report of placed walls. Decisions P3b owns: whether the core
-      walls `recover_core_walls` still places as thin columns move over
-      (column counts must not change until it decides), and which side wins
-      where the SAME wall is drawn on both conventions (test8's 250
-      `S-RCC-WALL` quad carries a 150 arch trace 50 mm off its centreline —
-      shared face, both planned today, findings #12).
+- [x] 3b Builder + dialog (v0.76.0). `builders/walls.py` places one
+      line-based `Wall.Create` per planned centreline: width through the
+      type's compound structure (no instance parameter exists), duplicated
+      per (kind, width) off a per-kind base type — a refused width (membrane
+      layer, curtain/stacked base) is a red console error and the wall still
+      places at the base type's own width; top constrained to the level
+      above via WALL_HEIGHT_TYPE after Create (the column builder's
+      pattern), unconnected at the storey height when no top exists; the
+      `structural` bool on Create is the kind. `run_builders._create_walls`
+      plans ONCE for both kinds (tolerances passed through), places each
+      kind against its own type, groups the planner's refusals on the
+      console. Dialog: Structure gains the structural-wall group,
+      Architecture its first real content (arch group + roofs note); naming
+      rows "RCC WALL {t} THK" / "BRICK WALL {t} THK", {t} required (the
+      raft precedent — a collision is a silent reuse and widths are
+      measured, not noted); selections keys create_struct_walls /
+      create_arch_walls / struct_wall_type_id / arch_wall_type_id; settings
+      and preset ride the name-driven capture, no schema change. Walls run
+      per storey, step 8 of the build. Tests 701 → 714; gate green with
+      ZERO baseline movement (no planning change).
+
+- [ ] 3c The two deferred decisions, taken against the user's Revit run of
+      P3b — recorded here rather than guessed:
+      * **Walls from core recovery.** `recover_core_walls` still places
+        lift-core walls as thin COLUMNS (`recovered_core_wall`), untouched
+        by P3b — column counts did not move and must not until this
+        decides. Moving them to `DB.Wall` changes column and wall counts
+        together and wants the user's verdict on the P3b walls first.
+      * **One wall drawn on both conventions.** test8's 250 `S-RCC-WALL`
+        quad carries a 150 arch `wall` trace 50 mm off its centreline
+        (shared face, findings #12): both kinds plan and both now BUILD,
+        overlapping. Which side wins — and whether the loser is dropped in
+        the planner or the builder — is the user's call once they see the
+        pair in Revit.
 
 ---
 

@@ -17,6 +17,8 @@ A template is a plain format string over the sizes that type carries:
     stair_waist   {k}              the stair's waist type
     footing       {t}              600 thick foundation pad
     raft          {t}              750 thick raft foundation
+    wall_struct   {t}              250 wide structural (RCC/shear) wall
+    wall_arch     {t}              150 wide brick/partition wall
     level         {n} {o} {e} {label}  a storey level ({o} = 1st/2nd/3rd)
     grid          {name}           a grid line (its CAD bubble, or A/B/1/2)
 
@@ -43,6 +45,8 @@ DEFAULTS = {
     "stair_waist": "cad2bim waist {k}",
     "footing": "PAD {t} THK",
     "raft": "RAFT {t} THK",
+    "wall_struct": "RCC WALL {t} THK",
+    "wall_arch": "BRICK WALL {t} THK",
     "level": "CAD Level {n}",
     "grid": "{name}",
 }
@@ -58,6 +62,8 @@ FIELDS = {
     "stair_waist": ("k",),
     "footing": ("t",),
     "raft": ("t",),
+    "wall_struct": ("t",),
+    "wall_arch": ("t",),
     "level": ("n", "o", "e", "label"),
     "grid": ("name",),
 }
@@ -105,11 +111,19 @@ _TEXT_FIELDS = ("label", "name")
 # older single-field templates keep their latitude ("GENERIC SLAB" is a choice
 # offices have already saved); the raft template is new, so the trap is closed
 # from day one.
+#
+# The two wall templates require {t} for the raft's reason: a wall's width is
+# MEASURED off the drawing (wall_plan), several widths per drawing is the
+# normal case (test8 draws 100/150/250 on one plan), and a collision is a
+# silent reuse -- a 150 and a 250 rendering one name would cast every 250 wall
+# at 150. New with P3b, so closed from day one like the raft's.
 _MUST_USE = {
     "column_rect": ("b", "h"),
     "beam_sized": ("w", "d"),
     "stair": ("r", "t", "w", "k"),
     "raft": ("t",),
+    "wall_struct": ("t",),
+    "wall_arch": ("t",),
 }
 
 
@@ -213,6 +227,30 @@ def raft_type_name(thickness_mm):
     (foundation_plan's "kind"), never guessed here.
     """
     return _render("raft", {"t": _mm(thickness_mm)})
+
+
+def struct_wall_type_name(width_mm):
+    """The name for a STRUCTURAL wall type.
+
+    A wall's width lives in its type's compound structure -- there is no
+    instance parameter to set -- so one type serves every wall of a width,
+    exactly as one floor type serves a thickness. The width is measured off
+    the drawing (wall_plan's pairing), not read from a note, which is why the
+    template's {t} is required: two widths rendering one name would cast the
+    second at the first one's width in silence.
+    """
+    return _render("wall_struct", {"t": _mm(width_mm)})
+
+
+def arch_wall_type_name(width_mm):
+    """The name for an ARCHITECTURAL wall type, apart from the structural one.
+
+    The same Revit shape -- a width in a compound structure -- but offices
+    name the two apart ("BRICK WALL 150 THK" beside "RCC WALL 250 THK"), the
+    raft-beside-pad precedent. Which template a segment takes is decided in
+    the Revit-free layer (wall_plan's "kind"), never guessed here.
+    """
+    return _render("wall_arch", {"t": _mm(width_mm)})
 
 
 def level_name(index, elevation_mm=0.0, label=None):

@@ -112,7 +112,7 @@ _BAR = _NullProgress()
 _READ_STEPS = 2
 
 
-_BUILD_STEPS = 9
+_BUILD_STEPS = 10
 # A multi-storey run repeats the build once per storey. Reporting each storey
 # 0-100 made the bar restart five times; instead the storey being built is an
 # OFFSET into one continuous 0-100 over storeys x steps.

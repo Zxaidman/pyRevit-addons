@@ -48,6 +48,18 @@ class WhatGetsSaved(unittest.TestCase):
         self.assertFalse(settings.saveable(None))
         self.assertFalse(settings.restorable(None))
 
+    def test_the_wall_controls_ride_the_snapshot(self):
+        # the P3b controls persist through the SAME name-driven capture as
+        # everything else -- no schema change, and a file from before them
+        # simply leaves them on their defaults. Saveable AND restorable is
+        # the claim: a name that drifted into SKIP_NAMES or DETECTED_NAMES
+        # would silently stop surviving the session.
+        for name in ("chk_struct_walls", "chk_arch_walls",
+                     "cb_struct_wall_type", "cb_arch_wall_type",
+                     "tb_name_wall_struct", "tb_name_wall_arch"):
+            self.assertTrue(settings.saveable(name), name)
+            self.assertTrue(settings.restorable(name), name)
+
 
 class MatchingASavedComboLabel(unittest.TestCase):
     ITEMS = ["(unchanged)", "Concrete - Cast In Situ", "Concrete, Precast"]

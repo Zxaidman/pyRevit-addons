@@ -135,8 +135,12 @@ try:
     from anongee_toolkit.cad2bim import ui_window
     from anongee_toolkit.cad2bim.run_builders import (   # noqa: F401
         _create_grids, _create_columns, _create_beams, _create_footings,
-        _create_slabs, _create_stairs, _apply_materials, _colour_open_views,
-        _strip_ids)
+        _create_slabs, _create_stairs, _create_walls, _apply_materials,
+        _colour_open_views, _strip_ids)
+    # builders.walls is new with v0.76.0, so it rides the guard: a stale
+    # library reports through _library_mismatch instead of raw-tracebacking
+    # on the module-level import below
+    from anongee_toolkit.cad2bim.builders import walls   # noqa: F401
     from anongee_toolkit.cad2bim.run_picking import _draw_stair_outlines
     from anongee_toolkit.cad2bim.ui_window import (CadToBimWindow,
                                                    LinkOptionsDialog)
@@ -472,6 +476,9 @@ def main():
     floor_type_options = slabs.floor_types(doc)
     stair_type_options = stairs.stairs_types(doc)
     footing_type_options = footings.foundation_types(doc)
+    # Wall types feed TWO pickers -- Structure's and Architecture's -- the way
+    # floor types feed the slab picker: one document scan, basic types first.
+    wall_type_options = walls.wall_types(doc)
     material_options = materials.materials(doc)
     level_elevations = {label: doc.GetElement(level_id).Elevation
                         for label, level_id in level_options}
@@ -529,6 +536,7 @@ def main():
                                 saved_naming=saved_naming,
                                 saved_standards=saved_standards,
                                 footing_type_options=footing_type_options,
+                                wall_type_options=wall_type_options,
                                 material_options=material_options,
                                 saved_settings=saved_settings,
                                 hatch_layer_rows=hatch_rows,
@@ -966,11 +974,21 @@ def _build_one_storey(doc, revit_result, texts, selections, schedule_source=None
                                             slab_beam_segments, dxf_texts,
                                             selections,
                                             column_rects=column_footprints)
+    # WALLS: the centrelines wall_plan read off the routed wall layers, both
+    # kinds in one pass. Structural walls rise base-to-top like columns; arch
+    # walls run base to the level above; either stands at the storey height,
+    # unconnected, when the run has no top level. Per storey like everything
+    # vertical -- each plan's walls belong to the storey it was drawn on.
+    _progress(8, _BUILD_STEPS, "create walls")
+    if (selections.get("create_struct_walls")
+            or selections.get("create_arch_walls")):
+        outcomes["walls"] = _create_walls(doc, revit_result.records,
+                                          selections)
     # FOOTINGS: the outlines the drawing carries, else one pad per column. Both
     # go on the columns' BASE level, and in a multi-storey run only the lowest
     # storey builds them -- a building has one set of foundations, not one per
     # floor.
-    _progress(8, _BUILD_STEPS, "create footings")
+    _progress(9, _BUILD_STEPS, "create footings")
     if selections.get("create_footings") and selections.get("build_footings", True):
         outcomes["footings"] = _create_footings(doc, sections, selections,
                                                 records=revit_result.records,
@@ -1026,6 +1044,8 @@ def _export_name(cad_path, selections, storey_label=None):
     e.g. "0.44.0_slab_test1_with_textmode.json"."""
     element = ("footing" if selections.get("create_footings")
                else "stair" if selections.get("create_stairs")
+               else "wall" if (selections.get("create_struct_walls")
+                               or selections.get("create_arch_walls"))
                else "slab" if selections.get("create_slabs")
                else "beam" if selections.get("create_beams")
                else "column" if selections.get("create_columns")
