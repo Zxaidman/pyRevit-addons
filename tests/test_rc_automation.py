@@ -937,6 +937,82 @@ class ReconciliationTests(unittest.TestCase):
         self.assertIn("using the excel", found[0].message.lower())
 
 
+class GeometryDeferralTests(unittest.TestCase):
+    """Phase 3's rules are recorded but not switched on.
+
+    These pin what the tool does *today* -- report a geometric difference and
+    change nothing -- and pin the recorded rule underneath it, so turning
+    geometry changes on is a deliberate edit with tests that notice.
+    """
+
+    def geometric(self):
+        return reconcile.compare("F1-A1", "Footing",
+                                 {"length_mm": 3000.0}, {"length_mm": 3200.0})
+
+    def parametric(self):
+        return reconcile.compare("F1-A1", "Footing",
+                                 {"cover_top_mm": 50.0}, {"cover_top_mm": 40.0})
+
+    def test_geometry_changes_are_deferred(self):
+        self.assertTrue(reconcile.GEOMETRY_CHANGES_ARE_DEFERRED)
+
+    def test_a_dimension_difference_is_geometric(self):
+        self.assertTrue(self.geometric().conflicts[0].is_geometric)
+        self.assertEqual(self.geometric().actionable_conflicts, [])
+
+    def test_a_cover_difference_is_not_geometric(self):
+        # Cover is a parameter: resolving it sets a value, it does not rebuild
+        # anything, so it is actionable now.
+        result = self.parametric()
+        self.assertFalse(result.conflicts[0].is_geometric)
+        self.assertEqual(len(result.actionable_conflicts), 1)
+        self.assertFalse(result.is_report_only)
+
+    def test_every_geometric_difference_reports_only_today(self):
+        for has_dependents in (True, False):
+            self.assertEqual(reconcile.strategy_for(has_dependents),
+                             reconcile.STRATEGY_REPORT_ONLY)
+        self.assertTrue(self.geometric().is_report_only)
+
+    def test_the_report_never_implies_a_change_that_did_not_happen(self):
+        # "using the schedule" about geometry nothing rewrote is the kind of
+        # sentence somebody signs a drawing off against.
+        text = self.geometric().describe()
+        self.assertIn("Reported only", text)
+        self.assertIn("length", text)
+
+    def test_an_agreeing_row_has_no_strategy(self):
+        agreeing = reconcile.compare("F1-A1", "Footing",
+                                     {"length_mm": 3000.0},
+                                     {"length_mm": 3000.0})
+        self.assertIsNone(agreeing.strategy())
+        self.assertFalse(agreeing.is_report_only)
+
+    def test_the_recorded_rule_is_dependency_driven(self):
+        # The phase 3 decision itself: nothing depending on the element means
+        # its sketch can be edited in place; dependents mean recreate and move
+        # them across instead of deleting first.
+        try:
+            reconcile.GEOMETRY_CHANGES_ARE_DEFERRED = False
+            self.assertEqual(reconcile.strategy_for(False),
+                             reconcile.STRATEGY_SKETCH_EDIT)
+            self.assertEqual(reconcile.strategy_for(True),
+                             reconcile.STRATEGY_RECREATE_AND_REHOST)
+            self.assertEqual(self.geometric().strategy(has_dependents=True),
+                             reconcile.STRATEGY_RECREATE_AND_REHOST)
+        finally:
+            reconcile.GEOMETRY_CHANGES_ARE_DEFERRED = True
+
+    def test_every_strategy_has_a_label(self):
+        for strategy in reconcile.STRATEGIES:
+            self.assertIn(strategy, reconcile.STRATEGY_LABELS)
+
+    def test_summary_counts_what_was_only_reported(self):
+        summary = reconcile.summarise([self.geometric(), self.parametric()])
+        self.assertEqual(summary["differing"], 2)
+        self.assertEqual(summary["report_only"], 1)
+
+
 # ── the file layer ─────────────────────────────────────────────────────────
 
 try:

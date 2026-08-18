@@ -386,14 +386,9 @@ is given) represents a whole layer, turning ~50,000 elements into ~2,000 at the
 `core/rebar_reader.py:241` reads `BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS`,
 which reports a set's bar count correctly.
 
-### Still open
+| 9 | **A geometric difference on an existing element is resolved by what depends on it: nothing depends on it → edit the sketch in place; something does → create the corrected element, move the dependents across, retire the old one last, never delete first; neither is safe → report only.** Report-only is in force for the whole of this release. | Recorded in `reconcile.py` beside the code that will implement it, guarded by `GEOMETRY_CHANGES_ARE_DEFERRED`, and pinned by tests on both sides of the switch. Revit has no re-host, so "move the dependents across" means capture → recreate → verify, and whatever cannot be captured faithfully falls to report-only rather than being guessed. |
 
-**Resolving a dimension difference in favour of Excel.** Changing an element that
-already exists means editing a floor's sketch (`SketchEditScope`, Revit 2022+) or
-deleting and recreating it — and recreating destroys any rebar hosted in it,
-which is exactly what phase 3 is looking at. Decide before phase 3: edit in
-place, recreate and rebuild the bars, or restrict "Excel wins" to non-geometric
-fields.
+### Still open
 
 **Ribbon placement.** `Dev.panel` matches the README's convention for a tool that
 has not yet proven itself; `Core.panel/BIM.stack` is where it belongs once it has.

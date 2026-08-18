@@ -24,6 +24,87 @@ from anongee_toolkit.rc_automation import models
 
 __version__ = "0.1.0"
 
+# ---------------------------------------------------------------------------
+# PHASE 3 — how a geometric difference gets resolved. READ THIS FIRST.
+# ---------------------------------------------------------------------------
+# Deciding that the schedule wins is cheap. Acting on it is not: changing a
+# footing that is already modelled means changing a Floor's sketch, and anything
+# hosted in or measuring that footing is downstream of the change.
+#
+# The agreed rule, in order. **None of it is implemented yet** -- today every
+# geometric difference resolves to REPORT_ONLY (see `strategy_for`) -- but it is
+# recorded here because it is the thing a future implementer needs before
+# writing a line, and a plan that lives only in a document gets rediscovered the
+# hard way.
+#
+#   1. Nothing depends on the element -- no rebar hosted in it, no dimension or
+#      annotation referencing it -> EDIT THE SKETCH IN PLACE. The element keeps
+#      its id, so nothing downstream notices.
+#
+#   2. Something does depend on it -> DO NOT DELETE IT FIRST. Create the
+#      corrected element alongside, then move each dependent onto it so the
+#      dependent re-measures itself against the new geometry, and only then
+#      retire the old one.
+#
+#   3. Neither is safe -> REPORT ONLY. Say what differs and leave the model
+#      alone. This is also the whole of today's behaviour.
+#
+# What rule 2 actually costs, so nobody starts from a false premise: Revit has
+# no re-host. There is no `Rebar.SetHostId`, and a `Dimension`'s references
+# cannot be re-pointed at another element. "Move each dependent onto it" is
+# therefore implemented as capture -> recreate -> verify: read the dependent's
+# defining curves, bar type and layout rule, build the equivalent against the
+# new element, confirm it, and only then remove the original. That is lossless
+# where everything can be captured faithfully, and where it cannot be, the case
+# falls to rule 3 rather than guessing. Revit also deletes a dimension whose
+# reference disappears, which is precisely why the old element is retired last
+# rather than first.
+
+#: Edit the existing element's sketch. Safe only with no dependents. Not built.
+STRATEGY_SKETCH_EDIT = "SketchEdit"
+
+#: Create the corrected element, move dependents onto it, retire the old one
+#: last. Not built.
+STRATEGY_RECREATE_AND_REHOST = "RecreateAndRehost"
+
+#: Say what differs and change nothing. The only strategy in force today.
+STRATEGY_REPORT_ONLY = "ReportOnly"
+
+STRATEGIES = (STRATEGY_SKETCH_EDIT, STRATEGY_RECREATE_AND_REHOST,
+              STRATEGY_REPORT_ONLY)
+
+STRATEGY_LABELS = {
+    STRATEGY_SKETCH_EDIT: "Edit the sketch in place",
+    STRATEGY_RECREATE_AND_REHOST: "Recreate and move dependents across",
+    STRATEGY_REPORT_ONLY: "Report only — the model is not changed",
+}
+
+#: Set while no geometry is ever rewritten. Flipping this to False is what
+#: switches rules 1 and 2 on, and it exists so that switch is one obvious edit
+#: rather than a hunt through branches.
+GEOMETRY_CHANGES_ARE_DEFERRED = True
+
+#: Fields whose value *is* the element's geometry. Resolving one in favour of
+#: the schedule means editing or replacing the element, which is what the rules
+#: above govern. Everything else is a parameter and can simply be set.
+GEOMETRIC_FIELDS = ("length_mm", "width_mm", "thickness_mm", "depth_mm",
+                    "rotation_deg", "outline")
+
+
+def strategy_for(has_dependents):
+    """Which rule applies to a geometric difference on an existing element.
+
+    Returns :data:`STRATEGY_REPORT_ONLY` for everything while
+    :data:`GEOMETRY_CHANGES_ARE_DEFERRED` is set, which is the current and
+    intended behaviour. The branch it guards is the recorded phase 3 rule, kept
+    here rather than in a document so it is read by whoever turns it on.
+    """
+    if GEOMETRY_CHANGES_ARE_DEFERRED:
+        return STRATEGY_REPORT_ONLY
+    return (STRATEGY_RECREATE_AND_REHOST if has_dependents
+            else STRATEGY_SKETCH_EDIT)
+
+
 #: Which side of a disagreement is used. Excel is the default everywhere.
 SOURCE_EXCEL = "Excel"
 SOURCE_MODEL = "Model"
@@ -82,6 +163,11 @@ class Difference(object):
     @property
     def label(self):
         return label_for(self.field)
+
+    @property
+    def is_geometric(self):
+        """True when resolving this means changing the element, not a parameter."""
+        return self.field in GEOMETRIC_FIELDS
 
     def describe(self):
         """"Length: 3000 in the schedule, 3200 in the model"."""
@@ -145,6 +231,34 @@ class Reconciliation(object):
     def field_count(self):
         return len(self.conflicts)
 
+    @property
+    def geometric_conflicts(self):
+        """Differences that would require the element itself to change."""
+        return [d for d in self.conflicts if d.is_geometric]
+
+    @property
+    def actionable_conflicts(self):
+        """Differences that can be resolved by setting a parameter."""
+        return [d for d in self.conflicts if not d.is_geometric]
+
+    def strategy(self, has_dependents=False):
+        """How this row's geometric differences would be resolved.
+
+        ``has_dependents`` is whether anything is hosted in or measuring the
+        element -- rebar, a dimension, an annotation. It is ignored while
+        geometry changes are deferred, and it is the whole question once they
+        are not.
+        """
+        if not self.geometric_conflicts:
+            return None
+        return strategy_for(has_dependents)
+
+    @property
+    def is_report_only(self):
+        """True when this row differs in ways nothing will act on yet."""
+        return bool(self.geometric_conflicts) and (
+            self.strategy() == STRATEGY_REPORT_ONLY)
+
     # -- the choice -------------------------------------------------------
     def choose(self, source):
         """Pick a side. Anything but a known source is refused, not guessed."""
@@ -185,10 +299,19 @@ class Reconciliation(object):
     def describe(self):
         if self.agrees:
             return "{0} matches the schedule.".format(self.key)
-        return "{0}: {1} — using the {2}.".format(
+        text = "{0}: {1} — using the {2}.".format(
             self.key,
             "; ".join(d.describe() for d in self.conflicts),
             self.source.lower())
+        if self.is_report_only:
+            # Never let a report imply a change that did not happen. Saying
+            # "using the schedule" about geometry nothing rewrote is the kind of
+            # sentence somebody signs a drawing off against.
+            text += (" Reported only — {0} would have to change in the model, "
+                     "which this release does not do.".format(
+                         ", ".join(d.label.lower()
+                                   for d in self.geometric_conflicts)))
+        return text
 
     def __repr__(self):
         return "<Reconciliation {0} {1} conflict(s) source={2}>".format(
@@ -288,6 +411,7 @@ def summarise(reconciliations):
         "using_model": len([r for r in conflicted
                             if r.source == SOURCE_MODEL]),
         "user_decided": len([r for r in conflicted if r.is_user_choice]),
+        "report_only": len([r for r in conflicted if r.is_report_only]),
     }
 
 

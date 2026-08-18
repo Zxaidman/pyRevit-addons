@@ -108,17 +108,46 @@ Deliberate behaviours, each with a test:
 - Differences are reported as **Info**, not warnings. Disagreeing with the model
   is the normal reason to run this; grading it as a problem trains people to
   ignore the colour that means something is actually wrong.
+- Geometric differences are separated from parameter ones. A cover mismatch can
+  be resolved by setting a value; a length mismatch means changing the element,
+  which is governed by the rules below and is report-only today.
 
-### Open question for Phase 3
+### Phase 3 — resolving a geometric difference
 
-When Excel wins a **dimension** difference on an element that already exists, the
-element has to change. For a floor-based footing that means editing its sketch
-(`SketchEditScope`, Revit 2022+) or deleting and recreating it — and **delete and
-recreate destroys any rebar already hosted in it**, which is exactly what Phase 3
-is looking at. Three ways out, and it needs deciding before Phase 3 is built:
-edit the sketch in place; recreate and rebuild the rebar from the schedule; or
-restrict "Excel wins" to non-geometric fields and report dimension differences
-for the user to fix by hand.
+**Decided 2026-08-18. Recorded now, implemented later.** Today every geometric
+difference is reported and nothing in the model changes.
+
+Deciding that the schedule wins is cheap; acting on it is not. Changing a footing
+that is already modelled means changing a `Floor`'s sketch, and anything hosted in
+or measuring that footing is downstream of the change. The rule, in order:
+
+| | Condition | Action |
+| --- | --- | --- |
+| **1** | Nothing depends on the element — no rebar hosted in it, no dimension or annotation referencing it | **Edit the sketch in place.** The element keeps its id, so nothing downstream notices. |
+| **2** | Something does depend on it | **Do not delete it first.** Create the corrected element alongside, move each dependent onto it so the dependent re-measures itself against the new geometry, and retire the old one last. |
+| **3** | Neither is safe | **Report only.** Say what differs, leave the model alone. |
+
+Rule 3 is also the whole of today's behaviour, and it is enforced in code rather
+than left as an intention: `reconcile.GEOMETRY_CHANGES_ARE_DEFERRED` is set,
+`reconcile.strategy_for()` returns `STRATEGY_REPORT_ONLY` for every case while it
+is, and the report says *"Reported only — length would have to change in the
+model, which this release does not do"* rather than "using the schedule". A
+report that implies a change nobody made is the kind of sentence someone signs a
+drawing off against. Tests pin both the current behaviour and the rule beneath
+it, so switching it on is one deliberate edit that the suite notices.
+
+**What rule 2 actually costs.** Revit has no re-host. There is no
+`Rebar.SetHostId`, and a `Dimension`'s references cannot be re-pointed at another
+element. "Move each dependent onto it" is therefore *capture → recreate →
+verify*: read the dependent's defining curves, bar type and layout rule, build
+the equivalent against the new element, confirm it, and only then remove the
+original. Lossless where everything can be captured faithfully; where it cannot,
+the case falls to rule 3 rather than guessing. Revit also deletes a dimension
+whose reference disappears — which is exactly why the old element is retired
+last rather than first.
+
+Non-geometric differences are unaffected. Cover, and anything else that is a
+parameter rather than a shape, resolves by setting a value and is actionable now.
 
 ---
 
