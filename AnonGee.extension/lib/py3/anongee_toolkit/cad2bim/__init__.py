@@ -40,7 +40,7 @@ statically inspected and unit-tested outside Revit.
 # The version moves with EVERY commit that changes this package -- it is a
 # tracking number, not a release or a tag. A user reporting "0.69.2 did X"
 # names one commit; three commits all answering "0.68.1" name nothing.
-__version__ = "0.73.0"  # Legends read: swatch pattern to meaning, proposed never silent.
+__version__ = "0.73.1"  # Baselines follow the 0.73.0 exports; hatch reader checked.
 #
 #                         P1: the DXF reader keeps HATCH regions; the foundation
 #                         layers classify; foundation_plan reads the outlines

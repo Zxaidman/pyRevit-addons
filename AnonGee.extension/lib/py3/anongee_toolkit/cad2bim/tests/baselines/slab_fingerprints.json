@@ -375,19 +375,19 @@
     "storey": "single"
   },
   "test9": {
-    "beams": 194,
+    "beams": 184,
     "column_circles": 0,
-    "column_footprints": 66,
-    "column_rectangles": 66,
-    "loops_from_beam_graph": 22,
-    "loops_from_beam_graph_area_m2": 108.1,
+    "column_footprints": 63,
+    "column_rectangles": 63,
+    "loops_from_beam_graph": 23,
+    "loops_from_beam_graph_area_m2": 116.9,
     "loops_from_edges": 6,
     "loops_from_edges_area_m2": 1.6,
     "loops_from_placed_members": 35,
-    "loops_from_placed_members_area_m2": 449.3,
-    "records": 269,
+    "loops_from_placed_members_area_m2": 449.2,
+    "records": 259,
     "sized_beams": 0,
-    "storey": "FIRST FLOOR FRAMING PLAN (SCALE 1:75) (1/10)"
+    "storey": "FIRST FLOOR FRAMING PLAN (SCALE 1:75)"
   },
   "test9-firstfloorfr": {
     "beams": 195,
