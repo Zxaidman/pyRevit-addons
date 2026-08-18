@@ -85,7 +85,12 @@ DEFAULT_CONVENTION = (
     (r"stair|strs|step", CATEGORY_STAIR),
     (r"boundar|bound|extent|sheet.?box", CATEGORY_FLOOR_BOUNDARY),
     (r"origin|basept|base.?point|datum", CATEGORY_FLOOR_ORIGIN),
-    (r"shear|retain", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
+    # "rcc" = reinforced cement concrete: a wall so named is structural, and
+    # test8's S-RCC-WALL used to fall through to the arch row on its "wall"
+    # token. Safe at this position -- the corpus's other rcc layers (PI_RCC
+    # BEAM, S-RCC-COL) are claimed by the beam and column rows above, and the
+    # full 72-layer dump moved exactly one layer when this token was added.
+    (r"shear|retain|rcc", CATEGORY_STRUCT_WALL),   # structural walls before plain "wall"
     (r"wall|parapet", CATEGORY_ARCH_WALL),
 )
 

@@ -37,7 +37,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 717
+    "texts": 717,
+    "wall_arch_segments": 17,
+    "wall_length_m": 38.5,
+    "wall_records": 30,
+    "wall_segments": 17,
+    "wall_skipped": 11,
+    "wall_struct_segments": 0
   },
   "MessyPlan-Test0.dxf": {
     "beams": 102,
@@ -77,7 +83,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 154
+    "texts": 154,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StaircasePlan-Test1.dxf": {
     "beams": 4,
@@ -117,7 +129,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 15
+    "texts": 15,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StaircasePlan-Test2.dxf": {
     "beams": 76,
@@ -157,7 +175,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 718
+    "texts": 718,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test1.dxf": {
     "beams": 106,
@@ -197,7 +221,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 242
+    "texts": 242,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test10.dxf": {
     "beams": 411,
@@ -237,7 +267,13 @@
     "steps_planned": 7,
     "steps_skipped": 0,
     "sunk_regions": 1,
-    "texts": 1082
+    "texts": 1082,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test11.dxf": {
     "beams": 424,
@@ -277,7 +313,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 0
+    "texts": 0,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test12.dxf": {
     "beams": 1721,
@@ -317,7 +359,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 299
+    "texts": 299,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test13.dxf": {
     "beams": 989,
@@ -357,7 +405,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 1993
+    "texts": 1993,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test2.dxf": {
     "beams": 115,
@@ -397,7 +451,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 256
+    "texts": 256,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test3.dxf": {
     "beams": 115,
@@ -437,7 +497,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 256
+    "texts": 256,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test4.dxf": {
     "beams": 674,
@@ -477,7 +543,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 412
+    "texts": 412,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test5.dxf": {
     "beams": 674,
@@ -517,7 +589,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 2540
+    "texts": 2540,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test6.dxf": {
     "beams": 21,
@@ -557,7 +635,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 311
+    "texts": 311,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test7.dxf": {
     "beams": 21,
@@ -597,7 +681,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 59
+    "texts": 59,
+    "wall_arch_segments": 0,
+    "wall_length_m": 0.0,
+    "wall_records": 0,
+    "wall_segments": 0,
+    "wall_skipped": 0,
+    "wall_struct_segments": 0
   },
   "StructuralPlan-Test8.dxf": {
     "beams": 215,
@@ -637,7 +727,13 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 120
+    "texts": 120,
+    "wall_arch_segments": 153,
+    "wall_length_m": 591.4,
+    "wall_records": 362,
+    "wall_segments": 178,
+    "wall_skipped": 110,
+    "wall_struct_segments": 25
   },
   "StructuralPlan-Test9.dxf": {
     "beams": 172,
@@ -677,6 +773,12 @@
     "steps_planned": 0,
     "steps_skipped": 0,
     "sunk_regions": 0,
-    "texts": 448
+    "texts": 448,
+    "wall_arch_segments": 0,
+    "wall_length_m": 61.3,
+    "wall_records": 77,
+    "wall_segments": 19,
+    "wall_skipped": 39,
+    "wall_struct_segments": 19
   }
 }

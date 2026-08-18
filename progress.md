@@ -472,8 +472,55 @@ full gate green with NO baseline movement — fold 6 / sunk 1 (test10) and
 every other count identical, the fold/sunk/cutout/col tokens carry over
 exactly.
 
+### Session 2026-08-18 (later) — v0.75.0, the wall plan (P3a)
+
+**Measured first, built after.** Wall layers exist in 3 of the 17 drawings
+(Project1, test8, test9), and the corpus is NOT axis-aligned — Project1 and
+test8 both carry 10.3-degree wall runs — so the pairing is the
+`recover_core_walls` machinery (collinear bridging, smallest-gap-first,
+union spans) generalised off the axes, not a port of it. The candidate-gap
+histogram put the width band at 90..520: real widths run 100..495 (154
+candidates at 150 in test8 alone), the range below 100 is empty down to the
+~5 mm re-traced duplicates, and 495..565 is empty before the door artifacts
+begin (37 candidates at exactly 750 — jamb strokes across 750 doorways).
+The collinear-gap histogram put the door bridge at 1300: crossing walls cut
+faces by 150..200, doors by 750..1310 (27x750, 10x1000, 12x1150, 12x1200),
+and from 1350 the values blur into room-scale separations. All of it is
+findings #12.
+
+**One classification fix, proven on the whole corpus first.** `S-RCC-WALL`
+(test8, 29 records — reinforced concrete) read as ARCH wall because only
+"wall" matched. An `rcc` token on the structural row moves it; the full
+72-layer dump (17 DXFs + archived exports) confirms it moves NOTHING else —
+`PI_RCC BEAM` and `S-RCC-COL` are claimed by earlier rows.
+
+**`wall_plan.py` (Revit-free): outlines first, then face pairs.** A closed
+thin ring IS the wall — a quad at any rotation via
+`beam_centerline_from_quad`, an L/U ring via `decompose_to_rectangles`, and
+a polyline open by exactly one wall width (test8 draws whole runs that way)
+closed first and kept only if the ring proves thin, the fabricated edge
+never emitted. Everything else explodes into per-category pools and pairs;
+test8's L-core arrives as OUTER and INNER face records and reads back as
+three walls on their true extents (the union span at work). `PI_SHEAR WALL
+CUTOUT`'s ten door quads are 240..500 wide — inside the band, refusable
+only by NAME — and go to `skipped`, as do test9's three zero-length stone
+lines, every end cap, and every partnerless face. Nothing leaves silently.
+
+Tests 679 → 701 (22 pins, the fixture ones on EXACT record coordinates);
+the sweep gains six wall metrics per fixture (Project1 17 segments/11
+skips, test8 178/110, test9 19/39, zeros elsewhere). The re-blessed
+baseline moved exactly those 102 lines and nothing else — the rcc move
+shifts records between two categories the sweep never counted, and legs 1
+and 3 re-recorded byte-identical. Full gate green.
+
 ### Open
 
+- P3b: the wall BUILDER — `DB.Wall` placement, dialog rows, run_builders
+  wiring. Two decisions recorded for it in task_plan.md: when the
+  core-wall-as-column placement moves over (column counts hold until then),
+  and which convention wins where one wall is drawn on both (test8's 250
+  S-RCC-WALL quad carries a 150 arch trace 50 mm off its centreline; both
+  plan today, findings #12).
 - P2.4 remainder: `legend.legend_steps()` has no consumer yet (legend-driven
   slab stepping is P2-on-slabs), and a per-tower legend read — each block is
   internally coherent — needs the multi-storey split to run before the

@@ -33,9 +33,9 @@ import _loader
 
 
 (report, layers, marks, dxf_reader, slab_outlines, foundation_plan,
- fold_plan, legend) = _loader.load(
+ fold_plan, legend, wall_plan) = _loader.load(
     "report", "classify.layers", "classify.marks", "readers.dxf_reader",
-    "slab_outlines", "foundation_plan", "fold_plan", "legend")
+    "slab_outlines", "foundation_plan", "fold_plan", "legend", "wall_plan")
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CAD = os.path.join(_HERE, "fixtures", "cad")
@@ -141,6 +141,11 @@ def _measure(path):
         layers.build_default_hatch_mapping(
             [r.layer_key for r in result.regions]))
     steps = fold_plan.plan_steps(foundation_plans, result.regions)
+    # WALLS, planned the way the wall pass reads them: the two wall
+    # categories only, outlines and face pairs, refusals counted. Three
+    # drawings carry wall layers (Project1, test8, test9); every other row
+    # measures zeros, which is itself the pin that nothing else leaks in.
+    walls = wall_plan.plan_walls(result.records, texts=result.texts)
     # The PROFILES the builder would hand Floor.Create, assembled the same
     # way: step openings and nested outlines as holes, then split wherever an
     # opening reaches its outline's boundary. The corridor block is the case:
@@ -211,6 +216,18 @@ def _measure(path):
         "step_depth_mm_total": round(sum(s["depth_mm"] for s in steps["steps"]), 1),
         "foundation_profiles": profile_count,
         "foundation_outlines_divided": outlines_divided,
+        "wall_records": sum(
+            1 for r in result.records
+            if r.category in (layers.CATEGORY_STRUCT_WALL,
+                              layers.CATEGORY_ARCH_WALL)),
+        "wall_segments": len(walls["segments"]),
+        "wall_struct_segments": sum(1 for s in walls["segments"]
+                                    if s["kind"] == "structural"),
+        "wall_arch_segments": sum(1 for s in walls["segments"]
+                                  if s["kind"] == "arch"),
+        "wall_skipped": len(walls["skipped"]),
+        "wall_length_m": round(sum(s["length_mm"]
+                                   for s in walls["segments"]) / 1000.0, 1),
     }
 
 

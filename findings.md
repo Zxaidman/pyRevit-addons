@@ -529,3 +529,66 @@ The suite runs green on Linux only after `pip install ezdxf`. The bundled
 `lib/py3/numpy` is a Windows wheel whose import calls `os.add_dll_directory`,
 absent on Linux, so the bundled `ezdxf` will not load. The DXF regression leg
 skips with that message rather than failing.
+
+## 12. The wall linework, measured (P3a survey, 2026-08-18)
+
+Three of the seventeen drawings carry wall layers, and between them they use
+three drawing conventions — all three in test8 alone:
+
+| Drawing | Layers | What the linework is |
+|---------|--------|----------------------|
+| LayoutPlan-Project1 | `A-WALL-CUT-Brick` 25, `PARAPET WALL` 4, `wall` 1 | closed/near-closed thin rings + loose faces; 10.3° angled jambs |
+| test8 | `wall` 312, `S-RCC-WALL` 29, `A-WALL-CUT-Brick` 21 | quads (150/250 wide, three rotated 10.3°), L/U rings, U's open by one wall width, L-core outer/inner face record pairs |
+| test9 | `PI_RETAINING WALL` 64, `PI_SHEAR WALL CUTOUT` 10, `PI_STONE WALL` 3 | loose 160..300 face pairs; door-cutout quads; zero-length lines |
+
+`S-RCC-WALL` classified as ARCH wall — only its "wall" token matched. RCC is
+reinforced cement concrete; an `rcc` token on the structural row reroutes it,
+and the full corpus layer dump (72 distinct names, DXFs + archived exports)
+shows exactly one layer moving: `PI_RCC BEAM` and `S-RCC-COL` are already
+claimed by the beam and column rows that run earlier.
+
+### The numbers behind wall_plan's constants
+
+Candidate pairs (parallel within 3°, ≥150 mm shared run, per category):
+
+- Real wall widths: 100 (test8's partitions), 150 (dominant — 154 candidates
+  in test8's arch pool alone), 160/175/200/230/240/250/300/350, thinning to
+  495. Drawn outlines never exceed 250.
+- Below 100: EMPTY down to the ~5 mm re-traced duplicates. Above 495: empty
+  until 565, then door artifacts — 37 candidates at exactly 750 are jamb
+  strokes facing each other across 750 doorways, with more at 840/850/900.
+- Hence `_WALL_MIN_MM = 90`, `_WALL_MAX_MM = 520`: both sit in measured
+  deserts. test9's 240..500 cutout quads sit INSIDE the band — no width rule
+  can refuse them, only the layer's name can (below).
+
+Collinear axial gaps between same-line faces (what the bridge must span):
+
+- 150..200: a tee'd wall interrupts its host's face by its own width — and
+  deposits its END CAP exactly in the cut, so the bridge plus the cap
+  rebuild the host's face across the junction.
+- 750..1310: the doors (test8: 27×750, 10×1000, 12×1150, 12×1200). From
+  1350 up the histogram blurs into room-scale separations; test9's four
+  1500 mm gaps stay unbridged on purpose. Hence `_COLLINEAR_BRIDGE_MM = 1300` —
+  wider than report.py's `_CORE_WALL_DOOR_MM` (700) because an architectural
+  door is wider than a lift-core access.
+
+### A cutout layer's rings are holes, not walls
+
+`PI_SHEAR WALL CUTOUT` carries ten closed quads 240..500 × 900..2600 — the
+legend row for its hatches reads "CUTOUT FOR DOOR ABOVE", and a planner that
+walls them shut casts concrete in every doorway. The geometry convention
+still refuses to ROUTE linework by a cutout token (finding the legend
+machinery relies on), so the refusal lives in wall_plan: a wall-category
+record whose layer name carries the token goes to `skipped` with the reason
+spelled out.
+
+### One wall drawn on both conventions — left for P3b
+
+test8's 250-wide `S-RCC-WALL` quad carries a 150-wide arch `wall` trace
+50 mm off its centreline: 250/2 − 150/2 = 50, i.e. the two drawings SHARE a
+face and disagree about the other one. Both plan today (different kinds, so
+neither pass can see the other). Which one places — and whether the lift-core
+walls `recover_core_walls` still emits as thin columns move over — is the
+builder's call, recorded in task_plan.md under P3b. The only same-kind
+coincidences in the corpus are three drawn nibs (100..151 wide, 250..410
+long closed rings sitting on longer wall runs) — drawn geometry, kept.

@@ -266,12 +266,55 @@ which of the two drives the support's offset.
 
 ---
 
-## Phase 3-7
+## Phase 3 — walls as real `DB.Wall`
+
+**Status:** P3a (the Revit-free plan) shipped as v0.75.0; P3b (builder + dialog)
+open.
+
+- [x] 3a.1 Classification: `rcc` token added to the structural-wall row, so
+      test8's `S-RCC-WALL` (29 records) stops reading as an arch wall.
+      Measured against the full corpus layer dump (72 distinct names across
+      the 17 DXFs + archived exports): exactly ONE layer moves — the other
+      rcc layers (`PI_RCC BEAM`, `S-RCC-COL`) are claimed by the beam and
+      column rows above it.
+- [x] 3a.2 `wall_plan.py` — `plan_walls(records, texts, tolerances)` →
+      `{"segments", "skipped"}`, Revit-free. Closed thin rings read as
+      outlines (quads at any rotation, rectilinear L/U rings decomposed; a
+      U open by one wall width closed first); loose faces merged collinear
+      across door gaps and paired smallest-gap-first with union spans —
+      `recover_core_walls`' three refinements, generalised off the axes
+      because the corpus is angled (10.3° runs in Project1 and test8).
+      Cutout-layer linework refused by name; every refusal lands in
+      `skipped` with a reason.
+- [x] 3a.3 22 unit tests (679 → 701), the fixture pins on EXACT record
+      coordinates from test8/test9/Project1; sweep gains six wall metrics
+      per fixture, all other numbers unmoved (the re-blessed baseline diff
+      is those 102 lines and nothing else).
+
+**Measured for P3a (the numbers behind every constant — findings #12):**
+wall layers exist in 3 of 17 drawings. Real widths 100–495 mm (empty below
+100 down to the ~5 mm re-traces, empty 495–565, door artifacts from 565);
+band set 90..520. Collinear face gaps: 150–200 (crossing walls), 750–1310
+(doors: 27×750, 10×1000, 12×1150, 12×1200), room-scale from 1350; bridge
+set 1300. Planned: Project1 17 segments / 11 skips, test8 178 / 110, test9
+19 / 39 (10 of those the door cutouts, 3 the zero-length stone lines).
+
+- [ ] 3b Builder + dialog: `builders/walls.py` placing `DB.Wall` from the
+      plan (structural rise base-to-top like columns; arch walls sit on
+      beams per the roadmap), wall rows in the dialog, run_builders wiring,
+      export/report of placed walls. Decisions P3b owns: whether the core
+      walls `recover_core_walls` still places as thin columns move over
+      (column counts must not change until it decides), and which side wins
+      where the SAME wall is drawn on both conventions (test8's 250
+      `S-RCC-WALL` quad carries a 150 arch trace 50 mm off its centreline —
+      shared face, both planned today, findings #12).
+
+---
+
+## Phase 4-7
 
 Detail in the roadmap document; opened when the phase starts.
 
-- [ ] 3 Walls as real `DB.Wall`. Today `geom/shapes.py::recover_core_walls`
-      emits them as column entries, so a wall is placed as a long thin column.
 - [ ] 4 Openings — doors, windows, shafts. Needs 1.1 and phase 3's hosts.
 - [ ] 5 Round-trip QA — built model vs source DXF delta.
 - [ ] 6 Annotation — dimensions, tags, views, sheets.
