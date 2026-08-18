@@ -362,16 +362,34 @@ schema lands and the footing element type is chosen.
 
 ---
 
-## 7. Blocking decisions
+## 7. Decisions taken
 
-1. **Excel schema** — adopt the type + placement split (§3.3), or keep one row
-   per instance and add `X`/`Y`/`Rotation`, or stay rebar-only and place nothing.
-2. **MVP scope** — P0 rebar-only first, or attempt structure creation immediately.
-3. **Footing element** — `FamilyInstance` pad, or the existing cad2bim
-   `Floor.Create` foundation-slab approach.
-4. **Preview mechanism** — overrides only, overrides + `DirectShape`, or no 3D
-   preview in the MVP.
+Settled 2026-08-18. These supersede the corresponding parts of the spec.
 
-Secondary, needed before rebar code is written: which detailing standard leads
-(BS 8666:2020 / IS 2502:2019 / ACI 315), since it fixes hook geometry, bend
-radii and lap lengths — and BBS Generator already implements all three.
+| # | Decision | Consequence |
+| --- | --- | --- |
+| 1 | **Excel schema splits type from placement** (§3.3). | One `*_REBAR` row can drive every instance of a type. Placement sheets are defined in the template now but only consumed from P1. |
+| 2 | **P0 is Rebar Only on existing elements.** | No coordinates needed. Ships the BBS round trip first. |
+| 3 | **Footings are `Floor.Create` on a Structural Foundation `FloorType`** — chosen so an arbitrary outline can be footed, not just a rectangle. `cad2bim` is *not* imported; anything reusable is written fresh into `anongee_toolkit`. | `Thickness` is the floor's compound-structure thickness; the pad sits **on** its level. The host must have `FLOOR_PARAM_IS_STRUCTURAL` set or it is not a legal rebar host — validation must check this and say so. |
+| 4 | **Preview = overrides for existing + `DirectShape` for new.** | Green/orange via `OverrideGraphicSettings`; blue CREATE volumes as `DirectShape` in an "RC Preview" subcategory, wiped by one Clear transaction. |
+| 5 | **BS 8666:2020 leads.** | Hooks, bend radii and cutting lengths come from `BBS Generator/standards/BS_8666_2020.py`. Its `SHAPE_MAP` covers codes 00, 11, 12, 13, 14, 15, 21, 31, 32, 41, 51, 60, 77. |
+| 6 | **Bar types are mapped in the UI; unmapped is an error.** | A Bar Type Mapping section pairs each workbook diameter with a `RebarBarType` from the model, auto-matching on name. No silent type creation. |
+| 7 | **Host key is a user-selected parameter, defaulting to `Mark`, with `Level` as tie-breaker.** | Folds the spec's Matching Modes 1, 3 and 4 into one mechanism. Choosing `Type Mark` makes one workbook row drive all instances of that type. |
+| 8 | **Existing rebar on a host is compared, not overwritten.** | Four statuses: `CREATE` (host bare), `MATCHED` (existing bars agree with the workbook within tolerance), `CONFLICT` (they differ), `INVALID` (no host, or host cannot take rebar). Skip is the default for `MATCHED` and `CONFLICT`; the user may opt a row into Replace. This makes the tool a rebar **checker** as well as a generator. |
+
+### Decided without asking
+
+**Rebar sets, not one element per bar.** A single `Rebar` with
+`SetLayoutAsNumberWithSpacing` (or `SetLayoutAsMaximumSpacing` when only spacing
+is given) represents a whole layer, turning ~50,000 elements into ~2,000 at the
+500-element target (§4.3). Verified compatible with the existing BBS: 
+`core/rebar_reader.py:241` reads `BuiltInParameter.REBAR_ELEM_QUANTITY_OF_BARS`,
+which reports a set's bar count correctly.
+
+### Still open, not blocking P0
+
+Ribbon placement. `Dev.panel` matches the README's convention for a tool that has
+not yet proven itself; `Core.panel/BIM.stack` is where it belongs once it has.
+
+The build plan is in
+[`2026-08-18-rc-automation-p0-plan.md`](2026-08-18-rc-automation-p0-plan.md).
