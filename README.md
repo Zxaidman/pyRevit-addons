@@ -93,6 +93,7 @@ Generators, the design system, and the reference patterns new tools are built fr
 | **Brand Guidelines**    | Living component gallery for the design system — brand colours, typography, buttons, inputs, selection controls, lists and status badges, exactly as they render inside Revit.                                                  |
 | **CPython3 engine**     | Engine health check. Reports whether the CPython 3 engine is a fresh load or a reused instance (and how many runs this session), which third-party libraries resolve, and whether the Revit API bridge responds.                |
 | **Create Button**       | Scaffold a new pyRevit pushbutton: collects the tab / panel / group / metadata in a brand-themed dialog, writes the folder, script, icon and `bundle.yaml`, then asks pyRevit to reload.                                        |
+| **RC Automation**       | Reads an Excel reinforcement schedule, checks it against **BS 8666:2020**, and reports what the open model would give it — levels, rebar bar types, and whether the footings and columns it would host into can take reinforcement at all. **Read-only**: opens no transaction, creates nothing. Works out what the schedule would build, including whether a layer ships as one Revit element or has to be individual bars. |
 | **Modeless Window**     | Reference implementation of the modeless (non-blocking) window pattern — `window.Show()`, an `IExternalEventHandler` bridge marshalling every Revit call onto Revit's primary thread, and the session-state rules that go with it. |
 
 ---

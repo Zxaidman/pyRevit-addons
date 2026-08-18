@@ -1,0 +1,42 @@
+title: RC Automation
+author: AnonGee
+tooltip: |
+  Read an Excel reinforcement schedule, check it, and see what the open model
+  would give it — without writing anything.
+
+  This build is READ-ONLY. It opens no transaction and creates no elements.
+  It exists to prove the reads are right before anything is written.
+
+  What it does
+    • Loads a schedule workbook (.xlsx / .xlsm) and validates it against
+      BS 8666:2020 — bar sizes, shape codes, cover that leaves room for steel,
+      spacing wider than the bar, ties that are actually closed links,
+      confinement zones, and cages that fit the column they are drawn in.
+    • Reports every finding against the cell it came from, so a problem can be
+      typed straight into Excel's Name Box.
+    • Works out what the schedule would build: how many bars, and how many
+      Revit elements those become. A layer whose bars are all the same length
+      is one element; a tapered pad's are not, and it says so.
+    • Probes the model read-only for the levels and rebar bar types the
+      workbook names, and for whether the footings and columns it would host
+      into can take reinforcement at all — a floor that is not flagged
+      structural cannot, which is the failure worth finding early.
+
+  Modes
+    • Create structure and reinforcement — needs the placement sheets.
+    • Reinforce existing structure — placement is ignored.
+    • Reconcile against the model — compare, do not overwrite.
+
+  Sheets it reads
+    FOOTING_TYPES, FOOTING_PLACEMENT, FOOTING_REBAR,
+    COLUMN_TYPES, COLUMN_PLACEMENT, COLUMN_REBAR.
+    All lengths in millimetres. A UNITS row above the header confirms it.
+
+  Notes
+    • Modeless — Revit stays interactive while the window is open.
+    • Runs on the CPython 3 engine; reading a workbook uses the bundled
+      openpyxl.
+    • Every control has a tooltip. Export report writes the findings and the
+      probe beside the workbook.
+
+  Version: 0.1.0

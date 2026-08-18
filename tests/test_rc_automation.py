@@ -35,6 +35,7 @@ standards = _rc.standards
 excel_engine = _rc.excel_engine
 validation = _rc.validation
 reconcile = _rc.reconcile
+rebar_spec = _rc.rebar_spec
 
 _FIXTURES = os.path.join(_ROOT, "tests", "fixtures", "rc_automation")
 _BBS_STANDARD = os.path.join(
@@ -1011,6 +1012,249 @@ class GeometryDeferralTests(unittest.TestCase):
         summary = reconcile.summarise([self.geometric(), self.parametric()])
         self.assertEqual(summary["differing"], 2)
         self.assertEqual(summary["report_only"], 1)
+
+
+# ── bar geometry ───────────────────────────────────────────────────────────
+
+class ScanGeometryTests(unittest.TestCase):
+
+    RECT = [(0.0, 0.0), (3000.0, 0.0), (3000.0, 2000.0), (0.0, 2000.0)]
+
+    def test_a_scan_line_across_a_rectangle(self):
+        self.assertEqual(rebar_spec.scan_segments(self.RECT, 1000.0, "X"),
+                         [(0.0, 3000.0)])
+        self.assertEqual(rebar_spec.scan_segments(self.RECT, 1500.0, "Y"),
+                         [(0.0, 2000.0)])
+
+    def test_a_scan_line_outside_the_polygon_finds_nothing(self):
+        self.assertEqual(rebar_spec.scan_segments(self.RECT, 5000.0, "X"), [])
+
+    def test_a_waisted_polygon_gives_two_runs_on_one_line(self):
+        # An H on its side: one scan line crosses two separate pieces of pad,
+        # and each is a bar. Taking only the outermost pair would reinforce the
+        # gap between them.
+        h_shape = [(0.0, 0.0), (1000.0, 0.0), (1000.0, 400.0), (2000.0, 400.0),
+                   (2000.0, 0.0), (3000.0, 0.0), (3000.0, 1000.0),
+                   (0.0, 1000.0)]
+        segments = rebar_spec.scan_segments(h_shape, 200.0, "X")
+        self.assertEqual(segments, [(0.0, 1000.0), (2000.0, 3000.0)])
+
+    def test_a_vertex_is_not_counted_twice(self):
+        # A scan line through a corner must not pair a doubled crossing into a
+        # zero-length bar.
+        diamond = [(0.0, -1000.0), (1500.0, 0.0), (0.0, 1000.0),
+                   (-1500.0, 0.0)]
+        self.assertEqual(len(rebar_spec.scan_segments(diamond, 0.0, "X")), 1)
+
+    def test_insetting_a_span(self):
+        self.assertEqual(rebar_spec.inset_segment(0.0, 3000.0, 50.0),
+                         (50.0, 2950.0))
+
+    def test_a_span_that_cover_swallows_is_not_a_bar(self):
+        self.assertIsNone(rebar_spec.inset_segment(0.0, 80.0, 30.0))
+
+    def test_a_rectangle_is_centred_on_its_origin(self):
+        points = rebar_spec.rectangle(3000.0, 2000.0)
+        self.assertEqual(rebar_spec.bounds(points),
+                         (-1500.0, -1000.0, 1500.0, 1000.0))
+
+
+class BarPositionTests(unittest.TestCase):
+
+    def test_count_and_spacing_honours_both(self):
+        got = rebar_spec.bar_positions(0.0, 3000.0, count=3, spacing_mm=200.0)
+        self.assertEqual(got, [1300.0, 1500.0, 1700.0])
+
+    def test_count_alone_spreads_evenly_with_half_gaps_at_the_ends(self):
+        got = rebar_spec.bar_positions(0.0, 3000.0, count=3)
+        self.assertEqual(got, [500.0, 1500.0, 2500.0])
+
+    def test_spacing_alone_fits_as_many_as_it_can(self):
+        got = rebar_spec.bar_positions(0.0, 1000.0, spacing_mm=200.0)
+        self.assertEqual(len(got), 6)
+        self.assertAlmostEqual(got[0], 0.0)
+        self.assertAlmostEqual(got[-1], 1000.0)
+
+    def test_one_bar_sits_in_the_middle(self):
+        self.assertEqual(rebar_spec.bar_positions(0.0, 1000.0, count=1),
+                         [500.0])
+
+    def test_nothing_asked_for_is_nothing_placed(self):
+        self.assertEqual(rebar_spec.bar_positions(0.0, 1000.0), [])
+
+
+class FootingLayerTests(unittest.TestCase):
+
+    def footing(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        return data
+
+    def test_a_rectangular_pad_collapses_to_one_set(self):
+        data = self.footing()
+        plans = rebar_spec.plan_footing(
+            data.footing_type("F1"), data.footing_rebar_for("F1"))
+        self.assertTrue(all(p.uniform for p in plans), [p.notes for p in plans])
+        self.assertTrue(all(p.element_count == 1 for p in plans))
+
+    def test_bar_length_is_the_pad_less_cover_both_ends(self):
+        data = self.footing()
+        plan = rebar_spec.plan_footing(
+            data.footing_type("F1"), data.footing_rebar_for("F1"))[0]
+        # F1 is 3000 x 3000 with 50 side cover.
+        self.assertAlmostEqual(plan.bars[0].length_mm, 2900.0)
+
+    def test_a_set_carries_its_count_and_spacing(self):
+        data = self.footing()
+        plan = rebar_spec.plan_footing(
+            data.footing_type("F1"), data.footing_rebar_for("F1"))[0]
+        bar_set = plan.as_set()
+        self.assertEqual(bar_set.count, 15)
+        self.assertEqual(bar_set.spacing_mm, 200.0)
+        self.assertEqual(bar_set.layout_rule, models.LAYOUT_NUMBER_WITH_SPACING)
+
+    def test_a_non_rectangular_pad_needs_individual_bars(self):
+        # The five-sided pad in the sample: a set repeats one shape, so bars of
+        # different lengths cannot be one element.
+        data = self.footing()
+        shaped = [p for p in data.footing_placement if p.has_outline][0]
+        plans = rebar_spec.plan_footing(
+            data.footing_type(shaped.type_mark),
+            data.footing_rebar_for(shaped.type_mark), placement=shaped)
+        varying = [p for p in plans if not p.uniform]
+        self.assertTrue(varying, "the tapered pad should not be uniform")
+        self.assertGreater(varying[0].element_count, 1)
+        self.assertTrue(any("vary in length" in n for n in varying[0].notes))
+
+    def test_layers_stack_by_the_diameter_below_them(self):
+        # B2 clears the cover, then B1's whole diameter, then half its own --
+        # and B1's diameter is looked up, not assumed equal to B2's.
+        b1 = models.FootingRebarRow("F1", layer="B1", direction="X",
+                                    diameter_mm=20.0, spacing_mm=200.0)
+        b2 = models.FootingRebarRow("F1", layer="B2", direction="Y",
+                                    diameter_mm=12.0, spacing_mm=200.0)
+        z1 = rebar_spec.layer_elevation(b1, [b1, b2], 900.0, 50.0, 75.0)
+        z2 = rebar_spec.layer_elevation(b2, [b1, b2], 900.0, 50.0, 75.0)
+        self.assertAlmostEqual(z1, 75.0 + 10.0)
+        self.assertAlmostEqual(z2, 75.0 + 20.0 + 6.0)
+
+    def test_top_layers_measure_down_from_the_top_face(self):
+        t1 = models.FootingRebarRow("F1", layer="T1", direction="X",
+                                    diameter_mm=12.0, spacing_mm=250.0)
+        z = rebar_spec.layer_elevation(t1, [t1], 900.0, 50.0, 75.0)
+        self.assertAlmostEqual(z, 900.0 - 50.0 - 6.0)
+
+    def test_cover_that_swallows_the_pad_places_nothing_and_says_why(self):
+        footing = models.FootingType("F1", length_mm=400.0, width_mm=400.0,
+                                     thickness_mm=900.0, cover_top_mm=50.0,
+                                     cover_bottom_mm=75.0, cover_side_mm=250.0)
+        row = models.FootingRebarRow("F1", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0)
+        plan = rebar_spec.plan_footing(footing, [row])[0]
+        self.assertEqual(plan.bars, [])
+        self.assertTrue(plan.notes)
+
+
+class ColumnArrangementTests(unittest.TestCase):
+
+    def arrange(self, count, width=300.0, depth=600.0):
+        return rebar_spec.arrange_column_bars(count, width, depth, 40.0, 10.0,
+                                              20.0)
+
+    def test_four_bars_are_the_four_corners(self):
+        positions = self.arrange(4)
+        self.assertEqual(len(positions), 4)
+        # 300/2 - (40 + 10 + 10) = 90; 600/2 - 60 = 240
+        self.assertEqual(sorted(set(abs(x) for x, _ in positions)), [90.0])
+        self.assertEqual(sorted(set(abs(y) for _, y in positions)), [240.0])
+
+    def test_fewer_than_four_still_places_corners(self):
+        self.assertEqual(len(self.arrange(2)), 2)
+
+    def test_the_requested_count_is_always_produced(self):
+        for count in range(1, 25):
+            self.assertEqual(len(self.arrange(count)), count, count)
+
+    def test_extras_favour_the_long_faces(self):
+        # A 300 x 600 column should put more intermediate bars down its 600
+        # faces than across its 300 ones.
+        positions = self.arrange(10)
+        on_long_face = [p for p in positions
+                        if abs(abs(p[0]) - 90.0) < 1e-6 and abs(p[1]) < 240.0]
+        on_short_face = [p for p in positions
+                         if abs(abs(p[1]) - 240.0) < 1e-6 and abs(p[0]) < 90.0]
+        self.assertGreater(len(on_long_face), len(on_short_face))
+
+    def test_bars_stay_inside_the_section(self):
+        for x, y in self.arrange(12):
+            self.assertLessEqual(abs(x), 90.0 + 1e-6)
+            self.assertLessEqual(abs(y), 240.0 + 1e-6)
+
+    def test_a_section_too_small_for_a_cage_places_nothing(self):
+        self.assertEqual(
+            rebar_spec.arrange_column_bars(8, 100.0, 100.0, 40.0, 10.0, 20.0),
+            [])
+
+
+class ColumnTieTests(unittest.TestCase):
+
+    def rows(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        return data
+
+    def test_confinement_produces_three_sets(self):
+        data = self.rows()
+        tie = [r for r in data.column_rebar_for("C1") if r.is_tie][0]
+        sets = rebar_spec.plan_column_ties(tie, data.column_type("C1"), 3600.0)
+        self.assertEqual(len(sets), 3)
+        self.assertEqual([s.spacing_mm for s in sets], [100.0, 200.0, 100.0])
+
+    def test_without_confinement_one_set_runs_the_full_height(self):
+        data = self.rows()
+        tie = [r for r in data.column_rebar_for("C3") if r.is_tie][0]
+        sets = rebar_spec.plan_column_ties(tie, data.column_type("C3"), 3600.0)
+        self.assertEqual(len(sets), 1)
+        self.assertAlmostEqual(sets[0].array_length_mm, 3600.0)
+
+    def test_a_tie_is_a_closed_loop(self):
+        data = self.rows()
+        tie = [r for r in data.column_rebar_for("C2") if r.is_tie][0]
+        bar = rebar_spec.plan_column_ties(
+            tie, data.column_type("C2"), 3000.0)[0].bar
+        self.assertEqual(bar.points[0], bar.points[-1])
+        self.assertEqual(len(bar.points), 5)
+
+    def test_a_tie_sits_inside_cover_by_half_its_own_diameter(self):
+        data = self.rows()
+        tie = [r for r in data.column_rebar_for("C2") if r.is_tie][0]
+        bar = rebar_spec.plan_column_ties(
+            tie, data.column_type("C2"), 3000.0)[0].bar
+        # C2 is 400 square, 40 cover, R10 tie: 200 - 40 - 5 = 155
+        self.assertAlmostEqual(abs(bar.points[0][0]), 155.0)
+
+    def test_confinement_never_eats_the_whole_column(self):
+        data = self.rows()
+        tie = [r for r in data.column_rebar_for("C1") if r.is_tie][0]
+        sets = rebar_spec.plan_column_ties(tie, data.column_type("C1"), 900.0)
+        self.assertTrue(all(s.array_length_mm > 0 for s in sets))
+
+
+class ColumnMainTests(unittest.TestCase):
+
+    def test_mains_run_the_full_height(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        row = [r for r in data.column_rebar_for("C2") if r.is_main][0]
+        bars = rebar_spec.plan_column_mains(
+            row, data.column_type("C2"), 3600.0, tie_diameter_mm=10.0)
+        self.assertEqual(len(bars), 8)
+        self.assertAlmostEqual(bars[0].length_mm, 3600.0)
+
+    def test_two_main_groups_produce_two_sets_of_bars(self):
+        # "4T20 corners + 6T16 faces" is one column and two rows.
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        mains = [r for r in data.column_rebar_for("C1") if r.is_main]
+        counts = [len(rebar_spec.plan_column_mains(
+            row, data.column_type("C1"), 3600.0, 10.0)) for row in mains]
+        self.assertEqual(sorted(counts), [4, 6])
 
 
 # ── the file layer ─────────────────────────────────────────────────────────

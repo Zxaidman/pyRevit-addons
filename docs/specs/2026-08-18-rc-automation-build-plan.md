@@ -158,13 +158,13 @@ Revit-free code lives in the toolkit so it runs under
 `cad2bim` — it belongs to its own pushbutton.
 
 ```
-anongee_toolkit/rc_automation/          no Revit — 109 tests, all green
+anongee_toolkit/rc_automation/          no Revit — 376 tests, all green
     models.py            DTOs, modes, severities, layout rules       ✅
     standards.py         the BS 8666 subset validation needs         ✅
     excel_engine.py      read_grid (openpyxl) + parse_grid (pure)    ✅
     validation.py        rules → Error / Warning / Info              ✅
     reconcile.py         field-by-field comparison, Excel default    ✅
-    rebar_spec.py        workbook row → abstract BarSpec
+    rebar_spec.py        workbook row → bar centrelines, sets vs bars ✅
     reporting_engine.py  hand-rolled CSV (no `csv` module), JSON, XLSX
 
 anongee_toolkit/structural/             Revit-touching, reusable
@@ -175,13 +175,11 @@ anongee_toolkit/structural/             Revit-touching, reusable
     footings.py          Floor.Create from an outline, on a level
     columns.py           FamilyInstance between two levels
 
-RCAutomation.pushbutton/                Revit + WPF
-    script.py            modeless window, session state, run()
-    ui.xaml
-    external_events.py   IExternalEventHandler + FIFO request queue
-    preview_items.py     __slots__ rows + ArrayList
+RC Automation.pushbutton/               Revit + WPF — READ-ONLY build shipped
+    script.py            modeless window, FIFO queue, read-only probe ✅
+    ui.xaml              inlined theme, findings grid, probe panel    ✅
+    bundle.yaml  icon.png  CHANGELOG.md                               ✅
     preview_engine.py    OverrideGraphicSettings + DirectShape
-    bundle.yaml  icon.png  CHANGELOG.md
 ```
 
 ---
@@ -269,14 +267,20 @@ Only int element ids cross the thread boundary.
 
 1. ✅ `models` · `standards` · `excel_engine` · `validation` — schedule in, objects out.
 2. ✅ `reconcile` — field-by-field comparison with the Excel default.
-3. `rebar_spec` — workbook row to abstract bar geometry. **Still no Revit.**
-4. `structural/footings` + `structural/columns` — Phase 1 creation, read-only probes first.
-5. `ui.xaml` + `script.py` + `external_events.py` + `preview_items.py` — window opens, grid populates, zero writes.
-6. `preview_engine` — overrides and DirectShape.
-7. `rebar_geometry` + `rebar_factory` — first rebar writes, footings before columns.
+3. ✅ `rebar_spec` — workbook row to bar centrelines, and whether a run is a set.
+4. ✅ **Read-only pushbutton, v0.1.0** — the window opens, the workbook loads and
+   validates, the model is probed, and nothing is written. Everything below is
+   downstream of questions only Revit can answer, so this build answers them
+   first: does the CPython 3 engine import the toolkit, does the bundled
+   openpyxl load, does the modeless bridge hold, are the levels and bar types
+   present, and can the matched elements host reinforcement at all.
+5. `rebar_geometry` + `rebar_factory` — bar specs to `Rebar.CreateFromCurves`.
+6. `structural/footings` + `structural/columns` — Phase 1 creation.
+7. `preview_engine` — overrides and DirectShape.
 8. Phase 2 matching, then Phase 3 reconciliation wiring.
 9. Chunked execution, cancellation, failure preprocessor, worksharing.
-10. `reporting_engine`, then the three delivery gates.
+10. `reporting_engine`, then re-check the delivery gates.
 
-Steps 1–3 are the entire data model and testable off-Revit; step 7 is where the
-real risk sits, which is why everything else is proven first.
+Steps 1–3 are the entire data model and testable off-Revit; step 4 proves the
+Revit half without risking a model; step 5 is where the real risk sits, which is
+why everything else is proven first.

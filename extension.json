@@ -1,7 +1,7 @@
 {
   "name": "AnonGee BIM Tools",
-  "version": "1.1.0",
-  "description": "A professional suite of structural and architectural BIM automation tools for Autodesk Revit — level management with smart text detection, parameter filtering, BIM generation from INP/DXF, bar bending schedules, rebar visibility, bulk operations, and more.",
+  "version": "1.2.0",
+  "description": "A professional suite of structural and architectural BIM automation tools for Autodesk Revit — level management with smart text detection, parameter filtering, BIM generation from INP/DXF, reinforcement schedules driven from Excel, bar bending schedules, rebar visibility, bulk operations, and more.",
   "author": "Zaid Shaikh (AnonGee)",
   "website": "https://github.com/Zxaidman/pyRevit-addons",
   "min_pyrevit_version": "6.10.0",

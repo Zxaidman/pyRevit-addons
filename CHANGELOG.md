@@ -22,6 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.1.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -31,6 +32,34 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.2.0
+
+**Added**
+
+- **RC Automation** (Dev panel) — reads an Excel reinforcement schedule, checks
+  it, and reports what the open model would give it. Shipping at its own version
+  0.1.0, and deliberately **read-only**: it opens no transaction and creates
+  nothing.
+
+  Everything hard about driving reinforcement from a schedule is downstream of
+  questions nobody had answered inside Revit yet — whether the CPython 3 engine
+  imports the toolkit, whether the bundled openpyxl loads, whether the modeless
+  bridge holds, whether the levels and bar types a schedule names are present,
+  and whether the elements it would host into can take reinforcement at all.
+  Finding that out during a four-hundred element write is the expensive way
+  round, so this build answers it first.
+
+  Validates against BS 8666:2020 and reports every finding against the cell it
+  came from. Works out what the schedule would build without building it,
+  including whether a layer can ship as one Revit element or has to be
+  individual bars. Full history in its own
+  [changelog](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md).
+- **`anongee_toolkit.rc_automation`** — the schedule layer, with no Revit in it:
+  workbook reading, validation, reconciliation against a model, and bar
+  geometry. 343 tests now run without Revit.
 
 ---
 
