@@ -116,6 +116,47 @@ def coerce_count(value):
     return int(round(number)), None
 
 
+def parse_outline(value):
+    """``(points, error)`` from ``"0,0; 3000,0; 3000,2000; 0,2000"``.
+
+    An arbitrary pad outline, millimetres relative to the placement point and
+    before rotation. This is the column that earns footings being floors rather
+    than family instances: a combined pad, a cut corner or a footing worked
+    around a pile cap can be scheduled instead of approximated by the nearest
+    rectangle.
+
+    Blank is not an error -- most footings are rectangles and say so through the
+    type's Length and Width.
+    """
+    text = coerce_text(value)
+    if not text:
+        return None, None
+
+    points = []
+    for chunk in text.replace("\n", ";").split(";"):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+        parts = chunk.split(",")
+        if len(parts) != 2:
+            return None, ("outline point {0!r} is not an x,y pair".format(chunk))
+        x, x_error = coerce_number(parts[0])
+        y, y_error = coerce_number(parts[1])
+        if x_error or y_error or x is None or y is None:
+            return None, "outline point {0!r} is not a pair of numbers".format(chunk)
+        points.append((x, y))
+
+    if len(points) < 3:
+        return None, ("an outline needs at least 3 points, found {0}".format(
+            len(points)))
+    # A closing point repeating the first is how people write these; the curve
+    # loop is built by walking back to the start, so carrying it would place a
+    # zero-length line and Revit would refuse the whole sketch.
+    if len(points) > 3 and points[0] == points[-1]:
+        points = points[:-1]
+    return points, None
+
+
 # ---------------------------------------------------------------------------
 # Column specifications
 # ---------------------------------------------------------------------------
@@ -123,7 +164,8 @@ def coerce_count(value):
 #
 # Aliases exist so the names in the original feature specification -- and the
 # abbreviations engineers actually type -- load without anyone editing a file.
-_TEXT, _NUM, _COUNT, _SHAPE = "text", "number", "count", "shape"
+_TEXT, _NUM, _COUNT, _SHAPE, _OUTLINE = (
+    "text", "number", "count", "shape", "outline")
 
 _FOOTING_TYPE_COLUMNS = (
     ("type_mark",      "TypeMark",    True,  _TEXT, ("Mark", "FootingMark", "Type")),
@@ -172,11 +214,42 @@ _COLUMN_REBAR_COLUMNS = (
     ("comments",              "Comments",          False, _TEXT,  ("Remarks", "Note", "Notes")),
 )
 
+_FOOTING_PLACEMENT_COLUMNS = (
+    ("mark",          "Mark",      True,  _TEXT,    ("FootingMark", "Instance")),
+    ("type_mark",     "TypeMark",  True,  _TEXT,    ("Type", "FootingType")),
+    ("grid_x",        "GridX",     False, _TEXT,    ("GridRefX", "AxisX")),
+    ("grid_y",        "GridY",     False, _TEXT,    ("GridRefY", "AxisY")),
+    ("x_mm",          "X",         False, _NUM,     ("Easting", "XCoord")),
+    ("y_mm",          "Y",         False, _NUM,     ("Northing", "YCoord")),
+    ("level",         "Level",     True,  _TEXT,    ("BaseLevel", "Storey")),
+    ("top_offset_mm", "TopOffset", False, _NUM,     ("Offset",)),
+    ("rotation_deg",  "Rotation",  False, _NUM,     ("Angle",)),
+    ("outline",       "Outline",   False, _OUTLINE, ("Shape", "Polygon")),
+)
+
+_COLUMN_PLACEMENT_COLUMNS = (
+    ("mark",           "Mark",       True,  _TEXT, ("ColumnMark", "Instance")),
+    ("type_mark",      "TypeMark",   True,  _TEXT, ("Type", "ColumnType")),
+    ("grid_x",         "GridX",      False, _TEXT, ("GridRefX", "AxisX")),
+    ("grid_y",         "GridY",      False, _TEXT, ("GridRefY", "AxisY")),
+    ("x_mm",           "X",          False, _NUM,  ("Easting", "XCoord")),
+    ("y_mm",           "Y",          False, _NUM,  ("Northing", "YCoord")),
+    ("base_level",     "BaseLevel",  True,  _TEXT, ("Level", "FromLevel")),
+    ("base_offset_mm", "BaseOffset", False, _NUM,  ("BottomOffset",)),
+    ("top_level",      "TopLevel",   True,  _TEXT, ("ToLevel",)),
+    ("top_offset_mm",  "TopOffset",  False, _NUM,  ("UpperOffset",)),
+    ("rotation_deg",   "Rotation",   False, _NUM,  ("Angle",)),
+)
+
 _SHEET_SPECS = (
     (models.SHEET_FOOTING_TYPES, _FOOTING_TYPE_COLUMNS, models.FootingType),
     (models.SHEET_COLUMN_TYPES, _COLUMN_TYPE_COLUMNS, models.ColumnType),
     (models.SHEET_FOOTING_REBAR, _FOOTING_REBAR_COLUMNS, models.FootingRebarRow),
     (models.SHEET_COLUMN_REBAR, _COLUMN_REBAR_COLUMNS, models.ColumnRebarRow),
+    (models.SHEET_FOOTING_PLACEMENT, _FOOTING_PLACEMENT_COLUMNS,
+     models.FootingPlacement),
+    (models.SHEET_COLUMN_PLACEMENT, _COLUMN_PLACEMENT_COLUMNS,
+     models.ColumnPlacement),
 )
 
 
@@ -353,6 +426,13 @@ def _read_row(row, mapping, columns, sheet_name, row_number, issues):
         raw = _cell(row, mapping.get(attr))
         if kind == _TEXT:
             values[attr] = coerce_text(raw)
+        elif kind == _OUTLINE:
+            points, error = parse_outline(raw)
+            if error:
+                issues.append(Issue(
+                    SEVERITY_ERROR, error,
+                    sheet=sheet_name, row=row_number, column=header))
+            values[attr] = points
         elif kind == _SHAPE:
             code = standards.normalise_shape_code(raw)
             if code is None and coerce_text(raw):
@@ -425,7 +505,7 @@ def _match_sheets(grids):
 
     matched = {}
     present = []
-    for canonical in models.REQUIRED_SHEETS + models.DEFERRED_SHEETS:
+    for canonical in models.ALL_SHEETS:
         found = folded.get(fold(canonical))
         if found is not None:
             matched[canonical] = found[1]
@@ -456,7 +536,7 @@ def _check_units(metadata, issues):
     return declared
 
 
-def parse_grid(grids, path=None):
+def parse_grid(grids, path=None, mode=models.MODE_CREATE_ALL):
     """``(WorkbookData, issues)`` from raw sheet grids. No dependencies.
 
     Structural problems only -- a sheet that is absent, a column that is not
@@ -464,11 +544,17 @@ def parse_grid(grids, path=None):
     sense is :mod:`validation`'s question, and keeping the two apart is what
     lets a workbook report "column missing" without also reporting four hundred
     consequences of it.
+
+    Every sheet the parser knows is read whatever the mode, and *mode* decides
+    only which absences are errors. Switching mode in the window then costs
+    nothing: the workbook is read once, and a file with placement in it is ready
+    to create structure the moment the user asks for that instead of rebar.
     """
     issues = []
     matched, present = _match_sheets(grids or {})
+    needed = models.required_sheets(mode)
 
-    for canonical in models.REQUIRED_SHEETS:
+    for canonical in needed:
         if canonical not in matched:
             issues.append(Issue(
                 SEVERITY_ERROR,
@@ -488,13 +574,13 @@ def parse_grid(grids, path=None):
         for key, value in sheet_metadata.items():
             metadata.setdefault(key, value)
 
-    for canonical in models.DEFERRED_SHEETS:
-        if canonical in matched:
+    for canonical in models.PLACEMENT_SHEETS:
+        if canonical in matched and canonical not in needed:
             issues.append(Issue(
                 SEVERITY_INFO,
-                "Sheet {0!r} was found and is not read yet — placement drives "
-                "structure creation, which this release does not do.".format(
-                    canonical)))
+                "Sheet {0!r} was read but is not used in this mode — the "
+                "structure already exists, so it supplies its own "
+                "geometry.".format(canonical)))
 
     units = _check_units(metadata, issues)
 
@@ -505,13 +591,15 @@ def parse_grid(grids, path=None):
         column_types=parsed[models.SHEET_COLUMN_TYPES],
         footing_rebar=parsed[models.SHEET_FOOTING_REBAR],
         column_rebar=parsed[models.SHEET_COLUMN_REBAR],
+        footing_placement=parsed[models.SHEET_FOOTING_PLACEMENT],
+        column_placement=parsed[models.SHEET_COLUMN_PLACEMENT],
         metadata=metadata,
         sheets_present=present,
     )
     return data, issues
 
 
-def load(path):
+def load(path, mode=models.MODE_CREATE_ALL):
     """Read and parse in one step: ``(WorkbookData, issues)``.
 
     What the UI calls. Parsing is skipped when the file could not be opened at
@@ -521,5 +609,5 @@ def load(path):
     grids, issues = read_grid(path)
     if models.has_errors(issues):
         return models.WorkbookData(path=path), issues
-    data, parse_issues = parse_grid(grids, path=path)
+    data, parse_issues = parse_grid(grids, path=path, mode=mode)
     return data, issues + parse_issues

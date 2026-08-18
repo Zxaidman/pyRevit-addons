@@ -21,5 +21,7 @@ from anongee_toolkit.rc_automation import models          # noqa: F401
 from anongee_toolkit.rc_automation import standards       # noqa: F401
 from anongee_toolkit.rc_automation import excel_engine    # noqa: F401
 from anongee_toolkit.rc_automation import validation      # noqa: F401
+from anongee_toolkit.rc_automation import reconcile       # noqa: F401
 
-__all__ = ["models", "standards", "excel_engine", "validation"]
+__all__ = ["models", "standards", "excel_engine", "validation",
+           "reconcile"]

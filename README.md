@@ -178,12 +178,19 @@ python -m unittest discover -s tests -v
 - the tool's version agrees across `__init__.py`, `bundle.yaml`, `CHANGELOG.md` and the window header.
 
 `tests/test_rc_automation.py` covers the RC Automation workbook layer — cell
-coercion, header detection beneath a title block, column-name aliases, and every
-validation rule the schedule is held to before a transaction is opened. It also
-holds `anongee_toolkit/rc_automation/standards.py` to the BS 8666:2020 module the
-BBS Generator ships, so the bar sizes and shape codes in the two cannot drift
-apart. The sample schedule it reads is in `tests/fixtures/rc_automation/`, one
-CSV per sheet, and doubles as the worked example of the workbook format.
+coercion, header detection beneath a title block, column-name aliases, pad
+outlines, every validation rule the schedule is held to before a transaction is
+opened, and the reconciliation that decides whether the workbook or the model
+wins where they disagree. It also holds
+`anongee_toolkit/rc_automation/standards.py` to the BS 8666:2020 module the BBS
+Generator ships, so the bar sizes and shape codes in the two cannot drift apart.
+The sample schedule it reads is in `tests/fixtures/rc_automation/`, one CSV per
+sheet, and doubles as the worked example of the workbook format.
+
+Most of that suite needs nothing installed. The handful of tests that open a real
+`.xlsx` need `openpyxl` importable and skip themselves when it is not — the copy
+vendored in `lib/py3` is a Windows build, so `pip install openpyxl` first if you
+want the file layer covered on Linux or macOS.
 
 ### Project Structure
 

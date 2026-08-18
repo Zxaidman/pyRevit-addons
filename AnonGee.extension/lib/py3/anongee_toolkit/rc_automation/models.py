@@ -46,17 +46,63 @@ SHEET_COLUMN_TYPES = "COLUMN_TYPES"
 SHEET_COLUMN_PLACEMENT = "COLUMN_PLACEMENT"
 SHEET_COLUMN_REBAR = "COLUMN_REBAR"
 
-#: What P0 reads. The placement sheets are part of the template so the file does
-#: not change shape at P1, but nothing in P0 consumes them.
-REQUIRED_SHEETS = (
+# ---------------------------------------------------------------------------
+# Modes — which of the three jobs the user is asking for
+# ---------------------------------------------------------------------------
+# The three build phases are three things a user actually does, so they are
+# modes in the window rather than releases you wait for. What a workbook must
+# contain depends on which one is running: only creating structure needs to know
+# where anything goes.
+
+#: Phase 1 — an empty model. Create the footings and columns, then reinforce
+#: them. Needs the placement sheets: nothing else says where an element goes.
+MODE_CREATE_ALL = "CreateAll"
+
+#: Phase 2 — the structure is already modelled. Reinforce what is there.
+#: Placement is ignored; the host supplies its own geometry.
+MODE_REBAR_ONLY = "RebarOnly"
+
+#: Phase 3 — structure and reinforcement both exist. Compare them with the
+#: schedule and reconcile the differences.
+MODE_RECONCILE = "Reconcile"
+
+MODES = (MODE_CREATE_ALL, MODE_REBAR_ONLY, MODE_RECONCILE)
+
+MODE_LABELS = {
+    MODE_CREATE_ALL: "Create structure and reinforcement",
+    MODE_REBAR_ONLY: "Reinforce existing structure",
+    MODE_RECONCILE: "Reconcile against the model",
+}
+
+#: The sheets every mode reads: what a footing and a column *are*, and how they
+#: are reinforced. None of it says where anything is.
+_CORE_SHEETS = (
     SHEET_FOOTING_TYPES,
     SHEET_FOOTING_REBAR,
     SHEET_COLUMN_TYPES,
     SHEET_COLUMN_REBAR,
 )
 
-#: Defined, accepted, and ignored until structure creation lands.
-DEFERRED_SHEETS = (SHEET_FOOTING_PLACEMENT, SHEET_COLUMN_PLACEMENT)
+#: The sheets that say where. Required only when something is being created.
+PLACEMENT_SHEETS = (SHEET_FOOTING_PLACEMENT, SHEET_COLUMN_PLACEMENT)
+
+REQUIRED_SHEETS_FOR_MODE = {
+    MODE_CREATE_ALL: _CORE_SHEETS + PLACEMENT_SHEETS,
+    MODE_REBAR_ONLY: _CORE_SHEETS,
+    MODE_RECONCILE: _CORE_SHEETS,
+}
+
+#: Every sheet the parser knows how to read. Parsing is mode-independent on
+#: purpose -- a workbook is read once and can then be run in any mode without
+#: being re-opened, and switching mode in the window must not mean re-reading
+#: the file.
+ALL_SHEETS = _CORE_SHEETS + PLACEMENT_SHEETS
+
+
+def required_sheets(mode):
+    """Which sheets *mode* cannot run without."""
+    return REQUIRED_SHEETS_FOR_MODE.get(mode, _CORE_SHEETS)
+
 
 # ---------------------------------------------------------------------------
 # Controlled vocabularies
@@ -347,6 +393,115 @@ class ColumnRebarRow(_RebarRow):
         return "<ColumnRebarRow {0} {1}>".format(self.type_mark, self.bar_role)
 
 
+class _Placement(object):
+    """What footing and column placements have in common: a mark, a type, a spot.
+
+    Position comes one of two ways and the workbook may use either. ``GridX`` /
+    ``GridY`` name grid lines and are resolved against the model, which is how a
+    drawing states it. ``X`` / ``Y`` are millimetres in project coordinates,
+    which is the only thing that works in a model with no grids in it yet -- and
+    an empty model is exactly what Phase 1 starts from.
+    """
+
+    __slots__ = ()
+
+    @property
+    def has_grid_reference(self):
+        return bool(self.grid_x) and bool(self.grid_y)
+
+    @property
+    def has_coordinates(self):
+        return self.x_mm is not None and self.y_mm is not None
+
+    @property
+    def is_locatable(self):
+        return self.has_grid_reference or self.has_coordinates
+
+    def location_description(self):
+        """How the row states its position, for a grid column and a report."""
+        if self.has_grid_reference:
+            return "{0}-{1}".format(self.grid_x, self.grid_y)
+        if self.has_coordinates:
+            return "{0:g}, {1:g}".format(self.x_mm, self.y_mm)
+        return "—"
+
+
+class FootingPlacement(_Placement):
+    """One footing instance: which type, where, on what level.
+
+    ``outline`` is the reason footings are floors rather than family instances.
+    When it is given it replaces the type's Length x Width rectangle with an
+    arbitrary polygon, so a pad that is not rectangular -- a combined footing, a
+    cut corner, a pad worked around a pile cap -- can be scheduled instead of
+    approximated. Points are millimetres relative to the placement point, before
+    rotation.
+    """
+
+    __slots__ = ("mark", "type_mark", "grid_x", "grid_y", "x_mm", "y_mm",
+                 "level", "top_offset_mm", "rotation_deg", "outline",
+                 "sheet", "source_row")
+
+    def __init__(self, mark, type_mark="", grid_x="", grid_y="", x_mm=None,
+                 y_mm=None, level="", top_offset_mm=None, rotation_deg=None,
+                 outline=None, sheet=SHEET_FOOTING_PLACEMENT, source_row=None):
+        self.mark = mark
+        self.type_mark = type_mark
+        self.grid_x = grid_x
+        self.grid_y = grid_y
+        self.x_mm = x_mm
+        self.y_mm = y_mm
+        self.level = level
+        self.top_offset_mm = top_offset_mm
+        self.rotation_deg = rotation_deg
+        self.outline = outline
+        self.sheet = sheet
+        self.source_row = source_row
+
+    @property
+    def has_outline(self):
+        return bool(self.outline)
+
+    def __repr__(self):
+        return "<FootingPlacement {0} ({1})>".format(
+            self.mark, self.location_description())
+
+
+class ColumnPlacement(_Placement):
+    """One column instance: which type, where, and between which two levels.
+
+    There is no Height. The column runs from its base level to its top level,
+    offsets included, because that is what the model will hold -- a height
+    column would be a second source of truth that disagrees the moment a level
+    moves.
+    """
+
+    __slots__ = ("mark", "type_mark", "grid_x", "grid_y", "x_mm", "y_mm",
+                 "base_level", "base_offset_mm", "top_level", "top_offset_mm",
+                 "rotation_deg", "sheet", "source_row")
+
+    def __init__(self, mark, type_mark="", grid_x="", grid_y="", x_mm=None,
+                 y_mm=None, base_level="", base_offset_mm=None, top_level="",
+                 top_offset_mm=None, rotation_deg=None,
+                 sheet=SHEET_COLUMN_PLACEMENT, source_row=None):
+        self.mark = mark
+        self.type_mark = type_mark
+        self.grid_x = grid_x
+        self.grid_y = grid_y
+        self.x_mm = x_mm
+        self.y_mm = y_mm
+        self.base_level = base_level
+        self.base_offset_mm = base_offset_mm
+        self.top_level = top_level
+        self.top_offset_mm = top_offset_mm
+        self.rotation_deg = rotation_deg
+        self.sheet = sheet
+        self.source_row = source_row
+
+    def __repr__(self):
+        return "<ColumnPlacement {0} ({1})>".format(
+            self.mark, self.location_description())
+
+
 class WorkbookData(object):
     """Everything P0 reads out of one workbook.
 
@@ -363,10 +518,13 @@ class WorkbookData(object):
 
     __slots__ = ("path", "units", "footing_types", "column_types",
                  "footing_type_by_mark", "column_type_by_mark",
-                 "footing_rebar", "column_rebar", "metadata", "sheets_present")
+                 "footing_rebar", "column_rebar",
+                 "footing_placement", "column_placement",
+                 "metadata", "sheets_present")
 
     def __init__(self, path=None, units=None, footing_types=None,
                  column_types=None, footing_rebar=None, column_rebar=None,
+                 footing_placement=None, column_placement=None,
                  metadata=None, sheets_present=None):
         self.path = path
         self.units = units
@@ -374,6 +532,8 @@ class WorkbookData(object):
         self.column_types = list(column_types or ())
         self.footing_rebar = list(footing_rebar or ())
         self.column_rebar = list(column_rebar or ())
+        self.footing_placement = list(footing_placement or ())
+        self.column_placement = list(column_placement or ())
         self.footing_type_by_mark = _first_by_mark(self.footing_types)
         self.column_type_by_mark = _first_by_mark(self.column_types)
         self.metadata = metadata if metadata is not None else {}
@@ -391,9 +551,14 @@ class WorkbookData(object):
     def column_rebar_for(self, type_mark):
         return [row for row in self.column_rebar if row.type_mark == type_mark]
 
+    def placements(self):
+        """Every placement row, footings then columns."""
+        return self.footing_placement + self.column_placement
+
     def is_empty(self):
         return not (self.footing_types or self.column_types
-                    or self.footing_rebar or self.column_rebar)
+                    or self.footing_rebar or self.column_rebar
+                    or self.footing_placement or self.column_placement)
 
     def summary(self):
         """Counts for the execution log, in the order the log reads best."""
@@ -402,6 +567,8 @@ class WorkbookData(object):
             "footing_rebar": len(self.footing_rebar),
             "column_types": len(self.column_types),
             "column_rebar": len(self.column_rebar),
+            "footing_placement": len(self.footing_placement),
+            "column_placement": len(self.column_placement),
         }
 
     def __repr__(self):

@@ -58,13 +58,18 @@ MIN_CLEAR_GAP_MM = 25.0
 MIN_MAIN_BARS = 4
 
 
-def validate(data):
+def validate(data, mode=models.MODE_CREATE_ALL):
     """Every finding about *data*, errors first.
 
     Takes a :class:`~models.WorkbookData` and returns a list of
     :class:`~models.Issue`. Pure: no file, no Revit, no model. Whether the marks
     in it match anything in the document is the matching engine's question, not
     this one's.
+
+    *mode* decides how much of the workbook has to hold up. Placement is only
+    checked when something is going to be created from it -- demanding a
+    coordinate for a footing that is already modelled would reject a workbook
+    that is perfectly good for the job being asked of it.
     """
     issues = []
     if data is None or data.is_empty():
@@ -78,7 +83,9 @@ def validate(data):
     _validate_footing_rebar(data, issues)
     _validate_column_rebar(data, issues)
     _validate_cross_references(data, issues)
-    _report_counts(data, issues)
+    if mode == models.MODE_CREATE_ALL:
+        _validate_placement(data, issues)
+    _report_counts(data, issues, mode)
     return models.sort_issues(issues)
 
 
@@ -507,11 +514,169 @@ def _check_cage_fits(column, mains, ties, issues):
             sheet=column.sheet, row=column.source_row))
 
 
-def _report_counts(data, issues):
+# ---------------------------------------------------------------------------
+# Placement — only when something is being created
+# ---------------------------------------------------------------------------
+
+def _validate_placement(data, issues):
+    """Every instance needs a type, a level and somewhere to be."""
+    _duplicate_instance_marks(data.footing_placement, issues, "Footing")
+    _duplicate_instance_marks(data.column_placement, issues, "Column")
+
+    for row in data.footing_placement:
+        _validate_located(row, issues)
+        _validate_referenced_type(
+            row, data.footing_type_by_mark, "footing", issues)
+        _require_level(row, row.level, "Level", issues)
+        _validate_rotation(row, issues)
+        _validate_pad_outline(row, issues)
+
+    for row in data.column_placement:
+        _validate_located(row, issues)
+        _validate_referenced_type(
+            row, data.column_type_by_mark, "column", issues)
+        _require_level(row, row.base_level, "BaseLevel", issues)
+        _require_level(row, row.top_level, "TopLevel", issues)
+        _validate_rotation(row, issues)
+        if (row.base_level and row.top_level
+                and row.base_level == row.top_level
+                and not (row.base_offset_mm or row.top_offset_mm)):
+            issues.append(Issue(
+                SEVERITY_ERROR,
+                "Base and top are both {0!r} with no offsets — the column would "
+                "have no height.".format(row.base_level),
+                sheet=row.sheet, row=row.source_row, column="TopLevel"))
+
+    for mark, footing in data.footing_type_by_mark.items():
+        if not any(row.type_mark == mark for row in data.footing_placement):
+            issues.append(Issue(
+                SEVERITY_WARNING,
+                "Footing type {0!r} is never placed.".format(mark),
+                sheet=footing.sheet, row=footing.source_row))
+    for mark, column in data.column_type_by_mark.items():
+        if not any(row.type_mark == mark for row in data.column_placement):
+            issues.append(Issue(
+                SEVERITY_WARNING,
+                "Column type {0!r} is never placed.".format(mark),
+                sheet=column.sheet, row=column.source_row))
+
+
+def _duplicate_instance_marks(rows, issues, label):
+    """Instance marks identify an element; two of one name is two elements."""
+    seen = {}
+    for row in rows:
+        if not row.mark:
+            continue
+        if row.mark in seen:
+            issues.append(Issue(
+                SEVERITY_ERROR,
+                "{0} mark {1!r} is already placed on row {2}.".format(
+                    label, row.mark, seen[row.mark]),
+                sheet=row.sheet, row=row.source_row, column="Mark"))
+        else:
+            seen[row.mark] = row.source_row
+
+
+def _validate_located(row, issues):
+    """Grid reference or coordinates -- one of them, and not half of either."""
+    if row.is_locatable:
+        if row.has_grid_reference and row.has_coordinates:
+            issues.append(Issue(
+                SEVERITY_WARNING,
+                "Both a grid reference and X/Y are given; the grid reference "
+                "will be used.",
+                sheet=row.sheet, row=row.source_row, column="GridX"))
+        return
+
+    half_grid = bool(row.grid_x) != bool(row.grid_y)
+    half_xy = (row.x_mm is None) != (row.y_mm is None)
+    if half_grid:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "Only one grid reference is given — both GridX and GridY are "
+            "needed to find an intersection.",
+            sheet=row.sheet, row=row.source_row, column="GridX"))
+    elif half_xy:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "Only one coordinate is given — both X and Y are needed.",
+            sheet=row.sheet, row=row.source_row, column="X"))
+    else:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "No position: give GridX and GridY, or X and Y in millimetres. "
+            "A model with no grids in it yet needs the coordinates.",
+            sheet=row.sheet, row=row.source_row, column="GridX"))
+
+
+def _validate_referenced_type(row, lookup, label, issues):
+    if not row.type_mark:
+        issues.append(Issue(
+            SEVERITY_ERROR, "TypeMark is required.",
+            sheet=row.sheet, row=row.source_row, column="TypeMark"))
+    elif row.type_mark not in lookup:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "No {0} type {1!r} is described in the workbook.".format(
+                label, row.type_mark),
+            sheet=row.sheet, row=row.source_row, column="TypeMark"))
+
+
+def _require_level(row, value, column, issues):
+    if not value:
+        issues.append(Issue(
+            SEVERITY_ERROR, "{0} is required.".format(column),
+            sheet=row.sheet, row=row.source_row, column=column))
+
+
+def _validate_rotation(row, issues):
+    if row.rotation_deg is None:
+        return
+    if row.rotation_deg <= -360 or row.rotation_deg >= 360:
+        issues.append(Issue(
+            SEVERITY_WARNING,
+            "Rotation of {0:g} degrees is a whole turn or more.".format(
+                row.rotation_deg),
+            sheet=row.sheet, row=row.source_row, column="Rotation"))
+
+
+def _validate_pad_outline(row, issues):
+    """A sketched outline has to be a polygon with some area to it."""
+    if not row.has_outline:
+        return
+    points = row.outline
+    if len(set(points)) != len(points):
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "The outline repeats a point, which would place a zero-length "
+            "edge.",
+            sheet=row.sheet, row=row.source_row, column="Outline"))
+        return
+    if abs(_polygon_area(points)) < 1.0:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "The outline encloses no area — the points are in a straight line.",
+            sheet=row.sheet, row=row.source_row, column="Outline"))
+
+
+def _polygon_area(points):
+    """The signed shoelace area, in square millimetres."""
+    total = 0.0
+    count = len(points)
+    for index in range(count):
+        x1, y1 = points[index]
+        x2, y2 = points[(index + 1) % count]
+        total += x1 * y2 - x2 * y1
+    return total / 2.0
+
+
+def _report_counts(data, issues, mode=models.MODE_CREATE_ALL):
     summary = data.summary()
-    issues.append(Issue(
-        SEVERITY_INFO,
-        "Read {0} footing types with {1} bar rows, and {2} column types with "
-        "{3} bar rows.".format(
-            summary["footing_types"], summary["footing_rebar"],
-            summary["column_types"], summary["column_rebar"])))
+    message = ("Read {0} footing types with {1} bar rows, and {2} column types "
+               "with {3} bar rows.".format(
+                   summary["footing_types"], summary["footing_rebar"],
+                   summary["column_types"], summary["column_rebar"]))
+    if mode == models.MODE_CREATE_ALL:
+        message += " Placing {0} footings and {1} columns.".format(
+            summary["footing_placement"], summary["column_placement"])
+    issues.append(Issue(SEVERITY_INFO, message))

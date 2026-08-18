@@ -6,18 +6,21 @@ Run from the repository root::
     python3 -m unittest discover -s tests -v
 
 Everything under test here reads a schedule and decides whether it can be built.
-None of it imports Revit, and only ``excel_engine.read_grid`` -- which is
-deliberately not exercised here -- imports openpyxl, because the extension
-vendors a Windows build whose numpy will not load on the machine running these.
-The seam is the point: ``parse_grid`` takes raw lists of lists, so every rule
-below is checked against hand-written rows.
+None of it imports Revit. Only ``excel_engine.read_grid`` imports openpyxl, and
+it is covered by :class:`ReadGridTests`, which is skipped when openpyxl is not
+importable -- the extension vendors a Windows build whose numpy will not load
+everywhere, so the file layer cannot be assumed testable. Everything else takes
+raw lists of lists, so every rule below is checked against hand-written rows on
+any machine at all. That seam is the point.
 """
 
 import csv
 import importlib.util
 import io
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -31,6 +34,7 @@ models = _rc.models
 standards = _rc.standards
 excel_engine = _rc.excel_engine
 validation = _rc.validation
+reconcile = _rc.reconcile
 
 _FIXTURES = os.path.join(_ROOT, "tests", "fixtures", "rc_automation")
 _BBS_STANDARD = os.path.join(
@@ -48,8 +52,8 @@ def grid(text):
 def fixture_grids():
     """The sample workbook, one grid per sheet."""
     grids = {}
-    for name in ("FOOTING_TYPES", "FOOTING_REBAR",
-                 "COLUMN_TYPES", "COLUMN_REBAR"):
+    for name in ("FOOTING_TYPES", "FOOTING_REBAR", "FOOTING_PLACEMENT",
+                 "COLUMN_TYPES", "COLUMN_REBAR", "COLUMN_PLACEMENT"):
         with io.open(os.path.join(_FIXTURES, name + ".csv"),
                      encoding="utf-8") as handle:
             grids[name] = [row for row in csv.reader(handle)]
@@ -88,6 +92,14 @@ C1,400,400,40
 TypeMark,BarRole,Diameter,Count,Spacing,ShapeCode
 C1,Main,20,8,,00
 C1,Tie,10,,200,51
+"""),
+        "FOOTING_PLACEMENT": grid("""
+Mark,TypeMark,X,Y,Level
+F1-A1,F1,0,0,Foundation
+"""),
+        "COLUMN_PLACEMENT": grid("""
+Mark,TypeMark,X,Y,BaseLevel,TopLevel
+C1-A1,C1,0,0,Foundation,Level 1
 """),
     }
     grids.update(overrides)
@@ -232,16 +244,34 @@ F1,B1,X,16,15,200,21
         self.assertTrue(any("no TypeMark" in i.message for i in warnings(issues)),
                         messages(issues))
 
-    def test_deferred_placement_sheet_is_noted_not_rejected(self):
+    def test_placement_is_read_in_every_mode(self):
+        # Parsing is mode-independent so switching mode in the window never
+        # means re-reading the file.
+        for mode in models.MODES:
+            data, _ = excel_engine.parse_grid(minimal_grids(), mode=mode)
+            self.assertEqual(len(data.footing_placement), 1, mode)
+
+    def test_rebar_modes_do_not_demand_placement(self):
         grids = minimal_grids()
-        grids["FOOTING_PLACEMENT"] = grid("""
-Mark,TypeMark,GridX,GridY,Level
-F1-A1,F1,A,1,Level 1
-""")
-        _, issues = excel_engine.parse_grid(grids)
+        del grids["FOOTING_PLACEMENT"]
+        del grids["COLUMN_PLACEMENT"]
+        for mode in (models.MODE_REBAR_ONLY, models.MODE_RECONCILE):
+            _, issues = excel_engine.parse_grid(grids, mode=mode)
+            self.assertEqual(errors(issues), [], mode + ": " + messages(issues))
+
+    def test_creating_structure_demands_placement(self):
+        grids = minimal_grids()
+        del grids["FOOTING_PLACEMENT"]
+        _, issues = excel_engine.parse_grid(grids, mode=models.MODE_CREATE_ALL)
+        self.assertTrue(any("FOOTING_PLACEMENT" in i.message
+                            for i in errors(issues)), messages(issues))
+
+    def test_unused_placement_is_noted_not_rejected(self):
+        _, issues = excel_engine.parse_grid(
+            minimal_grids(), mode=models.MODE_REBAR_ONLY)
         self.assertEqual(errors(issues), [], messages(issues))
         info = [i for i in issues if i.severity == models.SEVERITY_INFO]
-        self.assertTrue(any("FOOTING_PLACEMENT" in i.message for i in info),
+        self.assertTrue(any("not used in this mode" in i.message for i in info),
                         messages(issues))
 
 
@@ -321,9 +351,10 @@ class LayerTests(unittest.TestCase):
 
 # ── validation ─────────────────────────────────────────────────────────────
 
-def validate_grids(**overrides):
-    data, parse_issues = excel_engine.parse_grid(minimal_grids(**overrides))
-    return data, parse_issues + validation.validate(data)
+def validate_grids(mode=models.MODE_CREATE_ALL, **overrides):
+    data, parse_issues = excel_engine.parse_grid(
+        minimal_grids(**overrides), mode=mode)
+    return data, parse_issues + validation.validate(data, mode=mode)
 
 
 class ValidationBaselineTests(unittest.TestCase):
@@ -637,6 +668,386 @@ class StandardsAgreementTests(unittest.TestCase):
     def test_every_supported_code_has_a_description(self):
         for code in standards.SUPPORTED_SHAPE_CODES:
             self.assertIn(code, standards.SHAPE_DESCRIPTIONS)
+
+
+# ── placement ──────────────────────────────────────────────────────────────
+
+class OutlineParsingTests(unittest.TestCase):
+
+    def test_a_polygon_reads(self):
+        points, error = excel_engine.parse_outline(
+            "0,0; 4500,0; 4500,3000; 2250,4200; 0,3000")
+        self.assertIsNone(error)
+        self.assertEqual(len(points), 5)
+        self.assertEqual(points[0], (0.0, 0.0))
+        self.assertEqual(points[3], (2250.0, 4200.0))
+
+    def test_blank_is_not_an_error(self):
+        self.assertEqual(excel_engine.parse_outline(""), (None, None))
+        self.assertEqual(excel_engine.parse_outline(None), (None, None))
+
+    def test_a_repeated_closing_point_is_dropped(self):
+        # Writing the first point again at the end is how people close a
+        # polygon; carrying it would place a zero-length edge and Revit would
+        # refuse the sketch.
+        points, error = excel_engine.parse_outline(
+            "0,0; 3000,0; 3000,2000; 0,2000; 0,0")
+        self.assertIsNone(error)
+        self.assertEqual(len(points), 4)
+
+    def test_too_few_points_is_rejected(self):
+        _, error = excel_engine.parse_outline("0,0; 3000,0")
+        self.assertIn("at least 3", error)
+
+    def test_a_malformed_point_names_itself(self):
+        _, error = excel_engine.parse_outline("0,0; 3000; 3000,2000")
+        self.assertIn("3000", error)
+
+    def test_a_non_numeric_point_is_rejected(self):
+        _, error = excel_engine.parse_outline("0,0; a,b; 3000,2000")
+        self.assertIn("numbers", error)
+
+
+class PlacementValidationTests(unittest.TestCase):
+
+    def test_the_sample_workbook_places_cleanly(self):
+        data, parse_issues = excel_engine.parse_grid(fixture_grids())
+        issues = parse_issues + validation.validate(data)
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_placement), 6)
+        self.assertEqual(len(data.column_placement), 5)
+
+    def test_the_sample_carries_a_non_rectangular_pad(self):
+        # The reason footings are floors rather than family instances.
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        shaped = [p for p in data.footing_placement if p.has_outline]
+        self.assertEqual(len(shaped), 1)
+        self.assertEqual(len(shaped[0].outline), 5)
+
+    def test_grid_references_and_coordinates_both_locate_a_row(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        by_mark = dict((p.mark, p) for p in data.footing_placement)
+        self.assertTrue(by_mark["F1-A1"].has_grid_reference)
+        self.assertEqual(by_mark["F1-A1"].location_description(), "A-1")
+        self.assertTrue(by_mark["F3-P1"].has_coordinates)
+        self.assertTrue(all(p.is_locatable for p in data.footing_placement))
+
+    def test_a_row_with_no_position_is_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,GridX,GridY,X,Y,Level
+F1-A1,F1,,,,,Foundation
+"""))
+        self.assertTrue(any("No position" in i.message for i in errors(issues)),
+                        messages(issues))
+
+    def test_half_a_grid_reference_is_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,GridX,GridY,X,Y,Level
+F1-A1,F1,A,,,,Foundation
+"""))
+        self.assertTrue(any("Only one grid reference" in i.message
+                            for i in errors(issues)), messages(issues))
+
+    def test_half_a_coordinate_is_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,GridX,GridY,X,Y,Level
+F1-A1,F1,,,12500,,Foundation
+"""))
+        self.assertTrue(any("Only one coordinate" in i.message
+                            for i in errors(issues)), messages(issues))
+
+    def test_placing_an_undescribed_type_is_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,X,Y,Level
+F9-A1,F9,0,0,Foundation
+"""))
+        self.assertTrue(any("No footing type" in i.message
+                            for i in errors(issues)), messages(issues))
+
+    def test_duplicate_instance_marks_are_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,X,Y,Level
+F1-A1,F1,0,0,Foundation
+F1-A1,F1,3000,0,Foundation
+"""))
+        self.assertTrue(any("already placed" in i.message
+                            for i in errors(issues)), messages(issues))
+
+    def test_a_column_between_one_level_and_itself_is_rejected(self):
+        _, issues = validate_grids(COLUMN_PLACEMENT=grid("""
+Mark,TypeMark,X,Y,BaseLevel,TopLevel
+C1-A1,C1,0,0,Level 1,Level 1
+"""))
+        self.assertTrue(any("no height" in i.message for i in errors(issues)),
+                        messages(issues))
+
+    def test_a_flat_outline_is_rejected(self):
+        _, issues = validate_grids(FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,X,Y,Level,Outline
+F1-A1,F1,0,0,Foundation,"0,0; 1000,0; 2000,0"
+"""))
+        self.assertTrue(any("no area" in i.message for i in errors(issues)),
+                        messages(issues))
+
+    def test_a_type_that_is_never_placed_warns(self):
+        _, issues = validate_grids(FOOTING_TYPES=grid("""
+UNITS,mm
+TypeMark,Length,Width,Thickness,CoverTop,CoverBottom,CoverSide
+F1,3000,3000,900,50,75,50
+F2,2400,2400,750,50,75,50
+"""), FOOTING_REBAR=grid("""
+TypeMark,Layer,Direction,Diameter,Count,Spacing,ShapeCode
+F1,B1,X,16,15,200,21
+F2,B1,X,16,12,200,21
+"""))
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertTrue(any("never placed" in i.message for i in warnings(issues)),
+                        messages(issues))
+
+    def test_placement_is_not_checked_when_nothing_is_created(self):
+        # A workbook with no coordinates in it is perfectly good for putting
+        # rebar into a model that is already built.
+        _, issues = validate_grids(
+            mode=models.MODE_REBAR_ONLY,
+            FOOTING_PLACEMENT=grid("""
+Mark,TypeMark,GridX,GridY,X,Y,Level
+F1-A1,F1,,,,,
+"""))
+        self.assertEqual(errors(issues), [], messages(issues))
+
+
+# ── reconciliation ─────────────────────────────────────────────────────────
+
+class ReconciliationTests(unittest.TestCase):
+
+    def compare(self, excel, model, **kwargs):
+        return reconcile.compare("F1-A1", "Footing", excel, model, **kwargs)
+
+    def test_agreement_produces_no_conflicts(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3000.0})
+        self.assertTrue(result.agrees)
+        self.assertEqual(result.conflicts, [])
+
+    def test_a_difference_is_found_and_described(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        self.assertEqual(result.field_count, 1)
+        self.assertEqual(result.conflicts[0].describe(),
+                         "Length: 3000 in the schedule, 3200 in the model")
+
+    def test_excel_wins_by_default(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        self.assertEqual(result.source, reconcile.SOURCE_EXCEL)
+        self.assertEqual(result.resolved("length_mm"), 3000.0)
+        self.assertFalse(result.is_user_choice)
+
+    def test_the_user_can_choose_the_model(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        result.use_model()
+        self.assertEqual(result.resolved("length_mm"), 3200.0)
+        self.assertTrue(result.is_user_choice)
+
+    def test_a_default_is_distinguishable_from_a_decision(self):
+        # A report that cannot tell one from the other is not an audit trail.
+        chosen = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        chosen.use_excel()
+        untouched = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        self.assertEqual(chosen.source, untouched.source)
+        self.assertTrue(chosen.is_user_choice)
+        self.assertFalse(untouched.is_user_choice)
+
+    def test_an_unknown_source_is_refused_not_guessed(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        with self.assertRaises(ValueError):
+            result.choose("Whatever")
+
+    def test_rounding_noise_is_not_a_conflict(self):
+        # The toolkit rounds to the nearest millimetre; 0.4 mm is unit
+        # conversion, not a disagreement.
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3000.4})
+        self.assertTrue(result.agrees)
+
+    def test_bar_counts_are_exact(self):
+        result = reconcile.compare("F1 B1", "Rebar", {"count": 15}, {"count": 14})
+        self.assertEqual(result.field_count, 1)
+
+    def test_a_field_the_model_cannot_report_is_not_a_conflict(self):
+        # An unreadable parameter is "unknown", not "zero"; treating it as a
+        # difference would bury the real ones.
+        result = self.compare({"length_mm": 3000.0}, {})
+        self.assertTrue(result.agrees)
+        self.assertEqual(result.resolved("length_mm"), 3000.0)
+
+    def test_choosing_the_model_still_falls_back_to_the_schedule(self):
+        result = self.compare({"length_mm": 3000.0, "width_mm": 3000.0},
+                              {"length_mm": 3200.0})
+        result.use_model()
+        self.assertEqual(result.resolved("length_mm"), 3200.0)
+        self.assertEqual(result.resolved("width_mm"), 3000.0)
+
+    def test_a_field_the_schedule_omits_is_not_compared(self):
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3000.0,
+                                                      "thickness_mm": 900.0})
+        self.assertEqual([d.field for d in result.differences], ["length_mm"])
+
+    def test_footings_reconcile_from_workbook_objects(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        placement = data.footing_placement[0]
+        result = reconcile.compare_footing(
+            placement, data.footing_type(placement.type_mark),
+            {"length_mm": 3200.0, "width_mm": 3000.0, "thickness_mm": 900.0})
+        self.assertEqual(result.key, "F1-A1")
+        self.assertEqual([d.label for d in result.conflicts], ["Length"])
+
+    def test_columns_reconcile_from_workbook_objects(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        placement = data.column_placement[0]
+        result = reconcile.compare_column(
+            placement, data.column_type(placement.type_mark),
+            {"width_mm": 300.0, "depth_mm": 600.0, "cover_mm": 30.0})
+        self.assertEqual([d.label for d in result.conflicts], ["Cover"])
+
+    def test_rebar_reconciles_from_a_schedule_row(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        row = data.footing_rebar[0]
+        result = reconcile.compare_rebar(
+            row, {"diameter_mm": 16.0, "spacing_mm": 250.0, "count": 15})
+        self.assertEqual(result.key, "F1 B1")
+        self.assertEqual([d.label for d in result.conflicts], ["Spacing"])
+
+    def test_summary_counts_sides_and_decisions(self):
+        agreeing = self.compare({"length_mm": 3000.0}, {"length_mm": 3000.0})
+        defaulted = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        chosen = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        chosen.use_model()
+        summary = reconcile.summarise([agreeing, defaulted, chosen])
+        self.assertEqual(summary["compared"], 3)
+        self.assertEqual(summary["matching"], 1)
+        self.assertEqual(summary["differing"], 2)
+        self.assertEqual(summary["using_excel"], 1)
+        self.assertEqual(summary["using_model"], 1)
+        self.assertEqual(summary["user_decided"], 1)
+
+    def test_differences_are_reported_as_info_not_warnings(self):
+        # Disagreeing with the model is the normal reason to run this; grading
+        # it as a problem trains people to ignore the colour that means one.
+        result = self.compare({"length_mm": 3000.0}, {"length_mm": 3200.0})
+        found = reconcile.issues_for([result])
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0].severity, models.SEVERITY_INFO)
+        self.assertIn("using the excel", found[0].message.lower())
+
+
+# ── the file layer ─────────────────────────────────────────────────────────
+
+try:
+    import openpyxl as _openpyxl
+except Exception:                       # pragma: no cover - platform dependent
+    _openpyxl = None
+
+
+@unittest.skipIf(_openpyxl is None,
+                 "openpyxl not importable — the extension vendors a Windows build")
+class ReadGridTests(unittest.TestCase):
+    """``read_grid`` is thin, but it is the only thing standing between a real
+    workbook and everything else, so its failure modes are worth pinning."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp(prefix="rc_automation_")
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def write_workbook(self, grids, name="schedule.xlsx"):
+        book = _openpyxl.Workbook()
+        book.remove(book.active)
+        for sheet_name, rows in grids.items():
+            sheet = book.create_sheet(title=sheet_name)
+            for row in rows:
+                sheet.append(list(row))
+        path = os.path.join(self.tmp, name)
+        book.save(path)
+        return path
+
+    def test_a_real_workbook_round_trips_to_the_same_objects(self):
+        # The CSV fixtures and a genuine .xlsx must parse identically, which is
+        # what makes testing everything else off a CSV legitimate.
+        path = self.write_workbook(fixture_grids())
+        data, issues = excel_engine.load(path)
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_types), 3)
+        self.assertEqual(data.footing_type("F1").length_mm, 3000.0)
+        self.assertEqual(data.metadata.get("project"), "Riverside Tower")
+
+    def test_native_excel_types_read_the_same_as_text(self):
+        # openpyxl hands back ints and floats where the CSV hands back strings;
+        # a shape code of 0 and a count of 15.0 must survive both routes.
+        path = self.write_workbook({
+            "FOOTING_TYPES": [["UNITS", "mm"],
+                              ["TypeMark", "Length", "Width", "Thickness",
+                               "CoverTop", "CoverBottom", "CoverSide"],
+                              ["F1", 3000, 3000, 900, 50, 75, 50]],
+            "FOOTING_REBAR": [["TypeMark", "Layer", "Direction", "Diameter",
+                               "Count", "Spacing", "ShapeCode"],
+                              ["F1", "B1", "X", 16, 15.0, 200, 0]],
+            "COLUMN_TYPES": [["TypeMark", "Width", "Depth", "Cover"],
+                             ["C1", 400, 400, 40]],
+            "COLUMN_REBAR": [["TypeMark", "BarRole", "Diameter", "Count",
+                              "Spacing", "ShapeCode"],
+                             ["C1", "Main", 20, 8, None, 0],
+                             ["C1", "Tie", 10, None, 200, 51]],
+            "FOOTING_PLACEMENT": [["Mark", "TypeMark", "X", "Y", "Level"],
+                                  ["F1-A1", "F1", 12500, 8400.5, "Foundation"]],
+            "COLUMN_PLACEMENT": [["Mark", "TypeMark", "X", "Y", "BaseLevel",
+                                  "TopLevel"],
+                                 ["C1-A1", "C1", 12500, 8400.5, "Foundation",
+                                  "Level 1"]],
+        })
+        data, issues = excel_engine.load(path)
+        self.assertEqual(errors(issues), [], messages(issues))
+        row = data.footing_rebar[0]
+        self.assertEqual(row.count, 15)
+        self.assertEqual(row.shape_code, "00")
+        self.assertEqual(data.column_rebar[1].shape_code, "51")
+        # Native numeric coordinates survive the real Excel path.
+        self.assertEqual(data.footing_placement[0].x_mm, 12500.0)
+        self.assertEqual(data.footing_placement[0].y_mm, 8400.5)
+
+    def test_a_missing_file_is_a_sentence_not_a_traceback(self):
+        data, issues = excel_engine.load(os.path.join(self.tmp, "nope.xlsx"))
+        self.assertTrue(errors(issues))
+        self.assertIn("not found", errors(issues)[0].message)
+        self.assertTrue(data.is_empty())
+
+    def test_legacy_xls_says_what_to_do_about_it(self):
+        path = os.path.join(self.tmp, "old.xls")
+        with io.open(path, "w") as handle:
+            handle.write(u"not really a workbook")
+        _, issues = excel_engine.load(path)
+        self.assertIn("Save As", errors(issues)[0].message)
+
+    def test_a_file_that_is_not_a_workbook_is_refused_by_extension(self):
+        _, issues = excel_engine.load(os.path.join(self.tmp, "notes.txt"))
+        self.assertTrue(errors(issues))
+        self.assertIn("Excel workbook", errors(issues)[0].message)
+
+    def test_no_path_is_refused(self):
+        _, issues = excel_engine.load("")
+        self.assertTrue(errors(issues))
+
+    def test_a_corrupt_workbook_is_reported_not_raised(self):
+        path = os.path.join(self.tmp, "corrupt.xlsx")
+        with io.open(path, "w") as handle:
+            handle.write(u"PK\x03\x04 and then nonsense")
+        _, issues = excel_engine.load(path)
+        self.assertTrue(errors(issues), "a corrupt file must not raise")
+
+    def test_reading_does_not_hold_the_file_open(self):
+        # read_only workbooks lock the file until closed, which would lock the
+        # user out of their own schedule in Excel.
+        path = self.write_workbook(fixture_grids())
+        excel_engine.load(path)
+        os.remove(path)
+        self.assertFalse(os.path.exists(path))
 
 
 if __name__ == "__main__":
