@@ -1,5 +1,36 @@
 # RC Automation — changelog
 
+## 0.4.0 — 2026-08-19
+
+The first build that placed steel placed it straight, and some of it outside
+the concrete.
+
+- **Shape codes now bend the bar.** Every footing bar was a straight line
+  whatever its shape code said — the code was carried through parsing,
+  validation and planning as a label and never used to build anything, so a
+  bottom mat scheduled as a U-bar arrived as shape 00. `21` turns both ends up,
+  `11` turns one, and the leg reaches the underside of the top cover less half a
+  bar. A layer with no room to bend is placed straight **and says so**, rather
+  than quietly pretending.
+- **Bars stay inside the pad.** New footings were reinforced from the *type's
+  rectangle* and placed against the element's *bounding-box centre* — two
+  different frames. On the one pad in the sample that is not a rectangle, whose
+  outline runs from the placement point rather than around it, that put the bars
+  2.25 m out of the concrete. Bars are now planned from the outline the pad was
+  built from and placed at the point it was placed at, turned by the same angle.
+  Measured across every pad in the sample: zero overhang.
+- **The scheduled cover goes onto the element.** Top, bottom and side, as
+  `RebarCoverType` references — created when the project has none, because
+  cover is a distance with a name and inventing one carries none of the baggage
+  that inventing a bar type would. The model now carries the number, not just
+  the bars.
+- **Placed bars are constrained to that cover**, so editing a footing updates
+  its reinforcement instead of leaving it where it was put. Written without a
+  Revit to try it against: every call is probed first, a constraint that cannot
+  be made is counted and reported rather than raised, and the probe now reports
+  what this Revit build actually offers so the next pass can stop guessing. The
+  bars are in the right place either way; what is lost is the updating.
+
 ## 0.3.2 — 2026-08-19
 
 0.3.1 did not load.

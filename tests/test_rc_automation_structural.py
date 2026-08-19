@@ -27,7 +27,7 @@ _STRUCTURAL = os.path.join(_ROOT, "AnonGee.extension", "lib", "py3",
                            "anongee_toolkit", "structural")
 _MODULES = ("rebar_types", "rebar_hosts", "rebar_geometry",
             "rebar_factory", "rebar_run", "levels", "grids", "footings",
-            "structure_run")
+            "structure_run", "rebar_constraints")
 
 if os.path.join(_ROOT, "tests") not in sys.path:
     sys.path.insert(0, os.path.join(_ROOT, "tests"))
@@ -246,11 +246,30 @@ class PlacementContractTests(unittest.TestCase):
         # And the reason a footing usually fails it is spelled out.
         self.assertIn("FLOOR_PARAM_IS_STRUCTURAL", source)
 
-    def test_types_are_matched_never_created(self):
-        """Creating a bar type nobody loaded puts a wrong name in the BBS."""
+    def test_bar_types_are_matched_never_created(self):
+        """Creating a bar type nobody loaded puts a wrong name in the BBS.
+
+        A cover type is different and is created — it is a distance with a name
+        and carries none of that baggage — but it is created by the module that
+        writes, not by the one that reads.
+        """
         source = _read("rebar_types")
         for forbidden in (".Duplicate(", ".Create(", "NewFamilyInstance"):
             self.assertNotIn(forbidden, source, forbidden)
+        self.assertIn("RebarCoverType.Create", _read("rebar_factory"))
+
+    def test_constraints_are_probed_before_they_are_called(self):
+        """Written without a Revit to try it against, so nothing is assumed.
+
+        The shape of the constraints API moves between releases. Every call is
+        reached through a probe, and describe() exists so a report from a real
+        model can replace the guessing with knowing.
+        """
+        source = _read("rebar_constraints")
+        self.assertIn("getattr(rebar, \"GetRebarConstraintsManager\", None)",
+                      source)
+        self.assertIn("def describe", source)
+        self.assertIn("def is_available", source)
 
 
 class RunContractTests(unittest.TestCase):

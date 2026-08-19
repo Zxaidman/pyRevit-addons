@@ -34,6 +34,16 @@ tooltip: |
     • Every bar is stamped as this tool's work, so a later run can tell the
       difference.
 
+  Reinforcement
+    • Shape codes build the bar: 21 turns both ends up, 11 turns one, 00 runs
+      straight. A layer with no room to bend is placed straight and says so.
+    • The scheduled cover is written onto the footing itself, as cover types,
+      created if the project has none.
+    • Placed bars are constrained to that cover, so editing a footing updates
+      its reinforcement rather than leaving it behind. A constraint that cannot
+      be made is reported — the bars are still in the right place, what is lost
+      is the updating.
+
   Creating footings
     • Pads are floors, so an Outline in the placement sheet is sketched as
       drawn — a combined pad or a cut corner is scheduled, not approximated.
@@ -86,4 +96,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.3.2
+  Version: 0.4.0

@@ -1111,12 +1111,23 @@ class FootingLayerTests(unittest.TestCase):
         self.assertTrue(all(p.uniform for p in plans), [p.notes for p in plans])
         self.assertTrue(all(p.element_count == 1 for p in plans))
 
-    def test_bar_length_is_the_pad_less_cover_both_ends(self):
+    def test_the_run_between_the_bends_is_the_pad_less_cover_both_ends(self):
         data = self.footing()
         plan = rebar_spec.plan_footing(
             data.footing_type("F1"), data.footing_rebar_for("F1"))[0]
-        # F1 is 3000 x 3000 with 50 side cover.
-        self.assertAlmostEqual(plan.bars[0].length_mm, 2900.0)
+        # F1 is 3000 x 3000 with 50 side cover, so the horizontal run is 2900.
+        bar = plan.bars[0]
+        run = abs(bar.points[-2][0] - bar.points[1][0])
+        self.assertAlmostEqual(run, 2900.0)
+
+    def test_a_top_mat_straight_bar_is_just_the_run(self):
+        data = self.footing()
+        top = [p for p in rebar_spec.plan_footing(
+            data.footing_type("F1"), data.footing_rebar_for("F1"))
+            if p.row.layer == "T1"][0]
+        self.assertEqual(top.row.shape_code, "00")
+        self.assertEqual(len(top.bars[0].points), 2)
+        self.assertAlmostEqual(top.bars[0].length_mm, 2900.0)
 
     def test_a_set_carries_its_count_and_spacing(self):
         data = self.footing()
@@ -1411,6 +1422,79 @@ class ScheduledExtentTests(unittest.TestCase):
         as_drawn = rebar_spec.plan_footing(footing, rows, shaped)
         self.assertTrue(all(p.uniform for p in as_rectangle))
         self.assertFalse(any(p.uniform for p in as_drawn))
+
+
+class BarShapeTests(unittest.TestCase):
+    """The shape code has to build the bar, not just label it.
+
+    Every footing bar was placed as a straight line whatever its shape code
+    said. The code was carried through parsing, validation and planning as a
+    label and never used to bend anything, so a bottom mat scheduled as a U-bar
+    arrived in the model as shape 00 — wrong in the model, wrong in the bending
+    schedule, and looking right in neither.
+    """
+
+    def points(self, shape_code, leg=600.0):
+        return rebar_spec.bar_points(shape_code, 0.0, 3000.0, 500.0, 100.0,
+                                     "X", leg)
+
+    def test_a_straight_bar_is_two_points(self):
+        self.assertEqual(self.points("00"),
+                         [(0.0, 500.0, 100.0), (3000.0, 500.0, 100.0)])
+
+    def test_a_u_bar_turns_up_at_both_ends(self):
+        points = self.points("21")
+        self.assertEqual(len(points), 4)
+        self.assertEqual(points[0], (0.0, 500.0, 700.0))
+        self.assertEqual(points[1], (0.0, 500.0, 100.0))
+        self.assertEqual(points[2], (3000.0, 500.0, 100.0))
+        self.assertEqual(points[3], (3000.0, 500.0, 700.0))
+
+    def test_one_bend_turns_up_at_one_end(self):
+        points = self.points("11")
+        self.assertEqual(len(points), 3)
+        self.assertEqual(points[-1], (3000.0, 500.0, 700.0))
+
+    def test_a_bar_running_the_other_way_bends_the_same(self):
+        points = rebar_spec.bar_points("21", 0.0, 3000.0, 500.0, 100.0, "Y",
+                                       600.0)
+        self.assertEqual(points[1], (500.0, 0.0, 100.0))
+        self.assertEqual(points[2], (500.0, 3000.0, 100.0))
+
+    def test_a_leg_with_nowhere_to_go_is_not_bent(self):
+        # A nub is not a bend. Below the minimum the bar is placed straight and
+        # the layer says why.
+        self.assertEqual(len(self.points("21", leg=10.0)), 2)
+
+    def test_leg_height_stops_under_the_top_cover(self):
+        # 900 thick, 50 top cover, 16 mm bar: the leg reaches 842, and a bar
+        # whose centreline sits at 83 turns up 759.
+        self.assertAlmostEqual(
+            rebar_spec.leg_height_mm(83.0, 900.0, 50.0, 16.0), 759.0)
+
+    def test_a_top_layer_has_no_room_to_turn_up(self):
+        self.assertAlmostEqual(
+            rebar_spec.leg_height_mm(842.0, 900.0, 50.0, 16.0), 0.0)
+
+    def test_the_scheduled_shape_reaches_the_bar(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        plans = rebar_spec.plan_footing(data.footing_type("F1"),
+                                        data.footing_rebar_for("F1"))
+        by_layer = dict((p.row.layer, p) for p in plans)
+        self.assertEqual(len(by_layer["B1"].bars[0].points), 4)   # shape 21
+        self.assertEqual(len(by_layer["T1"].bars[0].points), 2)   # shape 00
+
+    def test_a_layer_that_cannot_bend_says_so(self):
+        footing = models.FootingType("F1", length_mm=3000.0, width_mm=3000.0,
+                                     thickness_mm=200.0, cover_top_mm=50.0,
+                                     cover_bottom_mm=75.0, cover_side_mm=50.0)
+        row = models.FootingRebarRow("F1", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="21")
+        plan = rebar_spec.plan_footing(footing, [row])[0]
+        self.assertEqual(len(plan.bars[0].points), 2)
+        self.assertTrue(any("placed straight" in n for n in plan.notes),
+                        plan.notes)
 
 
 class ColumnArrangementTests(unittest.TestCase):

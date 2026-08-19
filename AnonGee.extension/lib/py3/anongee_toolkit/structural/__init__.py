@@ -18,9 +18,10 @@ imports nothing and is unit-tested on any machine.
 ``grids``            a pair of grid names to a point
 ``footings``         create foundation pads as floors
 ``structure_run``    build the footings a schedule describes
+``rebar_constraints`` tie a bar to its host cover, so edits carry through
 """
 from anongee_toolkit.structural.rebars import get_rebars
 
 __all__ = ["get_rebars", "rebar_types", "rebar_hosts", "rebar_geometry",
            "rebar_factory", "rebar_run", "levels", "grids",
-           "footings", "structure_run"]
+           "footings", "structure_run", "rebar_constraints"]

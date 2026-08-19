@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.3.2 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.4.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -32,6 +32,17 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.5.0
+
+**Changed**
+
+- **RC Automation 0.4.0** bends the bars, keeps them inside the concrete, writes
+  the scheduled cover onto the footing, and constrains the reinforcement to it so
+  editing a footing updates its steel. Full history in its own
+  [changelog](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md).
 
 ---
 

@@ -31,12 +31,14 @@ class FootingPlan(object):
 
     __slots__ = ("mark", "type_mark", "status", "reason", "position_mm",
                  "outline_mm", "level_id", "level_name", "thickness_mm",
-                 "rotation_deg", "offset_mm")
+                 "rotation_deg", "offset_mm", "cover_top_mm",
+                 "cover_bottom_mm", "cover_side_mm")
 
     def __init__(self, mark, type_mark, status=STATUS_CREATE, reason="",
                  position_mm=None, outline_mm=None, level_id=None,
                  level_name="", thickness_mm=None, rotation_deg=0.0,
-                 offset_mm=0.0):
+                 offset_mm=0.0, cover_top_mm=None, cover_bottom_mm=None,
+                 cover_side_mm=None):
         self.mark = mark
         self.type_mark = type_mark
         self.status = status
@@ -48,6 +50,9 @@ class FootingPlan(object):
         self.thickness_mm = thickness_mm
         self.rotation_deg = rotation_deg
         self.offset_mm = offset_mm
+        self.cover_top_mm = cover_top_mm
+        self.cover_bottom_mm = cover_bottom_mm
+        self.cover_side_mm = cover_side_mm
 
     @property
     def will_create(self):
@@ -152,6 +157,9 @@ def _plan_one(workbook, placement, level_ids, doc_grids, already):
     # which the outline helper centres on the placement point for us.
     item.outline_mm = rebar_spec.outline_for(footing_type, placement)
     item.thickness_mm = footing_type.thickness_mm
+    item.cover_top_mm = footing_type.cover_top_mm
+    item.cover_bottom_mm = footing_type.cover_bottom_mm
+    item.cover_side_mm = footing_type.cover_side_mm
     if not item.thickness_mm:
         item.status = STATUS_INVALID
         item.reason = "the footing type has no thickness"
@@ -195,6 +203,17 @@ def create_one(doc, item, base_type_id, type_cache=None):
     if skipped:
         notes.append("{0} repeated outline point(s) were dropped".format(
             skipped))
+
+    # The cover goes on the element, so the model carries the number rather
+    # than only the bars, and anything constrained to cover has something real
+    # to follow.
+    from anongee_toolkit.structural import rebar_factory
+    _applied, created, cover_notes = rebar_factory.set_host_cover(
+        doc, element, item.cover_top_mm, item.cover_bottom_mm,
+        item.cover_side_mm)
+    for value in created:
+        notes.append("created a {0:g} mm cover type".format(value))
+    notes.extend(cover_notes)
     return element, notes
 
 

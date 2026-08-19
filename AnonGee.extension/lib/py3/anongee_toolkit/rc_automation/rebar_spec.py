@@ -42,6 +42,19 @@ UNIFORM_TOLERANCE_MM = 1.0
 #: outline produces slivers, and a 40 mm bar is a Revit failure, not steel.
 MIN_BAR_LENGTH_MM = 100.0
 
+#: Shape codes whose footing geometry is built here. A code outside this set
+#: validates and is reported, never quietly straightened -- a bar drawn straight
+#: where the schedule said bent is wrong in the model and wrong in the bending
+#: schedule, and looks right in neither.
+SHAPE_STRAIGHT = "00"
+SHAPE_ONE_BEND = "11"
+SHAPE_U_BAR = "21"
+BENT_SHAPE_CODES = (SHAPE_ONE_BEND, SHAPE_U_BAR)
+
+#: A leg shorter than this is not a bend, it is a nub. Below it the shape is
+#: built straight and the reason is carried on the plan.
+MIN_LEG_MM = 75.0
+
 ROLE_FOOTING_LAYER = "FootingLayer"
 ROLE_COLUMN_MAIN = "ColumnMain"
 ROLE_COLUMN_TIE = "ColumnTie"
@@ -299,6 +312,40 @@ def layer_elevation(row, rows, thickness_mm, cover_top_mm, cover_bottom_mm):
     return thickness_mm - cover_top_mm - beneath - own / 2.0
 
 
+def leg_height_mm(z_mm, thickness_mm, cover_top_mm, diameter_mm):
+    """How far a footing bar's end leg turns up, from its own centreline.
+
+    Up to the underside of the top cover, less half a bar so the leg's own
+    steel stays inside the concrete. A bar in the top mat has nowhere to go and
+    gets nothing, which is why this can return zero and the caller has to cope.
+    """
+    top = (thickness_mm or 0.0) - (cover_top_mm or 0.0) - (diameter_mm or 0.0) / 2.0
+    return max(0.0, top - z_mm)
+
+
+def bar_points(shape_code, start_mm, end_mm, position_mm, z_mm, axis="X",
+               leg_mm=0.0):
+    """The centreline of one footing bar, bent according to its shape code.
+
+    ``00`` is a straight run. ``11`` turns one end up, ``21`` turns both -- a
+    U-bar, which is what a footing bottom mat is detailed as almost everywhere,
+    and which was being placed as a straight bar because the shape code was
+    carried as a label and never used to build anything.
+    """
+    def point(along, height):
+        return ((along, position_mm, height) if axis == "X"
+                else (position_mm, along, height))
+
+    if leg_mm < MIN_LEG_MM or shape_code not in BENT_SHAPE_CODES:
+        return [point(start_mm, z_mm), point(end_mm, z_mm)]
+
+    if shape_code == SHAPE_U_BAR:
+        return [point(start_mm, z_mm + leg_mm), point(start_mm, z_mm),
+                point(end_mm, z_mm), point(end_mm, z_mm + leg_mm)]
+    return [point(start_mm, z_mm), point(end_mm, z_mm),
+            point(end_mm, z_mm + leg_mm)]
+
+
 def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                        cover_bottom_mm, cover_side_mm, sibling_rows=()):
     """Every bar of one scheduled footing layer.
@@ -325,6 +372,13 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                         cover_top_mm, cover_bottom_mm)
     positions = bar_positions(span[0], span[1], row.count, row.spacing_mm)
 
+    leg = leg_height_mm(z, thickness_mm, cover_top_mm, row.diameter_mm)
+    if row.shape_code in BENT_SHAPE_CODES and leg < MIN_LEG_MM:
+        notes.append(
+            "shape {0} asks for end legs, but only {1:.0f} mm is available "
+            "between this layer and the top cover — placed straight".format(
+                row.shape_code, leg))
+
     bars = []
     skipped = 0
     for position in positions:
@@ -333,10 +387,8 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
             if extent is None:
                 skipped += 1
                 continue
-            if axis == "X":
-                points = [(extent[0], position, z), (extent[1], position, z)]
-            else:
-                points = [(position, extent[0], z), (position, extent[1], z)]
+            points = bar_points(row.shape_code, extent[0], extent[1], position,
+                                z, axis, leg)
             bars.append(BarSpec(
                 points, row.diameter_mm, row.bar_type, row.shape_code,
                 ROLE_FOOTING_LAYER,
@@ -366,9 +418,17 @@ def _lengths_agree(bars):
     return max(lengths) - min(lengths) <= UNIFORM_TOLERANCE_MM
 
 
-def plan_footing(footing_type, rows, placement=None):
-    """Every layer of one footing type, in schedule order."""
-    outline = outline_for(footing_type, placement)
+def plan_footing(footing_type, rows, placement=None, outline=None):
+    """Every layer of one footing type, in schedule order.
+
+    *outline* overrides what the placement would give, so a caller holding the
+    pad's resolved shape can hand over exactly that. The bars and the pad then
+    share one local frame -- which is the whole point: planning bars from the
+    type's rectangle and placing them against the pad's bounding-box centre put
+    them 2.25 metres out of the concrete on the one pad that is not a rectangle.
+    """
+    outline = outline if outline is not None else outline_for(footing_type,
+                                                              placement)
     rows = list(rows)
     return [
         plan_footing_layer(

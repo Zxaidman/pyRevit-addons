@@ -20,14 +20,17 @@ Failures come back as results, never as exceptions. One bad bar in four hundred
 should cost that bar and a line in the report, not the run.
 """
 
+from Autodesk.Revit.DB import BuiltInParameter
 from Autodesk.Revit.DB import ElementId
 from Autodesk.Revit.DB.Structure import Rebar
 from Autodesk.Revit.DB.Structure import RebarBarType
+from Autodesk.Revit.DB.Structure import RebarCoverType
 from Autodesk.Revit.DB.Structure import RebarHookOrientation
 from Autodesk.Revit.DB.Structure import RebarStyle
 
 from anongee_toolkit.rc_automation import rebar_spec
 from anongee_toolkit.revit.units import mm_to_ft
+from anongee_toolkit.structural import rebar_types
 from anongee_toolkit.structural import rebar_geometry
 
 __version__ = "0.1.0"
@@ -42,7 +45,8 @@ STAMP_TEXT = "AnonGee RC Automation"
 class PlacementResult(object):
     """What one attempt produced: the ids, and why anything is missing."""
 
-    __slots__ = ("created", "skipped", "errors", "bars", "elements")
+    __slots__ = ("created", "skipped", "errors", "bars", "elements",
+                 "constrained", "constraint_notes")
 
     def __init__(self):
         self.created = []
@@ -50,6 +54,11 @@ class PlacementResult(object):
         self.errors = []
         self.bars = 0
         self.elements = 0
+        #: Handles tied to the host's cover. Counted rather than assumed,
+        #: because a constraint that could not be made costs the automatic
+        #: updating and nothing else.
+        self.constrained = 0
+        self.constraint_notes = []
 
     def merge(self, other):
         self.created.extend(other.created)
@@ -57,6 +66,10 @@ class PlacementResult(object):
         self.errors.extend(other.errors)
         self.bars += other.bars
         self.elements += other.elements
+        self.constrained += other.constrained
+        for note in other.constraint_notes:
+            if note not in self.constraint_notes:
+                self.constraint_notes.append(note)
         return self
 
     @property
@@ -66,6 +79,86 @@ class PlacementResult(object):
     def __repr__(self):
         return "<PlacementResult {0} element(s), {1} bar(s), {2} error(s)>"\
             .format(self.elements, self.bars, len(self.errors))
+
+
+# ---------------------------------------------------------------------------
+# Cover
+# ---------------------------------------------------------------------------
+#: How a cover type this tool has to invent is named. The value leads because
+#: that is the only thing that distinguishes one from another.
+COVER_TYPE_NAME = "RC {0} mm"
+
+
+def ensure_cover_type(doc, cover_mm):
+    """A ``RebarCoverType`` of this distance, matched or created.
+
+    Cover in Revit is an element reference, not a number, which is what turns
+    "50 mm cover" into something that can simply be absent from a project. A
+    bar type is not invented when it is missing -- a wrongly named one would go
+    into the bending schedule -- but a cover type carries no such baggage: it is
+    a distance with a name, and creating it is the difference between the tool
+    working on a fresh template and not.
+
+    Requires a transaction when it has to create. Returns ``(id, created)``.
+    """
+    if not cover_mm:
+        return None, False
+    existing = rebar_types.match_cover_type(doc, cover_mm)
+    if existing is not None:
+        return existing, False
+    try:
+        cover_type = RebarCoverType.Create(
+            doc, COVER_TYPE_NAME.format(int(round(cover_mm))),
+            mm_to_ft(cover_mm))
+        return cover_type.Id, True
+    except Exception:
+        return None, False
+
+
+#: Which host parameter holds which face's cover. Floors and foundations carry
+#: three; most other categories carry one, so the fallback matters.
+_COVER_PARAMETERS = {
+    "top": (BuiltInParameter.CLEAR_COVER_TOP, BuiltInParameter.CLEAR_COVER),
+    "bottom": (BuiltInParameter.CLEAR_COVER_BOTTOM,
+               BuiltInParameter.CLEAR_COVER),
+    "side": (BuiltInParameter.CLEAR_COVER_OTHER, BuiltInParameter.CLEAR_COVER),
+}
+
+
+def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None):
+    """Write the scheduled cover onto the element itself.
+
+    So the model carries the number, not just the bars. Reinforcement
+    constrained to cover then has something real to follow, and anyone opening
+    the footing sees what it was detailed to rather than having to measure a
+    bar. ``(applied, created, notes)``. Requires a transaction.
+    """
+    applied = []
+    created = []
+    notes = []
+    for face, value in (("top", top_mm), ("bottom", bottom_mm),
+                        ("side", side_mm)):
+        if not value:
+            continue
+        cover_id, was_created = ensure_cover_type(doc, value)
+        if cover_id is None:
+            notes.append("no cover type for {0:g} mm ({1})".format(value, face))
+            continue
+        if was_created:
+            created.append(value)
+        for builtin in _COVER_PARAMETERS[face]:
+            try:
+                parameter = host.get_Parameter(builtin)
+            except Exception:
+                parameter = None
+            if parameter is not None and not parameter.IsReadOnly:
+                try:
+                    parameter.Set(cover_id)
+                    applied.append(face)
+                    break
+                except Exception:
+                    continue
+    return applied, created, notes
 
 
 def _style_for(bar):
@@ -174,8 +267,20 @@ def apply_layout(rebar, bar_set):
     return True
 
 
+def _constrain(doc, host, result, offset_mm=0.0):
+    """Tie what was just placed to the host's cover, and note what happened."""
+    from anongee_toolkit.structural import rebar_constraints
+    applied, notes = rebar_constraints.apply_to_all(
+        result.created, doc, host, offset_mm)
+    result.constrained += applied
+    for note in notes:
+        if note not in result.constraint_notes:
+            result.constraint_notes.append(note)
+    return result
+
+
 def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
-                rotation_deg=0.0, view=None):
+                rotation_deg=0.0, view=None, constrain=True):
     """One scheduled run of bars, as a set where it can be.
 
     A uniform run becomes a single element carrying its own layout; a run whose
@@ -200,7 +305,7 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
             result.bars += bar_set.count
         except Exception as error:
             result.errors.append("{0}: {1}".format(bar_set.bar.label, error))
-        return result
+        return _constrain(doc, host, result) if constrain else result
 
     for bar in plan.bars:
         try:
@@ -212,7 +317,7 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
             result.bars += 1
         except Exception as error:
             result.errors.append("{0}: {1}".format(bar.label, error))
-    return result
+    return _constrain(doc, host, result) if constrain else result
 
 
 def place_set(doc, host, bar_set, bar_type_id, origin_ft=None,

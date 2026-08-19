@@ -75,7 +75,7 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -300,7 +300,22 @@ if _state.handler_cls is None:
                 doc, BuiltInCategory.OST_StructuralColumns)
             result["marks"] = self._marks(
                 doc, BuiltInCategory.OST_StructuralFoundation)
+            result["constraints"] = self._constraint_support(doc)
             return result
+
+        def _constraint_support(self, doc):
+            """What this Revit build offers for rebar constraints.
+
+            Written blind: the shape of that API moves between releases, and a
+            report from a real model is the only way to replace guessing with
+            knowing. Reads one existing bar if there is one.
+            """
+            from anongee_toolkit.structural import rebar_constraints
+            for element in (FilteredElementCollector(doc)
+                            .OfCategory(BuiltInCategory.OST_Rebar)
+                            .WhereElementIsNotElementType().ToElements()):
+                return rebar_constraints.describe(element)
+            return "no rebar in the model yet to read constraints from"
 
         def _hosts(self, doc, category):
             """``(count, valid_host_count)`` for one category.
@@ -546,6 +561,8 @@ if _state.handler_cls is None:
                 # same code Phase 2 runs, against elements a moment old.
                 created_bars = 0
                 created_elements = 0
+                constrained = 0
+                constraint_notes = []
                 if made:
                     transaction = Transaction(doc, "Reinforce new footings")
                     transaction.Start()
@@ -557,8 +574,12 @@ if _state.handler_cls is None:
                                 view)
                             created_bars += outcome.bars
                             created_elements += outcome.elements
+                            constrained += outcome.constrained
                             errors.extend(outcome.errors)
                             skipped.extend(outcome.skipped)
+                            for note in outcome.constraint_notes:
+                                if note not in constraint_notes:
+                                    constraint_notes.append(note)
                         transaction.Commit()
                     except Exception as rebar_error:
                         errors.append("reinforcement rolled back: {0}".format(
@@ -580,6 +601,8 @@ if _state.handler_cls is None:
                 "hosts": len(made),
                 "elements": created_elements,
                 "bars": created_bars,
+                "constrained": constrained,
+                "constraint_notes": constraint_notes,
                 "errors": errors,
                 "skipped": skipped,
                 "notes": notes,
@@ -608,12 +631,18 @@ def _swallow_warnings(transaction):
 
 
 def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
-    """Reinforce a pad this run just made.
+    """Reinforce a pad this run just made, in the pad's own frame.
 
-    It is measured rather than assumed: the bars are placed against the
-    element's own bounding box and bottom face, exactly as Phase 2 does, so a
-    pad that came out anywhere other than where it was asked for gets bars that
-    match the concrete rather than the schedule.
+    The bars are planned from **the outline the pad was built from** and placed
+    at **the point the pad was placed at**, turned by the same angle. Anything
+    else and the two drift apart: planning from the type's rectangle and placing
+    against the element's bounding-box centre put the bars 2.25 m outside the
+    concrete on the one pad in the sample that is not a rectangle, because its
+    outline runs from the placement point rather than around it.
+
+    Only the height is measured off the element, because that is the one thing
+    the frame does not give: the level, the offset and the type's thickness all
+    feed it, and reading it back is cheaper than reproducing that sum.
     """
     from anongee_toolkit.structural import rebar_factory
     from anongee_toolkit.structural import rebar_geometry
@@ -635,15 +664,18 @@ def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
                               .format(item.mark))
         return result
 
-    centre = rebar_hosts.plan_origin_mm(element)
     bottom = rebar_hosts.bottom_elevation_mm(element)
-    if centre is None or bottom is None:
+    if bottom is None:
         result.errors.append("{0}: could not measure the new pad".format(
             item.mark))
         return result
-    origin = rebar_geometry.origin_xyz(centre[0], centre[1], bottom)
 
-    for layer in rebar_spec.plan_footing(footing, rows):
+    position = item.position_mm or (0.0, 0.0)
+    origin = rebar_geometry.origin_xyz(position[0], position[1], bottom)
+    rotation = item.rotation_deg or 0.0
+
+    for layer in rebar_spec.plan_footing(footing, rows,
+                                         outline=item.outline_mm):
         key = (layer.row.diameter_mm, (layer.row.bar_type or "").strip())
         bar_type_id = bar_type_ids.get(key)
         if bar_type_id is None:
@@ -651,8 +683,7 @@ def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
                 item.mark, layer.row.layer, layer.row.diameter_mm or 0))
             continue
         result.merge(rebar_factory.place_layer(
-            doc, element, layer, bar_type_id, origin, item.rotation_deg or 0.0,
-            view))
+            doc, element, layer, bar_type_id, origin, rotation, view))
     return result
 
 
@@ -993,6 +1024,18 @@ class RCAutomationApp(object):
                   .format(result["elements"], result["bars"],
                           result["hosts"])),
                  "", "One undo step — Ctrl+Z reverses the whole run.", ""]
+        constrained = result.get("constrained")
+        if constrained:
+            lines.append("{0} bar handle(s) tied to the host's cover — editing "
+                         "a footing updates its reinforcement.".format(
+                             constrained))
+            lines.append("")
+        for note in result.get("constraint_notes") or []:
+            lines.append("Not constrained — " + note)
+        if result.get("constraint_notes"):
+            lines.append("The bars are placed correctly either way; what is "
+                         "lost is the automatic updating.")
+            lines.append("")
         for label, entries in (("Skipped", result["skipped"]),
                                ("Failed", result["errors"])):
             if entries:
@@ -1133,6 +1176,10 @@ class RCAutomationApp(object):
             columns, column_hosts))
         lines.append("")
         lines.append(self._mark_report(result.get("marks", [])))
+        if result.get("constraints"):
+            lines.append("")
+            lines.append("Rebar constraints on this build")
+            lines.append(result["constraints"])
 
         # The conclusion, spelled out. A reader should not have to infer "there
         # is nothing to reinforce" from a pair of zeroes.

@@ -386,13 +386,52 @@ class CreationSafetyTests(unittest.TestCase):
         self.assertIn("group.Assimilate()", body)
         self.assertIn("_reinforce_new", body)
 
-    def test_a_new_pad_is_measured_before_it_is_reinforced(self):
-        # Bars go against the element's own box, not the schedule's numbers, so
-        # a pad that came out anywhere else still gets bars that fit it.
+    def test_a_new_pad_and_its_bars_share_one_frame(self):
+        """Bars are planned from the outline the pad was built from, and placed
+        at the point the pad was placed at, turned by the same angle.
+
+        Anything else and the two drift apart. Planning from the type's
+        rectangle and placing against the element's bounding-box centre put the
+        bars 2.25 m outside the concrete on the one pad in the sample that is
+        not a rectangle, because its outline runs from the placement point
+        rather than around it.
+        """
         body = self.source.split("def _reinforce_new")[1].split("\ndef ")[0]
-        self.assertIn("plan_origin_mm", body)
+        self.assertIn("outline=item.outline_mm", body)
+        self.assertIn("item.position_mm", body)
+        self.assertIn("item.rotation_deg", body)
+        # The bounding-box centre is exactly what must not be used here.
+        self.assertNotIn("plan_origin_mm", body)
+        # The height still is: the frame does not carry it.
         self.assertIn("bottom_elevation_mm", body)
         self.assertIn("is_valid_host", body)
+
+    def test_the_scheduled_cover_goes_onto_the_element(self):
+        """So the model carries the number, not only the bars — and anything
+        constrained to cover has something real to follow."""
+        run = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "structure_run.py"))
+        body = run.split("def create_one")[1].split("\ndef ")[0]
+        self.assertIn("set_host_cover", body)
+        factory = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "rebar_factory.py"))
+        self.assertIn("RebarCoverType.Create", factory)
+        for builtin in ("CLEAR_COVER_TOP", "CLEAR_COVER_BOTTOM",
+                        "CLEAR_COVER_OTHER"):
+            self.assertIn(builtin, factory, builtin)
+
+    def test_a_constraint_that_cannot_be_made_never_costs_the_run(self):
+        """The bars are in the right place either way; what is lost is the
+        automatic updating, and that is not worth a rolled-back chunk."""
+        constraints = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "rebar_constraints.py"))
+        for function in ("def constrain_to_cover", "def apply_to_all"):
+            body = constraints.split(function)[1].split("\ndef ")[0]
+            self.assertNotIn("raise ", body, function)
+        self.assertIn("except Exception", constraints)
 
     def test_a_plan_has_to_exist_before_anything_is_written(self):
         body = self.source.split("def _on_create")[1].split("\n    def ")[0]
