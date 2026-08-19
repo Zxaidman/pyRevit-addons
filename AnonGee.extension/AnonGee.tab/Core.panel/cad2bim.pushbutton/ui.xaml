@@ -8,7 +8,7 @@
         ResizeMode="CanResize"
         Background="White"
         UseLayoutRounding="True"
-        FontFamily="JetBrains Mono, Source Serif 4, Inter, Segoe UI, Calibri">
+        FontFamily="Inter, JetBrains Mono, Source Serif 4, Segoe UI, Calibri">
 
     <Window.Resources>
         <ResourceDictionary>
