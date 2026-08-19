@@ -39,6 +39,11 @@ reconcile = _rc.reconcile
 rebar_spec = _rc.rebar_spec
 
 _FIXTURES = os.path.join(_ROOT, "tests", "fixtures", "rc_automation")
+#: Saved by Excel, not by this repository. The genuine legacy format for the
+#: refusal path, and the ground truth the generated .xlsm is held to.
+_LEGACY_XLS = os.path.join(_FIXTURES, "sample_schedule-R1.xls")
+_EXCEL_XLSM = os.path.join(_FIXTURES, "sample_schedule-R1.xlsm")
+
 _BBS_STANDARD = os.path.join(
     _ROOT, "AnonGee.extension", "AnonGee.tab", "Dev.panel",
     "BBS Generator.pushbutton", "standards", "BS_8666_2020.py")
@@ -1308,14 +1313,33 @@ class EveryFormatTests(unittest.TestCase):
             os.path.join(_FIXTURES, "sample_schedule.xlsm"))
         self.expect(data, issues, "xlsm")
 
+    @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
+    def test_the_workbook_excel_itself_saved(self):
+        # Round-tripped through Excel: same schedule, Excel's own bytes.
+        data, issues = excel_engine.load(_EXCEL_XLSM)
+        self.expect(data, issues, "R1.xlsm")
+
     def test_the_legacy_workbook_is_refused_with_the_fix(self):
-        # The file is present, so this is the "cannot read this format"
-        # message rather than "not found" -- which are different problems and
-        # need different sentences.
-        _, issues = excel_engine.load(
-            os.path.join(_FIXTURES, "not_a_workbook.xls"))
+        # A genuine BIFF file saved by Excel, so this is the real refusal path
+        # against the real format. The file is present, which makes this the
+        # "cannot read this format" message rather than "not found" -- different
+        # problems needing different sentences.
+        _, issues = excel_engine.load(_LEGACY_XLS)
         self.assertTrue(errors(issues))
         self.assertIn("Save As", errors(issues)[0].message)
+
+    def test_the_legacy_fixture_really_is_the_old_format(self):
+        """A .xls placeholder proves nothing; an OLE2 container proves it.
+
+        The first attempt at this fixture was a text file, and it even claimed
+        in its own words that Excel would refuse it -- which is false. Excel's
+        text import opens a text file named .xls and lays the words out in
+        cells. This one starts with the OLE2 compound-document signature, which
+        is what a real BIFF workbook is.
+        """
+        with io.open(_LEGACY_XLS, "rb") as handle:
+            signature = handle.read(8)
+        self.assertEqual(signature, b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
 
     @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
     def test_the_workbook_pushed_from_revit_reads(self):
@@ -1420,14 +1444,42 @@ class WorkbookFormatTests(unittest.TestCase):
             macro = h.read()
         self.assertNotEqual(plain, macro)
 
-    def test_the_placeholder_xls_is_named_for_what_it_is(self):
-        # A file that looks like a workbook and is not costs somebody a
-        # double-click and a confusing error; the name has to say so.
-        self.assertTrue(os.path.isfile(
-            os.path.join(_FIXTURES, "not_a_workbook.xls")))
-        self.assertFalse(os.path.isfile(
-            os.path.join(_FIXTURES, "sample_schedule.xls")),
-            "a placeholder must not be named like the real schedule")
+    def test_no_placeholder_pretends_to_be_a_workbook(self):
+        """Retired placeholders stay retired.
+
+        Both said in their own text that Excel would refuse them. Excel does
+        not -- it opens a text file named .xls through its text import. A
+        fixture that asserts something untrue about the tool it tests is worse
+        than no fixture, and the real Excel-saved .xls replaced them.
+        """
+        for name in ("not_a_workbook.xls", "sample_schedule.xls"):
+            self.assertFalse(os.path.isfile(os.path.join(_FIXTURES, name)),
+                             name + " should have been superseded")
+
+    def test_the_generated_xlsm_matches_what_excel_itself_writes(self):
+        """Ground truth: Excel's own save of this workbook is in the fixtures.
+
+        openpyxl cannot write an xlsm, so the generator re-declares the workbook
+        part by hand. The only way to know that guess is right is to compare it
+        with a file Excel actually produced -- and Excel writes exactly the same
+        content type, with no vbaProject.bin, for a macro-enabled workbook that
+        has no macros in it.
+        """
+        mine = self.declared_type(os.path.join(_FIXTURES,
+                                               "sample_schedule.xlsm"))
+        excels = self.declared_type(_EXCEL_XLSM)
+        self.assertEqual(mine, excels)
+        self.assertEqual(mine, self.CONTENT_TYPES[".xlsm"])
+
+    def test_neither_macro_enabled_file_needs_a_vba_project(self):
+        for path in (os.path.join(_FIXTURES, "sample_schedule.xlsm"),
+                     _EXCEL_XLSM):
+            archive = zipfile.ZipFile(path)
+            try:
+                self.assertNotIn("xl/vbaProject.bin", archive.namelist(),
+                                 os.path.basename(path))
+            finally:
+                archive.close()
 
 
 class DelimitedTextTests(unittest.TestCase):

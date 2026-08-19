@@ -23,12 +23,13 @@ What gets written, and why each earns its place:
     the file outright. So the part is re-declared here, after saving. A
     macro-enabled workbook containing no macros is valid; what makes it xlsm is
     the content type, not a ``vbaProject.bin``.
-``not_a_workbook.xls``
-    Exactly what its name says. openpyxl cannot write BIFF and faking one would
-    be worse than useless, so this is a text file that exists purely so the
-    legacy-format refusal is tested against a file that is *present* -- "not
-    found" and "cannot read this format" are different problems needing
-    different sentences. Named so nobody wastes a double-click on it.
+The legacy ``.xls`` fixture is **not** generated. ``sample_schedule-R1.xls`` was
+saved by Excel and is a genuine BIFF/OLE2 file, which nothing here can write and
+no placeholder can honestly imitate. An earlier attempt at one claimed in its own
+text that "Excel will refuse it", which turned out to be false -- Excel's text
+import opens a text file named ``.xls`` quite happily and lays the words out in
+cells. A fixture that asserts something untrue about the tool it is testing is
+worse than no fixture, so it is gone and the real file took its place.
 ``txt_sheets/``
     One tab-separated file per sheet. Revit's own schedule export writes this,
     and a folder of them is a first-class input.
@@ -211,27 +212,6 @@ def build_text_sheets(folder):
     return written
 
 
-def build_placeholder_legacy(path):
-    """A file with a .xls name that is deliberately not one.
-
-    openpyxl cannot write BIFF and faking the format would be worse than
-    useless. This exists only so the legacy refusal is exercised against a file
-    that is present, and it is named so nobody wastes a double-click finding
-    that out.
-    """
-    with io.open(path, "w", encoding="utf-8") as handle:
-        handle.write(
-            u"This is NOT a real .xls workbook, and Excel will refuse it.\n"
-            u"\n"
-            u"It exists so RC Automation's 'legacy format' message is tested\n"
-            u"against a file that is actually present -- \"not found\" and\n"
-            u"\"cannot read this format\" are different problems and need\n"
-            u"different sentences.\n"
-            u"\n"
-            u"The real schedule is sample_schedule.xlsx.\n")
-    return path
-
-
 def main():
     try:
         import openpyxl  # noqa: F401
@@ -242,14 +222,19 @@ def main():
     made = [
         build_workbook(os.path.join(HERE, "sample_schedule.xlsx")),
         build_workbook(os.path.join(HERE, "sample_schedule.xlsm")),
-        build_placeholder_legacy(os.path.join(HERE, "not_a_workbook.xls")),
     ]
     made.extend(build_text_sheets(os.path.join(HERE, "txt_sheets")))
 
-    stale = os.path.join(HERE, "sample_schedule.xls")
-    if os.path.isfile(stale):
-        os.remove(stale)
-        print("removed", os.path.basename(stale), "(renamed)")
+    # The legacy fixture is Excel's own sample_schedule-R1.xls, which nothing
+    # here can write. Two earlier placeholders are removed on sight: one was
+    # named like the real schedule, and both claimed in their own text that
+    # Excel would refuse them, which is false -- Excel's text import opens a
+    # text file named .xls and lays the words out in cells.
+    for stale in ("not_a_workbook.xls", "sample_schedule.xls"):
+        path = os.path.join(HERE, stale)
+        if os.path.isfile(path):
+            os.remove(path)
+            print("removed", stale, "(superseded by sample_schedule-R1.xls)")
 
     for path in made:
         note = ""
