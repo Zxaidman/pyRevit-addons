@@ -1,0 +1,39 @@
+AnonGee RC Automation 0.2.1
+Workbook: D:\ZAID\Advance AI\pyRevit-addons\tests\fixtures\rc_automation\sample_schedule.xlsx
+Mode: Reinforce existing structure
+
+0 errors, 0 warnings, 3 notes
+
+[Info] Sheet 'FOOTING_PLACEMENT' was read but is not used in this mode — the structure already exists, so it supplies its own geometry.
+[Info] Sheet 'COLUMN_PLACEMENT' was read but is not used in this mode — the structure already exists, so it supplies its own geometry.
+[Info] Read 3 footing types with 10 bar rows, and 3 column types with 7 bar rows.
+
+Model: R25_REBAR_AUTOMATION
+
+Levels (3)
+  00 FOUNDATION LVL.
+  01 GROUND LVL.
+  02 1ST FLOOR LVL.
+
+Rebar bar types (8)
+  10T
+  12T
+  16T
+  20T
+  25T
+  32T
+  40T
+  8T
+
+The workbook names 2 level(s) this model does not have:
+  Foundation
+  Level 1
+  (map or rename them before creating structure)
+
+Structural foundations: 4 (4 can host rebar)
+Structural columns: 0 (0 can host rebar)
+
+Footing marks: 0 of 6 scheduled marks are in the model
+  not in the model: F1-A1, F1-A2, F1-B1, F2-C1, F3-B2, F3-P1
+
+Nothing in the model was changed.
