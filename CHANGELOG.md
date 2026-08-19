@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.3.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.3.1 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:

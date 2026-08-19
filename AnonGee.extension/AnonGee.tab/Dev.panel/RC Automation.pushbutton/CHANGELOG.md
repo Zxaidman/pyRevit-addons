@@ -1,5 +1,26 @@
 # RC Automation — changelog
 
+## 0.3.1 — 2026-08-19
+
+0.3.0 built footings and then told the user it could not.
+
+- **"Create structure and reinforcement is not built yet" was false.** Shipping
+  Phase 1 updated the gate on planning and left four other comparisons reading
+  "anything but reinforce-existing is unsupported", so the report and the status
+  bar denied a mode the button beside them would have built. Which modes can
+  build is decided in one place now, and the only one that cannot is Reconcile —
+  which resolves differences rather than building anything.
+- **The probe called levels missing that the run would have matched.** It was
+  doing a plain set difference where the run uses the name matcher, so a model
+  whose lowest level is `00 FOUNDATION LVL.` was reported as not having
+  `Foundation`. It now resolves them the same way the run does, and shows what
+  each one landed on.
+- **A stale LEVELS mapping no longer blocks.** Levels get renamed and the sheet
+  does not follow; a mapping pointing at a name the model no longer has is
+  reported and then the matching runs anyway. Blocking a run on an out-of-date
+  mapping, when the name it was written for is sitting right there, helps
+  nobody.
+
 ## 0.3.0 — 2026-08-19
 
 Phase 1: create the footings, then reinforce them.

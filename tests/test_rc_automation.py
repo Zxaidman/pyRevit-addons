@@ -1246,11 +1246,36 @@ class LevelNameTests(unittest.TestCase):
         self.assertEqual(missing, [])
         self.assertTrue(any("mapped" in note for note in notes))
 
-    def test_a_mapping_pointing_nowhere_is_reported(self):
+    def test_a_stale_mapping_is_reported_but_does_not_block(self):
+        """Levels get renamed and the sheet does not follow.
+
+        Blocking a run on a mapping that has gone out of date, when the name it
+        was written for is sitting right there in the model, helps nobody — so
+        it is said, and the matching runs anyway.
+        """
+        renamed = ["00 FOUNDATION LVL.", "01 GROUND LVL.", "02 1ST FLOOR LVL."]
+        resolved, notes, missing = naming.build_name_map(
+            renamed, ["Foundation"], {"Foundation": "00 Ground Lvl."})
+        self.assertEqual(resolved["Foundation"], "00 FOUNDATION LVL.")
+        self.assertEqual(missing, [])
+        self.assertTrue(any("does not have" in note for note in notes), notes)
+        self.assertTrue(any("instead" in note for note in notes), notes)
+
+    def test_a_stale_mapping_for_a_name_nothing_matches_still_fails(self):
         _resolved, _notes, missing = naming.build_name_map(
-            REAL_LEVELS, ["Foundation"], {"Foundation": "Basement"})
+            REAL_LEVELS, ["Basement"], {"Basement": "B1"})
         self.assertTrue(missing)
+        self.assertIn("B1", missing[0])
         self.assertIn("Basement", missing[0])
+
+    def test_the_renamed_model_resolves_without_help(self):
+        """The model as it stood on the second run, with the levels renamed."""
+        renamed = ["00 FOUNDATION LVL.", "01 GROUND LVL.", "02 1ST FLOOR LVL."]
+        resolved, _notes, missing = naming.build_name_map(
+            renamed, ["Foundation", "Level 1"])
+        self.assertEqual(missing, [])
+        self.assertEqual(resolved["Foundation"], "00 FOUNDATION LVL.")
+        self.assertEqual(resolved["Level 1"], "01 GROUND LVL.")
 
     def test_the_real_workbook_against_the_real_model(self):
         """The case that actually happened, end to end."""

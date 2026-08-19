@@ -506,17 +506,35 @@ class ReportingTests(unittest.TestCase):
         self.assertNotIn("read-only", body.lower())
         self.assertIn("__version__", body)
 
-    def test_an_unsupported_mode_is_said_the_same_way_everywhere(self):
-        """Status bar, report and probe share one sentence, so they cannot
-        drift into telling the user three different things."""
-        self.assertIn("_MODE_NOT_BUILT", self.source)
-        self.assertGreaterEqual(self.source.count("_MODE_NOT_BUILT.format"), 3)
+    def test_which_modes_can_build_is_decided_in_one_place(self):
+        """The count of these messages is not the thing worth pinning.
+
+        An earlier test asserted the sentence appeared at least three times and
+        passed happily while all three said the wrong thing: Phase 1 shipped,
+        and four comparisons still read "anything but reinforce-existing is
+        unsupported", so the report told the user a mode was not built while
+        the button beside it would have built it. What matters is that the
+        decision is made once.
+        """
+        self.assertIn("BUILDABLE_MODES", self.source)
+        self.assertIn("def can_build", self.source)
+        # No surviving hand-rolled comparison against a single mode.
+        self.assertNotIn("!= models.MODE_REBAR_ONLY", self.source)
+
+    def test_every_buildable_mode_is_one_the_window_can_plan(self):
+        body = self.source.split("def _ready_to_plan")[1].split("\n    def ")[0]
+        buildable = self.source.split("BUILDABLE_MODES = (")[1].split(")")[0]
+        for mode in ("MODE_CREATE_ALL", "MODE_REBAR_ONLY"):
+            self.assertIn(mode, buildable, mode)
+            self.assertNotIn(
+                "mode == models.{0}".format(mode) + ":", body,
+                "{0} must not be refused by _ready_to_plan".format(mode))
 
     def test_the_mode_is_flagged_when_the_workbook_loads(self):
         # Not only when Plan is pressed — a user who loads, exports and never
         # presses Plan is told nothing otherwise.
         body = self.source.split("def _describe_plan")[1].split("\n    def ")[0]
-        self.assertIn("MODE_REBAR_ONLY", body)
+        self.assertIn("can_build(mode)", body)
 
     def test_the_probe_states_its_conclusion(self):
         # A reader should not have to infer "nothing to reinforce" from a pair
@@ -526,13 +544,20 @@ class ReportingTests(unittest.TestCase):
         self.assertIn("nothing to reinforce", body)
         self.assertIn("flagged structural", body)
 
-    def test_the_probe_names_levels_the_model_lacks(self):
-        """Not flagging a level is not the same as saying it is missing."""
-        self.assertIn("def _missing_level_lines", self.source)
+    def test_the_probe_resolves_levels_the_way_the_run_will(self):
+        """A set difference is not what the run does, so it must not be what
+        the probe reports.
+
+        It called "Foundation" missing from a model containing
+        "00 FOUNDATION LVL." — a level the run matches and builds on.
+        """
         body = self.source.split("def _missing_level_lines")[1]\
             .split("\n    def ")[0]
+        self.assertIn("naming.build_name_map", body)
+        self.assertIn("self.workbook.level_map", body)
         self.assertIn("base_level", body)
         self.assertIn("top_level", body)
+        self.assertNotIn("wanted - set(", body)
 
 
 class ToolkitApiTests(unittest.TestCase):

@@ -86,4 +86,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.3.0
+  Version: 0.3.1

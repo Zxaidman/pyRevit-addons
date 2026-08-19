@@ -146,6 +146,12 @@ def build_name_map(candidates, wanted_names, overrides=None,
     *overrides* is an explicit ``{schedule name: model name}``, and it wins over
     every pass above: when someone has written down what a name means, guessing
     is not an improvement on being told.
+
+    A mapping pointing at a name the model does not have is a different matter.
+    That is not being told, it is being told something stale -- levels get
+    renamed and the sheet does not follow -- so it is reported and then the
+    passes run anyway. Blocking a run on a mapping that has simply gone out of
+    date, when the name it was written for is sitting right there, helps nobody.
     """
     overrides = overrides or {}
     available = list(candidates)
@@ -155,17 +161,21 @@ def build_name_map(candidates, wanted_names, overrides=None,
 
     for wanted in sorted(set(name for name in wanted_names if name)):
         override = overrides.get(wanted)
-        if override:
-            if override in available:
-                resolved[wanted] = override
-                notes.append("{0} → {1} (mapped)".format(wanted, override))
-            else:
-                missing.append(
-                    "{0}: mapped to '{1}', which the model does not have"
-                    .format(wanted, override))
+        if override and override in available:
+            resolved[wanted] = override
+            notes.append("{0} → {1} (mapped)".format(wanted, override))
             continue
 
         matched, note = resolve_name(available, wanted, noise)
+        if override:
+            stale = ("{0}: mapped to '{1}', which this model does not have"
+                     .format(wanted, override))
+            if matched is None:
+                missing.append("{0} — and {1}".format(stale, note))
+                continue
+            notes.append("{0}; matched '{1}' instead".format(stale, matched))
+            resolved[wanted] = matched
+            continue
         if matched is None:
             missing.append("{0}: {1}".format(wanted, note))
         else:

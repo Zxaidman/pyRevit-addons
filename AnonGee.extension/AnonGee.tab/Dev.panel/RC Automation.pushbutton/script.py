@@ -75,15 +75,29 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
-#: Said by the status bar, the report and the plan alike, so the three cannot
+#: The modes that can actually write. Kept as a set rather than as a comparison
+#: repeated in five places: when Phase 1 was built, four of those comparisons
+#: still read "anything but reinforce-existing is unsupported", and the report
+#: went on telling the user a mode was not built while the button beside it
+#: would happily have built it.
+BUILDABLE_MODES = (models.MODE_CREATE_ALL, models.MODE_REBAR_ONLY)
+
+
+def can_build(mode):
+    return mode in BUILDABLE_MODES
+
+
+#: Said by the status bar, the report and the probe alike, so the three cannot
 #: drift into telling the user different things.
 _MODE_NOT_BUILT = (
-    "'{0}' is not built yet — this release reinforces structure that already "
-    "exists. Switch to 'Reinforce existing structure' to plan and create.")
+    "'{0}' is not built yet — it resolves differences against a model rather "
+    "than building anything, and acting on them is deliberately report-only. "
+    "Use 'Create structure and reinforcement' or 'Reinforce existing "
+    "structure' to build.")
 
 #: Hosts written per Transaction. Revit's thread is blocked for the whole of
 #: one, so this is the granularity at which a long run can be given up on and
@@ -127,6 +141,7 @@ _bootstrap_lib_path()
 
 from anongee_toolkit.rc_automation import excel_engine         # noqa: E402
 from anongee_toolkit.rc_automation import models               # noqa: E402
+from anongee_toolkit.rc_automation import naming               # noqa: E402
 from anongee_toolkit.rc_automation import rebar_spec           # noqa: E402
 from anongee_toolkit.rc_automation import validation           # noqa: E402
 from anongee_toolkit.structural import rebar_hosts             # noqa: E402
@@ -1080,14 +1095,14 @@ class RCAutomationApp(object):
         tail = ""
         if blocked:
             tail = "  Errors must be fixed before a run."
-        elif mode != models.MODE_REBAR_ONLY:
+        elif not can_build(mode):
             tail = "  " + _MODE_NOT_BUILT.format(models.MODE_LABELS[mode])
         self.set_status(
             "{0} footing types, {1} column types. {2} footing bars would be "
             "placed as {3} element(s).{4}{5}".format(
                 summary["footing_types"], summary["column_types"], bars,
                 elements, note, tail),
-            blocked or mode != models.MODE_REBAR_ONLY)
+            blocked or not can_build(mode))
 
     def _probe_text(self, result):
         lines = ["Model: {0}".format(result.get("title", "?")), ""]
@@ -1127,14 +1142,17 @@ class RCAutomationApp(object):
         """What all of the above adds up to, in a sentence."""
         mode = self.selected_mode()
         if not footings and not columns:
+            if mode == models.MODE_CREATE_ALL:
+                return ("This model has no footings or columns yet — "
+                        "which is what this mode is for. Plan, and it "
+                        "will say what it would build.")
             if mode == models.MODE_REBAR_ONLY:
                 return ("This model has no footings or columns, so there is "
                         "nothing to reinforce. Model the structure first, or "
                         "wait for the release that creates it from the "
                         "placement sheets.")
-            return _MODE_NOT_BUILT.format(models.MODE_LABELS[mode]) + \
-                " The model has no footings or columns yet either."
-        if mode != models.MODE_REBAR_ONLY:
+            return _MODE_NOT_BUILT.format(models.MODE_LABELS[mode])
+        if not can_build(mode):
             return _MODE_NOT_BUILT.format(models.MODE_LABELS[mode])
         if footings and not footing_hosts:
             return ("None of the {0} foundation(s) can host reinforcement — a "
@@ -1143,11 +1161,12 @@ class RCAutomationApp(object):
         return ""
 
     def _missing_level_lines(self, model_levels):
-        """Name the workbook's levels the model does not have.
+        """Say which of the workbook's levels resolve, and which do not.
 
-        Not flagging a level is not the same as saying it is missing, and a
-        schedule written against "Foundation" in a model whose levels are
-        "00 Ground Lvl." fails for a reason nobody can see from a list.
+        Through the same matcher the run uses. A plain set difference reported
+        "Foundation" as missing from a model containing "00 FOUNDATION LVL."
+        — the run would have matched it and built the footing, and the probe
+        beside it said it could not.
         """
         if self.workbook is None:
             return []
@@ -1159,13 +1178,28 @@ class RCAutomationApp(object):
             for name in (row.base_level, row.top_level):
                 if name:
                     wanted.add(name)
-        missing = sorted(wanted - set(model_levels))
-        if not missing:
+        if not wanted:
             return []
-        return ["", "The workbook names {0} level(s) this model does not "
-                    "have:".format(len(missing))] + \
-               ["  " + name for name in missing] + \
-               ["  (map or rename them before creating structure)"]
+
+        resolved, notes, missing = naming.build_name_map(
+            model_levels, wanted, self.workbook.level_map)
+        lines = []
+        if resolved:
+            lines.append("")
+            lines.append("Levels the workbook asks for")
+            for name in sorted(resolved):
+                lines.append("  {0} → {1}".format(name, resolved[name]))
+        if notes:
+            for note in notes:
+                if "mapped to" in note or "does not have" in note:
+                    lines.append("  " + note)
+        if missing:
+            lines.append("")
+            lines.append("Could not be matched ({0})".format(len(missing)))
+            for entry in missing:
+                lines.append("  " + entry)
+            lines.append("  (add a LEVELS sheet, or rename the level)")
+        return lines
 
     def _level_flag(self, name):
         """Mark the levels the workbook actually asks for."""
@@ -1205,7 +1239,7 @@ class RCAutomationApp(object):
                      (self.WorkbookPathText.Text or "").strip()),
                  "Mode: {0}".format(models.MODE_LABELS[mode]),
                  ""]
-        if mode != models.MODE_REBAR_ONLY:
+        if not can_build(mode):
             lines.append(_MODE_NOT_BUILT.format(models.MODE_LABELS[mode]))
             lines.append("")
         counts = models.count_by_severity(self.issues)
