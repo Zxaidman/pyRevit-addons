@@ -26,7 +26,8 @@ _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _STRUCTURAL = os.path.join(_ROOT, "AnonGee.extension", "lib", "py3",
                            "anongee_toolkit", "structural")
 _MODULES = ("rebar_types", "rebar_hosts", "rebar_geometry",
-            "rebar_factory", "rebar_run")
+            "rebar_factory", "rebar_run", "levels", "grids", "footings",
+            "structure_run")
 
 if os.path.join(_ROOT, "tests") not in sys.path:
     sys.path.insert(0, os.path.join(_ROOT, "tests"))
@@ -145,7 +146,8 @@ class MarshallingTests(unittest.TestCase):
 class CrossModuleApiTests(unittest.TestCase):
     """Every rc_automation attribute these modules name actually exists."""
 
-    OWNERS = {"rebar_spec": "rebar_spec", "models": "models"}
+    OWNERS = {"rebar_spec": "rebar_spec", "models": "models",
+              "naming": "naming"}
 
     def test_referenced_rc_automation_attributes_exist(self):
         missing = []
@@ -293,6 +295,92 @@ class RunContractTests(unittest.TestCase):
         body = self.body("_plan_one_footing")
         self.assertIn("rebar_spec.scheduled_extent_mm", body)
         self.assertTrue(hasattr(_rc.rebar_spec, "scheduled_extent_mm"))
+
+
+class FootingCreationTests(unittest.TestCase):
+    """Phase 1: making the pads, and the two things easy to leave out."""
+
+    def body(self, module, function):
+        return _read(module).split("def " + function)[1].split("\ndef ")[0]
+
+    def test_a_pad_is_flagged_structural_when_it_is_made(self):
+        """Otherwise it carries no reinforcement and looks identical anyway.
+
+        This is what the first probe of a real model found waiting: a floor
+        that is not flagged structural refuses every bar, in every view, with
+        nothing to see.
+        """
+        self.assertIn("set_structural(floor)", self.body("footings", "create"))
+        body = self.body("footings", "set_structural")
+        self.assertIn("FLOOR_PARAM_IS_STRUCTURAL", body)
+
+    def test_a_type_is_duplicated_per_thickness_not_edited(self):
+        # Setting the thickness on a shared type would silently resize every
+        # footing already using it.
+        body = self.body("footings", "resolve_type")
+        self.assertIn(".Duplicate(", body)
+        self.assertIn("cache", body)
+
+    def test_an_existing_type_of_that_thickness_is_reused(self):
+        # A second run over the same schedule must add no types.
+        body = self.body("footings", "resolve_type")
+        self.assertIn("floor_type.Name == wanted", body)
+
+    def test_the_outline_is_a_typed_curve_loop(self):
+        body = self.body("footings", "create")
+        self.assertIn("List[CurveLoop]()", body)
+        self.assertIn("loops.Add(", body)
+
+    def test_zero_length_edges_are_dropped_not_passed_on(self):
+        # Revit refuses the whole sketch for one, so a repeated outline point
+        # would cost the entire pad.
+        body = self.body("footings", "curve_loop")
+        self.assertIn("MIN_EDGE_FT", body)
+
+    def test_rotation_happens_before_the_offset(self):
+        """Rotating after offsetting swings a pad away from where it belongs."""
+        body = self.body("footings", "curve_loop")
+        self.assertLess(body.index("math.radians"), body.index("origin_mm[0]"))
+
+    def test_nothing_in_the_creation_modules_opens_a_transaction(self):
+        for name in ("footings", "structure_run", "levels", "grids"):
+            for forbidden in ("Transaction(", "TransactionGroup("):
+                self.assertNotIn(forbidden, _read(name),
+                                 "{0} opens {1}".format(name, forbidden))
+
+
+class StructureRunTests(unittest.TestCase):
+    """Resolving everything before writing anything."""
+
+    def body(self, function):
+        return _read("structure_run").split("def " + function)[1]\
+            .split("\ndef ")[0]
+
+    def test_a_mark_already_in_the_model_is_not_placed_twice(self):
+        body = self.body("_plan_one")
+        self.assertIn("already", body)
+        self.assertIn("STATUS_EXISTS", body)
+
+    def test_an_unmatched_level_stops_the_run_rather_than_one_row(self):
+        """A level nobody can match breaks every row that uses it, so it is
+        reported once as a blocker with the model's own names beside it."""
+        body = self.body("plan")
+        self.assertIn("blockers", body)
+        self.assertIn("level_module.names(doc)", body)
+
+    def test_coordinates_rescue_a_grid_reference_that_does_not_resolve(self):
+        # A workbook carrying both has already said where the pad goes.
+        body = self.body("_position_mm")
+        self.assertIn("has_coordinates", body)
+
+    def test_a_project_with_no_floor_type_is_a_blocker(self):
+        body = self.body("plan")
+        self.assertIn("default_type_id", body)
+        self.assertIn("Structural Foundation floor type", body)
+
+    def test_an_outline_is_placed_as_drawn(self):
+        body = self.body("_plan_one")
+        self.assertIn("rebar_spec.outline_for", body)
 
 
 class GeometryContractTests(unittest.TestCase):

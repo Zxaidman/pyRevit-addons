@@ -37,6 +37,7 @@ excel_engine = _rc.excel_engine
 validation = _rc.validation
 reconcile = _rc.reconcile
 rebar_spec = _rc.rebar_spec
+naming = _rc.naming
 
 _FIXTURES = os.path.join(_ROOT, "tests", "fixtures", "rc_automation")
 #: Saved by Excel, not by this repository. The genuine legacy format for the
@@ -1166,6 +1167,179 @@ class FootingLayerTests(unittest.TestCase):
         plan = rebar_spec.plan_footing(footing, [row])[0]
         self.assertEqual(plan.bars, [])
         self.assertTrue(plan.notes)
+
+
+# The levels in the model RC Automation was first run against. Every case
+# below is measured against these rather than against invented names.
+REAL_LEVELS = ["00 Ground Lvl.", "01 1st Floor Lvl.", "02 2nd Floor Lvl."]
+
+
+class LevelNameTests(unittest.TestCase):
+    """Joining what a schedule calls a level to what the model calls it.
+
+    The single most common reason a workbook that is perfectly correct will not
+    build, and the first thing a real model proved: the schedule said
+    "Foundation" and "Level 1" where the model said "00 Ground Lvl." and
+    "01 1st Floor Lvl.".
+    """
+
+    def resolve(self, wanted, candidates=None):
+        return naming.resolve_name(candidates or REAL_LEVELS, wanted)
+
+    def test_an_exact_name_needs_no_explaining(self):
+        matched, note = self.resolve("00 Ground Lvl.")
+        self.assertEqual(matched, "00 Ground Lvl.")
+        self.assertIsNone(note)
+
+    def test_case_and_punctuation_are_forgiven(self):
+        self.assertEqual(self.resolve("00 ground lvl")[0], "00 Ground Lvl.")
+
+    def test_the_ordinal_and_the_word_level_come_off(self):
+        # "00 Ground Lvl." and "Ground" are the same level; the number is the
+        # model's own convention and "Lvl." says nothing about which one.
+        self.assertEqual(self.resolve("Ground")[0], "00 Ground Lvl.")
+        self.assertEqual(self.resolve("1st Floor")[0], "01 1st Floor Lvl.")
+
+    def test_a_storey_number_matches_when_nothing_else_is_left(self):
+        # "Level 1" is a noise word and a digit, so there is nothing to compare
+        # by name at all -- but it plainly means storey 1.
+        for wanted in ("Level 1", "L1", "LEVEL 1"):
+            self.assertEqual(self.resolve(wanted)[0], "01 1st Floor Lvl.",
+                             wanted)
+        self.assertEqual(self.resolve("Level 0")[0], "00 Ground Lvl.")
+
+    def test_a_name_the_model_does_not_have_is_refused_not_guessed(self):
+        matched, note = self.resolve("Foundation")
+        self.assertIsNone(matched)
+        self.assertIn("Foundation", note)
+
+    def test_a_storey_the_model_does_not_have_is_refused(self):
+        self.assertIsNone(self.resolve("Level 9")[0])
+
+    def test_two_candidates_are_named_rather_than_picked_between(self):
+        """A guess that puts a foundation on the second floor is worse than a
+        message naming both levels it could have meant."""
+        matched, note = self.resolve(
+            "Ground", ["Ground Level", "Ground Lvl", "01 1st Floor Lvl."])
+        self.assertIsNone(matched)
+        self.assertIn("could be", note)
+        self.assertIn("Ground Level", note)
+
+    def test_ordinals_read_every_number_in_the_name(self):
+        self.assertEqual(naming.ordinal("01 1st Floor Lvl."), 1)
+        self.assertEqual(naming.ordinal("02 2nd Floor Lvl."), 2)
+        self.assertEqual(naming.ordinal("00 Ground Lvl."), 0)
+        self.assertEqual(naming.ordinal("Level 1"), 1)
+        # Numbers that disagree say nothing: "3rd of 4" is not a storey.
+        self.assertIsNone(naming.ordinal("Level 3 of 4"))
+        self.assertIsNone(naming.ordinal("Roof"))
+
+    def test_significance_strips_what_a_level_is_from_which_one(self):
+        self.assertEqual(naming.significant("00 Ground Lvl."), "ground")
+        self.assertEqual(naming.significant("Ground Level"), "ground")
+        self.assertEqual(naming.significant("Level 1"), "")
+
+    def test_a_written_down_mapping_beats_every_guess(self):
+        resolved, notes, missing = naming.build_name_map(
+            REAL_LEVELS, ["Foundation"], {"Foundation": "00 Ground Lvl."})
+        self.assertEqual(resolved["Foundation"], "00 Ground Lvl.")
+        self.assertEqual(missing, [])
+        self.assertTrue(any("mapped" in note for note in notes))
+
+    def test_a_mapping_pointing_nowhere_is_reported(self):
+        _resolved, _notes, missing = naming.build_name_map(
+            REAL_LEVELS, ["Foundation"], {"Foundation": "Basement"})
+        self.assertTrue(missing)
+        self.assertIn("Basement", missing[0])
+
+    def test_the_real_workbook_against_the_real_model(self):
+        """The case that actually happened, end to end."""
+        resolved, _notes, missing = naming.build_name_map(
+            REAL_LEVELS, ["Foundation", "Level 1"])
+        self.assertEqual(resolved.get("Level 1"), "01 1st Floor Lvl.")
+        self.assertEqual(len(missing), 1)
+        self.assertIn("Foundation", missing[0])
+
+
+class LevelsSheetTests(unittest.TestCase):
+    """Writing down what a level means, when guessing cannot get there."""
+
+    def with_levels(self, rows):
+        grids = minimal_grids()
+        grids["LEVELS"] = grid(rows)
+        return grids
+
+    def test_the_sheet_is_read(self):
+        data, issues = excel_engine.parse_grid(self.with_levels("""
+Schedule,Model
+Foundation,00 Ground Lvl.
+Level 1,01 1st Floor Lvl.
+"""))
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(data.level_map["Foundation"], "00 Ground Lvl.")
+        self.assertEqual(data.level_map["Level 1"], "01 1st Floor Lvl.")
+
+    def test_a_header_row_is_not_read_as_a_mapping(self):
+        data, _ = excel_engine.parse_grid(self.with_levels("""
+Schedule,Model
+Foundation,00 Ground Lvl.
+"""))
+        self.assertNotIn("Schedule", data.level_map)
+
+    def test_the_sheet_may_be_called_a_level_map(self):
+        grids = minimal_grids()
+        grids["Level Map"] = grid("Foundation,00 Ground Lvl.")
+        data, _ = excel_engine.parse_grid(grids)
+        self.assertEqual(data.level_map["Foundation"], "00 Ground Lvl.")
+
+    def test_no_sheet_means_no_map_and_no_complaint(self):
+        data, issues = excel_engine.parse_grid(minimal_grids())
+        self.assertEqual(data.level_map, {})
+        self.assertEqual(errors(issues), [], messages(issues))
+
+    def test_a_mapping_settles_what_guessing_could_not(self):
+        # "Foundation" resembles nothing in the model; written down, it is
+        # simply the ground level.
+        data, _ = excel_engine.parse_grid(self.with_levels(
+            "Foundation,00 Ground Lvl."))
+        resolved, _notes, missing = naming.build_name_map(
+            REAL_LEVELS, ["Foundation"], data.level_map)
+        self.assertEqual(resolved["Foundation"], "00 Ground Lvl.")
+        self.assertEqual(missing, [])
+
+
+class GridCrossingTests(unittest.TestCase):
+
+    def test_two_perpendicular_grids_cross_where_they_should(self):
+        point, note = naming.cross_segments(
+            ((0.0, 5000.0), (10000.0, 5000.0)),      # grid running east-west
+            ((3000.0, 0.0), (3000.0, 9000.0)))       # grid running north-south
+        self.assertIsNone(note)
+        self.assertAlmostEqual(point[0], 3000.0)
+        self.assertAlmostEqual(point[1], 5000.0)
+
+    def test_grids_that_do_not_reach_each_other_still_cross(self):
+        # A grid bubble stops where the drawing needed it to; a footing can sit
+        # on a crossing neither drawn line reaches.
+        point, note = naming.cross_segments(
+            ((0.0, 0.0), (1000.0, 0.0)),
+            ((5000.0, -1000.0), (5000.0, -500.0)))
+        self.assertIsNone(note)
+        self.assertAlmostEqual(point[0], 5000.0)
+        self.assertAlmostEqual(point[1], 0.0)
+
+    def test_parallel_grids_are_refused(self):
+        point, note = naming.cross_segments(
+            ((0.0, 0.0), (1000.0, 0.0)), ((0.0, 500.0), (1000.0, 500.0)))
+        self.assertIsNone(point)
+        self.assertIn("parallel", note)
+
+    def test_a_skew_crossing(self):
+        point, note = naming.cross_segments(
+            ((0.0, 0.0), (1000.0, 1000.0)), ((0.0, 1000.0), (1000.0, 0.0)))
+        self.assertIsNone(note)
+        self.assertAlmostEqual(point[0], 500.0)
+        self.assertAlmostEqual(point[1], 500.0)
 
 
 class ScheduledExtentTests(unittest.TestCase):

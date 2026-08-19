@@ -165,6 +165,7 @@ anongee_toolkit/rc_automation/          no Revit — 423 tests, all green
     validation.py        rules → Error / Warning / Info              ✅
     reconcile.py         field-by-field comparison, Excel default    ✅
     rebar_spec.py        workbook row → bar centrelines, sets vs bars ✅
+    naming.py            schedule names → model names, grid crossings ✅
     reporting_engine.py  hand-rolled CSV (no `csv` module), JSON, XLSX
 
 anongee_toolkit/structural/             Revit-touching, statically checked
@@ -173,7 +174,10 @@ anongee_toolkit/structural/             Revit-touching, statically checked
     rebar_geometry.py    local mm → world-feet List[Curve], array vector = normal ✅
     rebar_factory.py     Rebar.CreateFromCurves, layout rules, sets, stamping    ✅
     rebar_run.py         one workbook against one model: plan, then place       ✅
-    footings.py          Floor.Create from an outline, on a level
+    levels.py            read the model's levels; matching lives in naming.py    ✅
+    grids.py             a pair of grid names to a point                         ✅
+    footings.py          Floor.Create from an outline, flagged structural        ✅
+    structure_run.py     resolve every pad first, then build                     ✅
     columns.py           FamilyInstance between two levels
 
 RC Automation.pushbutton/               Revit + WPF — v0.2.0 shipped, writes
@@ -285,10 +289,13 @@ Only int element ids cross the thread boundary.
    warnings-only failure preprocessor. Footings only.
 7. Column reinforcement through the same path — mains and ties are planned
    already, they just have no run yet.
-8. `structural/footings` + `structural/columns` — Phase 1 creation.
-9. `preview_engine` — overrides and DirectShape.
-10. Phase 3 reconciliation wiring, geometry still report-only.
-11. Cancellation between chunks, worksharing checkout, `reporting_engine`.
+8. ✅ **Phase 1 wired, v0.3.0.** Footings created as floors, flagged structural,
+   then reinforced — both halves in one `TransactionGroup`. Level names matched
+   with a `LEVELS` sheet for what matching cannot reach; grid crossings resolved.
+9. `structural/columns` — the last element type without a creation path.
+10. `preview_engine` — overrides and DirectShape.
+11. Phase 3 reconciliation wiring, geometry still report-only.
+12. Cancellation between chunks, worksharing checkout, `reporting_engine`.
 
 Steps 1–3 are the entire data model and testable off-Revit; step 4 proves the
 Revit half without risking a model; step 5 is where the real risk sits, which is

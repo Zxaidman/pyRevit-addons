@@ -72,5 +72,11 @@ reason footings are floors rather than family instances. Its bars are genuinely
 different lengths, so that layer cannot ship as one Revit element and the tool
 says so instead of quietly placing the wrong steel.
 
+**There is a `LEVELS` sheet.** The schedule says `Foundation` and `Level 1`; the
+model it was first run against says `00 Ground Lvl.` and `01 1st Floor Lvl.`.
+`Level 1` is matched by storey number without help, but nothing resembles
+`Foundation` — so it is written down. Two columns: the name the schedule uses,
+the name the model uses.
+
 **`C1` has two main-bar rows.** "4T20 corners + 6T16 faces" is one column and two
 rows — the shape a single-row `COLUMN_REBAR` sheet could not express.
