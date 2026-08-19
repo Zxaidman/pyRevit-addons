@@ -6,6 +6,11 @@ REVISION	C
 	
 Note	Lengths in millimetres. One row per type; placement is separate.
 
+#SHEET	LEVELS
+Schedule	Model
+Foundation	00 Ground Lvl.
+Level 1	01 1st Floor Lvl.
+
 #SHEET	FOOTING_TYPES
 TypeMark	Length	Width	Thickness	CoverTop	CoverBottom	CoverSide	Concrete	Comments
 F1	3000	3000	900	50	75	50	C32/40	Typical internal pad

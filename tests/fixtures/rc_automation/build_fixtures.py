@@ -54,6 +54,16 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SHEETS = ("FOOTING_TYPES", "FOOTING_PLACEMENT", "FOOTING_REBAR",
           "COLUMN_TYPES", "COLUMN_PLACEMENT", "COLUMN_REBAR")
 
+#: What the schedule calls a level, against what a model calls it. Taken from
+#: the first model this was run against, where the schedule said "Foundation"
+#: and "Level 1" and the model said "00 Ground Lvl." and "01 1st Floor Lvl." --
+#: names no amount of matching will join, which is what this sheet is for.
+LEVELS_ROWS = [
+    ["Schedule", "Model"],
+    ["Foundation", "00 Ground Lvl."],
+    ["Level 1", "01 1st Floor Lvl."],
+]
+
 #: The cover sheet the CSVs cannot carry -- they are one table each by design.
 INFO_ROWS = [
     ["PROJECT", "Riverside Tower"],
@@ -176,9 +186,10 @@ def build_workbook(path):
     book = Workbook()
     book.remove(book.active)
 
-    info = book.create_sheet(title="INFO")
-    for row in INFO_ROWS:
-        info.append(row)
+    for name, rows in (("INFO", INFO_ROWS), ("LEVELS", LEVELS_ROWS)):
+        sheet = book.create_sheet(title=name)
+        for row in rows:
+            sheet.append(row)
 
     for name in SHEETS:
         rows = read_csv_rows(os.path.join(HERE, name + ".csv"))
@@ -220,7 +231,7 @@ def _quote(cell, delimiter):
 
 def _all_sheets():
     """``[(name, rows)]`` for the whole workbook, INFO first."""
-    sheets = [("INFO", INFO_ROWS)]
+    sheets = [("INFO", INFO_ROWS), ("LEVELS", LEVELS_ROWS)]
     for name in SHEETS:
         rows = read_csv_rows(os.path.join(HERE, name + ".csv"))
         if name == "FOOTING_TYPES":

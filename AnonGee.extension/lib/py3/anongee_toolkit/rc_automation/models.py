@@ -49,6 +49,12 @@ SHEET_INFO = "INFO"
 INFO_SHEET_ALIASES = ("INFO", "PROJECT", "PROJECTINFO", "METADATA", "COVER",
                       "SETTINGS", "README")
 
+#: Optional. Two columns: the level name the schedule uses, and the level name
+#: this model uses. Guessing is good, but somebody who has written down what a
+#: name means has settled it, and being told beats being clever.
+SHEET_LEVELS = "LEVELS"
+LEVELS_SHEET_ALIASES = ("LEVELS", "LEVELMAP", "LEVELMAPPING")
+
 SHEET_FOOTING_TYPES = "FOOTING_TYPES"
 SHEET_FOOTING_PLACEMENT = "FOOTING_PLACEMENT"
 SHEET_FOOTING_REBAR = "FOOTING_REBAR"
@@ -105,7 +111,7 @@ REQUIRED_SHEETS_FOR_MODE = {
 #: Never required. A workbook without one still reads -- the metadata can sit
 #: above a header instead, the way a real schedule carries its title block --
 #: and a workbook with neither is warned about, not rejected.
-OPTIONAL_SHEETS = (SHEET_INFO,)
+OPTIONAL_SHEETS = (SHEET_INFO, SHEET_LEVELS)
 
 #: Every sheet the parser knows how to read. Parsing is mode-independent on
 #: purpose -- a workbook is read once and can then be run in any mode without
@@ -535,12 +541,12 @@ class WorkbookData(object):
                  "footing_type_by_mark", "column_type_by_mark",
                  "footing_rebar", "column_rebar",
                  "footing_placement", "column_placement",
-                 "metadata", "sheets_present")
+                 "metadata", "level_map", "sheets_present")
 
     def __init__(self, path=None, units=None, footing_types=None,
                  column_types=None, footing_rebar=None, column_rebar=None,
                  footing_placement=None, column_placement=None,
-                 metadata=None, sheets_present=None):
+                 metadata=None, level_map=None, sheets_present=None):
         self.path = path
         self.units = units
         self.footing_types = list(footing_types or ())
@@ -552,6 +558,8 @@ class WorkbookData(object):
         self.footing_type_by_mark = _first_by_mark(self.footing_types)
         self.column_type_by_mark = _first_by_mark(self.column_types)
         self.metadata = metadata if metadata is not None else {}
+        #: ``{schedule level name: model level name}`` from the LEVELS sheet.
+        self.level_map = level_map if level_map is not None else {}
         self.sheets_present = tuple(sheets_present or ())
 
     def footing_type(self, type_mark):

@@ -75,7 +75,7 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -131,6 +131,8 @@ from anongee_toolkit.rc_automation import rebar_spec           # noqa: E402
 from anongee_toolkit.rc_automation import validation           # noqa: E402
 from anongee_toolkit.structural import rebar_hosts             # noqa: E402
 from anongee_toolkit.structural import rebar_run               # noqa: E402
+from anongee_toolkit.structural import footings as footing_api  # noqa: E402
+from anongee_toolkit.structural import structure_run            # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -315,7 +317,7 @@ if _state.handler_cls is None:
 
         # -- planning (reads only) ----------------------------------------
         def _plan(self, uiapp):
-            """Work out what every existing footing would get. No writes."""
+            """Work out what would be built. No writes, whichever mode."""
             uidoc = uiapp.ActiveUIDocument
             if uidoc is None:
                 return {"error": "Open a Revit model first."}
@@ -323,6 +325,8 @@ if _state.handler_cls is None:
             workbook = self.data.get("workbook")
             if workbook is None:
                 return {"error": "Load a workbook first."}
+            if self.data.get("mode") == models.MODE_CREATE_ALL:
+                return self._plan_structure(doc, workbook)
 
             key_parameter = self.data.get("key_parameter") or \
                 rebar_hosts.DEFAULT_KEY_PARAMETER
@@ -345,13 +349,60 @@ if _state.handler_cls is None:
                     for diameter, name in missing],
             }
 
+        def _plan_structure(self, doc, workbook):
+            """Phase 1: every pad the schedule places, resolved. No writes."""
+            key_parameter = self.data.get("key_parameter") or \
+                rebar_hosts.DEFAULT_KEY_PARAMETER
+            plans, notes, blockers = structure_run.plan(
+                doc, workbook, key_parameter)
+            bar_type_ids, missing = rebar_run.resolve_bar_types(doc, workbook)
+
+            self.data["footing_plans"] = plans
+            self.data["bar_type_ids"] = bar_type_ids
+            self.data["plans"] = []
+            summary = structure_run.summarise(plans)
+            summary["bars"] = 0
+            summary["elements"] = 0
+            for item in plans:
+                if not item.will_create:
+                    continue
+                footing = workbook.footing_type(item.type_mark)
+                rows = workbook.footing_rebar_for(item.type_mark)
+                for layer in rebar_spec.plan_footing(footing, rows):
+                    summary["bars"] += layer.count
+                    summary["elements"] += layer.element_count
+
+            return {
+                "request": "plan",
+                "structure": True,
+                "summary": summary,
+                "notes": notes,
+                "blockers": blockers,
+                "rows": [{
+                    "key": item.mark,
+                    "type_mark": item.type_mark,
+                    "category": "Footing",
+                    "status": item.status,
+                    "reason": item.reason,
+                    "bars": 0,
+                    "elements": 0,
+                    "level": item.level_name,
+                } for item in plans],
+                "missing_bar_types": [
+                    "{0:g} mm{1}".format(diameter or 0,
+                                         " ({0})".format(name) if name else "")
+                    for diameter, name in missing],
+            }
+
         # -- creation (the only thing here that writes) --------------------
         def _create(self, uiapp):
-            """Place the reinforcement the plan described, and nothing else."""
+            """Build what the plan described, and nothing else."""
             uidoc = uiapp.ActiveUIDocument
             if uidoc is None:
                 return {"error": "Open a Revit model first."}
             doc = uidoc.Document
+            if self.data.get("mode") == models.MODE_CREATE_ALL:
+                return self._create_structure(doc)
             workbook = self.data.get("workbook")
             plans = [p for p in (self.data.get("plans") or []) if p.will_create]
             bar_type_ids = self.data.get("bar_type_ids") or {}
@@ -417,6 +468,104 @@ if _state.handler_cls is None:
                 "skipped": skipped,
             }
 
+        def _create_structure(self, doc):
+            """Phase 1: build the pads, then reinforce the ones that took.
+
+            Both halves live in one TransactionGroup, so a user who does not
+            like the result reverses the footings and their reinforcement
+            together rather than being left with bare pads.
+            """
+            workbook = self.data.get("workbook")
+            plans = [p for p in (self.data.get("footing_plans") or [])
+                     if p.will_create]
+            bar_type_ids = self.data.get("bar_type_ids") or {}
+            if not plans:
+                return {"error": "Nothing to create — plan first."}
+            if doc.IsReadOnly:
+                return {"error": "The model is read-only."}
+
+            base_type_id = footing_api.default_type_id(doc)
+            if base_type_id is None:
+                return {"error": "This project has no floor type to make a "
+                                 "foundation from."}
+
+            view = doc.ActiveView
+            type_cache = {}
+            made = []
+            errors = []
+            skipped = []
+            notes = []
+
+            group = TransactionGroup(doc, "AnonGee · RC Automation")
+            group.Start()
+            try:
+                for start in range(0, len(plans), CHUNK_SIZE):
+                    chunk = plans[start:start + CHUNK_SIZE]
+                    transaction = Transaction(
+                        doc, "Create footings {0}-{1}".format(
+                            start + 1, start + len(chunk)))
+                    transaction.Start()
+                    try:
+                        _swallow_warnings(transaction)
+                        for item in chunk:
+                            try:
+                                element, item_notes = structure_run.create_one(
+                                    doc, item, base_type_id, type_cache)
+                                made.append((item, element.Id))
+                                notes.extend(item_notes)
+                            except Exception as pad_error:
+                                errors.append("{0}: {1}".format(
+                                    item.mark, pad_error))
+                        transaction.Commit()
+                    except Exception as chunk_error:
+                        errors.append("chunk rolled back: {0}".format(
+                            chunk_error))
+                        if transaction.HasStarted() and not transaction.HasEnded():
+                            transaction.RollBack()
+
+                # The pads exist now, so they can host. Reinforcing them is the
+                # same code Phase 2 runs, against elements a moment old.
+                created_bars = 0
+                created_elements = 0
+                if made:
+                    transaction = Transaction(doc, "Reinforce new footings")
+                    transaction.Start()
+                    try:
+                        _swallow_warnings(transaction)
+                        for item, element_id in made:
+                            outcome = _reinforce_new(
+                                doc, workbook, item, element_id, bar_type_ids,
+                                view)
+                            created_bars += outcome.bars
+                            created_elements += outcome.elements
+                            errors.extend(outcome.errors)
+                            skipped.extend(outcome.skipped)
+                        transaction.Commit()
+                    except Exception as rebar_error:
+                        errors.append("reinforcement rolled back: {0}".format(
+                            rebar_error))
+                        if transaction.HasStarted() and not transaction.HasEnded():
+                            transaction.RollBack()
+                group.Assimilate()
+            except Exception as run_error:
+                if group.HasStarted() and not group.HasEnded():
+                    group.RollBack()
+                return {"error": "The run was rolled back: {0}".format(
+                    run_error)}
+
+            self.data["footing_plans"] = []
+            return {
+                "request": "create",
+                "structure": True,
+                "footings": len(made),
+                "hosts": len(made),
+                "elements": created_elements,
+                "bars": created_bars,
+                "errors": errors,
+                "skipped": skipped,
+                "notes": notes,
+            }
+
         # -- back to the WPF thread ---------------------------------------
         def _marshal_to_ui(self):
             try:
@@ -430,6 +579,62 @@ else:
     # Later press: the CLR type is already emitted. Re-running the class
     # statement would raise "Duplicate type name within an assembly".
     RCAutomationHandler = _state.handler_cls
+
+
+def _swallow_warnings(transaction):
+    """Absorb the warning-per-element a batch raises, leaving errors alone."""
+    options = transaction.GetFailureHandlingOptions()
+    options.SetFailuresPreprocessor(RebarWarningSwallower())
+    transaction.SetFailureHandlingOptions(options)
+
+
+def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
+    """Reinforce a pad this run just made.
+
+    It is measured rather than assumed: the bars are placed against the
+    element's own bounding box and bottom face, exactly as Phase 2 does, so a
+    pad that came out anywhere other than where it was asked for gets bars that
+    match the concrete rather than the schedule.
+    """
+    from anongee_toolkit.structural import rebar_factory
+    from anongee_toolkit.structural import rebar_geometry
+
+    result = rebar_factory.PlacementResult()
+    element = doc.GetElement(element_id)
+    if element is None:
+        result.errors.append("{0}: the pad vanished".format(item.mark))
+        return result
+    if not rebar_hosts.is_valid_host(element):
+        result.skipped.append("{0}: {1}".format(
+            item.mark, rebar_hosts.why_not_a_host(element)))
+        return result
+
+    footing = workbook.footing_type(item.type_mark)
+    rows = workbook.footing_rebar_for(item.type_mark)
+    if footing is None or not rows:
+        result.skipped.append("{0}: nothing scheduled to reinforce it with"
+                              .format(item.mark))
+        return result
+
+    centre = rebar_hosts.plan_origin_mm(element)
+    bottom = rebar_hosts.bottom_elevation_mm(element)
+    if centre is None or bottom is None:
+        result.errors.append("{0}: could not measure the new pad".format(
+            item.mark))
+        return result
+    origin = rebar_geometry.origin_xyz(centre[0], centre[1], bottom)
+
+    for layer in rebar_spec.plan_footing(footing, rows):
+        key = (layer.row.diameter_mm, (layer.row.bar_type or "").strip())
+        bar_type_id = bar_type_ids.get(key)
+        if bar_type_id is None:
+            result.skipped.append("{0} {1}: no bar type for {2:g} mm".format(
+                item.mark, layer.row.layer, layer.row.diameter_mm or 0))
+            continue
+        result.merge(rebar_factory.place_layer(
+            doc, element, layer, bar_type_id, origin, item.rotation_deg or 0.0,
+            view))
+    return result
 
 
 def _plan_row(plan):
@@ -561,9 +766,13 @@ class RCAutomationApp(object):
         if not self._ready_to_plan():
             return
         self.handler.data["workbook"] = self.workbook
+        self.handler.data["mode"] = self.selected_mode()
         self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
         self._enqueue("plan")
-        self.set_status("Working out what each footing would get…")
+        self.set_status(
+            "Working out what would be built…"
+            if self.selected_mode() == models.MODE_CREATE_ALL
+            else "Working out what each footing would get…")
 
     def _ready_to_plan(self):
         if self.workbook is None or self.workbook.is_empty():
@@ -574,7 +783,7 @@ class RCAutomationApp(object):
                 "The workbook has errors — fix those before planning.", True)
             return False
         mode = self.selected_mode()
-        if mode != models.MODE_REBAR_ONLY:
+        if mode == models.MODE_RECONCILE:
             self.set_status(_MODE_NOT_BUILT.format(models.MODE_LABELS[mode]),
                             True)
             return False
@@ -592,16 +801,23 @@ class RCAutomationApp(object):
             return
 
         summary = self.plan["summary"]
+        if self.plan.get("structure"):
+            question = ("Create {0} footing(s) and reinforce them?\n\n"
+                        "{1} bar(s) as {2} Revit element(s).\n"
+                        "A footing whose mark is already in the model is left "
+                        "alone.".format(summary["creating"], summary["bars"],
+                                        summary["elements"]))
+        else:
+            question = ("Place reinforcement into {0} footing(s)?\n\n"
+                        "{1} bar(s) as {2} Revit element(s).\n{3}".format(
+                            summary["creating"], summary["bars"],
+                            summary["elements"],
+                            "Bars this tool placed earlier will be replaced."
+                            if self.ReplaceCheck.IsChecked
+                            else "Footings that already carry reinforcement "
+                                 "are left alone."))
         answer = MessageBox.Show(
-            "Place reinforcement into {0} footing(s)?\n\n"
-            "{1} bar(s) as {2} Revit element(s).\n"
-            "{3}\n\n"
-            "This lands as a single undo step."
-            .format(summary["creating"], summary["bars"], summary["elements"],
-                    "Bars this tool placed earlier will be replaced."
-                    if self.ReplaceCheck.IsChecked
-                    else "Footings that already carry reinforcement are left "
-                         "alone."),
+            question + "\n\nThis lands as a single undo step.",
             "AnonGee · RC Automation",
             MessageBoxButton.OKCancel, MessageBoxImage.Question)
         if answer != MessageBoxResult.OK:
@@ -609,14 +825,16 @@ class RCAutomationApp(object):
             return
 
         self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
+        self.handler.data["mode"] = self.selected_mode()
         self._enqueue("create")
-        self.set_status("Placing reinforcement — Revit is busy until it is done…")
+        self.set_status("Building — Revit is busy until it is done…")
 
     def _update_create_button(self):
         creating = 0
         if self.plan:
             creating = self.plan.get("summary", {}).get("creating", 0)
-        blocked = bool(self.plan and self.plan.get("missing_bar_types"))
+        blocked = bool(self.plan and (self.plan.get("missing_bar_types")
+                                      or self.plan.get("blockers")))
         self.CreateBtn.IsEnabled = bool(creating) and not blocked
 
     def _on_export(self, sender, args):
@@ -711,35 +929,50 @@ class RCAutomationApp(object):
         self.SidePanelTitle.Text = "Plan"
         self.ProbeText.Text = self._plan_text(result)
 
-        if result["missing_bar_types"]:
+        if result.get("blockers"):
+            # One of these stops everything, so it is said before the counts.
+            self.set_status(result["blockers"][0], True)
+        elif result["missing_bar_types"]:
             self.set_status(
                 "{0} footing(s) ready, but these bar sizes are not loaded: "
                 "{1}.".format(summary["creating"],
                               ", ".join(result["missing_bar_types"])), True)
         elif summary["creating"]:
             self.set_status(
-                "{0} of {1} footing(s) would take {2} bar(s) as {3} element(s). "
-                "Nothing written yet.".format(
-                    summary["creating"], summary["hosts"], summary["bars"],
-                    summary["elements"]))
+                "{0} of {1} footing(s) would be {2} with {3} bar(s) as {4} "
+                "element(s). Nothing written yet.".format(
+                    summary["creating"],
+                    summary.get("footings", summary.get("hosts", 0)),
+                    "created and reinforced" if result.get("structure")
+                    else "reinforced",
+                    summary["bars"], summary["elements"]))
         else:
             self.set_status(
-                "No footing is ready to reinforce — the panel says why for "
-                "each.", True)
+                "Nothing is ready to build — the panel says why for each.",
+                True)
 
     def _on_create_done(self, result):
         self.plan = None
         self.created_anything = True
-        parts = ["Placed {0} element(s) — {1} bar(s) — into {2} footing(s).".
-                 format(result["elements"], result["bars"], result["hosts"])]
+        parts = [
+            "Created {0} footing(s) with {1} element(s) — {2} bar(s).".format(
+                result["footings"], result["elements"], result["bars"])
+            if result.get("structure") else
+            "Placed {0} element(s) — {1} bar(s) — into {2} footing(s).".format(
+                result["elements"], result["bars"], result["hosts"])]
         if result["skipped"]:
             parts.append("{0} skipped.".format(len(result["skipped"])))
         if result["errors"]:
             parts.append("{0} failed.".format(len(result["errors"])))
         self.set_status(" ".join(parts), bool(result["errors"]))
 
-        lines = ["Created {0} element(s), {1} bar(s), across {2} footing(s)."
-                 .format(result["elements"], result["bars"], result["hosts"]),
+        lines = [("Created {0} footing(s), and {1} element(s) — {2} bar(s) — "
+                  "in them.".format(result["footings"], result["elements"],
+                                    result["bars"])
+                  if result.get("structure") else
+                  "Created {0} element(s), {1} bar(s), across {2} footing(s)."
+                  .format(result["elements"], result["bars"],
+                          result["hosts"])),
                  "", "One undo step — Ctrl+Z reverses the whole run.", ""]
         for label, entries in (("Skipped", result["skipped"]),
                                ("Failed", result["errors"])):
@@ -769,14 +1002,28 @@ class RCAutomationApp(object):
 
     def _plan_text(self, result):
         summary = result["summary"]
-        lines = ["{0} footing(s) matched".format(summary["hosts"]), ""]
-        for status in ("Create", "Has rebar", "Skip", "Invalid"):
+        lines = []
+        if result.get("blockers"):
+            lines.append("Blocked")
+            for entry in result["blockers"]:
+                lines.append("  " + entry)
+            lines.append("")
+        lines.append("{0} footing(s) {1}".format(
+            summary.get("footings", summary.get("hosts", 0)),
+            "scheduled" if result.get("structure") else "matched"))
+        lines.append("")
+        for status in ("Create", "Exists", "Has rebar", "Skip", "Invalid"):
             count = summary["by_status"].get(status, 0)
             if count:
                 lines.append("  {0:<10} {1}".format(status, count))
         lines.append("")
         lines.append("Would place {0} bar(s) as {1} Revit element(s).".format(
             summary["bars"], summary["elements"]))
+        if result.get("notes"):
+            lines.append("")
+            lines.append("Resolved for you")
+            for entry in result["notes"][:12]:
+                lines.append("  " + entry)
         if result["missing_bar_types"]:
             lines.append("")
             lines.append("No RebarBarType loaded for:")

@@ -1,0 +1,3 @@
+Schedule	Model
+Foundation	00 Ground Lvl.
+Level 1	01 1st Floor Lvl.

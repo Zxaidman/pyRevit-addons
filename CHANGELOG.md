@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.2.1 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.3.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -32,6 +32,24 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.4.0
+
+**Changed**
+
+- **RC Automation 0.3.0 creates footings.** "Create structure and reinforcement"
+  builds the pads a schedule places and then reinforces them, both halves in one
+  `TransactionGroup` so reversing the run does not leave bare footings behind.
+
+  Pads are floors, so a non-rectangular `Outline` is sketched as drawn rather
+  than approximated, and every one is flagged structural — without which Revit
+  accepts no reinforcement and nothing looks wrong. Level names are matched
+  rather than demanded: `Ground` finds `00 Ground Lvl.` and `Level 1` finds
+  `01 1st Floor Lvl.` by storey number, with an optional `LEVELS` sheet for the
+  ones matching cannot reach. Full history in its own
+  [changelog](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md).
 
 ---
 

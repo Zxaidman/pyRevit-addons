@@ -357,11 +357,42 @@ class CreationSafetyTests(unittest.TestCase):
         self.source = _read(_SCRIPT)
         self.tree = ast.parse(self.source)
 
-    def test_creating_is_gated_to_the_mode_that_only_reinforces(self):
-        # The other two modes create or reconcile structure. Letting Create run
-        # in them would write half a feature that does not exist yet.
+    def test_reconcile_cannot_write(self):
+        """Reconcile resolves differences, and resolving them is not built.
+
+        The other two modes build: one creates footings and reinforces them,
+        one reinforces what is already there. Reconcile would have to change
+        elements that exist, which is deliberately report-only.
+        """
         body = self.source.split("def _ready_to_plan")[1].split("\n    def ")[0]
-        self.assertIn("models.MODE_REBAR_ONLY", body)
+        self.assertIn("models.MODE_RECONCILE", body)
+        self.assertIn("_MODE_NOT_BUILT", body)
+
+    def test_each_mode_creates_through_its_own_path(self):
+        # Phase 1 makes pads then reinforces them; Phase 2 reinforces what is
+        # there. Sharing one branch would silently do the wrong one.
+        for name in ("_plan_structure", "_create_structure"):
+            self.assertIn("def {0}".format(name), self.source, name)
+        for branch in ("_plan", "_create"):
+            body = self.source.split("def {0}(self, uiapp)".format(branch))[1]\
+                .split("\n        def ")[0]
+            self.assertIn("models.MODE_CREATE_ALL", body, branch)
+
+    def test_new_pads_and_their_bars_share_one_undo_step(self):
+        """Otherwise a user reversing the run is left with bare footings."""
+        body = self.source.split("def _create_structure")[1]\
+            .split("\n        def ")[0]
+        self.assertEqual(body.count("TransactionGroup("), 1)
+        self.assertIn("group.Assimilate()", body)
+        self.assertIn("_reinforce_new", body)
+
+    def test_a_new_pad_is_measured_before_it_is_reinforced(self):
+        # Bars go against the element's own box, not the schedule's numbers, so
+        # a pad that came out anywhere else still gets bars that fit it.
+        body = self.source.split("def _reinforce_new")[1].split("\ndef ")[0]
+        self.assertIn("plan_origin_mm", body)
+        self.assertIn("bottom_elevation_mm", body)
+        self.assertIn("is_valid_host", body)
 
     def test_a_plan_has_to_exist_before_anything_is_written(self):
         body = self.source.split("def _on_create")[1].split("\n    def ")[0]

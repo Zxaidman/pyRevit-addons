@@ -14,8 +14,13 @@ imports nothing and is unit-tested on any machine.
 ``rebar_geometry``   millimetres local to a host, into world-feet curves
 ``rebar_factory``    place the bars — the only module that writes
 ``rebar_run``        one workbook against one model: plan it, then place it
+``levels``           schedule level names to the model's, via rc_automation.naming
+``grids``            a pair of grid names to a point
+``footings``         create foundation pads as floors
+``structure_run``    build the footings a schedule describes
 """
 from anongee_toolkit.structural.rebars import get_rebars
 
 __all__ = ["get_rebars", "rebar_types", "rebar_hosts", "rebar_geometry",
-           "rebar_factory", "rebar_run"]
+           "rebar_factory", "rebar_run", "levels", "grids",
+           "footings", "structure_run"]

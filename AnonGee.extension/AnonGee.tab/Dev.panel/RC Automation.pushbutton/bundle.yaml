@@ -34,19 +34,34 @@ tooltip: |
     • Every bar is stamped as this tool's work, so a later run can tell the
       difference.
 
+  Creating footings
+    • Pads are floors, so an Outline in the placement sheet is sketched as
+      drawn — a combined pad or a cut corner is scheduled, not approximated.
+    • Every pad is flagged structural, without which Revit accepts no
+      reinforcement at all and nothing looks wrong.
+    • A floor type is duplicated per thickness and reused, so a second run adds
+      no types. A mark already on a foundation is left alone.
+    • Position comes from a grid crossing, or from X/Y millimetres — which is
+      the only one that works in a model with no grids in it yet.
+
+  Level names
+    • Matched rather than demanded: "Ground" finds "00 Ground Lvl."; "Level 1"
+      and "L1" find "01 1st Floor Lvl." by storey number. Two candidates are
+      named rather than picked between.
+    • An optional LEVELS sheet settles what matching cannot reach — two
+      columns, the name the schedule uses and the name this model uses.
+
   What it will NOT do
-    • Create footings or columns. That needs the placement sheets and is not in
-      this build, so Create is only available in "Reinforce existing structure".
+    • Create columns. Their reinforcement is worked out but not yet placed.
     • Lap or start column main bars. Bars stop at the pour; the report says so
-      per column rather than guessing a lap length.
+      rather than guessing a lap length.
     • Change an element that disagrees with the schedule. Differences are
       reported; the model is not rewritten.
 
   Modes
-    • Create structure and reinforcement — needs the placement sheets. Reads
-      and checks only in this build.
-    • Reinforce existing structure — the one Create runs in.
-    • Reconcile against the model — compare, do not overwrite.
+    • Create structure and reinforcement — footings, then their rebar.
+    • Reinforce existing structure — rebar into what is already modelled.
+    • Reconcile against the model — compare, do not overwrite. Report only.
 
   Sheets it reads
     FOOTING_TYPES, FOOTING_PLACEMENT, FOOTING_REBAR,
@@ -71,4 +86,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.2.1
+  Version: 0.3.0

@@ -1,5 +1,38 @@
 # RC Automation — changelog
 
+## 0.3.0 — 2026-08-19
+
+Phase 1: create the footings, then reinforce them.
+
+"Create structure and reinforcement" builds now. Both halves land in one
+`TransactionGroup`, so a user who reverses the run does not end up holding bare
+pads.
+
+- **Footings are placed as floors**, which is what lets a pad that is not
+  rectangular be scheduled rather than approximated — the `Outline` column is
+  sketched as drawn. A type is duplicated per thickness and reused, so a second
+  run over the same schedule adds no types.
+- **Every pad is flagged structural on creation.** A floor that is not carries no
+  reinforcement, refuses every bar, and looks identical in every view. The first
+  probe of a real model found exactly that waiting.
+- **New pads are measured before they are reinforced**, against their own
+  bounding box, so a pad that came out anywhere other than where it was asked
+  for still gets bars that fit its concrete.
+- **Level names are matched, not demanded.** A schedule saying `Ground` finds
+  `00 Ground Lvl.`; `Level 1` and `L1` find `01 1st Floor Lvl.` by storey number
+  even though neither has a word in common with it. Two candidates are named
+  rather than picked between — a guess that puts a foundation on the second
+  floor is worse than a question.
+- **An optional `LEVELS` sheet** settles the ones matching cannot reach. Two
+  columns: the name the schedule uses, the name this model uses. `Foundation`
+  resembles nothing in a model whose lowest level is `00 Ground Lvl.`, and being
+  told beats being clever.
+- **Grid references resolve to points.** `GridX`/`GridY` cross two grid lines,
+  as infinite lines rather than drawn segments, because a grid bubble stops
+  where the drawing needed it to. A row carrying coordinates as well falls back
+  to them when a grid name does not resolve.
+- A mark already on a foundation is left alone rather than placed twice.
+
 ## 0.2.1 — 2026-08-19
 
 Everything here came out of one report exported from a real model.

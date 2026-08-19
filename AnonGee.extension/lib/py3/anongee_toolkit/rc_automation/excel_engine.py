@@ -718,8 +718,10 @@ def _match_sheets(grids):
     matched = {}
     present = []
     for canonical in models.ALL_SHEETS:
-        names = ([fold(alias) for alias in models.INFO_SHEET_ALIASES]
-                 if canonical == models.SHEET_INFO else [fold(canonical)])
+        aliases = {models.SHEET_INFO: models.INFO_SHEET_ALIASES,
+                   models.SHEET_LEVELS: models.LEVELS_SHEET_ALIASES}
+        names = [fold(alias)
+                 for alias in aliases.get(canonical, (canonical,))]
         for name in names:
             found = folded.get(name)
             if found is not None:
@@ -802,6 +804,24 @@ def parse_grid(grids, path=None, mode=models.MODE_CREATE_ALL):
                 "structure already exists, so it supplies its own "
                 "geometry.".format(canonical)))
 
+    # The LEVELS sheet is read as written: names are compared to the model's,
+    # not folded, because the whole point of writing one down is to say exactly
+    # which level was meant.
+    level_map = {}
+    for row in matched.get(models.SHEET_LEVELS) or ():
+        if len(row) < 2:
+            continue
+        wanted = coerce_text(row[0])
+        actual = coerce_text(row[1])
+        if wanted and actual and fold(wanted) not in ("schedule", "workbook",
+                                                      "level", "from"):
+            level_map.setdefault(wanted, actual)
+    if level_map:
+        issues.append(Issue(
+            SEVERITY_INFO,
+            "The {0} sheet maps {1} level name(s) onto the model's.".format(
+                models.SHEET_LEVELS, len(level_map))))
+
     units = _check_units(metadata, issues)
 
     data = models.WorkbookData(
@@ -814,6 +834,7 @@ def parse_grid(grids, path=None, mode=models.MODE_CREATE_ALL):
         footing_placement=parsed[models.SHEET_FOOTING_PLACEMENT],
         column_placement=parsed[models.SHEET_COLUMN_PLACEMENT],
         metadata=metadata,
+        level_map=level_map,
         sheets_present=present,
     )
     return data, issues
