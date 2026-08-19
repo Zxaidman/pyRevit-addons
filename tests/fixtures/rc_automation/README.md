@@ -8,14 +8,25 @@ away from the others.
 | --- | --- |
 | `*.csv` — one per sheet | **The source of truth.** A schema change gets reviewed in a diff of these, and everything else is generated from them. Also a working input: point the tool at this folder. |
 | `sample_schedule.xlsx` | The normal case, with the `INFO` cover sheet. |
-| `sample_schedule.xlsm` | Macro-enabled, which is what a firm's real template usually is. |
-| `sample_schedule.xls` | **Not a real `.xls`** — deliberately. It exists so the legacy-format refusal is tested against a file that is actually present, because "not found" and "cannot read this format" are different problems needing different sentences. |
+| `sample_schedule.xlsm` | Macro-enabled, which is what a firm's real template usually is. openpyxl **cannot** write one from scratch — `Workbook().save("x.xlsm")` writes an ordinary xlsx under an xlsm name, which openpyxl reads back happily and Excel refuses outright. The generator re-declares the workbook part afterwards; a macro-enabled workbook with no macros is valid, and what makes it xlsm is the content type, not a `vbaProject.bin`. |
+| `not_a_workbook.xls` | **Not a real `.xls`**, and named so nobody wastes a double-click finding out. openpyxl cannot write BIFF and faking it would be worse than useless; this exists so the legacy-format refusal is tested against a file that is actually present, because "not found" and "cannot read this format" are different problems needing different sentences. |
 | `txt_sheets/` | Tab-separated, one file per sheet. Revit's own schedule export writes this, so a folder of them is a first-class input. |
 | `all-in-one xlsx sheet needed like this example.xlsx` | The workbook from the first real run inside Revit. It has no `INFO` sheet and no title block, which is exactly why it warns about units — kept because a real file that exercises the fallback is worth more than one written to pass. |
 
 Regenerate everything but the CSVs and the pushed workbook with:
 
     python tests/fixtures/rc_automation/build_fixtures.py
+
+## Reading a file back is not proof it is valid
+
+The `.xlsm` here was, for one commit, a byte-for-byte copy of the `.xlsx` with a
+different name. Every test passed — openpyxl goes by content and ignores the
+extension — and Excel would not open it at all.
+
+So `WorkbookFormatTests` does not read the files. It opens the archive and checks
+what `[Content_Types].xml` *declares* the workbook part to be, against what the
+extension promises, which is the same comparison Excel makes. Whatever writes
+these fixtures next, that check is what holds it honest.
 
 ## What the sample is showing
 

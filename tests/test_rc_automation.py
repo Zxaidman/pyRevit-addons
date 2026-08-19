@@ -20,6 +20,7 @@ import io
 import os
 import shutil
 import sys
+import zipfile
 import tempfile
 import unittest
 
@@ -1312,7 +1313,7 @@ class EveryFormatTests(unittest.TestCase):
         # message rather than "not found" -- which are different problems and
         # need different sentences.
         _, issues = excel_engine.load(
-            os.path.join(_FIXTURES, "sample_schedule.xls"))
+            os.path.join(_FIXTURES, "not_a_workbook.xls"))
         self.assertTrue(errors(issues))
         self.assertIn("Save As", errors(issues)[0].message)
 
@@ -1350,6 +1351,83 @@ class EveryFormatTests(unittest.TestCase):
                              generated.footing_type(mark).length_mm, mark)
             self.assertEqual(pushed.footing_type(mark).thickness_mm,
                              generated.footing_type(mark).thickness_mm, mark)
+
+
+class WorkbookFormatTests(unittest.TestCase):
+    """The file has to be the format its name claims. Excel checks; readers do not.
+
+    This exists because of a bug these tests originally missed. The generator
+    called ``Workbook().save("sample_schedule.xlsm")``, which writes an ordinary
+    xlsx and puts an xlsm name on it. openpyxl read it back perfectly -- it goes
+    by content and ignores the extension -- so every test passed, while Excel
+    compared the declared content type against the extension and refused to open
+    the file at all.
+
+    Reading it back is therefore not the check. The check is what the file says
+    it is.
+    """
+
+    CONTENT_TYPES = {
+        ".xlsx": "application/vnd.openxmlformats-officedocument"
+                 ".spreadsheetml.sheet.main+xml",
+        ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+    }
+
+    def declared_type(self, path):
+        archive = zipfile.ZipFile(path)
+        try:
+            text = archive.read("[Content_Types].xml").decode("utf-8")
+        finally:
+            archive.close()
+        marker = 'PartName="/xl/workbook.xml"'
+        index = text.find(marker)
+        self.assertNotEqual(index, -1, "no workbook part in " + path)
+        tail = text[index:]
+        key = 'ContentType="'
+        start = tail.find(key) + len(key)
+        return tail[start:tail.find('"', start)]
+
+    def workbooks(self):
+        for name in os.listdir(_FIXTURES):
+            extension = os.path.splitext(name)[1].lower()
+            if extension in self.CONTENT_TYPES:
+                yield os.path.join(_FIXTURES, name), extension
+
+    def test_every_workbook_declares_the_type_its_extension_promises(self):
+        checked = 0
+        for path, extension in self.workbooks():
+            self.assertEqual(self.declared_type(path),
+                             self.CONTENT_TYPES[extension],
+                             os.path.basename(path))
+            checked += 1
+        self.assertGreaterEqual(checked, 2, "no workbooks were checked")
+
+    def test_every_workbook_is_a_sound_archive(self):
+        for path, _extension in self.workbooks():
+            archive = zipfile.ZipFile(path)
+            try:
+                self.assertIsNone(archive.testzip(), os.path.basename(path))
+                self.assertIn("xl/workbook.xml", archive.namelist())
+            finally:
+                archive.close()
+
+    def test_the_macro_enabled_file_is_not_just_the_xlsx_renamed(self):
+        # Identical bytes under two names is exactly the bug, and it is the one
+        # thing a content check could still miss if both were wrong together.
+        with io.open(os.path.join(_FIXTURES, "sample_schedule.xlsx"), "rb") as h:
+            plain = h.read()
+        with io.open(os.path.join(_FIXTURES, "sample_schedule.xlsm"), "rb") as h:
+            macro = h.read()
+        self.assertNotEqual(plain, macro)
+
+    def test_the_placeholder_xls_is_named_for_what_it_is(self):
+        # A file that looks like a workbook and is not costs somebody a
+        # double-click and a confusing error; the name has to say so.
+        self.assertTrue(os.path.isfile(
+            os.path.join(_FIXTURES, "not_a_workbook.xls")))
+        self.assertFalse(os.path.isfile(
+            os.path.join(_FIXTURES, "sample_schedule.xls")),
+            "a placeholder must not be named like the real schedule")
 
 
 class DelimitedTextTests(unittest.TestCase):
