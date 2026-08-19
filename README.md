@@ -188,6 +188,14 @@ Generator ships, so the bar sizes and shape codes in the two cannot drift apart.
 The sample schedule it reads is in `tests/fixtures/rc_automation/`, one CSV per
 sheet, and doubles as the worked example of the workbook format.
 
+`tests/test_rc_automation_structural.py` checks the half that does import Revit
+and so cannot be run outside it — that no module opens its own transaction, that
+curves cross the pythonnet bridge as a typed `List[Curve]` built with `Add`
+rather than a Python list, that every toolkit function these modules call
+actually exists, and that a tie is placed as a stirrup rather than a straight
+bar. Each is a fault that would otherwise only show up part-way through writing
+several hundred elements.
+
 Most of that suite needs nothing installed. The handful of tests that open a real
 `.xlsx` need `openpyxl` importable and skip themselves when it is not — the copy
 vendored in `lib/py3` is a Windows build, so `pip install openpyxl` first if you

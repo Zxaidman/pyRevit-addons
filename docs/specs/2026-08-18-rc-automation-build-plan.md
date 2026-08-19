@@ -158,7 +158,7 @@ Revit-free code lives in the toolkit so it runs under
 `cad2bim` — it belongs to its own pushbutton.
 
 ```
-anongee_toolkit/rc_automation/          no Revit — 376 tests, all green
+anongee_toolkit/rc_automation/          no Revit — 423 tests, all green
     models.py            DTOs, modes, severities, layout rules       ✅
     standards.py         the BS 8666 subset validation needs         ✅
     excel_engine.py      read_grid (openpyxl) + parse_grid (pure)    ✅
@@ -167,11 +167,11 @@ anongee_toolkit/rc_automation/          no Revit — 376 tests, all green
     rebar_spec.py        workbook row → bar centrelines, sets vs bars ✅
     reporting_engine.py  hand-rolled CSV (no `csv` module), JSON, XLSX
 
-anongee_toolkit/structural/             Revit-touching, reusable
-    rebar_hosts.py       host validity, RebarHostData, cover types
-    rebar_types.py       RebarBarType / RebarHookType collection
-    rebar_factory.py     Rebar.CreateFromCurves, layout rules, sets
-    rebar_geometry.py    BarSpec + host geometry → IList<Curve>
+anongee_toolkit/structural/             Revit-touching, statically checked
+    rebar_types.py       bar / hook / cover TYPE resolution, match never create ✅
+    rebar_hosts.py       key-parameter matching, IsValidHost, why-not messages  ✅
+    rebar_geometry.py    local mm → world-feet List[Curve], array vector = normal ✅
+    rebar_factory.py     Rebar.CreateFromCurves, layout rules, sets, stamping    ✅
     footings.py          Floor.Create from an outline, on a level
     columns.py           FamilyInstance between two levels
 
@@ -274,7 +274,11 @@ Only int element ids cross the thread boundary.
    first: does the CPython 3 engine import the toolkit, does the bundled
    openpyxl load, does the modeless bridge hold, are the levels and bar types
    present, and can the matched elements host reinforcement at all.
-5. `rebar_geometry` + `rebar_factory` — bar specs to `Rebar.CreateFromCurves`.
+5. ✅ `rebar_types` · `rebar_hosts` · `rebar_geometry` · `rebar_factory` — bar
+   specs to `Rebar.CreateFromCurves`, held statically to opening no transaction,
+   marshalling `List[Curve]` with `Add`, and naming only toolkit functions that
+   exist. Not yet wired to the window: the next thing to do is put a Create
+   button behind it, inside a `TransactionGroup` the pushbutton owns.
 6. `structural/footings` + `structural/columns` — Phase 1 creation.
 7. `preview_engine` — overrides and DirectShape.
 8. Phase 2 matching, then Phase 3 reconciliation wiring.
