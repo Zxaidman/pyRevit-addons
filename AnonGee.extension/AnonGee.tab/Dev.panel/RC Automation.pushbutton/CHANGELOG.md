@@ -1,5 +1,19 @@
 # RC Automation — changelog
 
+## 0.3.2 — 2026-08-19
+
+0.3.1 did not load.
+
+- **`NameError: name 'models' is not defined`.** The constant deciding which
+  modes can build was written above the import that provides `models`, so the
+  script raised before a line of it ran. Moved below the imports.
+- **The tests could not have caught it.** All of them parse this file and none
+  executes it — importing it is not an option, since it imports Revit at module
+  scope. There is now a check that reads the module top to bottom and reports
+  any name used before something binds it, across the pushbutton and every
+  toolkit module. It is itself tested against the fault it was written for,
+  because a check that reports nothing looks exactly like a broken one.
+
 ## 0.3.1 — 2026-08-19
 
 0.3.0 built footings and then told the user it could not.

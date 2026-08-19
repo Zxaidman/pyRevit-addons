@@ -192,8 +192,10 @@ sheet, and doubles as the worked example of the workbook format.
 and so cannot be run outside it — that no module opens its own transaction, that
 curves cross the pythonnet bridge as a typed `List[Curve]` built with `Add`
 rather than a Python list, that every toolkit function these modules call
-actually exists, and that a tie is placed as a stirrup rather than a straight
-bar. Each is a fault that would otherwise only show up part-way through writing
+actually exists, that a tie is placed as a stirrup rather than a straight
+bar, and that no module names something before the import that provides it —
+these files cannot be imported outside Revit, so a `NameError` at module scope
+would otherwise only ever appear as a traceback in Revit. Each is a fault that would otherwise only show up part-way through writing
 several hundred elements.
 
 Most of that suite needs nothing installed. The handful of tests that open a real

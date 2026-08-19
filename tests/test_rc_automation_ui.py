@@ -480,6 +480,137 @@ class CreationSafetyTests(unittest.TestCase):
             self.assertIn("undo", text, path)
 
 
+class ModuleScopeTests(unittest.TestCase):
+    """Names read while the file loads have to be defined by then.
+
+    This exists because a constant referencing ``models`` was written above the
+    import that provides it. The script raised ``NameError: name 'models' is
+    not defined`` before a single line of it ran — and every test here passed,
+    because they all *parse* the file and none of them *executes* it. Importing
+    it is not an option (it imports Revit at module scope), so the order is
+    checked instead.
+
+    Only what actually runs at import time is looked at. A function body runs
+    later and may name anything defined by the time it is called; its
+    decorators and argument defaults run now and may not.
+    """
+
+    #: Bound by pyRevit before the script runs, not by the script itself.
+    INJECTED = ("__revit__", "__file__", "__name__", "__doc__", "__builtins__")
+
+    def _immediate(self, node):
+        """The parts of *node* evaluated when the module loads."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            args = node.args
+            return (list(node.decorator_list) + list(args.defaults)
+                    + [d for d in args.kw_defaults if d])
+        if isinstance(node, ast.ClassDef):
+            # A class body does execute; the bodies of its methods do not.
+            parts = list(node.decorator_list) + list(node.bases)
+            for statement in node.body:
+                parts.extend(self._immediate(statement))
+            return parts
+        return [node]
+
+    def _loads(self, node):
+        """Name reads inside *node*, not descending into deferred bodies."""
+        found = []
+        stack = [node]
+        while stack:
+            current = stack.pop()
+            if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                    ast.Lambda, ast.ClassDef)):
+                stack.extend(self._immediate(current))
+                continue
+            if (isinstance(current, ast.Name)
+                    and isinstance(current.ctx, ast.Load)):
+                found.append(current)
+            stack.extend(ast.iter_child_nodes(current))
+        return found
+
+    def _bound(self, node):
+        """Every name *node* binds — including its own locals and targets."""
+        names = set()
+        for inner in ast.walk(node):
+            if isinstance(inner, ast.alias):
+                names.add(inner.asname or inner.name.split(".")[0])
+            elif isinstance(inner, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                    ast.ClassDef)):
+                names.add(inner.name)
+            elif isinstance(inner, ast.Name) and isinstance(inner.ctx,
+                                                            ast.Store):
+                names.add(inner.id)
+            elif isinstance(inner, ast.arg):
+                names.add(inner.arg)
+            elif isinstance(inner, ast.ExceptHandler) and inner.name:
+                names.add(inner.name)
+        return names
+
+    def module_scope_problems(self, path):
+        """``[(name, line)]`` read at import time before anything binds them."""
+        import builtins
+        tree = ast.parse(_read(path))
+        bound = set(dir(builtins)) | set(self.INJECTED)
+        problems = []
+
+        for statement in tree.body:
+            local = self._bound(statement)
+            for part in self._immediate(statement):
+                for name in self._loads(part):
+                    if name.id not in bound and name.id not in local:
+                        problems.append((name.id, name.lineno))
+            bound |= local
+        return problems
+
+    def test_the_check_catches_the_fault_it_was_written_for(self):
+        """A check that reports nothing is indistinguishable from a broken one."""
+        import tempfile
+        handle, path = tempfile.mkstemp(suffix=".py")
+        os.close(handle)
+        try:
+            with io.open(path, "w", encoding="utf-8") as out:
+                out.write(u"BUILDABLE = (models.MODE_CREATE_ALL,)\n"
+                          u"from anongee_toolkit.rc_automation import models\n")
+            problems = self.module_scope_problems(path)
+            self.assertEqual([name for name, _line in problems], ["models"])
+        finally:
+            os.remove(path)
+
+    def test_a_correct_order_is_not_reported(self):
+        import tempfile
+        handle, path = tempfile.mkstemp(suffix=".py")
+        os.close(handle)
+        try:
+            with io.open(path, "w", encoding="utf-8") as out:
+                out.write(u"from anongee_toolkit.rc_automation import models\n"
+                          u"BUILDABLE = (models.MODE_CREATE_ALL,)\n"
+                          u"def later():\n    return undefined_until_called\n"
+                          u"class Thing(object):\n    value = BUILDABLE\n"
+                          u"    def method(self):\n        return self.value\n")
+            self.assertEqual(self.module_scope_problems(path), [])
+        finally:
+            os.remove(path)
+
+    def test_the_pushbutton_script_loads_in_order(self):
+        problems = self.module_scope_problems(_SCRIPT)
+        self.assertEqual(
+            problems, [],
+            "used before it is defined: " + ", ".join(
+                "{0} (line {1})".format(name, line) for name, line in problems))
+
+    def test_every_toolkit_module_loads_in_order(self):
+        import glob
+        root = os.path.join(_ROOT, "AnonGee.extension", "lib", "py3",
+                            "anongee_toolkit")
+        checked = 0
+        for folder in ("rc_automation", "structural"):
+            for path in sorted(glob.glob(os.path.join(root, folder, "*.py"))):
+                self.assertEqual(self.module_scope_problems(path), [],
+                                 os.path.basename(path))
+                checked += 1
+        self.assertGreater(checked, 10)
+
+
 class ReportingTests(unittest.TestCase):
     """What the tool says when it does nothing — which is most of the time.
 

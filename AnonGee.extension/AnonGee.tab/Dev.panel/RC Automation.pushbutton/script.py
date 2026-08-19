@@ -75,29 +75,9 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
-
-#: The modes that can actually write. Kept as a set rather than as a comparison
-#: repeated in five places: when Phase 1 was built, four of those comparisons
-#: still read "anything but reinforce-existing is unsupported", and the report
-#: went on telling the user a mode was not built while the button beside it
-#: would happily have built it.
-BUILDABLE_MODES = (models.MODE_CREATE_ALL, models.MODE_REBAR_ONLY)
-
-
-def can_build(mode):
-    return mode in BUILDABLE_MODES
-
-
-#: Said by the status bar, the report and the probe alike, so the three cannot
-#: drift into telling the user different things.
-_MODE_NOT_BUILT = (
-    "'{0}' is not built yet — it resolves differences against a model rather "
-    "than building anything, and acting on them is deliberately report-only. "
-    "Use 'Create structure and reinforcement' or 'Reinforce existing "
-    "structure' to build.")
 
 #: Hosts written per Transaction. Revit's thread is blocked for the whole of
 #: one, so this is the granularity at which a long run can be given up on and
@@ -148,6 +128,30 @@ from anongee_toolkit.structural import rebar_hosts             # noqa: E402
 from anongee_toolkit.structural import rebar_run               # noqa: E402
 from anongee_toolkit.structural import footings as footing_api  # noqa: E402
 from anongee_toolkit.structural import structure_run            # noqa: E402
+
+
+# These name `models`, so they live below the import that provides it. Putting
+# them up with the other constants is what broke the script on load — every
+# test parses this file rather than running it, so a NameError at module scope
+# sailed through all of them and only appeared as a traceback in Revit.
+#: The modes that can actually write. One set rather than a comparison repeated
+#: in five places: when Phase 1 shipped, four of those still read "anything but
+#: reinforce-existing is unsupported", and the report went on denying a mode the
+#: button beside it would have built.
+BUILDABLE_MODES = (models.MODE_CREATE_ALL, models.MODE_REBAR_ONLY)
+
+
+def can_build(mode):
+    return mode in BUILDABLE_MODES
+
+
+#: Said by the status bar, the report and the probe alike, so the three cannot
+#: drift into telling the user different things.
+_MODE_NOT_BUILT = (
+    "'{0}' is not built yet — it resolves differences against a model rather "
+    "than building anything, and acting on them is deliberately report-only. "
+    "Use 'Create structure and reinforcement' or 'Reinforce existing "
+    "structure' to build.")
 
 
 # ---------------------------------------------------------------------------
