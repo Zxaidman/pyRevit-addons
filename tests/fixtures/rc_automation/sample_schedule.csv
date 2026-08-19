@@ -1,0 +1,59 @@
+#SHEET,INFO
+PROJECT,Riverside Tower
+UNITS,mm
+STANDARD,BS 8666:2020
+REVISION,C
+,
+Note,Lengths in millimetres. One row per type; placement is separate.
+
+#SHEET,FOOTING_TYPES
+TypeMark,Length,Width,Thickness,CoverTop,CoverBottom,CoverSide,Concrete,Comments
+F1,3000,3000,900,50,75,50,C32/40,Typical internal pad
+F2,2400,2400,750,50,75,50,C32/40,
+F3,4500,3000,1050,50,75,50,C32/40,Under twin columns
+
+#SHEET,FOOTING_PLACEMENT
+Mark,TypeMark,GridX,GridY,X,Y,Level,TopOffset,Rotation,Outline
+F1-A1,F1,A,1,,,Foundation,0,0,
+F1-A2,F1,A,2,,,Foundation,0,0,
+F1-B1,F1,B,1,,,Foundation,0,0,
+F2-C1,F2,C,1,,,Foundation,0,0,
+F3-B2,F3,B,2,,,Foundation,0,90,
+F3-P1,F3,,,12500,8400,Foundation,0,0,"0,0; 4500,0; 4500,3000; 2250,4200; 0,3000"
+
+#SHEET,FOOTING_REBAR
+TypeMark,Layer,Direction,BarType,Diameter,Count,Spacing,ShapeCode,EndCover,Comments
+F1,B1,X,T16,16,15,200,21,50,Bottom outer mat
+F1,B2,Y,T16,16,15,200,21,50,
+F1,T1,X,T12,12,,250,00,50,Top mat
+F1,T2,Y,T12,12,,250,00,50,
+F2,B1,X,T16,16,12,200,21,50,
+F2,B2,Y,T16,16,12,200,21,50,
+F3,B1,X,T20,20,22,200,21,50,
+F3,B2,Y,T20,20,15,200,21,50,
+F3,T1,X,T16,16,,250,00,50,
+F3,T2,Y,T16,16,,250,00,50,
+
+#SHEET,COLUMN_TYPES
+TypeMark,Width,Depth,Cover,Concrete,Comments
+C1,300,600,40,C32/40,Perimeter column
+C2,400,400,40,C32/40,
+C3,300,300,40,C32/40,Internal
+
+#SHEET,COLUMN_PLACEMENT
+Mark,TypeMark,GridX,GridY,X,Y,BaseLevel,BaseOffset,TopLevel,TopOffset,Rotation
+C1-A1,C1,A,1,,,Foundation,0,Level 1,0,0
+C1-A2,C1,A,2,,,Foundation,0,Level 1,0,90
+C1-B1,C1,B,1,,,Foundation,0,Level 1,0,0
+C2-C1,C2,C,1,,,Foundation,0,Level 1,0,0
+C3-B2,C3,B,2,,,Foundation,0,Level 1,0,0
+
+#SHEET,COLUMN_REBAR
+TypeMark,BarRole,BarType,Diameter,Count,Spacing,ShapeCode,SpacingEnd,ConfinementLength,Comments
+C1,Main,T20,20,4,,00,,,Corner bars
+C1,Main,T16,16,6,,00,,,Face bars
+C1,Tie,R10,10,,200,51,100,600,Tighter over lo each end
+C2,Main,T20,20,8,,00,,,
+C2,Tie,R10,10,,200,51,100,500,
+C3,Main,T16,16,4,,00,,,
+C3,Tie,R8,8,,175,51,,,No confinement scheduled

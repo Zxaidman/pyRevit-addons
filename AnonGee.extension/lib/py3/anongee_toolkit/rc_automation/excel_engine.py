@@ -44,11 +44,22 @@ _MAX_HEADER_SCAN_ROWS = 12
 _LEGACY_EXTENSIONS = (".xls", ".xlsb")
 _READABLE_EXTENSIONS = (".xlsx", ".xlsm", ".xltx", ".xltm")
 
-#: Delimited text, one file per sheet, read from a folder. Revit's own schedule
-#: export writes tab-separated text, and a workbook nobody can open in Excel is
-#: still a workbook -- so a folder of these is a first-class input, not a
-#: testing convenience. The sheet name is the file name.
+#: Delimited text. Revit's own schedule export writes tab-separated text, so
+#: this is a first-class input rather than a testing convenience.
+#:
+#: Two layouts, because both are how people actually keep these. A *folder* of
+#: files is one sheet per file, named by the file. A *single file* carries every
+#: sheet, separated by :data:`SHEET_MARKER` rows -- one attachment to send,
+#: one thing to diff, and it still opens in Excel as a readable column.
 _TEXT_EXTENSIONS = (".csv", ".tsv", ".txt")
+
+#: The first cell of a row that starts a new sheet in a single-file workbook.
+#: The second cell is the sheet name: ``#SHEET,FOOTING_TYPES``.
+#:
+#: A leading ``#`` because no column heading or type mark begins with one, so it
+#: cannot collide with data, and Excel shows it as an ordinary row rather than
+#: choking on it.
+SHEET_MARKER = "#SHEET"
 
 
 # ---------------------------------------------------------------------------
@@ -309,6 +320,52 @@ def split_delimited(text):
     return rows
 
 
+def split_sheets(rows):
+    """``{sheet name: rows}`` from one file holding several sheets.
+
+    Rows before the first marker are ignored: a file that opens with a title or
+    a note should not lose its first sheet to it, and a stray line is a likelier
+    explanation than an unnamed sheet.
+    """
+    sheets = {}
+    current = None
+    for row in rows:
+        if row and coerce_text(row[0]).upper() == SHEET_MARKER:
+            name = coerce_text(row[1]) if len(row) > 1 else ""
+            current = name or None
+            if current:
+                sheets.setdefault(current, [])
+            continue
+        if current is not None:
+            sheets[current].append(row)
+    return sheets
+
+
+def read_text_file(path):
+    """``({sheet: rows}, issues)`` from a single delimited file."""
+    issues = []
+    try:
+        handle = open(path, "r")
+        try:
+            text = handle.read()
+        finally:
+            handle.close()
+    except Exception as read_error:
+        issues.append(Issue(
+            SEVERITY_ERROR, "Could not read {0}: {1}".format(path, read_error)))
+        return {}, issues
+
+    sheets = split_sheets(split_delimited(text))
+    if not sheets:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "This file holds one table, and a schedule needs several sheets. "
+            "Either separate them with '{0}' rows naming each sheet, or put one "
+            "file per sheet in a folder and select the folder.".format(
+                SHEET_MARKER)))
+    return sheets, issues
+
+
 def read_text_folder(path):
     """``({sheet name: rows}, issues)`` from a folder of delimited text files."""
     import os
@@ -368,13 +425,12 @@ def read_grid(path):
         return read_text_folder(path)
 
     lowered = str(path).lower()
-    for extension in _TEXT_EXTENSIONS:
-        if lowered.endswith(extension):
+    if any(lowered.endswith(extension) for extension in _TEXT_EXTENSIONS):
+        if not os.path.isfile(path):
             issues.append(Issue(
-                SEVERITY_ERROR,
-                "{0} holds one sheet, and a schedule needs several. Select the "
-                "folder the sheets are in instead.".format(extension)))
+                SEVERITY_ERROR, "File not found: {0}".format(path)))
             return {}, issues
+        return read_text_file(path)
     for extension in _LEGACY_EXTENSIONS:
         if lowered.endswith(extension):
             issues.append(Issue(

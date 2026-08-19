@@ -33,6 +33,10 @@ worse than no fixture, so it is gone and the real file took its place.
 ``txt_sheets/``
     One tab-separated file per sheet. Revit's own schedule export writes this,
     and a folder of them is a first-class input.
+``sample_schedule.csv`` / ``sample_schedule.txt``
+    Every sheet in one file, separated by ``#SHEET`` rows. One attachment to
+    send and one thing to diff, and it still opens in Excel as a readable
+    column.
 
 Needs openpyxl. The extension vendors a Windows build, so on Linux or macOS::
 
@@ -190,16 +194,46 @@ def build_workbook(path):
     return retype_workbook(path)
 
 
-def build_text_sheets(folder):
-    if not os.path.isdir(folder):
-        os.makedirs(folder)
-    written = []
-    rows_by_sheet = [("INFO", INFO_ROWS)]
+SHEET_MARKER = "#SHEET"
+
+
+def build_single_file(path, delimiter=","):
+    """Every sheet in one file, separated by ``#SHEET`` rows."""
+    lines = []
+    for name, rows in _all_sheets():
+        lines.append(delimiter.join([SHEET_MARKER, name]))
+        for row in rows:
+            lines.append(delimiter.join(_quote(str(cell), delimiter)
+                                        for cell in row))
+        lines.append("")
+    with io.open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(u"\n".join(lines))
+    return path
+
+
+def _quote(cell, delimiter):
+    """Wrap a cell that contains the delimiter, so the Outline survives."""
+    if delimiter in cell or '"' in cell or "\n" in cell:
+        return '"' + cell.replace('"', '""') + '"'
+    return cell
+
+
+def _all_sheets():
+    """``[(name, rows)]`` for the whole workbook, INFO first."""
+    sheets = [("INFO", INFO_ROWS)]
     for name in SHEETS:
         rows = read_csv_rows(os.path.join(HERE, name + ".csv"))
         if name == "FOOTING_TYPES":
             rows = strip_title_block(rows)
-        rows_by_sheet.append((name, rows))
+        sheets.append((name, rows))
+    return sheets
+
+
+def build_text_sheets(folder):
+    if not os.path.isdir(folder):
+        os.makedirs(folder)
+    written = []
+    rows_by_sheet = _all_sheets()
 
     for name, rows in rows_by_sheet:
         target = os.path.join(folder, name + ".txt")
@@ -223,6 +257,10 @@ def main():
         build_workbook(os.path.join(HERE, "sample_schedule.xlsx")),
         build_workbook(os.path.join(HERE, "sample_schedule.xlsm")),
     ]
+    made.append(build_single_file(os.path.join(HERE, "sample_schedule.csv"),
+                                  ","))
+    made.append(build_single_file(os.path.join(HERE, "sample_schedule.txt"),
+                                  "\t"))
     made.extend(build_text_sheets(os.path.join(HERE, "txt_sheets")))
 
     # The legacy fixture is Excel's own sample_schedule-R1.xls, which nothing

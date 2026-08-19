@@ -1482,6 +1482,69 @@ class WorkbookFormatTests(unittest.TestCase):
                 archive.close()
 
 
+class SingleFileWorkbookTests(unittest.TestCase):
+    """Every sheet in one file: one attachment to send, one thing to diff."""
+
+    def test_sheets_are_split_on_the_marker(self):
+        rows = excel_engine.split_delimited(
+            "#SHEET,FOOTING_TYPES\n"
+            "TypeMark,Length\n"
+            "F1,3000\n"
+            "#SHEET,COLUMN_TYPES\n"
+            "TypeMark,Width\n"
+            "C1,300\n")
+        sheets = excel_engine.split_sheets(rows)
+        self.assertEqual(sorted(sheets), ["COLUMN_TYPES", "FOOTING_TYPES"])
+        self.assertEqual(sheets["FOOTING_TYPES"][1], ["F1", "3000"])
+
+    def test_rows_before_the_first_marker_are_ignored(self):
+        # A file opening with a title should not lose its first sheet to it.
+        rows = excel_engine.split_delimited(
+            "Riverside Tower schedule,\n"
+            "#SHEET,FOOTING_TYPES\n"
+            "TypeMark,Length\n"
+            "F1,3000\n")
+        sheets = excel_engine.split_sheets(rows)
+        self.assertEqual(list(sheets), ["FOOTING_TYPES"])
+        self.assertEqual(len(sheets["FOOTING_TYPES"]), 2)
+
+    def test_the_marker_is_case_insensitive(self):
+        rows = excel_engine.split_delimited("#sheet,INFO\nUNITS,mm\n")
+        self.assertEqual(list(excel_engine.split_sheets(rows)), ["INFO"])
+
+    def test_a_marker_with_no_name_starts_nothing(self):
+        rows = excel_engine.split_delimited("#SHEET,\nTypeMark,Length\n")
+        self.assertEqual(excel_engine.split_sheets(rows), {})
+
+    def test_the_single_csv_reads_like_the_folder(self):
+        one_file, one_issues = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.csv"))
+        folder, folder_issues = excel_engine.load(_FIXTURES)
+        self.assertEqual(errors(one_issues), [], messages(one_issues))
+        self.assertEqual(len(one_file.footing_types),
+                         len(folder.footing_types))
+        self.assertEqual(len(one_file.footing_placement),
+                         len(folder.footing_placement))
+        self.assertEqual(one_file.footing_type("F1").length_mm,
+                         folder.footing_type("F1").length_mm)
+
+    def test_the_single_txt_reads_like_the_folder(self):
+        data, issues = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.txt"))
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(warnings(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_types), 3)
+        self.assertEqual(data.units, "mm")
+
+    def test_the_outline_survives_a_single_file(self):
+        # The one cell full of commas, through the marker split as well.
+        for name in ("sample_schedule.csv", "sample_schedule.txt"):
+            data, _ = excel_engine.load(os.path.join(_FIXTURES, name))
+            shaped = [p for p in data.footing_placement if p.has_outline]
+            self.assertEqual(len(shaped), 1, name)
+            self.assertEqual(len(shaped[0].outline), 5, name)
+
+
 class DelimitedTextTests(unittest.TestCase):
     """Delimited text is a real input: Revit's own schedule export writes it."""
 
@@ -1691,11 +1754,16 @@ class ReadGridTests(unittest.TestCase):
         self.assertTrue(errors(issues))
         self.assertIn("Excel workbook", errors(issues)[0].message)
 
-    def test_a_single_text_sheet_points_at_the_folder(self):
-        # One .txt is one sheet, and a schedule needs six -- so the message has
-        # to say what to select instead, not just refuse.
-        _, issues = excel_engine.load(os.path.join(self.tmp, "FOOTING_TYPES.txt"))
-        self.assertIn("folder", errors(issues)[0].message)
+    def test_a_text_file_with_no_sheet_markers_says_both_ways_out(self):
+        # One unmarked table is one sheet, and a schedule needs six. The message
+        # has to name both layouts that work, not just refuse.
+        path = os.path.join(self.tmp, "FOOTING_TYPES.txt")
+        with io.open(path, "w") as handle:
+            handle.write(u"TypeMark\tLength\nF1\t3000\n")
+        _, issues = excel_engine.load(path)
+        message = errors(issues)[0].message
+        self.assertIn("#SHEET", message)
+        self.assertIn("folder", message)
 
     def test_no_path_is_refused(self):
         _, issues = excel_engine.load("")

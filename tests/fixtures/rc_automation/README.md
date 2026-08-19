@@ -12,6 +12,7 @@ away from the others.
 | `sample_schedule-R1.xls` | **Saved by Excel** — a genuine BIFF/OLE2 workbook, which nothing here can write. The legacy-format refusal is tested against the real thing, and against a file that is *present*, because "not found" and "cannot read this format" are different problems needing different sentences. |
 | `sample_schedule-R1.xlsm` | **Saved by Excel**, and the ground truth the generated `.xlsm` is held to. openpyxl cannot write one, so the generator re-declares the workbook part by hand; the only way to know that is right is to compare it with a file Excel actually produced. |
 | `txt_sheets/` | Tab-separated, one file per sheet. Revit's own schedule export writes this, so a folder of them is a first-class input. |
+| `sample_schedule.csv` / `.txt` | **Every sheet in one file**, separated by `#SHEET,<name>` rows. One attachment to send and one thing to diff, and it still opens in Excel as a readable column. |
 | `all-in-one xlsx sheet needed like this example.xlsx` | The workbook from the first real run inside Revit. It has no `INFO` sheet and no title block, which is exactly why it warns about units — kept because a real file that exercises the fallback is worth more than one written to pass. |
 
 Regenerate everything but the CSVs and the pushed workbook with:
@@ -29,6 +30,20 @@ against what the extension promises, which is the same comparison Excel makes,
 and then checks that answer against `sample_schedule-R1.xlsm` — a file Excel
 itself wrote. A guess about a format is only as good as the thing you compare it
 to.
+
+## Three ways to hand over delimited text
+
+All read to the same objects:
+
+| Layout | Select |
+| --- | --- |
+| one file per sheet, named by the sheet | the **folder** |
+| every sheet in one file, `#SHEET` rows between them | the **file** |
+| a real workbook | the **file** |
+
+A single delimited file with no `#SHEET` rows is one table, and a schedule needs
+six — so it is refused with a message naming both layouts that work rather than
+just the one.
 
 **A placeholder that claims something false is worse than no placeholder.** The
 legacy fixture used to be a text file named `.xls` whose own text said "Excel

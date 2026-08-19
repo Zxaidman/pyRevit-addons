@@ -37,8 +37,11 @@ tooltip: |
     All lengths in millimetres.
 
   What it will open
-    An .xlsx or .xlsm workbook, or a folder holding one tab-separated .txt or
-    .csv file per sheet — which is what Revit's own schedule export writes.
+    • An .xlsx or .xlsm workbook.
+    • A folder holding one .txt or .csv file per sheet — which is the shape
+      Revit's own schedule export writes.
+    • A single .csv or .txt holding every sheet, separated by '#SHEET,<name>'
+      rows.
 
   Notes
     • Modeless — Revit stays interactive while the window is open.
