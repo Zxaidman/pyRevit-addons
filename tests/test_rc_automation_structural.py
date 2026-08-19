@@ -25,7 +25,8 @@ import unittest
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _STRUCTURAL = os.path.join(_ROOT, "AnonGee.extension", "lib", "py3",
                            "anongee_toolkit", "structural")
-_MODULES = ("rebar_types", "rebar_hosts", "rebar_geometry", "rebar_factory")
+_MODULES = ("rebar_types", "rebar_hosts", "rebar_geometry",
+            "rebar_factory", "rebar_run")
 
 if os.path.join(_ROOT, "tests") not in sys.path:
     sys.path.insert(0, os.path.join(_ROOT, "tests"))
@@ -45,6 +46,18 @@ def _read(name):
 
 def _tree(name):
     return ast.parse(_read(name))
+
+
+def _top_level_names(name):
+    """Everything a module defines at the top level: functions and classes.
+
+    Classes count. The first version of this collected only functions and duly
+    reported ``rebar_factory.PlacementResult`` as a call into something that
+    does not exist, which is a test finding its own blind spot rather than a
+    bug.
+    """
+    return set(node.name for node in _tree(name).body
+               if isinstance(node, (ast.FunctionDef, ast.ClassDef)))
 
 
 def _functions(name):
@@ -152,7 +165,7 @@ class CrossModuleApiTests(unittest.TestCase):
 
     def test_internal_calls_resolve(self):
         """A call into a sibling module has to name a function it defines."""
-        known = dict((name, set(_functions(name))) for name in _MODULES)
+        known = dict((name, _top_level_names(name)) for name in _MODULES)
         missing = []
         for name in _MODULES:
             for node in ast.walk(_tree(name)):
@@ -236,6 +249,50 @@ class PlacementContractTests(unittest.TestCase):
         source = _read("rebar_types")
         for forbidden in (".Duplicate(", ".Create(", "NewFamilyInstance"):
             self.assertNotIn(forbidden, source, forbidden)
+
+
+class RunContractTests(unittest.TestCase):
+    """The Phase 2 pass: what it refuses to do, and why."""
+
+    def body(self, function):
+        return _read("rebar_run").split("def " + function)[1].split("\ndef ")[0]
+
+    def test_planning_opens_no_transaction(self):
+        # The plan is shown before a transaction exists, so it can be refused.
+        for name in ("plan_footings", "_plan_one_footing", "resolve_bar_types"):
+            self.assertNotIn("Transaction", self.body(name), name)
+
+    def test_a_host_that_cannot_be_reinforced_is_asked_first(self):
+        body = self.body("_plan_one_footing")
+        self.assertIn("is_valid_host", body)
+        self.assertIn("why_not_a_host", body)
+
+    def test_a_pad_that_is_not_its_scheduled_size_is_refused(self):
+        # Bars planned from the schedule and placed against a bounding box do
+        # not fit a pad that was modelled differently, or rotated.
+        body = self.body("_plan_one_footing")
+        self.assertIn("_sized_as_scheduled", body)
+        self.assertIn("STATUS_INVALID", body)
+
+    def test_an_outline_is_threaded_through_to_the_bars(self):
+        body = self.body("_plan_one_footing")
+        self.assertIn("plan_footing(footing, rows, placement)", body)
+
+    def test_existing_reinforcement_stops_a_second_run_doubling_it(self):
+        body = self.body("_plan_one_footing")
+        self.assertIn("_has_any_rebar", body)
+        self.assertIn("STATUS_EXISTS", body)
+
+    def test_bar_types_are_resolved_once_for_the_run(self):
+        # A thousand footings of one type ask the same question a thousand
+        # times otherwise.
+        body = self.body("resolve_bar_types")
+        self.assertIn("if key in resolved or key in missing", body)
+
+    def test_the_size_check_uses_the_schedule_not_the_type_row(self):
+        body = self.body("_plan_one_footing")
+        self.assertIn("rebar_spec.scheduled_extent_mm", body)
+        self.assertTrue(hasattr(_rc.rebar_spec, "scheduled_extent_mm"))
 
 
 class GeometryContractTests(unittest.TestCase):

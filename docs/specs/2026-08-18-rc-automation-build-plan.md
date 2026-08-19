@@ -172,12 +172,13 @@ anongee_toolkit/structural/             Revit-touching, statically checked
     rebar_hosts.py       key-parameter matching, IsValidHost, why-not messages  ✅
     rebar_geometry.py    local mm → world-feet List[Curve], array vector = normal ✅
     rebar_factory.py     Rebar.CreateFromCurves, layout rules, sets, stamping    ✅
+    rebar_run.py         one workbook against one model: plan, then place       ✅
     footings.py          Floor.Create from an outline, on a level
     columns.py           FamilyInstance between two levels
 
-RC Automation.pushbutton/               Revit + WPF — READ-ONLY build shipped
-    script.py            modeless window, FIFO queue, read-only probe ✅
-    ui.xaml              inlined theme, findings grid, probe panel    ✅
+RC Automation.pushbutton/               Revit + WPF — v0.2.0 shipped, writes
+    script.py            modeless window, FIFO queue, plan + create   ✅
+    ui.xaml              inlined theme, findings grid, side panel     ✅
     bundle.yaml  icon.png  CHANGELOG.md                               ✅
     preview_engine.py    OverrideGraphicSettings + DirectShape
 ```
@@ -279,11 +280,15 @@ Only int element ids cross the thread boundary.
    marshalling `List[Curve]` with `Add`, and naming only toolkit functions that
    exist. Not yet wired to the window: the next thing to do is put a Create
    button behind it, inside a `TransactionGroup` the pushbutton owns.
-6. `structural/footings` + `structural/columns` — Phase 1 creation.
-7. `preview_engine` — overrides and DirectShape.
-8. Phase 2 matching, then Phase 3 reconciliation wiring.
-9. Chunked execution, cancellation, failure preprocessor, worksharing.
-10. `reporting_engine`, then re-check the delivery gates.
+6. ✅ **Phase 2 wired to a Create button, v0.2.0.** Plan first, confirm, then one
+   `TransactionGroup` assimilated into a single undo step, chunked, with a
+   warnings-only failure preprocessor. Footings only.
+7. Column reinforcement through the same path — mains and ties are planned
+   already, they just have no run yet.
+8. `structural/footings` + `structural/columns` — Phase 1 creation.
+9. `preview_engine` — overrides and DirectShape.
+10. Phase 3 reconciliation wiring, geometry still report-only.
+11. Cancellation between chunks, worksharing checkout, `reporting_engine`.
 
 Steps 1–3 are the entire data model and testable off-Revit; step 4 proves the
 Revit half without risking a model; step 5 is where the real risk sits, which is

@@ -1,11 +1,11 @@
 title: RC Automation
 author: AnonGee
 tooltip: |
-  Read an Excel reinforcement schedule, check it, and see what the open model
-  would give it — without writing anything.
+  Read an Excel reinforcement schedule, check it, work out what every existing
+  footing would get, and place the reinforcement.
 
-  This build is READ-ONLY. It opens no transaction and creates no elements.
-  It exists to prove the reads are right before anything is written.
+  Nothing is written until Create, and Create does exactly what the plan showed.
+  The whole run lands as ONE undo step.
 
   What it does
     • Loads a schedule workbook (.xlsx / .xlsm) and validates it against
@@ -22,9 +22,30 @@ tooltip: |
       into can take reinforcement at all — a floor that is not flagged
       structural cannot, which is the failure worth finding early.
 
+  Creating reinforcement
+    • Plan reinforcement — matches every footing, works out its bars, and says
+      why anything is being skipped. Still writes nothing.
+    • Create rebar — places what the plan showed, after a confirmation naming
+      the counts. Chunked, so a failure rolls back that chunk and the rest of
+      the run continues; assimilated, so Ctrl+Z reverses all of it at once.
+    • A footing that already carries reinforcement is left alone. Tick
+      "Replace mine" to rebuild the bars this tool placed earlier — bars added
+      by hand are never touched.
+    • Every bar is stamped as this tool's work, so a later run can tell the
+      difference.
+
+  What it will NOT do
+    • Create footings or columns. That needs the placement sheets and is not in
+      this build, so Create is only available in "Reinforce existing structure".
+    • Lap or start column main bars. Bars stop at the pour; the report says so
+      per column rather than guessing a lap length.
+    • Change an element that disagrees with the schedule. Differences are
+      reported; the model is not rewritten.
+
   Modes
-    • Create structure and reinforcement — needs the placement sheets.
-    • Reinforce existing structure — placement is ignored.
+    • Create structure and reinforcement — needs the placement sheets. Reads
+      and checks only in this build.
+    • Reinforce existing structure — the one Create runs in.
     • Reconcile against the model — compare, do not overwrite.
 
   Sheets it reads
@@ -50,4 +71,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.1.0
+  Version: 0.2.0

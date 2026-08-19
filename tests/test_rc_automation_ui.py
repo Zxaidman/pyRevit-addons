@@ -345,35 +345,108 @@ class ScriptWiringTests(unittest.TestCase):
             self.assertIn(fragment, self.source)
 
 
-class ReadOnlyTests(unittest.TestCase):
-    """The claim this build is published under, held to the source."""
+class CreationSafetyTests(unittest.TestCase):
+    """What stands between a Create click and a damaged model.
+
+    This build writes, so "it writes nothing" is no longer the guarantee. These
+    are the guarantees that replaced it, and each is here because the failure it
+    prevents is expensive and quiet.
+    """
 
     def setUp(self):
         self.source = _read(_SCRIPT)
         self.tree = ast.parse(self.source)
 
-    def test_nothing_opens_a_transaction(self):
-        for forbidden in ("Transaction(", "TransactionGroup(",
-                          "SubTransaction("):
-            self.assertNotIn(forbidden, self.source, forbidden)
+    def test_creating_is_gated_to_the_mode_that_only_reinforces(self):
+        # The other two modes create or reconcile structure. Letting Create run
+        # in them would write half a feature that does not exist yet.
+        body = self.source.split("def _ready_to_plan")[1].split("\n    def ")[0]
+        self.assertIn("models.MODE_REBAR_ONLY", body)
 
-    def test_no_transaction_type_is_even_imported(self):
-        imported = set()
+    def test_a_plan_has_to_exist_before_anything_is_written(self):
+        body = self.source.split("def _on_create")[1].split("\n    def ")[0]
+        self.assertIn("self.plan is None", body)
+        self.assertIn("MessageBox.Show", body)
+        self.assertIn("MessageBoxResult.OK", body)
+
+    def test_the_button_is_disabled_until_there_is_something_to_do(self):
+        self.assertIn('IsEnabled="False"', _read(_XAML))
+        self.assertIn("def _update_create_button", self.source)
+
+    def test_a_stale_plan_is_thrown_away(self):
+        """A plan belongs to the workbook and mode it was made in."""
+        for hook in ("def _on_mode_changed", "def _on_load", "def _on_clear"):
+            body = self.source.split(hook)[1].split("\n    def ")[0]
+            self.assertIn("self.plan = None", body, hook)
+
+    def test_the_run_is_one_undo_step(self):
+        # A user who does not like the result must be able to reverse it with
+        # one Ctrl+Z, not four hundred.
+        body = self.source.split("def _create")[1].split("\n        def ")[0]
+        self.assertIn("TransactionGroup(", body)
+        self.assertIn("group.Assimilate()", body)
+
+    def test_every_transaction_is_rolled_back_when_it_fails(self):
+        body = self.source.split("def _create")[1].split("\n        def ")[0]
+        self.assertIn("transaction.HasStarted() and not transaction.HasEnded()",
+                      body)
+        self.assertIn("transaction.RollBack()", body)
+        self.assertIn("group.RollBack()", body)
+
+    def test_work_is_chunked_so_a_failure_is_contained(self):
+        self.assertIn("CHUNK_SIZE", self.source)
+        body = self.source.split("def _create")[1].split("\n        def ")[0]
+        self.assertIn("range(0, len(plans), CHUNK_SIZE)", body)
+
+    def test_only_warnings_are_swallowed_never_errors(self):
+        """Suppressing an error would let the run write something invalid.
+
+        A batch of several hundred bars raises a warning dialog per host, which
+        makes a modeless tool unusable — but an error has to reach Revit so the
+        chunk rolls back instead of committing nonsense.
+        """
+        body = self.source.split("class RebarWarningSwallower")[1]\
+            .split("\n    _state.failures_cls")[0]
+        self.assertIn("FailureSeverity.Warning", body)
+        self.assertIn("DeleteWarning", body)
+        self.assertNotIn("DeleteAllWarnings", body)
+        self.assertNotIn("ResolveFailure", body)
+
+    def test_the_failure_preprocessor_follows_the_interface_rules(self):
+        """Same three traps as the event handler (§12.9.4)."""
         for node in ast.walk(self.tree):
-            if isinstance(node, ast.ImportFrom):
-                imported.update(a.name for a in node.names)
-        for forbidden in ("Transaction", "TransactionGroup", "SubTransaction"):
-            self.assertNotIn(forbidden, imported)
+            if (isinstance(node, ast.ClassDef)
+                    and node.name == "RebarWarningSwallower"):
+                names = [n.name for n in node.body
+                         if isinstance(n, ast.FunctionDef)]
+                self.assertNotIn("__init__", names)
+                self.assertIn("PreprocessFailures", names)
+                break
+        else:
+            self.fail("RebarWarningSwallower not found")
+        self.assertIn("failures_cls", self.source)
 
-    def test_nothing_creates_or_deletes_an_element(self):
-        for forbidden in (".Delete(", "doc.Create", "NewFamilyInstance",
-                          "Floor.Create", "Rebar.Create", ".Duplicate("):
-            self.assertNotIn(forbidden, self.source, forbidden)
+    def test_existing_reinforcement_is_not_doubled(self):
+        # Running the same workbook twice must not place the steel twice.
+        self.assertIn("ReplaceCheck", self.source)
+        self.assertIn('"replace"', self.source)
 
-    def test_the_user_is_told_it_writes_nothing(self):
+    def test_only_this_tools_own_bars_are_ever_removed(self):
+        run = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "rebar_run.py"))
+        body = run.split("def place_footing")[1].split("\ndef ")[0]
+        self.assertIn("existing_stamped_rebar", body)
+        # Never a blanket delete of whatever the host happens to contain.
+        self.assertNotIn("GetRebarsInHost", body)
+
+    def test_the_document_being_read_only_is_checked(self):
+        self.assertIn("doc.IsReadOnly", self.source)
+
+    def test_the_user_is_told_what_the_build_does_and_does_not_do(self):
         for path in (_BUNDLE, _CHANGELOG):
             text = _read(path).lower()
-            self.assertTrue("read-only" in text or "read only" in text, path)
+            self.assertIn("undo", text, path)
 
 
 class ToolkitApiTests(unittest.TestCase):

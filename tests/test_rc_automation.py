@@ -1168,6 +1168,52 @@ class FootingLayerTests(unittest.TestCase):
         self.assertTrue(plan.notes)
 
 
+class ScheduledExtentTests(unittest.TestCase):
+    """What size the schedule says a pad is — which is what a model is held to."""
+
+    def workbook(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        return data
+
+    def test_a_plain_type_gives_its_length_and_width(self):
+        data = self.workbook()
+        self.assertEqual(
+            rebar_spec.scheduled_extent_mm(data.footing_type("F1")),
+            (3000.0, 3000.0))
+
+    def test_an_outline_wins_over_the_type_rectangle(self):
+        # F3's type row says 4500 x 3000; the pad placed at F3-P1 is a
+        # five-sided 4500 x 4200. Holding the model to the type row would
+        # reject a footing that is exactly right.
+        data = self.workbook()
+        shaped = [p for p in data.footing_placement if p.has_outline][0]
+        footing = data.footing_type(shaped.type_mark)
+        self.assertEqual(rebar_spec.scheduled_extent_mm(footing),
+                         (4500.0, 3000.0))
+        self.assertEqual(rebar_spec.scheduled_extent_mm(footing, shaped),
+                         (4500.0, 4200.0))
+
+    def test_a_placement_without_an_outline_falls_back_to_the_type(self):
+        data = self.workbook()
+        plain = [p for p in data.footing_placement if not p.has_outline][0]
+        self.assertEqual(
+            rebar_spec.scheduled_extent_mm(data.footing_type(plain.type_mark),
+                                           plain),
+            (3000.0, 3000.0))
+
+    def test_the_outline_reaches_the_bars(self):
+        # The placement has to be threaded through, or a tapered pad is
+        # reinforced as the rectangle its type row describes.
+        data = self.workbook()
+        shaped = [p for p in data.footing_placement if p.has_outline][0]
+        footing = data.footing_type(shaped.type_mark)
+        rows = data.footing_rebar_for(shaped.type_mark)
+        as_rectangle = rebar_spec.plan_footing(footing, rows)
+        as_drawn = rebar_spec.plan_footing(footing, rows, shaped)
+        self.assertTrue(all(p.uniform for p in as_rectangle))
+        self.assertFalse(any(p.uniform for p in as_drawn))
+
+
 class ColumnArrangementTests(unittest.TestCase):
 
     def arrange(self, count, width=300.0, depth=600.0):

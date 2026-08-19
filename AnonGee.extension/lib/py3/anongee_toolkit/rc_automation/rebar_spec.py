@@ -251,6 +251,22 @@ class LayerPlan(object):
 # Footings
 # ---------------------------------------------------------------------------
 
+def scheduled_extent_mm(footing_type, placement=None):
+    """``(length, width)`` the schedule expects the pad to measure.
+
+    An outline wins over the type's Length and Width, because a pad drawn as a
+    polygon is not the rectangle its type row describes. Comparing a five-sided
+    pad against its type's Length would reject a footing that is exactly right,
+    which is the opposite of what the check is for.
+    """
+    if placement is not None and getattr(placement, "outline", None):
+        points = placement.outline
+        xs = [point[0] for point in points]
+        ys = [point[1] for point in points]
+        return max(xs) - min(xs), max(ys) - min(ys)
+    return footing_type.length_mm, footing_type.width_mm
+
+
 def outline_for(footing_type, placement=None):
     """The pad's plan shape: its scheduled outline, else its Length x Width."""
     if placement is not None and getattr(placement, "outline", None):

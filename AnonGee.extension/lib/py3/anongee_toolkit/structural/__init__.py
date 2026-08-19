@@ -13,8 +13,9 @@ imports nothing and is unit-tested on any machine.
 ``rebar_hosts``      find the elements a row is about, and say when one cannot host
 ``rebar_geometry``   millimetres local to a host, into world-feet curves
 ``rebar_factory``    place the bars — the only module that writes
+``rebar_run``        one workbook against one model: plan it, then place it
 """
 from anongee_toolkit.structural.rebars import get_rebars
 
 __all__ = ["get_rebars", "rebar_types", "rebar_hosts", "rebar_geometry",
-           "rebar_factory"]
+           "rebar_factory", "rebar_run"]

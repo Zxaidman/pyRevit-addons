@@ -669,6 +669,17 @@
                 <Button x:Name="ProbeBtn" Content="Probe model"
                         Style="{StaticResource ButtonSecondary}" Margin="8,0,0,0"
                         ToolTip="Read the open model and report what the workbook needs from it: levels, rebar bar types, matched hosts, and whether those hosts can take reinforcement at all. Read-only."/>
+                <Button x:Name="PlanBtn" Content="Plan reinforcement"
+                        Style="{StaticResource ButtonSecondary}" Margin="8,0,0,0"
+                        ToolTip="Work out what each existing footing would get, and say why anything is being skipped. Still writes nothing."/>
+                <Button x:Name="CreateBtn" Content="Create rebar"
+                        Style="{StaticResource ButtonPrimary}" Margin="8,0,0,0"
+                        IsEnabled="False"
+                        ToolTip="Place the reinforcement into the model. Enabled once a plan has been worked out and there is something to place. Lands as one undo step, and only touches footings the plan says it will."/>
+                <CheckBox x:Name="ReplaceCheck" Content="Replace mine"
+                          Style="{StaticResource GridCheckBox}"
+                          VerticalAlignment="Center" Margin="12,0,0,0"
+                          ToolTip="When a footing already carries reinforcement, remove the bars this tool placed earlier and rebuild them. Bars added by hand are never touched."/>
                 <Button x:Name="ExportBtn" Content="Export report"
                         Style="{StaticResource ButtonNeutral}" Margin="8,0,0,0"
                         ToolTip="Write the findings and the probe to a text file beside the workbook."/>
@@ -760,7 +771,8 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Text="Model probe" Style="{StaticResource TextH3}" Margin="0,0,0,8"/>
+                        <TextBlock Grid.Row="0" x:Name="SidePanelTitle" Text="Model probe"
+                                   Style="{StaticResource TextH3}" Margin="0,0,0,8"/>
                         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                                       HorizontalScrollBarVisibility="Disabled">
                             <TextBlock x:Name="ProbeText" TextWrapping="Wrap"
@@ -807,7 +819,7 @@
                 <TextBlock Grid.Column="1" x:Name="StatusBar" Margin="14,0,14,0"
                            VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
                            Style="{StaticResource TextCaption}"
-                           Text="Read-only build. Nothing here writes to the model."/>
+                           Text="Nothing is written until Create, and the whole run is one undo step."/>
                 <Button Grid.Column="2" x:Name="CloseBtn" Content="Close"
                         Style="{StaticResource ButtonGhost}"
                         ToolTip="Close the window. Revit is left exactly as it is."/>

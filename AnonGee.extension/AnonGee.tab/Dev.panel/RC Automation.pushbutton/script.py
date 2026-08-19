@@ -1,17 +1,26 @@
 #! python3
 # -*- coding: utf-8 -*-
 """
-AnonGee · RC Automation — read-only build
------------------------------------------
-Reads an Excel schedule, validates it, and probes the open model for what the
-schedule would need from it. **It opens no transaction and writes nothing.**
+AnonGee · RC Automation
+-----------------------
+Reads an Excel schedule, checks it, works out what each existing footing would
+get, and — on Create — places the reinforcement.
 
-That is the point of this build. Every hard part of the feature is downstream of
-questions this answers: does the CPython 3 engine import the toolkit, does the
-vendored openpyxl actually load inside Revit, does the modeless bridge hold up,
-are the levels and bar types the workbook names present, and can the elements it
-matches host reinforcement at all. Finding any of that out during a four-hundred
-element write is the expensive way.
+Everything before Create is read-only, and deliberately so: a plan is worked out
+and shown in full before a transaction exists, so what is about to happen can be
+read and refused. Create then does exactly what the plan said and nothing else.
+
+What guards the model:
+  • Create is only reachable in "Reinforce existing structure". The other two
+    modes create or reconcile structure, which this build does not do.
+  • A plan runs first. Create is disabled until one exists and has something in
+    it, and it re-plans on the Revit thread rather than trusting a stale one.
+  • The whole run is one TransactionGroup, assimilated, so it is one undo step.
+    Each chunk is its own Transaction, so a failure rolls back that chunk only.
+  • A host that already carries reinforcement is left alone unless Replace is
+    ticked, and even then only bars this tool stamped are removed.
+  • Every bar is stamped, so a later run can tell its own work from a
+    detailer's.
 
 Architecture is the reference pattern (§12.8):
   • window.Show() runs WPF on its own thread; the Revit API is reached only
@@ -38,7 +47,10 @@ clr.AddReference("RevitAPIUI")
 from Autodesk.Revit.DB import BuiltInCategory                 # noqa: E402
 from Autodesk.Revit.DB import BuiltInParameter                # noqa: E402
 from Autodesk.Revit.DB import FilteredElementCollector        # noqa: E402
+from Autodesk.Revit.DB import IFailuresPreprocessor           # noqa: E402
 from Autodesk.Revit.DB import Level                           # noqa: E402
+from Autodesk.Revit.DB import Transaction                     # noqa: E402
+from Autodesk.Revit.DB import TransactionGroup                # noqa: E402
 from Autodesk.Revit.DB.Structure import RebarHostData         # noqa: E402
 from Autodesk.Revit.UI import ExternalEvent                   # noqa: E402
 from Autodesk.Revit.UI import IExternalEventHandler           # noqa: E402
@@ -54,14 +66,22 @@ from System import Action                                     # noqa: E402
 from System.Collections import ArrayList                       # noqa: E402
 from System.IO import FileAccess, FileMode, FileStream        # noqa: E402
 from System.Windows import MessageBox                          # noqa: E402
+from System.Windows import MessageBoxButton                    # noqa: E402
+from System.Windows import MessageBoxImage                     # noqa: E402
+from System.Windows import MessageBoxResult                    # noqa: E402
 from System.Windows.Interop import WindowInteropHelper        # noqa: E402
 from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+#: Hosts written per Transaction. Revit's thread is blocked for the whole of
+#: one, so this is the granularity at which a long run can be given up on and
+#: the size of what a single failure rolls back.
+CHUNK_SIZE = 25
 
 
 # ---------------------------------------------------------------------------
@@ -102,6 +122,8 @@ from anongee_toolkit.rc_automation import excel_engine         # noqa: E402
 from anongee_toolkit.rc_automation import models               # noqa: E402
 from anongee_toolkit.rc_automation import rebar_spec           # noqa: E402
 from anongee_toolkit.rc_automation import validation           # noqa: E402
+from anongee_toolkit.structural import rebar_hosts             # noqa: E402
+from anongee_toolkit.structural import rebar_run               # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +172,38 @@ if _state is None:
     sys.modules[_STATE_MODULE] = _state
 
 
+if getattr(_state, "failures_cls", None) is None:
+    class RebarWarningSwallower(IFailuresPreprocessor):
+        """Absorb the warnings a batch of reinforcement generates.
+
+        Placing several hundred bars raises a dialog per host otherwise, and a
+        modeless tool that stops on each one is unusable. Only *warnings* are
+        deleted; an error is left for Revit to roll the chunk back on, because
+        suppressing those would let the run write something invalid and call it
+        a success.
+
+        Same three rules as the event handler: ``__namespace__``, no
+        ``__init__``, and defined once per session (§12.9.4).
+        """
+
+        __namespace__ = "AnonGee"
+
+        def PreprocessFailures(self, accessor):
+            from Autodesk.Revit.DB import FailureProcessingResult
+            from Autodesk.Revit.DB import FailureSeverity
+            deleted = False
+            for failure in accessor.GetFailureMessages():
+                if failure.GetSeverity() == FailureSeverity.Warning:
+                    accessor.DeleteWarning(failure)
+                    deleted = True
+            return (FailureProcessingResult.ProceedWithCommit if deleted
+                    else FailureProcessingResult.Continue)
+
+    _state.failures_cls = RebarWarningSwallower
+else:
+    RebarWarningSwallower = _state.failures_cls
+
+
 if _state.handler_cls is None:
     class RCAutomationHandler(IExternalEventHandler):
         """Runs on Revit's primary thread. Reads only — never writes.
@@ -176,6 +230,10 @@ if _state.handler_cls is None:
             try:
                 if request == "probe":
                     self.data["result"] = self._probe(uiapp)
+                elif request == "plan":
+                    self.data["result"] = self._plan(uiapp)
+                elif request == "create":
+                    self.data["result"] = self._create(uiapp)
                 else:
                     self.data["result"] = {"error": "Unknown request."}
             except Exception as probe_error:
@@ -248,6 +306,110 @@ if _state.handler_cls is None:
                         marks.append(value)
             return sorted(set(marks))
 
+        # -- planning (reads only) ----------------------------------------
+        def _plan(self, uiapp):
+            """Work out what every existing footing would get. No writes."""
+            uidoc = uiapp.ActiveUIDocument
+            if uidoc is None:
+                return {"error": "Open a Revit model first."}
+            doc = uidoc.Document
+            workbook = self.data.get("workbook")
+            if workbook is None:
+                return {"error": "Load a workbook first."}
+
+            key_parameter = self.data.get("key_parameter") or \
+                rebar_hosts.DEFAULT_KEY_PARAMETER
+            replace = bool(self.data.get("replace"))
+            plans = rebar_run.plan_footings(doc, workbook, key_parameter,
+                                            replace)
+            bar_type_ids, missing = rebar_run.resolve_bar_types(doc, workbook)
+
+            # The plan is kept on the handler, on Revit's thread. Only the
+            # description of it crosses back (§12.8.7.2).
+            self.data["plans"] = plans
+            self.data["bar_type_ids"] = bar_type_ids
+            return {
+                "request": "plan",
+                "summary": rebar_run.summarise(plans),
+                "rows": [_plan_row(plan) for plan in plans],
+                "missing_bar_types": [
+                    "{0:g} mm{1}".format(diameter or 0,
+                                         " ({0})".format(name) if name else "")
+                    for diameter, name in missing],
+            }
+
+        # -- creation (the only thing here that writes) --------------------
+        def _create(self, uiapp):
+            """Place the reinforcement the plan described, and nothing else."""
+            uidoc = uiapp.ActiveUIDocument
+            if uidoc is None:
+                return {"error": "Open a Revit model first."}
+            doc = uidoc.Document
+            workbook = self.data.get("workbook")
+            plans = [p for p in (self.data.get("plans") or []) if p.will_create]
+            bar_type_ids = self.data.get("bar_type_ids") or {}
+            if not plans:
+                return {"error": "Nothing to create — plan first."}
+            if doc.IsReadOnly:
+                return {"error": "The model is read-only."}
+
+            view = doc.ActiveView
+            replace = bool(self.data.get("replace"))
+            created = 0
+            bars = 0
+            errors = []
+            skipped = []
+            done = 0
+
+            group = TransactionGroup(doc, "AnonGee · RC Automation")
+            group.Start()
+            try:
+                for start in range(0, len(plans), CHUNK_SIZE):
+                    chunk = plans[start:start + CHUNK_SIZE]
+                    transaction = Transaction(
+                        doc, "Reinforce footings {0}-{1}".format(
+                            start + 1, start + len(chunk)))
+                    transaction.Start()
+                    try:
+                        options = transaction.GetFailureHandlingOptions()
+                        options.SetFailuresPreprocessor(
+                            RebarWarningSwallower())
+                        transaction.SetFailureHandlingOptions(options)
+
+                        for plan in chunk:
+                            outcome = rebar_run.place_footing(
+                                doc, plan, workbook, bar_type_ids, view,
+                                replace)
+                            created += outcome.elements
+                            bars += outcome.bars
+                            errors.extend(outcome.errors)
+                            skipped.extend(outcome.skipped)
+                            done += 1
+                        transaction.Commit()
+                    except Exception as chunk_error:
+                        errors.append("chunk rolled back: {0}".format(
+                            chunk_error))
+                        if transaction.HasStarted() and not transaction.HasEnded():
+                            transaction.RollBack()
+                # Assimilate so the whole run is a single undo step rather than
+                # one per chunk.
+                group.Assimilate()
+            except Exception as run_error:
+                if group.HasStarted() and not group.HasEnded():
+                    group.RollBack()
+                return {"error": "The run was rolled back: {0}".format(
+                    run_error)}
+
+            self.data["plans"] = []
+            return {
+                "request": "create",
+                "hosts": done,
+                "elements": created,
+                "bars": bars,
+                "errors": errors,
+                "skipped": skipped,
+            }
+
         # -- back to the WPF thread ---------------------------------------
         def _marshal_to_ui(self):
             try:
@@ -261,6 +423,20 @@ else:
     # Later press: the CLR type is already emitted. Re-running the class
     # statement would raise "Duplicate type name within an assembly".
     RCAutomationHandler = _state.handler_cls
+
+
+def _plan_row(plan):
+    """One host plan as scalars. Revit objects never cross the bridge."""
+    return {
+        "key": plan.key,
+        "type_mark": plan.type_mark,
+        "category": plan.category,
+        "status": plan.status,
+        "reason": plan.reason,
+        "bars": plan.bars,
+        "elements": plan.elements,
+        "level": plan.level,
+    }
 
 
 def _name_of(element):
@@ -280,6 +456,7 @@ class RCAutomationApp(object):
         self.workbook = None
         self.issues = []
         self.probe = None
+        self.plan = None
         self._queue = []
         self._busy = False
 
@@ -292,6 +469,10 @@ class RCAutomationApp(object):
         self.ModeCombo = self.window.FindName("ModeCombo")
         self.LoadBtn = self.window.FindName("LoadBtn")
         self.ProbeBtn = self.window.FindName("ProbeBtn")
+        self.PlanBtn = self.window.FindName("PlanBtn")
+        self.CreateBtn = self.window.FindName("CreateBtn")
+        self.ReplaceCheck = self.window.FindName("ReplaceCheck")
+        self.SidePanelTitle = self.window.FindName("SidePanelTitle")
         self.ExportBtn = self.window.FindName("ExportBtn")
         self.ClearBtn = self.window.FindName("ClearBtn")
         self.CloseBtn = self.window.FindName("CloseBtn")
@@ -303,7 +484,7 @@ class RCAutomationApp(object):
         self.InfoCount = self.window.FindName("InfoCount")
         self.VersionText = self.window.FindName("VersionText")
 
-        self.VersionText.Text = "{0} · read-only".format(__version__)
+        self.VersionText.Text = __version__
         self._fill_modes()
         self._wire_events()
 
@@ -317,6 +498,9 @@ class RCAutomationApp(object):
         self.BrowseBtn.Click += self._on_browse
         self.LoadBtn.Click += self._on_load
         self.ProbeBtn.Click += self._on_probe
+        self.PlanBtn.Click += self._on_plan
+        self.CreateBtn.Click += self._on_create
+        self.ModeCombo.SelectionChanged += self._on_mode_changed
         self.ExportBtn.Click += self._on_export
         self.ClearBtn.Click += self._on_clear
         self.CloseBtn.Click += self._on_close
@@ -350,12 +534,83 @@ class RCAutomationApp(object):
                 models.SEVERITY_ERROR,
                 "The workbook could not be read: {0}".format(load_error))]
 
+        self.plan = None
+        self._update_create_button()
         self._refresh_grid()
         self._describe_plan()
+
+    def _on_mode_changed(self, sender, args):
+        # A plan belongs to the mode it was made in; changing mode invalidates
+        # it rather than leaving a Create button armed with the wrong answer.
+        self.plan = None
+        self._update_create_button()
 
     def _on_probe(self, sender, args):
         self._enqueue("probe")
         self.set_status("Reading the model on Revit's thread…")
+
+    def _on_plan(self, sender, args):
+        if not self._ready_to_plan():
+            return
+        self.handler.data["workbook"] = self.workbook
+        self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
+        self._enqueue("plan")
+        self.set_status("Working out what each footing would get…")
+
+    def _ready_to_plan(self):
+        if self.workbook is None or self.workbook.is_empty():
+            self.set_status("Load a workbook first.", True)
+            return False
+        if models.has_errors(self.issues):
+            self.set_status(
+                "The workbook has errors — fix those before planning.", True)
+            return False
+        if self.selected_mode() != models.MODE_REBAR_ONLY:
+            self.set_status(
+                "Planning reinforcement needs the '{0}' mode. The other two "
+                "create or reconcile structure, which this build does not do."
+                .format(models.MODE_LABELS[models.MODE_REBAR_ONLY]), True)
+            return False
+        return True
+
+    def _on_create(self, sender, args):
+        if self.plan is None or not self.plan.get("summary", {}).get("creating"):
+            self.set_status("Plan first — there is nothing to create.", True)
+            return
+        if self.plan.get("missing_bar_types"):
+            self.set_status(
+                "These bar sizes have no RebarBarType in the model: {0}. Load "
+                "them and plan again.".format(
+                    ", ".join(self.plan["missing_bar_types"])), True)
+            return
+
+        summary = self.plan["summary"]
+        answer = MessageBox.Show(
+            "Place reinforcement into {0} footing(s)?\n\n"
+            "{1} bar(s) as {2} Revit element(s).\n"
+            "{3}\n\n"
+            "This lands as a single undo step."
+            .format(summary["creating"], summary["bars"], summary["elements"],
+                    "Bars this tool placed earlier will be replaced."
+                    if self.ReplaceCheck.IsChecked
+                    else "Footings that already carry reinforcement are left "
+                         "alone."),
+            "AnonGee · RC Automation",
+            MessageBoxButton.OKCancel, MessageBoxImage.Question)
+        if answer != MessageBoxResult.OK:
+            self.set_status("Nothing was written.")
+            return
+
+        self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
+        self._enqueue("create")
+        self.set_status("Placing reinforcement — Revit is busy until it is done…")
+
+    def _update_create_button(self):
+        creating = 0
+        if self.plan:
+            creating = self.plan.get("summary", {}).get("creating", 0)
+        blocked = bool(self.plan and self.plan.get("missing_bar_types"))
+        self.CreateBtn.IsEnabled = bool(creating) and not blocked
 
     def _on_export(self, sender, args):
         if not self.issues:
@@ -379,9 +634,13 @@ class RCAutomationApp(object):
         self.workbook = None
         self.issues = []
         self.probe = None
+        self.plan = None
+        self.handler.data["plans"] = []
         self.FindingsGrid.ItemsSource = None
+        self.SidePanelTitle.Text = "Model probe"
         self.ProbeText.Text = "Load a workbook, then Probe model."
         self._refresh_counts()
+        self._update_create_button()
         self.set_status("Cleared.")
 
     def _on_close(self, sender, args):
@@ -420,11 +679,100 @@ class RCAutomationApp(object):
 
         if "error" in result:
             self.set_status(result["error"], True)
+        elif result.get("request") == "plan":
+            self._on_plan_done(result)
+        elif result.get("request") == "create":
+            self._on_create_done(result)
         else:
             self.probe = result
+            self.SidePanelTitle.Text = "Model probe"
             self.ProbeText.Text = self._probe_text(result)
             self.set_status("Model read. Nothing was written.")
+        self._update_create_button()
         self._pump()
+
+    def _on_plan_done(self, result):
+        self.plan = result
+        summary = result["summary"]
+        self._show_plan_rows(result["rows"])
+        self.SidePanelTitle.Text = "Plan"
+        self.ProbeText.Text = self._plan_text(result)
+
+        if result["missing_bar_types"]:
+            self.set_status(
+                "{0} footing(s) ready, but these bar sizes are not loaded: "
+                "{1}.".format(summary["creating"],
+                              ", ".join(result["missing_bar_types"])), True)
+        elif summary["creating"]:
+            self.set_status(
+                "{0} of {1} footing(s) would take {2} bar(s) as {3} element(s). "
+                "Nothing written yet.".format(
+                    summary["creating"], summary["hosts"], summary["bars"],
+                    summary["elements"]))
+        else:
+            self.set_status(
+                "No footing is ready to reinforce — the panel says why for "
+                "each.", True)
+
+    def _on_create_done(self, result):
+        self.plan = None
+        parts = ["Placed {0} element(s) — {1} bar(s) — into {2} footing(s).".
+                 format(result["elements"], result["bars"], result["hosts"])]
+        if result["skipped"]:
+            parts.append("{0} skipped.".format(len(result["skipped"])))
+        if result["errors"]:
+            parts.append("{0} failed.".format(len(result["errors"])))
+        self.set_status(" ".join(parts), bool(result["errors"]))
+
+        lines = ["Created {0} element(s), {1} bar(s), across {2} footing(s)."
+                 .format(result["elements"], result["bars"], result["hosts"]),
+                 "", "One undo step — Ctrl+Z reverses the whole run.", ""]
+        for label, entries in (("Skipped", result["skipped"]),
+                               ("Failed", result["errors"])):
+            if entries:
+                lines.append("{0} ({1})".format(label, len(entries)))
+                for entry in entries[:20]:
+                    lines.append("  " + entry)
+                if len(entries) > 20:
+                    lines.append("  ... and {0} more".format(len(entries) - 20))
+                lines.append("")
+        self.SidePanelTitle.Text = "Result"
+        self.ProbeText.Text = "\n".join(lines)
+
+    def _show_plan_rows(self, rows):
+        """The plan in the grid, worst first — what needs attention is on top."""
+        order = {"Invalid": 0, "Has rebar": 1, "Skip": 2, "Create": 3}
+        items = ArrayList()
+        for row in sorted(rows, key=lambda r: (order.get(r["status"], 9),
+                                               r["key"])):
+            message = row["reason"] or "{0} bar(s) as {1} element(s)".format(
+                row["bars"], row["elements"])
+            items.Add(FindingRow(row["status"], row["category"], None,
+                                 row["type_mark"],
+                                 "{0} — {1}".format(row["key"], message)))
+        self.FindingsGrid.ItemsSource = None
+        self.FindingsGrid.ItemsSource = items
+
+    def _plan_text(self, result):
+        summary = result["summary"]
+        lines = ["{0} footing(s) matched".format(summary["hosts"]), ""]
+        for status in ("Create", "Has rebar", "Skip", "Invalid"):
+            count = summary["by_status"].get(status, 0)
+            if count:
+                lines.append("  {0:<10} {1}".format(status, count))
+        lines.append("")
+        lines.append("Would place {0} bar(s) as {1} Revit element(s).".format(
+            summary["bars"], summary["elements"]))
+        if result["missing_bar_types"]:
+            lines.append("")
+            lines.append("No RebarBarType loaded for:")
+            for entry in result["missing_bar_types"]:
+                lines.append("  " + entry)
+            lines.append("")
+            lines.append("Load these into the project and plan again.")
+        lines.append("")
+        lines.append("Nothing has been written.")
+        return "\n".join(lines)
 
     # -- rendering -------------------------------------------------------
     def _refresh_grid(self):

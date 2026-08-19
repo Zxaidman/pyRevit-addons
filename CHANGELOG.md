@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.1.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.2.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -32,6 +32,27 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.3.0
+
+**Changed**
+
+- **RC Automation 0.2.0 places reinforcement.** The first release read and
+  reported only; this one writes, into footings that already exist. Creating the
+  structure itself needs the placement sheets and is not in this build, so
+  Create is reachable only in "Reinforce existing structure".
+
+  A plan is worked out and shown in full before a transaction exists, so what is
+  about to happen can be read and refused. The run is then one
+  `TransactionGroup`, assimilated into a single undo step, chunked so a failure
+  rolls back its chunk and the rest carries on. A footing that already carries
+  reinforcement is left alone, and "Replace mine" rebuilds only the bars this
+  tool stamped. Full history in its own
+  [changelog](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md).
+- **Delimited schedules in one file.** A `.csv` or `.txt` holding every sheet,
+  separated by `#SHEET,<name>` rows, alongside the folder-of-sheets layout.
 
 ---
 
