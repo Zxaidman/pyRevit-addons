@@ -1,0 +1,8 @@
+This is NOT a real .xls workbook, and Excel will refuse it.
+
+It exists so RC Automation's 'legacy format' message is tested
+against a file that is actually present -- "not found" and
+"cannot read this format" are different problems and need
+different sentences.
+
+The real schedule is sample_schedule.xlsx.

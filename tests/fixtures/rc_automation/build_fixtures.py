@@ -14,12 +14,21 @@ What gets written, and why each earns its place:
     The normal case, plus the INFO cover sheet that keeps project and units off
     the data sheets.
 ``sample_schedule.xlsm``
-    Macro-enabled, which is what a firm's real template usually is. Same bytes
-    as far as openpyxl cares; the point is that the *extension* is accepted.
-``sample_schedule.xls``
-    Not a real .xls -- deliberately. It exists so the legacy-format refusal is
-    tested against a file that is actually there, since "not found" and "cannot
-    read this format" are different messages and the user needs the second one.
+    Macro-enabled, which is what a firm's real template usually is.
+
+    openpyxl cannot write one from scratch: ``Workbook().save("x.xlsm")`` writes
+    an ordinary xlsx and puts an xlsm name on it. openpyxl then reads it back
+    perfectly happily -- it goes by content and ignores the extension -- while
+    Excel compares the declared content type against the extension and refuses
+    the file outright. So the part is re-declared here, after saving. A
+    macro-enabled workbook containing no macros is valid; what makes it xlsm is
+    the content type, not a ``vbaProject.bin``.
+``not_a_workbook.xls``
+    Exactly what its name says. openpyxl cannot write BIFF and faking one would
+    be worse than useless, so this is a text file that exists purely so the
+    legacy-format refusal is tested against a file that is *present* -- "not
+    found" and "cannot read this format" are different problems needing
+    different sentences. Named so nobody wastes a double-click on it.
 ``txt_sheets/``
     One tab-separated file per sheet. Revit's own schedule export writes this,
     and a folder of them is a first-class input.
@@ -31,7 +40,9 @@ Needs openpyxl. The extension vendors a Windows build, so on Linux or macOS::
 
 import io
 import os
+import shutil
 import sys
+import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -92,7 +103,70 @@ def strip_title_block(rows):
     return rows
 
 
-def build_workbook(path, keep_macros=False):
+#: The workbook part's content type, per extension. Excel checks this against
+#: the file name and refuses the file when they disagree -- which is the whole
+#: reason an xlsx renamed to .xlsm will not open.
+WORKBOOK_CONTENT_TYPES = {
+    ".xlsx": "application/vnd.openxmlformats-officedocument"
+             ".spreadsheetml.sheet.main+xml",
+    ".xlsm": "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
+    ".xltx": "application/vnd.openxmlformats-officedocument"
+             ".spreadsheetml.template.main+xml",
+    ".xltm": "application/vnd.ms-excel.template.macroEnabled.main+xml",
+}
+
+
+def declared_workbook_content_type(path):
+    """What ``[Content_Types].xml`` says ``/xl/workbook.xml`` is."""
+    archive = zipfile.ZipFile(path)
+    try:
+        text = archive.read("[Content_Types].xml").decode("utf-8")
+    finally:
+        archive.close()
+    marker = 'PartName="/xl/workbook.xml"'
+    index = text.find(marker)
+    if index == -1:
+        return None
+    tail = text[index:]
+    key = 'ContentType="'
+    start = tail.find(key) + len(key)
+    return tail[start:tail.find('"', start)]
+
+
+def retype_workbook(path):
+    """Re-declare the workbook part so the content type matches the extension.
+
+    Rebuilds the archive rather than editing in place: a zip entry cannot change
+    length where it sits, and a half-rewritten one is a corrupt workbook.
+    """
+    extension = os.path.splitext(path)[1].lower()
+    wanted = WORKBOOK_CONTENT_TYPES.get(extension)
+    if not wanted or declared_workbook_content_type(path) == wanted:
+        return path
+
+    temporary = path + ".rebuilding"
+    source = zipfile.ZipFile(path, "r")
+    try:
+        target = zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED)
+        try:
+            for item in source.infolist():
+                data = source.read(item.filename)
+                if item.filename == "[Content_Types].xml":
+                    text = data.decode("utf-8")
+                    for other in WORKBOOK_CONTENT_TYPES.values():
+                        text = text.replace(other, wanted)
+                    data = text.encode("utf-8")
+                target.writestr(item, data)
+        finally:
+            target.close()
+    finally:
+        source.close()
+
+    shutil.move(temporary, path)
+    return path
+
+
+def build_workbook(path):
     from openpyxl import Workbook
     book = Workbook()
     book.remove(book.active)
@@ -110,7 +184,9 @@ def build_workbook(path, keep_macros=False):
             sheet.append(row)
 
     book.save(path)
-    return path
+    # openpyxl writes the xlsx content type whatever the file is called, and
+    # Excel refuses a file whose declared type disagrees with its extension.
+    return retype_workbook(path)
 
 
 def build_text_sheets(folder):
@@ -135,12 +211,24 @@ def build_text_sheets(folder):
     return written
 
 
-def build_fake_legacy(path):
-    """A file with a .xls name that is not one, for the refusal path."""
+def build_placeholder_legacy(path):
+    """A file with a .xls name that is deliberately not one.
+
+    openpyxl cannot write BIFF and faking the format would be worse than
+    useless. This exists only so the legacy refusal is exercised against a file
+    that is present, and it is named so nobody wastes a double-click finding
+    that out.
+    """
     with io.open(path, "w", encoding="utf-8") as handle:
-        handle.write(u"This is not a real BIFF workbook.\n"
-                     u"It exists so the '.xls cannot be read' message is "
-                     u"tested against a file that is present.\n")
+        handle.write(
+            u"This is NOT a real .xls workbook, and Excel will refuse it.\n"
+            u"\n"
+            u"It exists so RC Automation's 'legacy format' message is tested\n"
+            u"against a file that is actually present -- \"not found\" and\n"
+            u"\"cannot read this format\" are different problems and need\n"
+            u"different sentences.\n"
+            u"\n"
+            u"The real schedule is sample_schedule.xlsx.\n")
     return path
 
 
@@ -154,11 +242,21 @@ def main():
     made = [
         build_workbook(os.path.join(HERE, "sample_schedule.xlsx")),
         build_workbook(os.path.join(HERE, "sample_schedule.xlsm")),
-        build_fake_legacy(os.path.join(HERE, "sample_schedule.xls")),
+        build_placeholder_legacy(os.path.join(HERE, "not_a_workbook.xls")),
     ]
     made.extend(build_text_sheets(os.path.join(HERE, "txt_sheets")))
+
+    stale = os.path.join(HERE, "sample_schedule.xls")
+    if os.path.isfile(stale):
+        os.remove(stale)
+        print("removed", os.path.basename(stale), "(renamed)")
+
     for path in made:
-        print("wrote", os.path.relpath(path, HERE))
+        note = ""
+        if path.endswith((".xlsx", ".xlsm")):
+            note = "  [{0}]".format(
+                declared_workbook_content_type(path).rsplit(".", 1)[-1])
+        print("wrote", os.path.relpath(path, HERE) + note)
     return 0
 
 

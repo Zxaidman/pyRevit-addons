@@ -1,2 +1,0 @@
-This is not a real BIFF workbook.
-It exists so the '.xls cannot be read' message is tested against a file that is present.
