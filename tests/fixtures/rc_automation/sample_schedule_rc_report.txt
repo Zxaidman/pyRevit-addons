@@ -1,0 +1,32 @@
+AnonGee RC Automation — read-only report
+Workbook: D:\ZAID\Advance AI\pyRevit-addons\tests\fixtures\rc_automation\sample_schedule.xlsm
+Mode: Create structure and reinforcement
+
+0 errors, 0 warnings, 1 notes
+
+[Info] Read 3 footing types with 10 bar rows, and 3 column types with 7 bar rows. Placing 6 footings and 5 columns.
+
+Model: R25_REBAR_AUTOMATION
+
+Levels (3)
+  00 Ground Lvl.
+  01 1st Floor Lvl.
+  02 2nd Floor Lvl.
+
+Rebar bar types (8)
+  10T
+  12T
+  16T
+  20T
+  25T
+  32T
+  40T
+  8T
+
+Structural foundations: 0 (0 can host rebar)
+Structural columns: 0 (0 can host rebar)
+
+Footing marks: 0 of 6 scheduled marks are in the model
+  not in the model: F1-A1, F1-A2, F1-B1, F2-C1, F3-B2, F3-P1
+
+Nothing in the model was changed.
