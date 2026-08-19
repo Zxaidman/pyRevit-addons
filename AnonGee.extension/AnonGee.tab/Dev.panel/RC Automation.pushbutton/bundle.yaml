@@ -30,7 +30,15 @@ tooltip: |
   Sheets it reads
     FOOTING_TYPES, FOOTING_PLACEMENT, FOOTING_REBAR,
     COLUMN_TYPES, COLUMN_PLACEMENT, COLUMN_REBAR.
-    All lengths in millimetres. A UNITS row above the header confirms it.
+    Plus an optional INFO cover sheet carrying the project, the units and the
+    standard — keeping those off the data sheets leaves them as pure tables, so
+    Excel's own filter and sort still work. A title block above the header
+    reads too, the way a real schedule arrives.
+    All lengths in millimetres.
+
+  What it will open
+    An .xlsx or .xlsm workbook, or a folder holding one tab-separated .txt or
+    .csv file per sheet — which is what Revit's own schedule export writes.
 
   Notes
     • Modeless — Revit stays interactive while the window is open.

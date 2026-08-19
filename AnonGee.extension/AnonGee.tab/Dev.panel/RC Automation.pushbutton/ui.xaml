@@ -648,7 +648,7 @@
                                VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <TextBox Grid.Row="0" Grid.Column="1" x:Name="WorkbookPathText"
                              Style="{StaticResource InputTextBox}"
-                             ToolTip="Full path to the schedule (.xlsx or .xlsm). Type it, or use Browse."/>
+                             ToolTip="Full path to the schedule — an .xlsx or .xlsm workbook, or a folder holding one tab-separated .txt or .csv file per sheet. Type it, or use Browse for a workbook."/>
                     <Button Grid.Row="0" Grid.Column="2" x:Name="BrowseBtn" Content="Browse"
                             Style="{StaticResource ButtonSecondary}" Margin="8,0,0,0"
                             ToolTip="Pick the schedule workbook from disk."/>

@@ -1,19 +1,42 @@
-# Sample RC Automation workbook
+# Sample RC Automation schedule
 
-The six sheets the tool reads, one CSV each, holding a schedule that is meant to look
-like one an engineer would actually issue — a title block above the table, two
-main-bar groups in a column, ties that tighten at the ends, and a footing with
-two mats.
+The same schedule in every format the tool has to cope with. `test_rc_automation.py`
+asserts they all parse to the **same objects**, so a format cannot quietly drift
+away from the others.
 
-They are CSVs rather than an `.xlsx` for two reasons: a diff of a schema change
-is readable, and the test suite can load them on a machine where the extension's
-vendored (Windows) openpyxl will not import. `parse_grid` takes the raw grid
-either way, so these exercise the same code the real workbook does.
+| What | Why it is here |
+| --- | --- |
+| `*.csv` — one per sheet | **The source of truth.** A schema change gets reviewed in a diff of these, and everything else is generated from them. Also a working input: point the tool at this folder. |
+| `sample_schedule.xlsx` | The normal case, with the `INFO` cover sheet. |
+| `sample_schedule.xlsm` | Macro-enabled, which is what a firm's real template usually is. |
+| `sample_schedule.xls` | **Not a real `.xls`** — deliberately. It exists so the legacy-format refusal is tested against a file that is actually present, because "not found" and "cannot read this format" are different problems needing different sentences. |
+| `txt_sheets/` | Tab-separated, one file per sheet. Revit's own schedule export writes this, so a folder of them is a first-class input. |
+| `all-in-one xlsx sheet needed like this example.xlsx` | The workbook from the first real run inside Revit. It has no `INFO` sheet and no title block, which is exactly why it warns about units — kept because a real file that exercises the fallback is worth more than one written to pass. |
 
-`FOOTING_TYPES.csv` carries the title block on purpose. Finding the header row
-rather than assuming row 1 is what lets a real schedule load unedited.
+Regenerate everything but the CSVs and the pushed workbook with:
 
-`FOOTING_PLACEMENT.csv` shows both ways of saying where something goes: grid
-references for the pads that sit on an intersection, and X/Y millimetres for the
-one that does not. Its last row also carries an `Outline` — the five-sided pad
-that is the reason footings are floors rather than family instances.
+    python tests/fixtures/rc_automation/build_fixtures.py
+
+## What the sample is showing
+
+**Metadata lives on its own sheet.** `INFO` carries the project, the units and
+the standard, so the data sheets stay pure tables and Excel's own filter and sort
+keep working on them. A title block above the header still reads — that is how a
+real schedule arrives, and `FOOTING_TYPES.csv` keeps one to prove it — but the
+cover sheet wins where both exist.
+
+**Type and placement are separate.** One `FOOTING_TYPES` row describes a footing;
+`FOOTING_PLACEMENT` says where each one goes. That is why one `FOOTING_REBAR` row
+can reinforce every F1 in the building.
+
+**Position comes two ways.** Grid references for the pads on an intersection,
+X/Y millimetres for the one that is not — which is the only thing that works in a
+model with no grids in it yet.
+
+**The last footing placement carries an `Outline`.** A five-sided pad, and the
+reason footings are floors rather than family instances. Its bars are genuinely
+different lengths, so that layer cannot ship as one Revit element and the tool
+says so instead of quietly placing the wrong steel.
+
+**`C1` has two main-bar rows.** "4T20 corners + 6T16 faces" is one column and two
+rows — the shape a single-row `COLUMN_REBAR` sheet could not express.

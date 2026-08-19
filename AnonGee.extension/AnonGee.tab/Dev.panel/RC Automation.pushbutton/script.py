@@ -565,7 +565,12 @@ class RCAutomationApp(object):
 
 
 def _pick_workbook():
-    """Ask for a workbook with the .NET dialog — no pyRevit forms in CPython 3."""
+    """Ask for a workbook with the .NET dialog — no pyRevit forms in CPython 3.
+
+    Only files are offered here. A folder of tab-separated sheets is a valid
+    input too, but ``OpenFileDialog`` cannot select one, so that path is typed
+    into the box rather than browsed to.
+    """
     try:
         clr.AddReference("Microsoft.Win32.Primitives")
     except Exception:
@@ -574,7 +579,8 @@ def _pick_workbook():
         from Microsoft.Win32 import OpenFileDialog
         dialog = OpenFileDialog()
         dialog.Title = "AnonGee · RC Automation — select a schedule"
-        dialog.Filter = "Excel workbook (*.xlsx;*.xlsm)|*.xlsx;*.xlsm"
+        dialog.Filter = ("Excel workbook (*.xlsx;*.xlsm)|*.xlsx;*.xlsm"
+                         "|All files (*.*)|*.*")
         if dialog.ShowDialog():
             return dialog.FileName
     except Exception as dialog_error:

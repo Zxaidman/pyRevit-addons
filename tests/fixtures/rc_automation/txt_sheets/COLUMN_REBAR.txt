@@ -1,0 +1,8 @@
+TypeMark	BarRole	BarType	Diameter	Count	Spacing	ShapeCode	SpacingEnd	ConfinementLength	Comments
+C1	Main	T20	20	4		00			Corner bars
+C1	Main	T16	16	6		00			Face bars
+C1	Tie	R10	10		200	51	100	600	Tighter over lo each end
+C2	Main	T20	20	8		00			
+C2	Tie	R10	10		200	51	100	500	
+C3	Main	T16	16	4		00			
+C3	Tie	R8	8		175	51			No confinement scheduled

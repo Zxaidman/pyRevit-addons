@@ -39,6 +39,16 @@ _SEVERITY_ORDER = {SEVERITY_ERROR: 0, SEVERITY_WARNING: 1, SEVERITY_INFO: 2}
 # ---------------------------------------------------------------------------
 # Sheet names
 # ---------------------------------------------------------------------------
+#: The cover sheet. Project name, units, standard -- everything about the
+#: workbook rather than about a footing. Keeping it on its own sheet leaves the
+#: data sheets as pure tables, which is what makes Excel's own filter and sort
+#: usable on them; a title block wedged above the header breaks both.
+SHEET_INFO = "INFO"
+
+#: What else people call that sheet. Matched folded, so "Project Info" lands.
+INFO_SHEET_ALIASES = ("INFO", "PROJECT", "PROJECTINFO", "METADATA", "COVER",
+                      "SETTINGS", "README")
+
 SHEET_FOOTING_TYPES = "FOOTING_TYPES"
 SHEET_FOOTING_PLACEMENT = "FOOTING_PLACEMENT"
 SHEET_FOOTING_REBAR = "FOOTING_REBAR"
@@ -92,11 +102,16 @@ REQUIRED_SHEETS_FOR_MODE = {
     MODE_RECONCILE: _CORE_SHEETS,
 }
 
+#: Never required. A workbook without one still reads -- the metadata can sit
+#: above a header instead, the way a real schedule carries its title block --
+#: and a workbook with neither is warned about, not rejected.
+OPTIONAL_SHEETS = (SHEET_INFO,)
+
 #: Every sheet the parser knows how to read. Parsing is mode-independent on
 #: purpose -- a workbook is read once and can then be run in any mode without
 #: being re-opened, and switching mode in the window must not mean re-reading
 #: the file.
-ALL_SHEETS = _CORE_SHEETS + PLACEMENT_SHEETS
+ALL_SHEETS = _CORE_SHEETS + PLACEMENT_SHEETS + OPTIONAL_SHEETS
 
 
 def required_sheets(mode):

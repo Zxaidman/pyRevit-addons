@@ -44,6 +44,12 @@ _MAX_HEADER_SCAN_ROWS = 12
 _LEGACY_EXTENSIONS = (".xls", ".xlsb")
 _READABLE_EXTENSIONS = (".xlsx", ".xlsm", ".xltx", ".xltm")
 
+#: Delimited text, one file per sheet, read from a folder. Revit's own schedule
+#: export writes tab-separated text, and a workbook nobody can open in Excel is
+#: still a workbook -- so a folder of these is a first-class input, not a
+#: testing convenience. The sheet name is the file name.
+_TEXT_EXTENSIONS = (".csv", ".tsv", ".txt")
+
 
 # ---------------------------------------------------------------------------
 # Text folding
@@ -257,6 +263,87 @@ _SHEET_SPECS = (
 # Half one: the file
 # ---------------------------------------------------------------------------
 
+def split_delimited(text):
+    """Rows from delimited text, working out the delimiter from the header.
+
+    Hand-rolled because the engine has no ``csv`` module (§12.9.3), and quote
+    aware because the Outline column is a single cell full of commas and
+    semicolons -- splitting naively would tear one pad's shape into six columns.
+
+    Tab wins where the header has one, since that is what Revit's own schedule
+    export writes; otherwise comma.
+    """
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    if not lines:
+        return []
+    delimiter = "\t" if "\t" in lines[0] else ","
+
+    rows = []
+    for line in lines:
+        if not line.strip():
+            rows.append([])
+            continue
+        cells = []
+        current = []
+        quoted = False
+        index = 0
+        while index < len(line):
+            char = line[index]
+            if char == '"':
+                if quoted and index + 1 < len(line) and line[index + 1] == '"':
+                    current.append('"')      # "" inside a quoted cell is one "
+                    index += 1
+                else:
+                    quoted = not quoted
+            elif char == delimiter and not quoted:
+                cells.append("".join(current))
+                current = []
+            else:
+                current.append(char)
+            index += 1
+        cells.append("".join(current))
+        rows.append(cells)
+
+    while rows and not rows[-1]:
+        rows.pop()
+    return rows
+
+
+def read_text_folder(path):
+    """``({sheet name: rows}, issues)`` from a folder of delimited text files."""
+    import os
+    issues = []
+    grids = {}
+    try:
+        names = sorted(os.listdir(path))
+    except Exception as list_error:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "Could not read the folder: {0}".format(list_error)))
+        return {}, issues
+
+    for name in names:
+        stem, extension = os.path.splitext(name)
+        if extension.lower() not in _TEXT_EXTENSIONS:
+            continue
+        try:
+            handle = open(os.path.join(path, name), "r")
+            try:
+                grids[stem] = split_delimited(handle.read())
+            finally:
+                handle.close()
+        except Exception as read_error:
+            issues.append(Issue(
+                SEVERITY_ERROR,
+                "Could not read {0}: {1}".format(name, read_error)))
+
+    if not grids:
+        issues.append(Issue(
+            SEVERITY_ERROR,
+            "No .csv, .tsv or .txt sheets in {0}.".format(path)))
+    return grids, issues
+
+
 def read_grid(path):
     """``({sheet_name: [[cell, ...], ...]}, issues)`` -- every sheet, raw.
 
@@ -276,7 +363,18 @@ def read_grid(path):
         issues.append(Issue(SEVERITY_ERROR, "No workbook selected."))
         return {}, issues
 
+    import os
+    if os.path.isdir(path):
+        return read_text_folder(path)
+
     lowered = str(path).lower()
+    for extension in _TEXT_EXTENSIONS:
+        if lowered.endswith(extension):
+            issues.append(Issue(
+                SEVERITY_ERROR,
+                "{0} holds one sheet, and a schedule needs several. Select the "
+                "folder the sheets are in instead.".format(extension)))
+            return {}, issues
     for extension in _LEGACY_EXTENSIONS:
         if lowered.endswith(extension):
             issues.append(Issue(
@@ -287,10 +385,10 @@ def read_grid(path):
     if not any(lowered.endswith(ext) for ext in _READABLE_EXTENSIONS):
         issues.append(Issue(
             SEVERITY_ERROR,
-            "Expected an Excel workbook (.xlsx or .xlsm), got {0!r}.".format(path)))
+            "Expected an Excel workbook (.xlsx or .xlsm), or a folder of .csv "
+            "/ .tsv / .txt sheets. Got {0!r}.".format(path)))
         return {}, issues
 
-    import os
     if not os.path.isfile(path):
         issues.append(Issue(
             SEVERITY_ERROR, "Workbook not found: {0}".format(path)))
@@ -363,6 +461,24 @@ def find_header_row(rows, columns):
         if matched == len(required):
             return index
     return None
+
+
+def read_key_value_sheet(rows):
+    """``{folded key: text}`` from a two-column cover sheet.
+
+    Column A is the label, column B the value. Blank rows and label-only rows
+    are skipped, so a sheet laid out with spacing and section headings still
+    reads.
+    """
+    metadata = {}
+    for row in rows or ():
+        if len(row) < 2:
+            continue
+        key = fold(row[0])
+        value = coerce_text(row[1])
+        if key and value:
+            metadata.setdefault(key, value)
+    return metadata
 
 
 def read_metadata(rows, header_index):
@@ -506,10 +622,14 @@ def _match_sheets(grids):
     matched = {}
     present = []
     for canonical in models.ALL_SHEETS:
-        found = folded.get(fold(canonical))
-        if found is not None:
-            matched[canonical] = found[1]
-            present.append(canonical)
+        names = ([fold(alias) for alias in models.INFO_SHEET_ALIASES]
+                 if canonical == models.SHEET_INFO else [fold(canonical)])
+        for name in names:
+            found = folded.get(name)
+            if found is not None:
+                matched[canonical] = found[1]
+                present.append(canonical)
+                break
     return matched, tuple(present)
 
 
@@ -524,7 +644,8 @@ def _check_units(metadata, issues):
         issues.append(Issue(
             SEVERITY_WARNING,
             "No UNITS declared in the workbook. Reading every length as "
-            "millimetres. Add a 'UNITS | mm' row above the header to confirm."))
+            "millimetres. Add an {0} sheet with a 'UNITS | mm' row to confirm "
+            "it.".format(models.SHEET_INFO)))
         return "mm"
     if fold(declared) in ("mm", "millimetre", "millimetres", "millimeter",
                           "millimeters"):
@@ -562,7 +683,10 @@ def parse_grid(grids, path=None, mode=models.MODE_CREATE_ALL):
                     canonical)))
 
     parsed = {}
-    metadata = {}
+    # The cover sheet wins where it says anything, because it is the sheet the
+    # user maintains on purpose; a title block above a header is the fallback
+    # for a schedule that arrives with one.
+    metadata = read_key_value_sheet(matched.get(models.SHEET_INFO))
     for canonical, columns, factory in _SHEET_SPECS:
         rows = matched.get(canonical)
         if rows is None:

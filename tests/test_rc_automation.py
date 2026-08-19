@@ -61,6 +61,14 @@ def fixture_grids():
     return grids
 
 
+def _openpyxl_missing():
+    try:
+        import openpyxl  # noqa: F401
+        return False
+    except Exception:
+        return True
+
+
 def errors(issues):
     return [i for i in issues if i.severity == models.SEVERITY_ERROR]
 
@@ -1257,6 +1265,209 @@ class ColumnMainTests(unittest.TestCase):
         self.assertEqual(sorted(counts), [4, 6])
 
 
+class EveryFormatTests(unittest.TestCase):
+    """The same schedule, in every format, has to become the same objects.
+
+    Regenerate with ``python tests/fixtures/rc_automation/build_fixtures.py``.
+    Nothing here needs openpyxl for the text routes; only the workbook ones do.
+    """
+
+    def expect(self, data, issues, label):
+        self.assertEqual(errors(issues), [], label + ": " + messages(issues))
+        self.assertEqual(len(data.footing_types), 3, label)
+        self.assertEqual(len(data.footing_placement), 6, label)
+        self.assertEqual(len(data.column_rebar), 7, label)
+        self.assertEqual(data.footing_type("F1").length_mm, 3000.0, label)
+        self.assertEqual(data.units, "mm", label)
+        shaped = [p for p in data.footing_placement if p.has_outline]
+        self.assertEqual(len(shaped), 1, label)
+        self.assertEqual(len(shaped[0].outline), 5, label)
+
+    def test_the_csv_folder(self):
+        data, issues = excel_engine.load(_FIXTURES)
+        self.expect(data, issues, "csv")
+
+    def test_the_tab_separated_folder(self):
+        data, issues = excel_engine.load(os.path.join(_FIXTURES, "txt_sheets"))
+        self.expect(data, issues, "txt")
+        # The txt set carries the cover sheet, so nothing is assumed.
+        self.assertEqual(warnings(issues), [], messages(issues))
+        self.assertEqual(data.metadata.get("project"), "Riverside Tower")
+
+    @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
+    def test_the_xlsx_workbook(self):
+        data, issues = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.xlsx"))
+        self.expect(data, issues, "xlsx")
+        self.assertEqual(warnings(issues), [], messages(issues))
+
+    @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
+    def test_the_macro_enabled_workbook(self):
+        data, issues = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.xlsm"))
+        self.expect(data, issues, "xlsm")
+
+    def test_the_legacy_workbook_is_refused_with_the_fix(self):
+        # The file is present, so this is the "cannot read this format"
+        # message rather than "not found" -- which are different problems and
+        # need different sentences.
+        _, issues = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.xls"))
+        self.assertTrue(errors(issues))
+        self.assertIn("Save As", errors(issues)[0].message)
+
+    @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
+    def test_the_workbook_pushed_from_revit_reads(self):
+        """The file that produced the first real run, warning and all.
+
+        It has no INFO sheet and no title block, which is exactly why it warned
+        about units. Kept as a fixture because a real workbook that exercises
+        the fallback is worth more than one written to pass.
+        """
+        path = os.path.join(
+            _FIXTURES, "all-in-one xlsx sheet needed like this example.xlsx")
+        data, issues = excel_engine.load(path)
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_types), 3)
+        self.assertEqual(len(data.footing_placement), 6)
+        found = [i for i in warnings(issues) if "UNITS" in i.message]
+        self.assertEqual(len(found), 1, messages(issues))
+
+    @unittest.skipIf(_openpyxl_missing(), "openpyxl not importable")
+    def test_text_and_numeric_cells_agree(self):
+        """A dimension typed as text and as a number must read the same.
+
+        The pushed workbook stores FOOTING_TYPES as strings and FOOTING_REBAR as
+        numbers -- both are what Excel hands back depending on how a cell was
+        formatted, and neither may change what gets built.
+        """
+        pushed, _ = excel_engine.load(os.path.join(
+            _FIXTURES, "all-in-one xlsx sheet needed like this example.xlsx"))
+        generated, _ = excel_engine.load(
+            os.path.join(_FIXTURES, "sample_schedule.xlsx"))
+        for mark in ("F1", "F2", "F3"):
+            self.assertEqual(pushed.footing_type(mark).length_mm,
+                             generated.footing_type(mark).length_mm, mark)
+            self.assertEqual(pushed.footing_type(mark).thickness_mm,
+                             generated.footing_type(mark).thickness_mm, mark)
+
+
+class DelimitedTextTests(unittest.TestCase):
+    """Delimited text is a real input: Revit's own schedule export writes it."""
+
+    def test_a_comma_file_splits(self):
+        rows = excel_engine.split_delimited("a,b,c\n1,2,3")
+        self.assertEqual(rows, [["a", "b", "c"], ["1", "2", "3"]])
+
+    def test_a_tab_header_switches_the_delimiter(self):
+        rows = excel_engine.split_delimited("a\tb\tc\n1\t2\t3")
+        self.assertEqual(rows, [["a", "b", "c"], ["1", "2", "3"]])
+
+    def test_a_quoted_cell_keeps_its_commas(self):
+        # The Outline column is one cell full of commas and semicolons;
+        # splitting naively would tear a pad's shape into six columns.
+        rows = excel_engine.split_delimited(
+            'Mark,Outline\nF3,"0,0; 4500,0; 4500,3000"')
+        self.assertEqual(rows[1], ["F3", "0,0; 4500,0; 4500,3000"])
+
+    def test_a_doubled_quote_is_one_quote(self):
+        rows = excel_engine.split_delimited('a,b\n1,"say ""hi"""')
+        self.assertEqual(rows[1], ["1", 'say "hi"'])
+
+    def test_windows_line_endings(self):
+        rows = excel_engine.split_delimited("a,b\r\n1,2\r\n")
+        self.assertEqual(rows, [["a", "b"], ["1", "2"]])
+
+    def test_a_blank_line_is_a_blank_row_not_a_ragged_one(self):
+        rows = excel_engine.split_delimited("a,b\n\n1,2")
+        self.assertEqual(rows, [["a", "b"], [], ["1", "2"]])
+
+
+class TextFolderTests(unittest.TestCase):
+    """A folder of sheets reads exactly like the workbook it came from."""
+
+    def test_the_csv_fixtures_load_as_a_workbook(self):
+        data, issues = excel_engine.load(_FIXTURES)
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_types), 3)
+        self.assertEqual(len(data.footing_placement), 6)
+        self.assertEqual(data.footing_type("F1").length_mm, 3000.0)
+
+    def test_the_outline_survives_the_folder_route(self):
+        data, _ = excel_engine.load(_FIXTURES)
+        shaped = [p for p in data.footing_placement if p.has_outline]
+        self.assertEqual(len(shaped), 1)
+        self.assertEqual(len(shaped[0].outline), 5)
+
+    def test_a_folder_with_no_sheets_says_so(self):
+        empty = tempfile.mkdtemp(prefix="rc_empty_")
+        try:
+            _, issues = excel_engine.load(empty)
+            self.assertIn("No .csv", errors(issues)[0].message)
+        finally:
+            shutil.rmtree(empty, ignore_errors=True)
+
+
+class CoverSheetTests(unittest.TestCase):
+    """Metadata belongs on its own sheet, so the data sheets stay tables."""
+
+    def info(self, rows):
+        grids = minimal_grids()
+        grids["INFO"] = grid(rows)
+        return grids
+
+    def test_the_cover_sheet_declares_the_units(self):
+        data, issues = excel_engine.parse_grid(self.info("""
+PROJECT,Riverside Tower
+UNITS,mm
+STANDARD,BS 8666:2020
+"""))
+        self.assertEqual(data.units, "mm")
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(warnings(issues), [], messages(issues))
+        self.assertEqual(data.metadata.get("project"), "Riverside Tower")
+
+    def test_the_sheet_may_be_called_something_else(self):
+        for name in ("Project Info", "COVER", "Settings"):
+            grids = minimal_grids()
+            grids[name] = grid("UNITS,mm")
+            data, issues = excel_engine.parse_grid(grids)
+            self.assertEqual(warnings(issues), [], name + ": " + messages(issues))
+            self.assertEqual(data.units, "mm", name)
+
+    def test_wrong_units_on_the_cover_sheet_are_still_refused(self):
+        _, issues = excel_engine.parse_grid(self.info("UNITS,m"))
+        self.assertTrue(any("UNITS" in i.message for i in errors(issues)),
+                        messages(issues))
+
+    def test_blank_and_label_only_rows_are_skipped(self):
+        data, _ = excel_engine.parse_grid(self.info("""
+Project schedule,
+,
+UNITS,mm
+"""))
+        self.assertEqual(data.units, "mm")
+
+    def test_the_warning_names_the_sheet_that_fixes_it(self):
+        # This is the workbook that produced the only warning on the first real
+        # run in Revit: pure data sheets, no title block, nothing declaring mm.
+        _, issues = excel_engine.parse_grid(minimal_grids(FOOTING_TYPES=grid("""
+TypeMark,Length,Width,Thickness,CoverTop,CoverBottom,CoverSide
+F1,3000,3000,900,50,75,50
+""")))
+        found = [i for i in warnings(issues) if "UNITS" in i.message]
+        self.assertTrue(found, messages(issues))
+        self.assertIn("INFO", found[0].message)
+
+    def test_a_title_block_still_works_without_a_cover_sheet(self):
+        # A real schedule arrives with its title block above the header, and
+        # rejecting that would make the tool useless on the documents it exists
+        # to read.
+        data, issues = excel_engine.parse_grid(fixture_grids())
+        self.assertEqual(warnings(issues), [], messages(issues))
+        self.assertEqual(data.metadata.get("project"), "Riverside Tower")
+
+
 # ── the file layer ─────────────────────────────────────────────────────────
 
 try:
@@ -1346,9 +1557,15 @@ class ReadGridTests(unittest.TestCase):
         self.assertIn("Save As", errors(issues)[0].message)
 
     def test_a_file_that_is_not_a_workbook_is_refused_by_extension(self):
-        _, issues = excel_engine.load(os.path.join(self.tmp, "notes.txt"))
+        _, issues = excel_engine.load(os.path.join(self.tmp, "notes.docx"))
         self.assertTrue(errors(issues))
         self.assertIn("Excel workbook", errors(issues)[0].message)
+
+    def test_a_single_text_sheet_points_at_the_folder(self):
+        # One .txt is one sheet, and a schedule needs six -- so the message has
+        # to say what to select instead, not just refuse.
+        _, issues = excel_engine.load(os.path.join(self.tmp, "FOOTING_TYPES.txt"))
+        self.assertIn("folder", errors(issues)[0].message)
 
     def test_no_path_is_refused(self):
         _, issues = excel_engine.load("")
