@@ -1638,13 +1638,45 @@ class TextFolderTests(unittest.TestCase):
         self.assertEqual(len(shaped), 1)
         self.assertEqual(len(shaped[0].outline), 5)
 
-    def test_a_folder_with_no_sheets_says_so(self):
+    def test_a_folder_with_no_sheets_names_what_it_wanted(self):
         empty = tempfile.mkdtemp(prefix="rc_empty_")
         try:
             _, issues = excel_engine.load(empty)
-            self.assertIn("No .csv", errors(issues)[0].message)
+            message = errors(issues)[0].message
+            self.assertIn("No sheets found", message)
+            self.assertIn("FOOTING_TYPES", message)
         finally:
             shutil.rmtree(empty, ignore_errors=True)
+
+    def test_a_stray_file_beside_the_sheets_is_ignored_not_fatal(self):
+        """A folder is somebody's working directory as often as a workbook.
+
+        An exported report sitting beside the sheets used to be read as one and
+        killed the whole load — it is not UTF-8, because Excel on Windows does
+        not write UTF-8.
+        """
+        data, issues = excel_engine.load(_FIXTURES)
+        self.assertEqual(errors(issues), [], messages(issues))
+        self.assertEqual(len(data.footing_types), 3)
+        notes = [i for i in issues if i.severity == models.SEVERITY_INFO]
+        self.assertTrue(any("not named after a sheet" in i.message
+                            for i in notes), messages(issues))
+
+    def test_a_cp1252_sheet_reads(self):
+        """Excel on a Western Windows writes cp1252, not UTF-8."""
+        folder = tempfile.mkdtemp(prefix="rc_cp1252_")
+        try:
+            path = os.path.join(folder, "FOOTING_TYPES.csv")
+            with open(path, "wb") as handle:
+                handle.write(u"TypeMark,Length,Width,Thickness,CoverTop,"
+                             u"CoverBottom,CoverSide,Comments\n"
+                             u"F1,3000,3000,900,50,75,50,pad \u2014 typical\n"
+                             .encode("cp1252"))
+            grids, issues = excel_engine.read_grid(folder)
+            self.assertEqual(errors(issues), [], messages(issues))
+            self.assertIn(u"\u2014", grids["FOOTING_TYPES"][1][7])
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 class CoverSheetTests(unittest.TestCase):

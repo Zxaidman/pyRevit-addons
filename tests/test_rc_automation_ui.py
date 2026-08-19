@@ -449,6 +449,61 @@ class CreationSafetyTests(unittest.TestCase):
             self.assertIn("undo", text, path)
 
 
+class ReportingTests(unittest.TestCase):
+    """What the tool says when it does nothing — which is most of the time.
+
+    Every check here comes from one exported report that was, in its own words,
+    a "read-only report" from a build that writes, in an encoding nothing could
+    decode, that listed two zeroes and left the reader to work out that the
+    model was empty and the mode unsupported.
+    """
+
+    def setUp(self):
+        self.source = _read(_SCRIPT)
+
+    def test_the_report_is_written_as_utf8(self):
+        # open() without an encoding writes cp1252 on Windows, which mangles
+        # every dash and makes the file undecodable.
+        body = self.source.split("def _on_export")[1].split("\n    def ")[0]
+        self.assertIn('encoding="utf-8"', body)
+        self.assertNotIn('open(target, "w")', body)
+
+    def test_the_report_does_not_call_itself_read_only(self):
+        # It writes now. A report that says otherwise is telling the reader
+        # something false about what just happened to their model.
+        body = self.source.split("def _report_text")[1].split("\n    def ")[0]
+        self.assertNotIn("read-only", body.lower())
+        self.assertIn("__version__", body)
+
+    def test_an_unsupported_mode_is_said_the_same_way_everywhere(self):
+        """Status bar, report and probe share one sentence, so they cannot
+        drift into telling the user three different things."""
+        self.assertIn("_MODE_NOT_BUILT", self.source)
+        self.assertGreaterEqual(self.source.count("_MODE_NOT_BUILT.format"), 3)
+
+    def test_the_mode_is_flagged_when_the_workbook_loads(self):
+        # Not only when Plan is pressed — a user who loads, exports and never
+        # presses Plan is told nothing otherwise.
+        body = self.source.split("def _describe_plan")[1].split("\n    def ")[0]
+        self.assertIn("MODE_REBAR_ONLY", body)
+
+    def test_the_probe_states_its_conclusion(self):
+        # A reader should not have to infer "nothing to reinforce" from a pair
+        # of zeroes.
+        self.assertIn("def _verdict", self.source)
+        body = self.source.split("def _verdict")[1].split("\n    def ")[0]
+        self.assertIn("nothing to reinforce", body)
+        self.assertIn("flagged structural", body)
+
+    def test_the_probe_names_levels_the_model_lacks(self):
+        """Not flagging a level is not the same as saying it is missing."""
+        self.assertIn("def _missing_level_lines", self.source)
+        body = self.source.split("def _missing_level_lines")[1]\
+            .split("\n    def ")[0]
+        self.assertIn("base_level", body)
+        self.assertIn("top_level", body)
+
+
 class ToolkitApiTests(unittest.TestCase):
     """Every toolkit attribute the script names actually exists.
 

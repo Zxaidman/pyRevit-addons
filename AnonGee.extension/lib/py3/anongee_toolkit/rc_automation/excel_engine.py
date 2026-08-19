@@ -341,18 +341,46 @@ def split_sheets(rows):
     return sheets
 
 
-def read_text_file(path):
-    """``({sheet: rows}, issues)`` from a single delimited file."""
-    issues = []
-    try:
-        handle = open(path, "r")
+#: Encodings tried, in order, when reading delimited text. UTF-8 first because
+#: it is what everything modern writes; then cp1252, because Excel on a Western
+#: Windows writes that and its em-dash is the byte that breaks a strict UTF-8
+#: read; then latin-1, which cannot fail and so guarantees an answer.
+_TEXT_ENCODINGS = ("utf-8", "cp1252", "latin-1")
+
+
+def decode_text(data):
+    """Bytes to text, tolerating what a spreadsheet tool actually writes.
+
+    A schedule exported from Excel is not UTF-8, and refusing to read it on that
+    account would be the tool's problem presented as the user's.
+    """
+    for encoding in _TEXT_ENCODINGS:
         try:
-            text = handle.read()
+            return data.decode(encoding)
+        except Exception:
+            continue
+    return data.decode("latin-1", "replace")
+
+
+def read_text_bytes(path):
+    """``(text, error)`` for one delimited file."""
+    try:
+        handle = open(path, "rb")
+        try:
+            return decode_text(handle.read()), None
         finally:
             handle.close()
     except Exception as read_error:
+        return None, str(read_error)
+
+
+def read_text_file(path):
+    """``({sheet: rows}, issues)`` from a single delimited file."""
+    issues = []
+    text, error = read_text_bytes(path)
+    if error is not None:
         issues.append(Issue(
-            SEVERITY_ERROR, "Could not read {0}: {1}".format(path, read_error)))
+            SEVERITY_ERROR, "Could not read {0}: {1}".format(path, error)))
         return {}, issues
 
     sheets = split_sheets(split_delimited(text))
@@ -379,25 +407,37 @@ def read_text_folder(path):
             "Could not read the folder: {0}".format(list_error)))
         return {}, issues
 
+    wanted = dict((fold(sheet), sheet) for sheet in models.ALL_SHEETS)
+    ignored = []
     for name in names:
         stem, extension = os.path.splitext(name)
         if extension.lower() not in _TEXT_EXTENSIONS:
             continue
-        try:
-            handle = open(os.path.join(path, name), "r")
-            try:
-                grids[stem] = split_delimited(handle.read())
-            finally:
-                handle.close()
-        except Exception as read_error:
+        # Only files named after a sheet are read. A folder is somebody's
+        # working directory as often as it is a workbook, and an exported
+        # report or a stray note sitting beside the sheets is not one of them.
+        if fold(stem) not in wanted:
+            ignored.append(name)
+            continue
+        text, error = read_text_bytes(os.path.join(path, name))
+        if error is not None:
             issues.append(Issue(
-                SEVERITY_ERROR,
-                "Could not read {0}: {1}".format(name, read_error)))
+                SEVERITY_ERROR, "Could not read {0}: {1}".format(name, error)))
+            continue
+        grids[stem] = split_delimited(text)
 
     if not grids:
         issues.append(Issue(
             SEVERITY_ERROR,
-            "No .csv, .tsv or .txt sheets in {0}.".format(path)))
+            "No sheets found in {0}. Files have to be named after the sheet "
+            "they hold — {1}.".format(
+                path, ", ".join(models.ALL_SHEETS))))
+    elif ignored:
+        issues.append(Issue(
+            SEVERITY_INFO,
+            "Ignored {0} file(s) in the folder that are not named after a "
+            "sheet: {1}.".format(
+                len(ignored), ", ".join(sorted(ignored)[:5]))))
     return grids, issues
 
 

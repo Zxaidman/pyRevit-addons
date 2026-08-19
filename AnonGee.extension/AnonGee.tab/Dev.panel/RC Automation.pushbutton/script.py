@@ -36,6 +36,7 @@ Architecture is the reference pattern (§12.8):
   • No pyRevit imports, no `re` — the engine ships neither (§12.8.4, §12.9.3).
 """
 
+import io
 import os
 import sys
 import types
@@ -74,9 +75,15 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
+
+#: Said by the status bar, the report and the plan alike, so the three cannot
+#: drift into telling the user different things.
+_MODE_NOT_BUILT = (
+    "'{0}' is not built yet — this release reinforces structure that already "
+    "exists. Switch to 'Reinforce existing structure' to plan and create.")
 
 #: Hosts written per Transaction. Revit's thread is blocked for the whole of
 #: one, so this is the granularity at which a long run can be given up on and
@@ -457,6 +464,7 @@ class RCAutomationApp(object):
         self.issues = []
         self.probe = None
         self.plan = None
+        self.created_anything = False
         self._queue = []
         self._busy = False
 
@@ -565,11 +573,10 @@ class RCAutomationApp(object):
             self.set_status(
                 "The workbook has errors — fix those before planning.", True)
             return False
-        if self.selected_mode() != models.MODE_REBAR_ONLY:
-            self.set_status(
-                "Planning reinforcement needs the '{0}' mode. The other two "
-                "create or reconcile structure, which this build does not do."
-                .format(models.MODE_LABELS[models.MODE_REBAR_ONLY]), True)
+        mode = self.selected_mode()
+        if mode != models.MODE_REBAR_ONLY:
+            self.set_status(_MODE_NOT_BUILT.format(models.MODE_LABELS[mode]),
+                            True)
             return False
         return True
 
@@ -623,8 +630,14 @@ class RCAutomationApp(object):
             "{0}_rc_report.txt".format(
                 os.path.splitext(os.path.basename(path))[0] or "workbook"))
         try:
-            with open(target, "w") as handle:
+            # Explicit UTF-8: open() without one uses the platform encoding, and
+            # on Windows that writes cp1252, which mangles every dash in the
+            # report and makes the file undecodable by anything expecting UTF-8.
+            handle = io.open(target, "w", encoding="utf-8")
+            try:
                 handle.write(self._report_text())
+            finally:
+                handle.close()
             self.set_status("Report written to {0}".format(target))
         except Exception as write_error:
             self.set_status("Could not write the report: {0}".format(
@@ -716,6 +729,7 @@ class RCAutomationApp(object):
 
     def _on_create_done(self, result):
         self.plan = None
+        self.created_anything = True
         parts = ["Placed {0} element(s) — {1} bar(s) — into {2} footing(s).".
                  format(result["elements"], result["bars"], result["hosts"])]
         if result["skipped"]:
@@ -815,13 +829,18 @@ class RCAutomationApp(object):
         note = (" {0} layer(s) vary in length and would be placed as individual "
                 "bars.".format(varying) if varying else "")
         blocked = models.has_errors(self.issues)
+        mode = self.selected_mode()
+        tail = ""
+        if blocked:
+            tail = "  Errors must be fixed before a run."
+        elif mode != models.MODE_REBAR_ONLY:
+            tail = "  " + _MODE_NOT_BUILT.format(models.MODE_LABELS[mode])
         self.set_status(
             "{0} footing types, {1} column types. {2} footing bars would be "
             "placed as {3} element(s).{4}{5}".format(
                 summary["footing_types"], summary["column_types"], bars,
-                elements, note,
-                "  Errors must be fixed before a run." if blocked else ""),
-            blocked)
+                elements, note, tail),
+            blocked or mode != models.MODE_REBAR_ONLY)
 
     def _probe_text(self, result):
         lines = ["Model: {0}".format(result.get("title", "?")), ""]
@@ -833,6 +852,7 @@ class RCAutomationApp(object):
             len(result.get("bar_types", []))))
         for name in result.get("bar_types", []) or ["  none loaded"]:
             lines.append("  {0}".format(name))
+        lines.extend(self._missing_level_lines(result.get("levels", [])))
         lines.append("")
         footings, footing_hosts = result.get("footings", 0), result.get(
             "footing_hosts", 0)
@@ -847,7 +867,58 @@ class RCAutomationApp(object):
             columns, column_hosts))
         lines.append("")
         lines.append(self._mark_report(result.get("marks", [])))
+
+        # The conclusion, spelled out. A reader should not have to infer "there
+        # is nothing to reinforce" from a pair of zeroes.
+        verdict = self._verdict(footings, columns, footing_hosts)
+        if verdict:
+            lines.append("")
+            lines.append(verdict)
         return "\n".join(lines)
+
+    def _verdict(self, footings, columns, footing_hosts):
+        """What all of the above adds up to, in a sentence."""
+        mode = self.selected_mode()
+        if not footings and not columns:
+            if mode == models.MODE_REBAR_ONLY:
+                return ("This model has no footings or columns, so there is "
+                        "nothing to reinforce. Model the structure first, or "
+                        "wait for the release that creates it from the "
+                        "placement sheets.")
+            return _MODE_NOT_BUILT.format(models.MODE_LABELS[mode]) + \
+                " The model has no footings or columns yet either."
+        if mode != models.MODE_REBAR_ONLY:
+            return _MODE_NOT_BUILT.format(models.MODE_LABELS[mode])
+        if footings and not footing_hosts:
+            return ("None of the {0} foundation(s) can host reinforcement — a "
+                    "floor has to be flagged structural before Revit will put "
+                    "a bar in it.".format(footings))
+        return ""
+
+    def _missing_level_lines(self, model_levels):
+        """Name the workbook's levels the model does not have.
+
+        Not flagging a level is not the same as saying it is missing, and a
+        schedule written against "Foundation" in a model whose levels are
+        "00 Ground Lvl." fails for a reason nobody can see from a list.
+        """
+        if self.workbook is None:
+            return []
+        wanted = set()
+        for row in self.workbook.footing_placement:
+            if row.level:
+                wanted.add(row.level)
+        for row in self.workbook.column_placement:
+            for name in (row.base_level, row.top_level):
+                if name:
+                    wanted.add(name)
+        missing = sorted(wanted - set(model_levels))
+        if not missing:
+            return []
+        return ["", "The workbook names {0} level(s) this model does not "
+                    "have:".format(len(missing))] + \
+               ["  " + name for name in missing] + \
+               ["  (map or rename them before creating structure)"]
 
     def _level_flag(self, name):
         """Mark the levels the workbook actually asks for."""
@@ -881,11 +952,15 @@ class RCAutomationApp(object):
         return "\n".join(lines)
 
     def _report_text(self):
-        lines = ["AnonGee RC Automation — read-only report",
+        mode = self.selected_mode()
+        lines = ["AnonGee RC Automation {0}".format(__version__),
                  "Workbook: {0}".format(
                      (self.WorkbookPathText.Text or "").strip()),
-                 "Mode: {0}".format(models.MODE_LABELS[self.selected_mode()]),
+                 "Mode: {0}".format(models.MODE_LABELS[mode]),
                  ""]
+        if mode != models.MODE_REBAR_ONLY:
+            lines.append(_MODE_NOT_BUILT.format(models.MODE_LABELS[mode]))
+            lines.append("")
         counts = models.count_by_severity(self.issues)
         lines.append("{0} errors, {1} warnings, {2} notes".format(
             counts[models.SEVERITY_ERROR], counts[models.SEVERITY_WARNING],
@@ -897,7 +972,9 @@ class RCAutomationApp(object):
             lines.append("")
             lines.append(self._probe_text(self.probe))
         lines.append("")
-        lines.append("Nothing in the model was changed.")
+        lines.append("Nothing in the model was changed."
+                     if not self.created_anything
+                     else "Reinforcement was placed. Ctrl+Z reverses the run.")
         return "\n".join(lines)
 
     def set_status(self, message, is_error=False):

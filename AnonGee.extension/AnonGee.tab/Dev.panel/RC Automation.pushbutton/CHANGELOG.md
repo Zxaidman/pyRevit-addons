@@ -1,5 +1,28 @@
 # RC Automation — changelog
 
+## 0.2.1 — 2026-08-19
+
+Everything here came out of one report exported from a real model.
+
+- **Reports are written as UTF-8.** `open(path, "w")` uses the platform encoding,
+  and on Windows that wrote cp1252 — every dash in the report came back as a byte
+  nothing could decode.
+- **The report no longer calls itself a "read-only report".** It writes now, and
+  a report saying otherwise tells the reader something false about what just
+  happened to their model.
+- **A folder of sheets tolerates what else is in it.** The exported report,
+  dropped beside the sheets, was read as one and failed the whole workbook. Only
+  files named after a sheet are read now, and text is decoded UTF-8 then cp1252
+  then latin-1, because a schedule exported from Excel is not UTF-8 and refusing
+  it on that account is the tool's problem presented as the user's.
+- **The probe states its conclusion.** "Structural foundations: 0" and a list of
+  bar types left the reader to work out that there was nothing to reinforce. It
+  now says so, names the levels the workbook asks for that the model does not
+  have, and says when no foundation can host a bar.
+- **An unsupported mode is said when the workbook loads**, not only when Plan is
+  pressed — and the status bar, the report and the probe now share one sentence
+  so they cannot drift apart.
+
 ## 0.2.0 — 2026-08-19
 
 It writes.
