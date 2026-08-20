@@ -1,4 +1,4 @@
-AnonGee RC Automation 0.5.0
+AnonGee RC Automation 0.6.0
 Workbook: D:\ZAID\Advance AI\pyRevit-addons\tests\fixtures\rc_automation\sample_schedule.xlsx
 Mode: Create structure and reinforcement
 
@@ -8,37 +8,19 @@ Mode: Create structure and reinforcement
 [Info] Read 3 footing types with 10 bar rows, and 3 column types with 7 bar rows. Placing 6 footings and 5 columns.
 
 What the run did
-Created 6 footing(s), and 22 set(s) — 317 bar(s) — in them.
+Created 6 footing(s), and 26 set(s) — 317 bar(s) — in them.
 
 One undo step — Ctrl+Z reverses the whole run.
 
-66 bar handle(s) tied to the host's cover — editing a footing updates its reinforcement.
+78 bar handle(s) tied to the host's cover — editing a footing updates its reinforcement.
 
-Not constrained (1)
+Not constrained (2)
   1x ApplyRebarConstraints: No method matches given arguments for RebarConstraintsManager.ApplyRebarConstraints: ()
+  F3 B1X from 3000: asked for a 1200 mm distribution, Revit made it 1000 mm
 
-Notes (26)
+Notes (2)
   created cover type FOOTING TOP (50 mm)
   created cover type FOOTING BOTTOM (75 mm)
-  F1-A1: no cover could be written onto the element
-  top cover could not be applied to the element
-  bottom cover could not be applied to the element
-  side cover could not be applied to the element
-  F1-A2: no cover could be written onto the element
-  top cover could not be applied to the element
-  bottom cover could not be applied to the element
-  side cover could not be applied to the element
-  F1-B1: no cover could be written onto the element
-  top cover could not be applied to the element
-  bottom cover could not be applied to the element
-  side cover could not be applied to the element
-  F2-C1: no cover could be written onto the element
-  top cover could not be applied to the element
-  bottom cover could not be applied to the element
-  side cover could not be applied to the element
-  F3-B2: no cover could be written onto the element
-  top cover could not be applied to the element
-  ... and 6 more
 
 The bars are placed correctly either way; what is lost is the automatic updating.
 
@@ -70,6 +52,9 @@ Structural columns: 0 (0 can host rebar)
 
 Footing marks: 0 of 6 scheduled marks are in the model
   not in the model: F1-A1, F1-A2, F1-B1, F2-C1, F3-B2, F3-P1
+
+Cover parameters on an existing footing
+  no footing in the model yet to read cover from
 
 Rebar constraints on this build
 no rebar in the model yet to read constraints from
