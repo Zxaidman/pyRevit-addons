@@ -75,7 +75,7 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -301,7 +301,20 @@ if _state.handler_cls is None:
             result["marks"] = self._marks(
                 doc, BuiltInCategory.OST_StructuralFoundation)
             result["constraints"] = self._constraint_support(doc)
+            result["cover"] = self._cover_support(doc)
             return result
+
+        def _cover_support(self, doc):
+            """Which cover parameters an existing footing actually has.
+
+            Cover types were being created and never applied, with nothing
+            saying which of the several possible reasons it was.
+            """
+            from anongee_toolkit.structural import rebar_factory
+            for element in rebar_hosts.elements_in(
+                    doc, rebar_hosts.FOOTING_CATEGORY):
+                return rebar_factory.describe_cover(element)
+            return "  no footing in the model yet to read cover from"
 
         def _constraint_support(self, doc):
             """What this Revit build offers for rebar constraints.
@@ -1194,6 +1207,10 @@ class RCAutomationApp(object):
             columns, column_hosts))
         lines.append("")
         lines.append(self._mark_report(result.get("marks", [])))
+        if result.get("cover"):
+            lines.append("")
+            lines.append("Cover parameters on an existing footing")
+            lines.append(result["cover"])
         if result.get("constraints"):
             lines.append("")
             lines.append("Rebar constraints on this build")

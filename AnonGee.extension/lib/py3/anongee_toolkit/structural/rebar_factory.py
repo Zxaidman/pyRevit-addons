@@ -143,38 +143,69 @@ _COVER_PARAMETERS = {
 
 
 def _set_cover_parameter(host, face, cover_id):
-    """Write one face's cover, host data first, built-in parameter second.
+    """Write one face's cover. ``(applied, note)``.
 
-    ``RebarHostData.SetCoverType`` is the route that works for a floor, a wall
-    and a family instance alike; the parameters are the fallback for a build or
-    a category where it does not.
+    The built-in parameters are the route that works. ``RebarHostData`` has a
+    ``SetCoverType`` too, but it takes a **``Reference`` to a face** rather than
+    a face enum -- an earlier version guessed at a ``RebarCoverFaceType`` that
+    does not exist, which is why nothing was written and nothing said so.
+    ``SetCommonCoverType`` is tried as a last resort because it needs no face at
+    all.
     """
-    try:
-        from Autodesk.Revit.DB.Structure import RebarHostData
-        from Autodesk.Revit.DB.Structure import RebarCoverFaceType
-        host_data = RebarHostData.GetRebarHostData(host)
-        if host_data is not None:
-            face_type = {"top": "Top", "bottom": "Bottom",
-                         "side": "Other"}.get(face)
-            enum_value = getattr(RebarCoverFaceType, face_type or "", None)
-            if enum_value is not None:
-                host_data.SetCoverType(enum_value, cover_id)
-                return True
-    except Exception:
-        pass
-
     for builtin in _COVER_PARAMETERS[face]:
         try:
             parameter = host.get_Parameter(builtin)
         except Exception:
-            parameter = None
-        if parameter is not None and not parameter.IsReadOnly:
+            continue
+        if parameter is None:
+            continue
+        if parameter.IsReadOnly:
+            return False, ("{0}: the host's {1} parameter is read-only"
+                           .format(face, builtin))
+        try:
+            parameter.Set(cover_id)
+            return True, ""
+        except Exception as error:
+            return False, "{0}: {1}".format(face, error)
+    return False, "{0}: the host has no cover parameter for this face".format(
+        face)
+
+
+def set_common_cover(host, cover_id):
+    """All faces at once, for a host that will not take them one by one."""
+    try:
+        from Autodesk.Revit.DB.Structure import RebarHostData
+        host_data = RebarHostData.GetRebarHostData(host)
+        if host_data is None:
+            return False
+        host_data.SetCommonCoverType(cover_id)
+        return True
+    except Exception:
+        return False
+
+
+def describe_cover(host):
+    """Which cover parameters this host actually has, and whether they take.
+
+    A diagnostic. Cover types were being created and never applied, with
+    nothing in the report saying which of the several possible reasons it was.
+    """
+    lines = []
+    for face, builtins in sorted(_COVER_PARAMETERS.items()):
+        for builtin in builtins:
             try:
-                parameter.Set(cover_id)
-                return True
+                parameter = host.get_Parameter(builtin)
             except Exception:
+                parameter = None
+            if parameter is None:
                 continue
-    return False
+            lines.append("  {0}: {1}{2}".format(
+                face, builtin,
+                " (read-only)" if parameter.IsReadOnly else ""))
+            break
+        else:
+            lines.append("  {0}: no parameter".format(face))
+    return "\n".join(lines) if lines else "  none"
 
 
 def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
@@ -191,6 +222,7 @@ def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
     applied = []
     created = []
     notes = []
+    last_id = None
     for face, value in (("top", top_mm), ("bottom", bottom_mm),
                         ("side", side_mm)):
         if not value:
@@ -202,11 +234,17 @@ def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
         if was_created:
             created.append("{0} ({1:g} mm)".format(
                 COVER_TYPE_NAMES.get(face, "cover"), value))
-        if _set_cover_parameter(host, face, cover_id):
+        ok, note = _set_cover_parameter(host, face, cover_id)
+        if ok:
             applied.append(face)
         else:
-            notes.append("{0} cover could not be applied to the element"
-                         .format(face))
+            notes.append(note or "{0} cover could not be applied".format(face))
+            last_id = cover_id
+
+    if not applied and side_mm and set_common_cover(host, last_id):
+        applied.append("all faces (common cover)")
+        notes.append("faces could not be set individually; one common cover "
+                     "was applied instead")
     return applied, created, notes
 
 
@@ -334,8 +372,16 @@ def apply_layout(rebar, bar_set):
 
 
 def _constrain(doc, host, result, varying=False):
-    """Tie what was just placed to the host's cover, and note what happened."""
+    """Tie what was just placed to the host's cover, and note what happened.
+
+    The document is regenerated first: a bar created a moment ago has no
+    handles to offer candidates for until Revit has caught up with it.
+    """
     from anongee_toolkit.structural import rebar_constraints
+    try:
+        doc.Regenerate()
+    except Exception:
+        pass
     applied, notes = rebar_constraints.apply_to_all(
         result.created, doc, host, varying)
     result.constrained += applied
@@ -378,6 +424,17 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
 
     if constrain:
         _constrain(doc, host, result, bar_set.varying)
+
+    # What Revit ended up with, not what it was asked for. A set that arrayed
+    # the wrong way, or filled further than the pad, says so here rather than
+    # in a screenshot.
+    from anongee_toolkit.structural import rebar_constraints
+    actual = rebar_constraints.array_length_mm(doc.GetElement(result.created[0]))
+    expected = bar_set.array_length_mm
+    if actual is not None and expected and abs(actual - expected) > 25.0:
+        result.constraint_notes.append(
+            "{0}: asked for a {1:.0f} mm distribution, Revit made it "
+            "{2:.0f} mm".format(bar_set.bar.label, expected, actual))
     return result
 
 

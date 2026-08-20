@@ -259,6 +259,16 @@ def create(doc, points_mm, floor_type_id, level_id, origin_mm=(0.0, 0.0),
     loops.Add(loop)
     floor = Floor.Create(doc, loops, floor_type_id, level_id)
     set_structural(floor)
+
+    # A floor's rebar-cover parameters do not exist until it is structural AND
+    # the document has caught up. Without this the cover is written to a
+    # parameter that is not there yet, silently -- which is why cover types
+    # were being created and never applied to anything.
+    try:
+        doc.Regenerate()
+    except Exception:
+        pass
+
     sit_on_level(floor, offset_mm)
     set_mark(floor, mark)
     return floor, skipped

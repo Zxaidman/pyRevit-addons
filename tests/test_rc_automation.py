@@ -1155,7 +1155,7 @@ class FootingLayerTests(unittest.TestCase):
         self.assertTrue(varying, "the tapered pad should vary")
         self.assertEqual(varying[0].element_count, 1)
         self.assertTrue(varying[0].as_set().varying)
-        self.assertTrue(any("vary in length" in n for n in varying[0].notes))
+        self.assertTrue(any("varying set" in n for n in varying[0].notes))
 
     def test_a_rectangular_pad_is_a_set_that_does_not_vary(self):
         # Orthogonal areas get their own set too, but varying stays off.
@@ -1436,8 +1436,12 @@ class ScheduledExtentTests(unittest.TestCase):
         rows = data.footing_rebar_for(shaped.type_mark)
         as_rectangle = rebar_spec.plan_footing(footing, rows)
         as_drawn = rebar_spec.plan_footing(footing, rows, shaped)
+        # A rectangle is one plain set per layer; the drawn pad is cut into
+        # regions and some of them vary.
         self.assertTrue(all(p.uniform for p in as_rectangle))
-        self.assertFalse(any(p.uniform for p in as_drawn))
+        self.assertEqual(len(as_rectangle), len(rows))
+        self.assertGreater(len(as_drawn), len(rows))
+        self.assertTrue(any(p.varying for p in as_drawn))
 
 
 class BarShapeTests(unittest.TestCase):
@@ -1511,6 +1515,94 @@ class BarShapeTests(unittest.TestCase):
         self.assertEqual(len(plan.bars[0].points), 2)
         self.assertTrue(any("placed straight" in n for n in plan.notes),
                         plan.notes)
+
+
+class DistributionRegionTests(unittest.TestCase):
+    """A set cannot follow a change of slope, so a layer is cut where it turns.
+
+    Told to vary from one end of a tapered pad to the other, Revit interpolates
+    straight through the corner and fans bars out past the concrete. One set per
+    stretch between the outline's vertices is what a detailer draws and what
+    Revit can actually follow.
+    """
+
+    #: A house: a rectangle with a gable on top. Apex at x = 2250, eaves at
+    #: y = 3000.
+    HOUSE = [(0.0, 0.0), (4500.0, 0.0), (4500.0, 3000.0), (2250.0, 4200.0),
+             (0.0, 3000.0)]
+
+    def test_breaks_are_the_outline_vertices_on_the_array_axis(self):
+        self.assertEqual(rebar_spec.region_breaks(self.HOUSE, "X"),
+                         [0.0, 3000.0, 4200.0])
+        self.assertEqual(rebar_spec.region_breaks(self.HOUSE, "Y"),
+                         [0.0, 2250.0, 4500.0])
+
+    def test_a_rectangle_has_one_region(self):
+        square = rebar_spec.rectangle(3000.0, 3000.0)
+        positions = [-1400.0, 0.0, 1400.0]
+        regions = rebar_spec.split_into_regions(
+            positions, rebar_spec.region_breaks(square, "X"))
+        self.assertEqual(len(regions), 1)
+
+    def test_positions_are_split_at_an_inner_break(self):
+        regions = rebar_spec.split_into_regions(
+            [0.0, 1000.0, 2000.0, 3000.0, 4000.0], [0.0, 2500.0, 4000.0])
+        self.assertEqual([positions for _label, positions in regions],
+                         [[0.0, 1000.0, 2000.0], [3000.0, 4000.0]])
+
+    def test_x_bars_give_a_plain_set_then_a_varying_one(self):
+        """Image 5: one normal set across the rectangle, one varying set over
+        the gable."""
+        row = models.FootingRebarRow("F3", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="00")
+        plans = rebar_spec.plan_footing_layer(row, self.HOUSE, 900.0, 50.0,
+                                              75.0, 50.0)
+        self.assertEqual(len(plans), 2)
+        self.assertFalse(plans[0].varying)
+        self.assertTrue(plans[1].varying)
+
+    def test_y_bars_give_two_varying_sets_either_side_of_the_apex(self):
+        """Image 4: the gable rises to the left of the apex and falls to the
+        right, so neither side can be one set with the other."""
+        row = models.FootingRebarRow("F3", layer="B2", direction="Y",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="00")
+        plans = rebar_spec.plan_footing_layer(row, self.HOUSE, 900.0, 50.0,
+                                              75.0, 50.0)
+        self.assertEqual(len(plans), 2)
+        self.assertTrue(all(plan.varying for plan in plans))
+
+    def test_every_bar_survives_the_split(self):
+        # Cutting a layer must not lose or duplicate steel.
+        row = models.FootingRebarRow("F3", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="00")
+        plans = rebar_spec.plan_footing_layer(row, self.HOUSE, 900.0, 50.0,
+                                              75.0, 50.0)
+        positions = []
+        for plan in plans:
+            positions.extend(bar.points[0][1] for bar in plan.bars)
+        self.assertEqual(len(positions), len(set(positions)))
+        self.assertEqual(sorted(positions), positions)
+
+    def test_each_region_is_its_own_set(self):
+        row = models.FootingRebarRow("F3", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="00")
+        plans = rebar_spec.plan_footing_layer(row, self.HOUSE, 900.0, 50.0,
+                                              75.0, 50.0)
+        self.assertTrue(all(plan.element_count == 1 for plan in plans))
+        self.assertTrue(all(plan.region for plan in plans))
+
+    def test_a_rectangular_pad_is_not_cut_up(self):
+        row = models.FootingRebarRow("F1", layer="B1", direction="X",
+                                     diameter_mm=16.0, spacing_mm=200.0,
+                                     shape_code="00")
+        plans = rebar_spec.plan_footing_layer(
+            row, rebar_spec.rectangle(3000.0, 3000.0), 900.0, 50.0, 75.0, 50.0)
+        self.assertEqual(len(plans), 1)
+        self.assertFalse(plans[0].varying)
 
 
 class ColumnArrangementTests(unittest.TestCase):

@@ -1,5 +1,37 @@
 # RC Automation — changelog
 
+## 0.6.0 — 2026-08-19
+
+One set per distribution region, and two reasons cover was never applied.
+
+- **A layer is cut at the outline's vertices, one set per stretch.** Told to
+  vary across a change of slope, Revit interpolates straight through the corner
+  and fans bars out past the concrete — which is what the tapered pad produced.
+  Between two consecutive vertices the edges are straight, so one set describes
+  the stretch; at a vertex it cannot. A house-shaped pad now gives, for X bars,
+  one plain set across the rectangle and one varying set over the gable; and for
+  Y bars, two varying sets, one rising to the apex and one falling from it.
+  Positions are computed once across the whole layer and then assigned to
+  regions, so the spacing stays uniform and the split only decides where one set
+  ends.
+- **Cover: `RebarCoverFaceType` does not exist.** The previous version guessed
+  at it for `RebarHostData.SetCoverType`, which actually takes a face
+  `Reference`. The guess failed silently, so cover types were created and
+  nothing was written.
+- **Cover: the parameters were not there yet.** A floor has no rebar-cover
+  parameters until it is structural *and the document has regenerated*. Both
+  the floor and, separately, every newly created bar are now regenerated before
+  anything asks them for parameters or constraint handles — a thing Revit has
+  not caught up with has neither.
+- **`SetCommonCoverType` as a fallback**, for a host that will not take faces
+  one at a time.
+- **The run reads back what Revit did.** A set's `ArrayLength` is compared with
+  what was asked for, and a disagreement over 25 mm is reported. A distribution
+  that arrayed the wrong way or filled past the pad now says so in the report
+  rather than in a screenshot.
+- **The probe reports the host's actual cover parameters** — which exist, which
+  are read-only — so the next report says which of the possible reasons applied.
+
 ## 0.5.0 — 2026-08-19
 
 The constraint error from a real run named the mistake exactly: *"Constrained

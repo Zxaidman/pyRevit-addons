@@ -144,15 +144,42 @@ do its own arithmetic — that is what makes the bars follow a later edit.
 
 ## 4. One set per distribution region
 
-From the ribbon help and the manual workflow: a varying set covers **one**
-region of varying depth. A pad that tapers one way and is orthogonal elsewhere
-needs a set per region — varying **on** for the tapered one, **off** for the
-orthogonal ones — not one set spanning both.
+A varying set covers **one** region of varying depth. Told to vary across a
+change of slope it interpolates straight through the corner and fans bars out
+past the concrete — which is what a run against a house-shaped pad produced.
 
-Consequence for `rebar_spec`: a layer is not always one distribution. Where the
-scan extents change along the run, the layer has to be cut into regions of
-constant behaviour, each becoming its own set. This is the largest outstanding
-change and is not yet implemented.
+**The breaks are the outline's vertices, projected onto the array axis.**
+Between two consecutive vertices the edges are straight, so bar length varies
+linearly and one set describes the stretch. At a vertex the slope changes and it
+cannot.
+
+For a house — rectangle with a gable, apex at x=2250, eaves at y=3000:
+
+| Layer | Regions | Behaviour |
+| --- | --- | --- |
+| X bars (arrayed along Y) | `y 0–3000`, `y 3000–4200` | one **plain** set across the rectangle, one **varying** set over the gable |
+| Y bars (arrayed along X) | `x 0–2250`, `x 2250–4500` | **two varying** sets, one rising to the apex and one falling from it |
+
+Implemented in `rebar_spec.region_breaks` and `split_into_regions`. Bar
+positions are computed once across the whole layer and then *assigned* to
+regions, so the spacing stays uniform across the pad and the split only decides
+where one set ends and the next begins.
+
+## 4a. `RebarHostData.SetCoverType` takes a face Reference
+
+Not a face enum. An earlier attempt guessed at a `RebarCoverFaceType` that does
+not exist, so nothing was written and nothing said so. The routes that work:
+
+| Route | Note |
+| --- | --- |
+| `CLEAR_COVER_TOP` / `_BOTTOM` / `_OTHER` parameters | the practical one — but they do not exist on a floor until it is structural **and the document has regenerated** |
+| `RebarHostData.SetCommonCoverType(coverType)` | all faces at once, no `Reference` needed — a good fallback |
+| `RebarHostData.SetCoverType(Reference, RebarCoverType)` | per face, and needs a face `Reference` off the geometry |
+
+`doc.Regenerate()` matters more than it looks in two places: after a floor is
+made structural and before its cover is written, and after a bar is created and
+before its constraint candidates are asked for. A thing Revit has not caught up
+with yet has no parameters and no handles.
 
 ---
 

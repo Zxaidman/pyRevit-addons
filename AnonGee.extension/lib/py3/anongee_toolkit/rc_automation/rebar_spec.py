@@ -225,16 +225,19 @@ class LayerPlan(object):
     """Every bar of one scheduled run, and whether it can ship as a set."""
 
     __slots__ = ("row", "bars", "uniform", "array_vector", "array_length_mm",
-                 "notes")
+                 "notes", "region")
 
     def __init__(self, row, bars, uniform, array_vector=None,
-                 array_length_mm=None, notes=None):
+                 array_length_mm=None, notes=None, region=""):
         self.row = row
         self.bars = list(bars)
         self.uniform = uniform
         self.array_vector = array_vector
         self.array_length_mm = array_length_mm
         self.notes = list(notes or ())
+        #: Which stretch of the layer this set covers, when the layer was cut
+        #: at the outline's vertices. Empty when the layer is one region.
+        self.region = region
 
     @property
     def count(self):
@@ -367,27 +370,98 @@ def bar_points(shape_code, start_mm, end_mm, position_mm, z_mm, axis="X",
             point(end_mm, z_mm + leg_mm)]
 
 
+def region_breaks(outline, axis="X"):
+    """Where a layer's bar length changes behaviour, along the array axis.
+
+    Between two consecutive vertices of a polygon the edges are straight, so a
+    bar's length varies linearly and one set can describe the whole stretch.
+    **At** a vertex the slope changes, and one set can no longer describe both
+    sides.
+
+    This is why a Revit varying set must not span a whole tapered pad. Told to
+    vary from one end to the other it interpolates straight through the corner
+    and fans bars out past the concrete -- which is exactly what a run against
+    a house-shaped pad produced. One set per stretch between breaks is what a
+    detailer draws and what Revit can actually follow.
+    """
+    across = 1 if axis == "X" else 0
+    return sorted(set(round(point[across], 6) for point in outline))
+
+
+def _length_at(outline, position, axis, cover_mm):
+    """Total bar length on this scan line, or ``None`` where there is no bar."""
+    total = 0.0
+    found = False
+    for start, end in scan_segments(outline, position, axis=axis):
+        extent = inset_segment(start, end, cover_mm)
+        if extent is not None:
+            total += extent[1] - extent[0]
+            found = True
+    return total if found else None
+
+
+def split_into_regions(positions, breaks):
+    """Group bar positions into the stretches between breaks.
+
+    ``[(label, [positions])]``. A stretch with nothing in it is dropped rather
+    than becoming an empty set.
+    """
+    if not positions:
+        return []
+    inner = [value for value in breaks
+             if positions[0] < value < positions[-1]]
+    if not inner:
+        return [("", list(positions))]
+
+    regions = []
+    remaining = list(positions)
+    lower = None
+    for boundary in inner + [None]:
+        if boundary is None:
+            taken, remaining = remaining, []
+        else:
+            taken = [p for p in remaining if p < boundary]
+            remaining = [p for p in remaining if p >= boundary]
+        if taken:
+            regions.append((_region_label(lower, boundary), taken))
+        lower = boundary
+    return regions
+
+
+def _region_label(lower, upper):
+    if lower is None and upper is None:
+        return ""
+    if lower is None:
+        return "up to {0:.0f}".format(upper)
+    if upper is None:
+        return "from {0:.0f}".format(lower)
+    return "{0:.0f}–{1:.0f}".format(lower, upper)
+
+
 def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                        cover_bottom_mm, cover_side_mm, sibling_rows=()):
-    """Every bar of one scheduled footing layer.
+    """One scheduled footing layer, as **one plan per distribution region**.
 
     Bars run along ``row.direction`` and are arrayed across it. Each bar's
     length comes from intersecting its own scan line with the outline, then
     pulling both ends in by the side cover -- so a pad that is not rectangular
-    gets bars that actually fit it, rather than a rectangle's worth of steel
-    poking out of the concrete.
+    gets bars that actually fit it.
+
+    The run is then cut at the outline's vertices, because a set cannot follow
+    a change of slope. A house-shaped pad gives one plain set across the
+    rectangle and one varying set up each side of the gable, which is what a
+    detailer draws by hand.
     """
     notes = []
     axis = row.direction if row.direction in models.DIRECTIONS else "X"
-    across = "Y" if axis == "X" else "X"
     min_x, min_y, max_x, max_y = bounds(outline)
 
     across_low, across_high = (min_y, max_y) if axis == "X" else (min_x, max_x)
     span = inset_segment(across_low, across_high, cover_side_mm)
     if span is None:
-        return LayerPlan(row, [], False, notes=[
+        return [LayerPlan(row, [], False, notes=[
             "side cover of {0:g} mm leaves no room to array bars across the "
-            "pad".format(cover_side_mm)])
+            "pad".format(cover_side_mm)])]
 
     z = layer_elevation(row, list(sibling_rows) or [row], thickness_mm,
                         cover_top_mm, cover_bottom_mm)
@@ -400,36 +474,53 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
             "between this layer and the top cover — placed straight".format(
                 row.shape_code, leg))
 
-    bars = []
+    breaks = region_breaks(outline, axis)
+    across_vector = (0.0, 1.0, 0.0) if axis == "X" else (1.0, 0.0, 0.0)
+
+    plans = []
     skipped = 0
-    for position in positions:
-        for start, end in scan_segments(outline, position, axis=axis):
-            extent = inset_segment(start, end, cover_side_mm)
-            if extent is None:
-                skipped += 1
-                continue
-            points = bar_points(row.shape_code, extent[0], extent[1], position,
-                                z, axis, leg)
-            bars.append(BarSpec(
-                points, row.diameter_mm, row.bar_type, row.shape_code,
-                ROLE_FOOTING_LAYER,
-                "{0} {1}{2}".format(row.type_mark, row.layer, row.direction)))
+    for label, region_positions in split_into_regions(positions, breaks):
+        bars = []
+        for position in region_positions:
+            for start, end in scan_segments(outline, position, axis=axis):
+                extent = inset_segment(start, end, cover_side_mm)
+                if extent is None:
+                    skipped += 1
+                    continue
+                points = bar_points(row.shape_code, extent[0], extent[1],
+                                    position, z, axis, leg)
+                bars.append(BarSpec(
+                    points, row.diameter_mm, row.bar_type, row.shape_code,
+                    ROLE_FOOTING_LAYER,
+                    "{0} {1}{2}{3}".format(
+                        row.type_mark, row.layer, row.direction,
+                        " " + label if label else "")))
+        if not bars:
+            continue
+        region_notes = list(notes)
+        uniform = _lengths_agree(bars)
+        if not uniform:
+            region_notes.append(
+                "bars vary across this region — placed as a varying set so "
+                "Revit lengths each one from its constraints")
+        length = (region_positions[-1] - region_positions[0]) or (
+            span[1] - span[0])
+        plans.append(LayerPlan(row, bars, uniform, across_vector, length,
+                               region_notes, label))
 
     if skipped:
-        notes.append(
-            "{0} bar position(s) fell outside the pad once side cover was "
-            "taken off".format(skipped))
-
-    uniform = _lengths_agree(bars)
-    if bars and not uniform:
-        notes.append(
-            "bars vary in length, so this layer is placed as {0} individual "
-            "bars rather than one set".format(len(bars)))
-
-    vector = (1.0, 0.0, 0.0) if axis == "X" else (0.0, 1.0, 0.0)
-    across_vector = (0.0, 1.0, 0.0) if axis == "X" else (1.0, 0.0, 0.0)
-    return LayerPlan(row, bars, uniform, across_vector,
-                     span[1] - span[0], notes)
+        for plan in plans:
+            plan.notes.append(
+                "{0} bar position(s) fell outside the pad once side cover was "
+                "taken off".format(skipped))
+    if not plans:
+        return [LayerPlan(row, [], False, across_vector,
+                          span[1] - span[0], notes)]
+    if len(plans) > 1:
+        for plan in plans:
+            plan.notes.append(
+                "one of {0} region(s) in this layer".format(len(plans)))
+    return plans
 
 
 def _lengths_agree(bars):
@@ -451,17 +542,17 @@ def plan_footing(footing_type, rows, placement=None, outline=None):
     outline = outline if outline is not None else outline_for(footing_type,
                                                               placement)
     rows = list(rows)
-    return [
-        plan_footing_layer(
+    plans = []
+    for row in rows:
+        plans.extend(plan_footing_layer(
             row, outline,
             footing_type.thickness_mm or 0.0,
             footing_type.cover_top_mm or 0.0,
             footing_type.cover_bottom_mm or 0.0,
             row.end_cover_mm if row.end_cover_mm is not None
             else (footing_type.cover_side_mm or 0.0),
-            sibling_rows=rows)
-        for row in rows
-    ]
+            sibling_rows=rows))
+    return plans
 
 
 # ---------------------------------------------------------------------------
