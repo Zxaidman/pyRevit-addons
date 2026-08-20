@@ -1,4 +1,4 @@
-AnonGee RC Automation 0.4.0
+AnonGee RC Automation 0.5.0
 Workbook: D:\ZAID\Advance AI\pyRevit-addons\tests\fixtures\rc_automation\sample_schedule.xlsx
 Mode: Create structure and reinforcement
 
@@ -6,6 +6,41 @@ Mode: Create structure and reinforcement
 
 [Info] The LEVELS sheet maps 2 level name(s) onto the model's.
 [Info] Read 3 footing types with 10 bar rows, and 3 column types with 7 bar rows. Placing 6 footings and 5 columns.
+
+What the run did
+Created 6 footing(s), and 22 set(s) — 317 bar(s) — in them.
+
+One undo step — Ctrl+Z reverses the whole run.
+
+66 bar handle(s) tied to the host's cover — editing a footing updates its reinforcement.
+
+Not constrained (1)
+  1x ApplyRebarConstraints: No method matches given arguments for RebarConstraintsManager.ApplyRebarConstraints: ()
+
+Notes (26)
+  created cover type FOOTING TOP (50 mm)
+  created cover type FOOTING BOTTOM (75 mm)
+  F1-A1: no cover could be written onto the element
+  top cover could not be applied to the element
+  bottom cover could not be applied to the element
+  side cover could not be applied to the element
+  F1-A2: no cover could be written onto the element
+  top cover could not be applied to the element
+  bottom cover could not be applied to the element
+  side cover could not be applied to the element
+  F1-B1: no cover could be written onto the element
+  top cover could not be applied to the element
+  bottom cover could not be applied to the element
+  side cover could not be applied to the element
+  F2-C1: no cover could be written onto the element
+  top cover could not be applied to the element
+  bottom cover could not be applied to the element
+  side cover could not be applied to the element
+  F3-B2: no cover could be written onto the element
+  top cover could not be applied to the element
+  ... and 6 more
+
+The bars are placed correctly either way; what is lost is the automatic updating.
 
 Model: R25_REBAR_AUTOMATION
 
