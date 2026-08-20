@@ -46,7 +46,8 @@ class PlacementResult(object):
     """What one attempt produced: the ids, and why anything is missing."""
 
     __slots__ = ("created", "skipped", "errors", "bars", "elements",
-                 "constrained", "constraint_notes")
+                 "constrained", "constraint_notes", "identity_notes",
+                 "constraint_faces")
 
     def __init__(self):
         self.created = []
@@ -59,6 +60,15 @@ class PlacementResult(object):
         #: updating and nothing else.
         self.constrained = 0
         self.constraint_notes = []
+        #: What could not be written into the project's own ID/ITEM/LEVEL_V
+        #: fields, one line per reason. Separate from the constraint notes
+        #: because a bar with no ``ID`` and a bar with no constraint are two
+        #: different problems with two different fixes.
+        self.identity_notes = []
+        #: For each varying set, which cover face each of its ends found. What
+        #: went right, not what went wrong -- and the only way to tell a set
+        #: that did not vary from one tied to the wrong face.
+        self.constraint_faces = []
 
     def merge(self, other):
         self.created.extend(other.created)
@@ -70,6 +80,12 @@ class PlacementResult(object):
         for note in other.constraint_notes:
             if note not in self.constraint_notes:
                 self.constraint_notes.append(note)
+        for note in other.identity_notes:
+            if note not in self.identity_notes:
+                self.identity_notes.append(note)
+        for line in other.constraint_faces:
+            if line not in self.constraint_faces:
+                self.constraint_faces.append(line)
         return self
 
     @property
@@ -96,7 +112,7 @@ COVER_TYPE_NAMES = {
 
 
 def ensure_cover_type(doc, cover_mm, face="side", cache=None):
-    """A ``RebarCoverType`` of this distance, matched or created once.
+    """A ``RebarCoverType`` for **this face**, matched or created once.
 
     Cover in Revit is an element reference, not a number, which is what turns
     "50 mm cover" into something that can simply be absent from a project.
@@ -107,28 +123,45 @@ def ensure_cover_type(doc, cover_mm, face="side", cache=None):
     50 mm type -- which is exactly what a real run produced: three identical
     cover types, none of them used.
 
+    **The cache is keyed by face as well as by value, and that is the whole
+    point of it.** Keyed by value alone, a schedule with 50 mm on the top and
+    50 mm on the sides -- which is most schedules -- put the type named
+    ``FOOTING TOP`` on both, and the footing then read *Other Faces: FOOTING
+    TOP <50 mm>*. The number was right and the model was wrong, which is the
+    kind of wrong that survives a check and reaches a drawing.
+
     ``(ElementId, created)``. Requires a transaction when it has to create.
     """
     if not cover_mm:
         return None, False
     cache = cache if cache is not None else {}
-    key = int(round(cover_mm))
+    key = (face, int(round(cover_mm)))
     if key in cache:
         return cache[key], False
 
-    existing = rebar_types.match_cover_type(doc, cover_mm)
+    wanted = COVER_TYPE_NAMES.get(face, "RC COVER")
+    existing = rebar_types.match_cover_type(doc, cover_mm, name_hint=wanted)
     if existing is not None:
         cache[key] = existing
         return existing, False
 
-    try:
-        cover_type = RebarCoverType.Create(
-            doc, COVER_TYPE_NAMES.get(face, "RC COVER {0}".format(key)),
-            mm_to_ft(cover_mm))
+    # This face's own name first. Falling back to a name carrying the value
+    # covers the project that already has a ``FOOTING TOP`` at some other
+    # distance, where creating a second one under that name is refused.
+    for name in (wanted, "{0} {1:g}".format(wanted, cover_mm)):
+        try:
+            cover_type = RebarCoverType.Create(doc, name, mm_to_ft(cover_mm))
+        except Exception:
+            continue
         cache[key] = cover_type.Id
         return cover_type.Id, True
-    except Exception:
-        return None, False
+
+    # Nothing could be created under a name of our own. An unnamed-but-correct
+    # type beats leaving the face uncovered.
+    fallback = rebar_types.match_cover_type(doc, cover_mm)
+    if fallback is not None:
+        cache[key] = fallback
+    return fallback, False
 
 
 #: Which host parameter holds which face's cover, when the host data route is
@@ -231,12 +264,15 @@ def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
         if cover_id is None:
             notes.append("no cover type for {0:g} mm ({1})".format(value, face))
             continue
+        # The name off the element, not the name we asked for: a project that
+        # already had this face's name in use gets a suffixed one, and a report
+        # that says otherwise is describing a model that does not exist.
+        name = _type_name(doc, cover_id) or COVER_TYPE_NAMES.get(face, "cover")
         if was_created:
-            created.append("{0} ({1:g} mm)".format(
-                COVER_TYPE_NAMES.get(face, "cover"), value))
+            created.append("{0} ({1:g} mm)".format(name, value))
         ok, note = _set_cover_parameter(host, face, cover_id)
         if ok:
-            applied.append(face)
+            applied.append("{0} → {1} ({2:g} mm)".format(face, name, value))
         else:
             notes.append(note or "{0} cover could not be applied".format(face))
             last_id = cover_id
@@ -246,6 +282,15 @@ def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
         notes.append("faces could not be set individually; one common cover "
                      "was applied instead")
     return applied, created, notes
+
+
+def _type_name(doc, element_id):
+    """A type's name from its id, or ``""``. Never raises."""
+    try:
+        element = doc.GetElement(element_id)
+        return element.Name if element is not None else ""
+    except Exception:
+        return ""
 
 
 def _style_for(bar):
@@ -371,7 +416,7 @@ def apply_layout(rebar, bar_set):
     return True
 
 
-def _constrain(doc, host, result, varying=False):
+def _constrain(doc, host, result, varying=False, label=""):
     """Tie what was just placed to the host's cover, and note what happened.
 
     The document is regenerated first: a bar created a moment ago has no
@@ -382,17 +427,44 @@ def _constrain(doc, host, result, varying=False):
         doc.Regenerate()
     except Exception:
         pass
-    applied, notes = rebar_constraints.apply_to_all(
-        result.created, doc, host, varying)
+    applied, notes, faces = rebar_constraints.apply_to_all(
+        result.created, doc, host, varying, label)
     result.constrained += applied
     for note in notes:
         if note not in result.constraint_notes:
             result.constraint_notes.append(note)
+    for line in faces:
+        if line not in result.constraint_faces:
+            result.constraint_faces.append(line)
     return result
 
 
+def _category_name(host):
+    try:
+        return host.Category.Name
+    except Exception:
+        return ""
+
+
+def identify(doc, rebar, host, host_identity, row, bar_type_id, count):
+    """Write the project's identity fields onto one bar. ``notes``.
+
+    The bar's own fields come from **the host's**, so a bar and the pad it sits
+    in cannot disagree about the level or the grid. Only ``ID_V`` -- the layer
+    and direction -- and ``ITEM`` -- the run as a schedule prints it -- are the
+    bar's own.
+    """
+    from anongee_toolkit.rc_automation import identity as identity_module
+    from anongee_toolkit.structural import element_params
+    values = identity_module.rebar_values(
+        host_identity, row, _type_name(doc, bar_type_id), count,
+        _category_name(host))
+    _written, notes = element_params.write(rebar, values)
+    return notes
+
+
 def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
-                rotation_deg=0.0, view=None, constrain=True):
+                rotation_deg=0.0, view=None, constrain=True, identity=None):
     """One scheduled run of bars, as a set where it can be.
 
     A uniform run becomes a single element carrying its own layout; a run whose
@@ -415,6 +487,11 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
             doc, host, bar_set.bar, bar_type_id, origin_ft, rotation_deg,
             view=view, array_vector=bar_set.array_vector)
         apply_layout(rebar, bar_set)
+        if identity:
+            for note in identify(doc, rebar, host, identity, plan.row,
+                                 bar_type_id, bar_set.count):
+                if note not in result.identity_notes:
+                    result.identity_notes.append(note)
         result.created.append(rebar.Id)
         result.elements += 1
         result.bars += bar_set.count
@@ -423,7 +500,7 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
         return result
 
     if constrain:
-        _constrain(doc, host, result, bar_set.varying)
+        _constrain(doc, host, result, bar_set.varying, bar_set.bar.label)
 
     # What Revit ended up with, not what it was asked for. A set that arrayed
     # the wrong way, or filled further than the pad, says so here rather than

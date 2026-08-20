@@ -1,5 +1,60 @@
 # RC Automation — changelog
 
+## 0.7.0 — 2026-08-20
+
+Bends that stay inside cover, constraints that find the right face, and the
+project's own schedule fields filled in.
+
+- **A bend now stops half a bar short of the cover plane.** Cover measures the
+  steel, and the two parts of a bent bar present different faces to it: a
+  straight end shows its end face, so its centreline stops on the plane; a
+  turned-up leg shows its barrel, which is half a diameter wide either side of
+  the centreline. Putting the bend on the plane put the outside of every leg
+  past it. The inset is `d/2` and is independent of the bend radius — for a 90°
+  bend the arc centre is `r` in from the corner and the outer surface is
+  `r + d/2` from it, so the outermost steel is always `d/2` outside the corner.
+  A T16 U-bar in a 3000 pad with 50 mm side cover now runs 2884 mm between
+  bends, and the 2900 mm between cover planes is exactly filled.
+- **The leg tip lands on the top cover plane, not half a bar under it.** What
+  top cover measures on a turned-up leg is the bar's end face, so a leg that
+  stops there is one Revit can hold at *distance to cover = 0*. The old
+  half-diameter shortfall was safe steel carrying an offset nobody scheduled.
+- **A varying set is tied to the face its bars actually end on.** A pad offers
+  a cover candidate for every face, and the old code took the first that
+  answered `IsToCover()`. On the gable end of a tapered pad that is never the
+  sloping edge, so the bars landed in the right regions and were then
+  constrained to a square face — a varying set with nothing to vary along.
+  The candidate is now chosen by the smallest **absolute**
+  `GetDistanceToTargetCover()`, which is the face the handle is at. The report
+  names the faces each varying set's ends found, because "did not vary" and
+  "tied to the wrong face" look identical in a model.
+- **`SetPreferredConstraintForHandle`, and no `ApplyRebarConstraints`.** The
+  handle-less `SetPreferredConstraint` reported success and changed nothing;
+  `ApplyRebarConstraints()` does not take no arguments and raised *"No method
+  matches given arguments"*, which went into the report as though a constraint
+  had failed. Setting the preferred constraint on the handle is the commit.
+- **Other Faces no longer takes the top face's cover type.** The cache that
+  stops three identical cover types being created was keyed on the value alone,
+  so a schedule with 50 mm on top and 50 mm on the sides gave both faces the
+  type named `FOOTING TOP` — the right number on the wrong face. The cache is
+  keyed by face and value, an existing type has to match the face's name as
+  well as its distance, and the report says which type landed on which face.
+- **The project's identity parameters are filled in.** `ID`, `ID_LIC`, `ID_V`,
+  `ITEM` and `LEVEL_V` on the footing; those plus `Host Category` and
+  `Host Mark` on every bar. A pad at grid C-1 of type F2 reads
+  `ID=F2, ID_LIC=C-1, ID_V=F2-C1, ITEM=2400x2400x750`; its bottom mat reads
+  `ID_V=B1-X, ITEM=#12-16T@200`. A bar takes the rest from its host rather than
+  re-deriving it, so the two cannot disagree about the level or the grid, and
+  `ITEM` prints the **model's** name for the bar type, not the workbook's.
+- **A new Parameters box says what to do when the project lacks them.** *Fill
+  where present* (the default) writes only what is already bound; *Create
+  missing, then fill* adds them as shared parameters bound to Structural
+  Foundations and Structural Rebar, inside the run's own undo step so one
+  Ctrl+Z takes the bindings back out too; *Skip* touches none of them. Probe the
+  model to see which are there before choosing.
+- **The report collapses repeated lines.** Six footings of one type produced the
+  same six notes six times, burying the one line that was different.
+
 ## 0.6.0 — 2026-08-19
 
 One set per distribution region, and two reasons cover was never applied.

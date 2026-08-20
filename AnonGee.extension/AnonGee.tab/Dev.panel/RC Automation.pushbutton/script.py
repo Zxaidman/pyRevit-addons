@@ -75,7 +75,7 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -128,6 +128,7 @@ from anongee_toolkit.structural import rebar_hosts             # noqa: E402
 from anongee_toolkit.structural import rebar_run               # noqa: E402
 from anongee_toolkit.structural import footings as footing_api  # noqa: E402
 from anongee_toolkit.structural import structure_run            # noqa: E402
+from anongee_toolkit.structural import element_params           # noqa: E402
 
 
 # These name `models`, so they live below the import that provides it. Putting
@@ -143,6 +144,12 @@ BUILDABLE_MODES = (models.MODE_CREATE_ALL, models.MODE_REBAR_ONLY)
 
 def can_build(mode):
     return mode in BUILDABLE_MODES
+
+
+#: What the Parameters box offers, in the order it offers it. Same list the
+#: handler compares against, so the label the user picked and the decision the
+#: run takes are the same string rather than two that have to be kept in step.
+PARAMETER_MODES = element_params.MODES
 
 
 #: Said by the status bar, the report and the probe alike, so the three cannot
@@ -302,6 +309,9 @@ if _state.handler_cls is None:
                 doc, BuiltInCategory.OST_StructuralFoundation)
             result["constraints"] = self._constraint_support(doc)
             result["cover"] = self._cover_support(doc)
+            present, missing = element_params.bound_names(doc)
+            result["params_present"] = present
+            result["params_missing"] = missing
             return result
 
         def _cover_support(self, doc):
@@ -442,6 +452,47 @@ if _state.handler_cls is None:
             }
 
         # -- creation (the only thing here that writes) --------------------
+        def _prepare_parameters(self, doc):
+            """Make the identity fields writable, as far as the user allowed.
+
+            ``(write, notes)``. Creating a shared parameter changes the
+            project's parameter bindings, so it happens only on an explicit
+            choice and inside the run's own TransactionGroup — one Ctrl+Z takes
+            the bindings back out along with everything else.
+            """
+            mode = self.data.get("params_mode") or element_params.MODE_FILL
+            if mode == element_params.MODE_SKIP:
+                return False, ["identity parameters: not written, at your "
+                               "request"]
+
+            _present, missing = element_params.bound_names(doc)
+            notes = []
+            if not missing:
+                return True, notes
+            if mode != element_params.MODE_CREATE:
+                notes.append(
+                    "this project has no {0} — those fields are left unfilled. "
+                    "Choose '{1}' to add them.".format(
+                        ", ".join(missing), element_params.MODE_CREATE))
+                return True, notes
+
+            transaction = Transaction(doc, "Add identity shared parameters")
+            transaction.Start()
+            try:
+                created, param_notes = element_params.ensure(doc, missing)
+                transaction.Commit()
+            except Exception as error:
+                if transaction.HasStarted() and not transaction.HasEnded():
+                    transaction.RollBack()
+                notes.append("shared parameters could not be created: "
+                             "{0}".format(error))
+                return True, notes
+            if created:
+                notes.append("created shared parameter(s): {0}".format(
+                    ", ".join(created)))
+            notes.extend(param_notes)
+            return True, notes
+
         def _create(self, uiapp):
             """Build what the plan described, and nothing else."""
             uidoc = uiapp.ActiveUIDocument
@@ -465,10 +516,16 @@ if _state.handler_cls is None:
             errors = []
             skipped = []
             done = 0
+            constrained = 0
+            constraint_notes = []
+            constraint_faces = []
 
+            notes = []
             group = TransactionGroup(doc, "AnonGee · RC Automation")
             group.Start()
             try:
+                write_identity, param_notes = self._prepare_parameters(doc)
+                notes.extend(param_notes)
                 for start in range(0, len(plans), CHUNK_SIZE):
                     chunk = plans[start:start + CHUNK_SIZE]
                     transaction = Transaction(
@@ -484,11 +541,19 @@ if _state.handler_cls is None:
                         for plan in chunk:
                             outcome = rebar_run.place_footing(
                                 doc, plan, workbook, bar_type_ids, view,
-                                replace)
+                                replace, write_identity)
                             created += outcome.elements
                             bars += outcome.bars
                             errors.extend(outcome.errors)
                             skipped.extend(outcome.skipped)
+                            notes.extend(outcome.identity_notes)
+                            constrained += outcome.constrained
+                            for note in outcome.constraint_notes:
+                                if note not in constraint_notes:
+                                    constraint_notes.append(note)
+                            for line in outcome.constraint_faces:
+                                if line not in constraint_faces:
+                                    constraint_faces.append(line)
                             done += 1
                         transaction.Commit()
                     except Exception as chunk_error:
@@ -511,8 +576,12 @@ if _state.handler_cls is None:
                 "hosts": done,
                 "elements": created,
                 "bars": bars,
+                "constrained": constrained,
+                "constraint_notes": constraint_notes,
+                "constraint_faces": constraint_faces,
                 "errors": errors,
                 "skipped": skipped,
+                "notes": notes,
             }
 
         def _create_structure(self, doc):
@@ -547,6 +616,8 @@ if _state.handler_cls is None:
             group = TransactionGroup(doc, "AnonGee · RC Automation")
             group.Start()
             try:
+                write_identity, param_notes = self._prepare_parameters(doc)
+                notes.extend(param_notes)
                 for start in range(0, len(plans), CHUNK_SIZE):
                     chunk = plans[start:start + CHUNK_SIZE]
                     transaction = Transaction(
@@ -559,7 +630,7 @@ if _state.handler_cls is None:
                             try:
                                 element, item_notes = structure_run.create_one(
                                     doc, item, base_type_id, type_cache,
-                                    cover_cache)
+                                    cover_cache, write_identity)
                                 made.append((item, element.Id))
                                 notes.extend(item_notes)
                             except Exception as pad_error:
@@ -578,6 +649,7 @@ if _state.handler_cls is None:
                 created_elements = 0
                 constrained = 0
                 constraint_notes = []
+                constraint_faces = []
                 if made:
                     transaction = Transaction(doc, "Reinforce new footings")
                     transaction.Start()
@@ -586,15 +658,19 @@ if _state.handler_cls is None:
                         for item, element_id in made:
                             outcome = _reinforce_new(
                                 doc, workbook, item, element_id, bar_type_ids,
-                                view)
+                                view, write_identity)
                             created_bars += outcome.bars
                             created_elements += outcome.elements
                             constrained += outcome.constrained
                             errors.extend(outcome.errors)
                             skipped.extend(outcome.skipped)
+                            notes.extend(outcome.identity_notes)
                             for note in outcome.constraint_notes:
                                 if note not in constraint_notes:
                                     constraint_notes.append(note)
+                            for line in outcome.constraint_faces:
+                                if line not in constraint_faces:
+                                    constraint_faces.append(line)
                         transaction.Commit()
                     except Exception as rebar_error:
                         errors.append("reinforcement rolled back: {0}".format(
@@ -618,6 +694,7 @@ if _state.handler_cls is None:
                 "bars": created_bars,
                 "constrained": constrained,
                 "constraint_notes": constraint_notes,
+                "constraint_faces": constraint_faces,
                 "errors": errors,
                 "skipped": skipped,
                 "notes": notes,
@@ -645,7 +722,8 @@ def _swallow_warnings(transaction):
     transaction.SetFailureHandlingOptions(options)
 
 
-def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
+def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view,
+                   write_identity=True):
     """Reinforce a pad this run just made, in the pad's own frame.
 
     The bars are planned from **the outline the pad was built from** and placed
@@ -698,7 +776,8 @@ def _reinforce_new(doc, workbook, item, element_id, bar_type_ids, view):
                 item.mark, layer.row.layer, layer.row.diameter_mm or 0))
             continue
         result.merge(rebar_factory.place_layer(
-            doc, element, layer, bar_type_id, origin, rotation, view))
+            doc, element, layer, bar_type_id, origin, rotation, view,
+            identity=item.identity if write_identity else None))
     return result
 
 
@@ -714,6 +793,24 @@ def _plan_row(plan):
         "elements": plan.elements,
         "level": plan.level,
     }
+
+
+def _collapse(entries):
+    """Repeated lines as ``3x <line>``, in the order they first appeared.
+
+    Six footings of the same type produce the same six notes six times, and a
+    report that prints all thirty-six buries the one line that is different
+    under the thirty-five that are not.
+    """
+    order = []
+    counts = {}
+    for entry in entries:
+        text = str(entry)
+        if text not in counts:
+            order.append(text)
+        counts[text] = counts.get(text, 0) + 1
+    return [text if counts[text] == 1 else "{0}x {1}".format(counts[text], text)
+            for text in order]
 
 
 def _name_of(element):
@@ -746,6 +843,7 @@ class RCAutomationApp(object):
         self.WorkbookPathText = self.window.FindName("WorkbookPathText")
         self.BrowseBtn = self.window.FindName("BrowseBtn")
         self.ModeCombo = self.window.FindName("ModeCombo")
+        self.ParamsCombo = self.window.FindName("ParamsCombo")
         self.LoadBtn = self.window.FindName("LoadBtn")
         self.ProbeBtn = self.window.FindName("ProbeBtn")
         self.PlanBtn = self.window.FindName("PlanBtn")
@@ -772,6 +870,21 @@ class RCAutomationApp(object):
         for mode in models.MODES:
             self.ModeCombo.Items.Add(models.MODE_LABELS[mode])
         self.ModeCombo.SelectedIndex = 0
+        for choice in PARAMETER_MODES:
+            self.ParamsCombo.Items.Add(choice)
+        self.ParamsCombo.SelectedIndex = 0
+
+    def selected_params_mode(self):
+        """What to do about the project's identity parameters.
+
+        Defaulting to *fill where present* is deliberate: creating a shared
+        parameter writes a definition file and changes the project's parameter
+        bindings, and a tool does not do that because it would be convenient.
+        """
+        index = self.ParamsCombo.SelectedIndex
+        if index < 0 or index >= len(PARAMETER_MODES):
+            return PARAMETER_MODES[0]
+        return PARAMETER_MODES[index]
 
     def _wire_events(self):
         self.BrowseBtn.Click += self._on_browse
@@ -834,6 +947,7 @@ class RCAutomationApp(object):
         self.handler.data["workbook"] = self.workbook
         self.handler.data["mode"] = self.selected_mode()
         self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
+        self.handler.data["params_mode"] = self.selected_params_mode()
         self._enqueue("plan")
         self.set_status(
             "Working out what would be built…"
@@ -892,6 +1006,7 @@ class RCAutomationApp(object):
 
         self.handler.data["replace"] = bool(self.ReplaceCheck.IsChecked)
         self.handler.data["mode"] = self.selected_mode()
+        self.handler.data["params_mode"] = self.selected_params_mode()
         self._enqueue("create")
         self.set_status("Building — Revit is busy until it is done…")
 
@@ -1061,6 +1176,15 @@ class RCAutomationApp(object):
                          "a footing updates its reinforcement.".format(
                              constrained))
             lines.append("")
+        faces = result.get("constraint_faces") or []
+        if faces:
+            lines.append("Varying sets, and the cover face each end found")
+            for line in faces[:20]:
+                lines.append("  " + str(line))
+            if len(faces) > 20:
+                lines.append("  ... and {0} more".format(len(faces) - 20))
+            lines.append("")
+
         for label, entries in (
                 ("Not constrained", result.get("constraint_notes") or []),
                 ("Notes", result.get("notes") or []),
@@ -1068,11 +1192,12 @@ class RCAutomationApp(object):
                 ("Failed", result.get("errors") or [])):
             if not entries:
                 continue
+            collapsed = _collapse(entries)
             lines.append("{0} ({1})".format(label, len(entries)))
-            for entry in entries[:20]:
-                lines.append("  " + str(entry))
-            if len(entries) > 20:
-                lines.append("  ... and {0} more".format(len(entries) - 20))
+            for entry in collapsed[:20]:
+                lines.append("  " + entry)
+            if len(collapsed) > 20:
+                lines.append("  ... and {0} more".format(len(collapsed) - 20))
             lines.append("")
         if result.get("constraint_notes"):
             lines.append("The bars are placed correctly either way; what is "
@@ -1215,6 +1340,20 @@ class RCAutomationApp(object):
             lines.append("")
             lines.append("Rebar constraints on this build")
             lines.append(result["constraints"])
+
+        lines.append("")
+        lines.append("Identity parameters")
+        for name in result.get("params_present", []):
+            lines.append("  {0} — bound, will be filled".format(name))
+        missing = result.get("params_missing", [])
+        for name in missing:
+            lines.append("  {0} — not in this project".format(name))
+        if missing:
+            lines.append("  Parameters: '{0}' adds the missing ones as shared "
+                         "parameters bound to Structural Foundations and "
+                         "Structural Rebar; '{1}' leaves them out.".format(
+                             element_params.MODE_CREATE,
+                             element_params.MODE_FILL))
 
         # The conclusion, spelled out. A reader should not have to infer "there
         # is nothing to reinforce" from a pair of zeroes.

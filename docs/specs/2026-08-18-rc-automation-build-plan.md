@@ -158,7 +158,7 @@ Revit-free code lives in the toolkit so it runs under
 `cad2bim` — it belongs to its own pushbutton.
 
 ```
-anongee_toolkit/rc_automation/          no Revit — 423 tests, all green
+anongee_toolkit/rc_automation/          no Revit — 570 tests, all green
     models.py            DTOs, modes, severities, layout rules       ✅
     standards.py         the BS 8666 subset validation needs         ✅
     excel_engine.py      read_grid (openpyxl) + parse_grid (pure)    ✅
@@ -166,6 +166,7 @@ anongee_toolkit/rc_automation/          no Revit — 423 tests, all green
     reconcile.py         field-by-field comparison, Excel default    ✅
     rebar_spec.py        workbook row → bar centrelines, sets vs bars ✅
     naming.py            schedule names → model names, grid crossings ✅
+    identity.py          ID / ID_LIC / ID_V / ITEM / LEVEL_V from a row ✅
     reporting_engine.py  hand-rolled CSV (no `csv` module), JSON, XLSX
 
 anongee_toolkit/structural/             Revit-touching, statically checked
@@ -178,9 +179,11 @@ anongee_toolkit/structural/             Revit-touching, statically checked
     grids.py             a pair of grid names to a point                         ✅
     footings.py          Floor.Create from an outline, flagged structural        ✅
     structure_run.py     resolve every pad first, then build                     ✅
+    rebar_constraints.py handle → nearest cover candidate → preferred constraint ✅
+    element_params.py    read, create and write the project's identity fields    ✅
     columns.py           FamilyInstance between two levels
 
-RC Automation.pushbutton/               Revit + WPF — v0.2.0 shipped, writes
+RC Automation.pushbutton/               Revit + WPF — v0.7.0 shipped, writes
     script.py            modeless window, FIFO queue, plan + create   ✅
     ui.xaml              inlined theme, findings grid, side panel     ✅
     bundle.yaml  icon.png  CHANGELOG.md                               ✅
@@ -211,9 +214,23 @@ instance of that type. Statuses:
   instead of ~50,000 at the 500-element target, and what a detailer expects to
   edit. Compatible with BBS Generator, which reads
   `REBAR_ELEM_QUANTITY_OF_BARS`.
-- **Cover** is a `RebarCoverType` element, not a number. Resolved against
-  existing cover types by value; no match is a mapping error, not a silent
-  creation.
+- **Cover** is a `RebarCoverType` element, not a number. One type **per face**,
+  named for the face — `FOOTING TOP`, `FOOTING BOTTOM`, `FOOTING ALL SIDE` —
+  matched by name *and* value so two faces at the same distance still get their
+  own. Matched by value alone for the pre-run check, where the question is
+  whether the project covers 50 mm at all.
+- **Bends stay inside the cover.** The API takes centrelines and cover measures
+  steel: a straight end shows its end face and stops on the cover plane, a
+  turned-up leg shows its barrel and stops half a diameter short of it.
+- **Constraints** tie every handle to the cover face it is nearest, by the
+  smallest absolute `GetDistanceToTargetCover()`. That is what puts a varying
+  set's ends on a tapered pad's sloping edge rather than on whichever face
+  Revit listed first.
+- **Identity parameters** — `ID`, `ID_LIC`, `ID_V`, `ITEM`, `LEVEL_V` on the
+  host, plus `Host Category` and `Host Mark` on every bar. A bar inherits the
+  shared ones from its host so the two cannot disagree. Missing shared
+  parameters are created only on an explicit choice, inside the run's own undo
+  step.
 - **Footing bars** are built from the floor's sketch outline inset by side
   cover, at the z of bottom cover plus layer offset. Because the outline is
   arbitrary, bar lengths come from intersecting the run direction with the inset
@@ -292,10 +309,14 @@ Only int element ids cross the thread boundary.
 8. ✅ **Phase 1 wired, v0.3.0.** Footings created as floors, flagged structural,
    then reinforced — both halves in one `TransactionGroup`. Level names matched
    with a `LEVELS` sheet for what matching cannot reach; grid crossings resolved.
-9. `structural/columns` — the last element type without a creation path.
-10. `preview_engine` — overrides and DirectShape.
-11. Phase 3 reconciliation wiring, geometry still report-only.
-12. Cancellation between chunks, worksharing checkout, `reporting_engine`.
+9. ✅ **Reinforcement made correct, v0.4.0–v0.7.0.** Shape codes bend the bar;
+   a layer is cut at the outline's vertices into one set per region; cover is
+   written per face and every handle constrained to the face it is nearest; the
+   project's identity fields are filled in.
+10. `structural/columns` — the last element type without a creation path.
+11. `preview_engine` — overrides and DirectShape.
+12. Phase 3 reconciliation wiring, geometry still report-only.
+13. Cancellation between chunks, worksharing checkout, `reporting_engine`.
 
 Steps 1–3 are the entire data model and testable off-Revit; step 4 proves the
 Revit half without risking a model; step 5 is where the real risk sits, which is

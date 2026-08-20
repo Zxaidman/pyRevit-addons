@@ -19,9 +19,11 @@ imports nothing and is unit-tested on any machine.
 ``footings``         create foundation pads as floors
 ``structure_run``    build the footings a schedule describes
 ``rebar_constraints`` tie a bar to its host cover, so edits carry through
+``element_params``   write the project's own ID/ITEM/LEVEL_V onto what is built
 """
 from anongee_toolkit.structural.rebars import get_rebars
 
 __all__ = ["get_rebars", "rebar_types", "rebar_hosts", "rebar_geometry",
            "rebar_factory", "rebar_run", "levels", "grids",
-           "footings", "structure_run", "rebar_constraints"]
+           "footings", "structure_run", "rebar_constraints",
+           "element_params"]

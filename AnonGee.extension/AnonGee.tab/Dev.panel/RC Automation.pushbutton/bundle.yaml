@@ -38,9 +38,16 @@ tooltip: |
     • Shape codes build the bar: 21 turns both ends up, 11 turns one, 00 runs
       straight. A layer with no room to bend is placed straight and says so.
     • The scheduled cover is written onto the footing itself, as cover types,
-      created if the project has none.
+      created if the project has none — one per face, named for it: FOOTING
+      TOP, FOOTING BOTTOM, FOOTING ALL SIDE. Two faces at the same distance
+      still get their own type, so Other Faces never reads FOOTING TOP.
+    • Bends stay inside the cover. A straight end stops on the cover plane,
+      where its end face is what cover measures; a turned-up leg stops half a
+      bar short, because there the barrel is.
     • Placed bars are constrained to the host's cover, so editing a footing
-      updates its reinforcement rather than leaving it behind.
+      updates its reinforcement rather than leaving it behind. Each handle
+      takes the cover face it is nearest — which on a tapered pad is the
+      sloping edge, and is what makes a varying set actually vary.
     • A layer is cut at the outline's vertices and each stretch becomes its
       own set — a set cannot follow a change of slope. A gabled pad gives a
       plain set across the rectangle and a varying set over the gable one way,
@@ -59,6 +66,19 @@ tooltip: |
       no types. A mark already on a foundation is left alone.
     • Position comes from a grid crossing, or from X/Y millimetres — which is
       the only one that works in a model with no grids in it yet.
+
+  The project's own schedule fields
+    • ID, ID_LIC, ID_V, ITEM and LEVEL_V are written onto every footing, and
+      onto every bar along with Host Category and Host Mark. A pad at grid C-1
+      of type F2 reads ID=F2, ID_LIC=C-1, ID_V=F2-C1, ITEM=2400x2400x750; its
+      bottom mat reads ID_V=B1-X, ITEM=#12-16T@200.
+    • A bar takes ID, ID_LIC and LEVEL_V from its host, so the two cannot
+      disagree about the level or the grid. ITEM prints the model's name for
+      the bar type, not the workbook's.
+    • Parameters chooses what happens when the project does not have them:
+      fill only what is bound, create the missing ones as shared parameters
+      (inside the same undo step), or skip them entirely. Probe the model to
+      see which are there.
 
   Level names
     • Matched rather than demanded: "Ground" finds "00 Ground Lvl."; "Level 1"
@@ -102,4 +122,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.6.0
+  Version: 0.7.0

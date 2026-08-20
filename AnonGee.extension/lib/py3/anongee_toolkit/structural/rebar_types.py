@@ -176,19 +176,39 @@ def cover_types(doc):
     return rows
 
 
-def match_cover_type(doc, cover_mm, tolerance_mm=COVER_TOLERANCE_MM):
-    """The cover type whose distance is the one scheduled, or ``None``.
+def match_cover_type(doc, cover_mm, tolerance_mm=COVER_TOLERANCE_MM,
+                     name_hint=""):
+    """The cover type the caller means, or ``None``.
 
-    Cover is an element reference in Revit, not a number, which is the detail
-    that turns "50 mm cover" into a mapping problem. Matching on the value
-    rather than the name is right because names vary by template while 50 mm is
-    50 mm.
+    Two different questions, and the caller says which by passing *name_hint*
+    or not:
+
+    **Without a hint** -- "does this project already cover 50 mm?" -- the value
+    is the whole answer, because names vary by template while 50 mm is 50 mm.
+    That is what the pre-run check asks.
+
+    **With a hint** -- "is *this* face's cover type already here?" -- the name
+    has to match as well, and ``None`` means *create it* rather than *fall back
+    to something the same size*. Value alone is not enough there: a footing's
+    top and side cover are both 50 mm on most schedules, so a value-only match
+    hands the side face the type named ``FOOTING TOP`` and the model then reads
+    "Other Faces: FOOTING TOP", which is wrong on a drawing whatever the number
+    says.
     """
     if cover_mm is None:
         return None
+    rows = cover_types(doc)
+    if name_hint:
+        wanted = str(name_hint).strip().lower()
+        for name_text, element_id, distance in rows:
+            if (name_text.strip().lower() == wanted and distance is not None
+                    and abs(distance - float(cover_mm)) <= tolerance_mm):
+                return element_id
+        return None
+
     best = None
     best_gap = None
-    for _name_text, element_id, distance in cover_types(doc):
+    for _name_text, element_id, distance in rows:
         if distance is None:
             continue
         gap = abs(distance - float(cover_mm))

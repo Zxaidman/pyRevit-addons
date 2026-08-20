@@ -27,7 +27,7 @@ _STRUCTURAL = os.path.join(_ROOT, "AnonGee.extension", "lib", "py3",
                            "anongee_toolkit", "structural")
 _MODULES = ("rebar_types", "rebar_hosts", "rebar_geometry",
             "rebar_factory", "rebar_run", "levels", "grids", "footings",
-            "structure_run", "rebar_constraints")
+            "structure_run", "rebar_constraints", "element_params")
 
 if os.path.join(_ROOT, "tests") not in sys.path:
     sys.path.insert(0, os.path.join(_ROOT, "tests"))
@@ -43,6 +43,14 @@ def _path(name):
 def _read(name):
     with io.open(_path(name), encoding="utf-8") as handle:
         return handle.read()
+
+
+def _read_script():
+    """The pushbutton, for the few contracts that span it and the toolkit."""
+    with io.open(os.path.join(
+            _ROOT, "AnonGee.extension", "AnonGee.tab", "Dev.panel",
+            "RC Automation.pushbutton", "script.py"), encoding="utf-8") as h:
+        return h.read()
 
 
 def _tree(name):
@@ -454,6 +462,171 @@ class GeometryContractTests(unittest.TestCase):
         rotate_at = body.index("math.radians")
         offset_at = body.index("origin_ft is None")
         self.assertLess(rotate_at, offset_at)
+
+
+class CoverFaceTests(unittest.TestCase):
+    """A cover type belongs to a face, not to a number.
+
+    A run against a schedule with 50 mm on top and 50 mm on the sides -- which
+    is most schedules -- gave the side faces the type named ``FOOTING TOP``,
+    because the cache that stops three identical types being created was keyed
+    on the value alone. The footing then read *Other Faces: FOOTING TOP
+    <50 mm>*: the right number on the wrong face, which is the kind of wrong
+    that survives a check and reaches a drawing.
+    """
+
+    def body(self, name):
+        return _read("rebar_factory").split("def " + name)[1].split("\ndef ")[0]
+
+    def test_the_cover_cache_is_keyed_by_face_as_well_as_value(self):
+        body = self.body("ensure_cover_type")
+        self.assertIn("key = (face,", body)
+
+    def test_an_existing_type_has_to_match_the_face_name_too(self):
+        body = self.body("ensure_cover_type")
+        self.assertIn("name_hint=wanted", body)
+
+    def test_a_name_hint_never_falls_back_to_a_type_of_the_same_size(self):
+        """Otherwise the hint buys nothing: the wrong-named type wins anyway."""
+        body = (_read("rebar_types").split("def match_cover_type")[1]
+                .split("\ndef ")[0])
+        hinted = body.split("if name_hint:")[1]
+        self.assertIn("return None", hinted.split("\n\n")[0])
+
+    def test_every_face_of_a_footing_has_its_own_name(self):
+        source = _read("rebar_factory")
+        names = source.split("COVER_TYPE_NAMES = {")[1].split("}")[0]
+        for face in ("top", "bottom", "side"):
+            self.assertIn('"{0}"'.format(face), names)
+        # Element-specific, not "RC 50 mm" -- a schedule full of RC-something
+        # tells a reader nothing about where it applies.
+        self.assertIn("FOOTING TOP", names)
+        self.assertIn("FOOTING BOTTOM", names)
+        self.assertIn("FOOTING ALL SIDE", names)
+
+
+class ConstraintChoiceTests(unittest.TestCase):
+    """Which candidate a handle takes decides whether a varying set varies.
+
+    A pad offers a cover candidate for every face. Taking the first one that
+    answers ``IsToCover()`` ties the gable-end bars of a tapered pad to a square
+    face, and the varying set then has nothing to vary along -- which is what a
+    real model showed after the bars were already landing in the right regions.
+    """
+
+    def body(self, name):
+        return (_read("rebar_constraints").split("def " + name)[1]
+                .split("\ndef ")[0])
+
+    def test_the_nearest_cover_candidate_wins_not_the_first(self):
+        body = self.body("_nearest_cover_candidate")
+        self.assertIn("abs(gap) < abs(best_gap)", body)
+
+    def test_the_distance_is_compared_as_a_magnitude(self):
+        # Signed in Revit: a raw comparison picks the most negative, which is
+        # the face furthest behind the handle rather than the nearest one.
+        self.assertIn("callers compare magnitudes", _read("rebar_constraints"))
+
+    def test_a_candidate_that_will_not_say_is_unrankable_not_nearest(self):
+        body = self.body("_nearest_cover_candidate")
+        self.assertIn("unranked", body)
+
+    def test_the_handle_is_named_when_the_constraint_is_set(self):
+        """``SetPreferredConstraint`` alone reported success and changed nothing."""
+        body = self.body("_prefer")
+        self.assertIn("SetPreferredConstraintForHandle", body)
+        self.assertLess(body.index("SetPreferredConstraintForHandle"),
+                        body.index('"SetPreferredConstraint"'))
+
+    def test_the_apply_call_that_does_not_exist_is_not_made(self):
+        # ``ApplyRebarConstraints()`` raised "No method matches given
+        # arguments" in a real run, and the note went into the report as though
+        # a constraint had failed.
+        source = _read("rebar_constraints")
+        self.assertNotIn('_call(manager, "ApplyRebarConstraints"', source)
+
+    def test_a_varying_set_reports_which_faces_its_ends_found(self):
+        # "The varying set did not vary" and "the varying set was tied to the
+        # wrong face" look identical in a model and are the same bug. The face
+        # report is what went *right*, so it travels separately from the notes
+        # rather than under a heading that says nothing was constrained.
+        body = self.body("apply_to_all")
+        self.assertIn("faces = []", body)
+        self.assertIn("faces.append(line)", body)
+        self.assertIn("return (applied,", body)
+        script = _read_script()
+        self.assertIn('"constraint_faces": constraint_faces', script)
+        self.assertIn("the cover face each end found", script)
+
+    def test_only_a_handle_already_on_its_cover_is_snapped_to_zero(self):
+        # A second layer sits a whole bar diameter off its cover and has to
+        # keep doing so; forcing every handle to zero would move the steel.
+        body = self.body("constrain_to_cover")
+        self.assertIn("snap_tolerance_mm", body)
+        self.assertIn("abs(gap) <= snap_tolerance_mm", body)
+
+
+class IdentityParameterTests(unittest.TestCase):
+    """Filling the project's own schedule fields, and never inventing them."""
+
+    def test_nothing_here_opens_its_own_transaction(self):
+        source = _read("element_params")
+        self.assertNotIn("Transaction(", source)
+        self.assertIn("Requires a transaction the caller owns", source)
+
+    def test_categories_cross_the_bridge_as_a_category_set(self):
+        """A raw Python list is a fatal marshalling fault, not a TypeError."""
+        body = (_read("element_params").split("def _category_set")[1]
+                .split("\ndef ")[0])
+        self.assertIn("NewCategorySet", body)
+        self.assertIn(".Insert(category)", body)
+
+    def test_both_spellings_of_the_moved_api_are_tried(self):
+        source = _read("element_params")
+        for pair in (("SpecTypeId", "ParameterType"),
+                     ("GroupTypeId", "BuiltInParameterGroup")):
+            for name in pair:
+                self.assertIn(name, source, name)
+
+    def test_a_shared_parameter_file_is_written_with_its_header(self):
+        # Revit hands back None for a file with no header, and every definition
+        # then fails to create with nothing said about why.
+        source = _read("element_params")
+        self.assertIn("*META\\tVERSION\\tMINVERSION", source)
+        self.assertIn("*PARAM\\tGUID\\tNAME", source)
+
+    def test_an_existing_definition_is_reused_rather_than_duplicated(self):
+        # A shared parameter is identified by GUID: a second one of the same
+        # name reads identically on screen and is a different parameter.
+        body = (_read("element_params").split("def _text_definition")[1]
+                .split("\ndef ")[0])
+        self.assertIn("if definition.Name == name:", body)
+
+    def test_bound_somewhere_else_does_not_count_as_bound_here(self):
+        # A project whose ID reaches only Walls has the parameter and still
+        # cannot put it on a footing. Calling that present would mean writing
+        # nothing and saying nothing.
+        body = (_read("element_params").split("def bound_names")[1]
+                .split("\ndef ")[0])
+        self.assertIn("wanted.issubset(reached)", body)
+        self.assertIn("reached is None", body)
+
+    def test_element_ids_are_read_both_ways_round_the_2024_rename(self):
+        body = (_read("element_params").split("def _id_value")[1]
+                .split("\ndef ")[0])
+        self.assertIn('"Value", "IntegerValue"', body)
+
+    def test_a_missing_parameter_never_fails_a_bar(self):
+        body = (_read("element_params").split("def write")[1]
+                .split("\ndef ")[0])
+        self.assertIn("notes.append", body)
+        self.assertNotIn("raise", body)
+
+    def test_a_bar_takes_its_host_s_values_rather_than_deriving_them(self):
+        body = (_read("rebar_factory").split("def identify")[1]
+                .split("\ndef ")[0])
+        self.assertIn("identity_module.rebar_values", body)
+        self.assertIn("host_identity", body)
 
 
 if __name__ == "__main__":

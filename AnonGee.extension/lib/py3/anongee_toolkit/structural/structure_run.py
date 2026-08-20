@@ -13,13 +13,14 @@ Nothing here opens a transaction. :func:`plan` reads; :func:`create_one` writes
 inside one the caller owns.
 """
 
+from anongee_toolkit.rc_automation import identity
 from anongee_toolkit.rc_automation import rebar_spec
 from anongee_toolkit.structural import footings
 from anongee_toolkit.structural import grids as grid_module
 from anongee_toolkit.structural import levels as level_module
 from anongee_toolkit.structural import rebar_hosts
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 STATUS_CREATE = "Create"
 STATUS_EXISTS = "Exists"
@@ -32,7 +33,7 @@ class FootingPlan(object):
     __slots__ = ("mark", "type_mark", "status", "reason", "position_mm",
                  "outline_mm", "level_id", "level_name", "thickness_mm",
                  "rotation_deg", "offset_mm", "cover_top_mm",
-                 "cover_bottom_mm", "cover_side_mm")
+                 "cover_bottom_mm", "cover_side_mm", "identity")
 
     def __init__(self, mark, type_mark, status=STATUS_CREATE, reason="",
                  position_mm=None, outline_mm=None, level_id=None,
@@ -53,6 +54,10 @@ class FootingPlan(object):
         self.cover_top_mm = cover_top_mm
         self.cover_bottom_mm = cover_bottom_mm
         self.cover_side_mm = cover_side_mm
+        #: The project's own identity fields for this pad -- ID, ID_LIC, ID_V,
+        #: ITEM, LEVEL_V. Worked out at plan time so the report can show what
+        #: would be written before anything is.
+        self.identity = {}
 
     @property
     def will_create(self):
@@ -116,9 +121,24 @@ def plan(doc, workbook, key_parameter=rebar_hosts.DEFAULT_KEY_PARAMETER,
 
     plans = []
     for placement in workbook.footing_placement:
-        plans.append(_plan_one(workbook, placement, level_ids, doc_grids,
-                               already))
+        item = _plan_one(workbook, placement, level_ids, doc_grids, already)
+        # The model's spelling of the level, not the workbook's. A schedule
+        # keyed on LEVEL_V splits into two levels that are one level otherwise.
+        item.level_name = _level_name(doc, item.level_id) or placement.level
+        if item.identity:
+            item.identity["LEVEL_V"] = item.level_name
+        plans.append(item)
     return plans, notes, blockers
+
+
+def _level_name(doc, level_id):
+    if level_id is None:
+        return ""
+    try:
+        level = doc.GetElement(level_id)
+        return level.Name if level is not None else ""
+    except Exception:
+        return ""
 
 
 def _plan_one(workbook, placement, level_ids, doc_grids, already):
@@ -156,6 +176,8 @@ def _plan_one(workbook, placement, level_ids, doc_grids, already):
     # An outline is placed as drawn; everything else is the type's rectangle,
     # which the outline helper centres on the placement point for us.
     item.outline_mm = rebar_spec.outline_for(footing_type, placement)
+    item.identity = identity.from_placement(placement, footing_type,
+                                            placement.level, item.outline_mm)
     item.thickness_mm = footing_type.thickness_mm
     item.cover_top_mm = footing_type.cover_top_mm
     item.cover_bottom_mm = footing_type.cover_bottom_mm
@@ -184,7 +206,7 @@ def _position_mm(placement, doc_grids):
 
 
 def create_one(doc, item, base_type_id, type_cache=None,
-               cover_cache=None):
+               cover_cache=None, write_identity=True):
     """Place one pad. **Requires a transaction the caller opened.**
 
     ``(element, notes)``. Raises only on something that stops the pad existing;
@@ -214,10 +236,25 @@ def create_one(doc, item, base_type_id, type_cache=None,
         item.cover_side_mm, cover_cache)
     for name in created:
         notes.append("created cover type {0}".format(name))
-    if not applied and (item.cover_top_mm or item.cover_bottom_mm):
+    if applied:
+        # Which type landed on which face, in as many words. The number being
+        # right is not the same as the face being right, and a run once wrote
+        # ``FOOTING TOP`` onto Other Faces with every number correct.
+        notes.append("cover: {0}".format("; ".join(applied)))
+    elif item.cover_top_mm or item.cover_bottom_mm:
         notes.append("{0}: no cover could be written onto the element".format(
             item.mark))
     notes.extend(cover_notes)
+
+    if write_identity and item.identity:
+        from anongee_toolkit.structural import element_params
+        written, param_notes = element_params.write(element, item.identity)
+        if written:
+            notes.append("identity: {0}".format(", ".join(
+                "{0}={1}".format(name, item.identity[name])
+                for name in written)))
+        for note in param_notes:
+            notes.append("identity {0}".format(note))
     return element, notes
 
 

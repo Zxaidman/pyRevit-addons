@@ -24,6 +24,7 @@ from anongee_toolkit.rc_automation import validation      # noqa: F401
 from anongee_toolkit.rc_automation import reconcile       # noqa: F401
 from anongee_toolkit.rc_automation import rebar_spec      # noqa: F401
 from anongee_toolkit.rc_automation import naming          # noqa: F401
+from anongee_toolkit.rc_automation import identity        # noqa: F401
 
 __all__ = ["models", "standards", "excel_engine", "validation",
-           "reconcile", "rebar_spec", "naming"]
+           "reconcile", "rebar_spec", "naming", "identity"]

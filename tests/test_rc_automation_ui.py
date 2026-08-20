@@ -510,6 +510,37 @@ class CreationSafetyTests(unittest.TestCase):
         # Never a blanket delete of whatever the host happens to contain.
         self.assertNotIn("GetRebarsInHost", body)
 
+    def test_the_user_chooses_what_happens_to_shared_parameters(self):
+        """Creating one changes the project's bindings — never silently.
+
+        A shared parameter is not a value: it is a definition in a file and a
+        binding in somebody's model. Adding one is a decision, so it is offered
+        rather than taken, and the conservative option is the default.
+        """
+        self.assertIn("ParamsCombo", self.source)
+        self.assertIn('"params_mode"', self.source)
+        self.assertIn("element_params.MODE_SKIP", self.source)
+        self.assertIn("element_params.MODE_CREATE", self.source)
+        # Fill-where-present first, so an untouched window creates nothing.
+        params = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "element_params.py"))
+        modes = params.split("MODES = (")[1].split(")")[0]
+        self.assertTrue(modes.strip().startswith("MODE_FILL"), modes)
+
+    def test_creating_parameters_lands_in_the_run_s_own_undo_step(self):
+        # Bindings added and then rolled back by Ctrl+Z, together with the
+        # footings they were added for -- not left behind in the project.
+        body = self.source.split("def _prepare_parameters")[1].split(
+            "\n        def ")[0]
+        self.assertIn("Transaction(doc", body)
+        self.assertIn("RollBack", body)
+        for create in ("def _create(", "def _create_structure("):
+            section = self.source.split(create)[1].split("\n        def ")[0]
+            self.assertIn("_prepare_parameters", section, create)
+            self.assertLess(section.index("group.Start()"),
+                            section.index("_prepare_parameters"), create)
+
     def test_the_document_being_read_only_is_checked(self):
         self.assertIn("doc.IsReadOnly", self.source)
 

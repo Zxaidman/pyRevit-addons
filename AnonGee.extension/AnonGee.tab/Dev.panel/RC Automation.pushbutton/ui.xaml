@@ -636,6 +636,7 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -659,6 +660,13 @@
                     <ComboBox Grid.Row="1" Grid.Column="1" x:Name="ModeCombo"
                               Style="{StaticResource InputComboBox}" Margin="0,10,0,0"
                               ToolTip="Which job the workbook is read for. It decides which sheets are required: creating a structure needs the placement sheets, reinforcing one that already exists does not."/>
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Parameters"
+                               Style="{StaticResource FieldLabel}"
+                               VerticalAlignment="Center" Margin="0,10,10,0"/>
+                    <ComboBox Grid.Row="2" Grid.Column="1" x:Name="ParamsCombo"
+                              Style="{StaticResource InputComboBox}" Margin="0,10,0,0"
+                              ToolTip="What to do about the project&apos;s own identity parameters — ID, ID_LIC, ID_V, ITEM, LEVEL_V on the footing, and those plus Host Category and Host Mark on every bar. Fill where present writes the ones this project already has. Create missing adds them as shared parameters bound to Structural Foundations and Structural Rebar, which changes the project&apos;s parameter bindings. Skip touches none of them. Probe the model to see which are there."/>
                 </Grid>
             </Border>
 

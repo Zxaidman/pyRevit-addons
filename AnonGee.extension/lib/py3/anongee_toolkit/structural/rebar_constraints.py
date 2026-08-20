@@ -13,31 +13,57 @@ first version of this module used the wrong one. ``RebarConstraint.Create`` is
 free-form only; called against a bar from ``CreateFromCurves`` it raises
 *"Constrained rebar isn't a free form rebar element"*, which is exactly what a
 real run reported. For shape-driven bars Revit offers **candidates** and the
-caller picks one:
+caller picks one::
 
-    manager.GetConstraintCandidatesForHandle(handle, host.Id)
-        -> the constraints that handle *could* have
-    constraint.IsToCover()
-        -> this one follows the cover rather than a bare face
-    manager.SetPreferredConstraint(constraint)
-        -> take it; the constraint already knows its handle
-    manager.ApplyRebarConstraints()
-        -> commit
+    manager = rebar.GetRebarConstraintsManager()
+    for handle in manager.GetAllHandles():
+        candidates = manager.GetConstraintCandidatesForHandle(handle, host.Id)
+        to_cover = [c for c in candidates if c.IsToCover()]
+        nearest = min(to_cover, key=lambda c: abs(c.GetDistanceToTargetCover()))
+        nearest.SetDistanceToTargetCover(0)
+        manager.SetPreferredConstraintForHandle(handle, nearest)
+
+Two things in that were wrong here before, and both showed in the model:
+
+**Nearest, not first.** The old code took the first candidate that answered
+``IsToCover()``. A pad footing offers a cover candidate for every face, so
+"first" is whichever face Revit happened to list first -- and on the gable end
+of a non-rectangular pad that is never the sloping edge. The bars were placed
+in the right regions and then constrained to the wrong face, so the varying set
+had nothing to vary along. ``GetDistanceToTargetCover()`` is what picks the
+face a handle is actually *at*, and the comparison has to be on the absolute
+value because the distance is signed.
+
+**``SetPreferredConstraintForHandle``, not ``SetPreferredConstraint``.** The
+handle-less overload reported success and changed nothing. There is no
+``ApplyRebarConstraints()`` to follow it with either -- calling it produced
+*"No method matches given arguments"* in a real run and the note went in the
+report as though a constraint had failed. Setting the preferred constraint on
+the handle *is* the commit.
 
 See ``REVIT_API_RESEARCH.md`` in the repository root for where that comes from.
 
 Still defensive, because the shape of this API moves between releases: every
 call is reached through a probe and a failure is reported rather than raised. A
-bar that cannot be constrained is still a bar in the right place — what is lost
-is the automatic updating, which is not worth losing a run over.
+bar that cannot be constrained is still a bar in the right place -- what is
+lost is the automatic updating, which is not worth losing a run over.
 """
 
-__version__ = "0.2.0"
+from anongee_toolkit.revit.units import ft_to_mm
+from anongee_toolkit.revit.units import mm_to_ft
+
+__version__ = "0.3.0"
 
 #: Handles worth tying to cover on a footing bar. The ends make a bar re-length
 #: when the pad changes; the plane keeps it at the right height.
 INTERESTING_HANDLES = ("StartOfBar", "EndOfBar", "RebarPlane", "TopOfBar",
                        "BottomOfBar")
+
+#: A handle this close to the cover it is being tied to is *on* it, and the
+#: constraint is set to zero so the model carries a round number rather than a
+#: rounding artefact. Anything further is a real offset -- a second layer sits a
+#: whole bar diameter off its cover and must keep doing so -- and is left alone.
+SNAP_TOLERANCE_MM = 1.0
 
 
 def _call(owner, name, *args):
@@ -89,6 +115,37 @@ def handles(manager):
     return named
 
 
+def distance_to_cover_mm(constraint):
+    """How far this candidate's handle is from the cover it targets, in mm.
+
+    Signed in Revit and left signed here; callers compare magnitudes. ``None``
+    when the build will not say, which makes the candidate unrankable rather
+    than nearest -- guessing zero would make every unknown candidate win.
+    """
+    value, _error = _call(constraint, "GetDistanceToTargetCover")
+    if value is None:
+        return None
+    try:
+        return ft_to_mm(value)
+    except Exception:
+        return None
+
+
+def target_face(constraint):
+    """Which host face a candidate targets, as text, or ``""``.
+
+    Only for the report. It is the line that says whether the varying set on a
+    tapered pad found the sloping edge or one of the square ones, which is a
+    question no amount of reading the code answers.
+    """
+    for name in ("GetRebarConstraintTargetHostFaceType",
+                 "GetTargetHostFaceType"):
+        value, _error = _call(constraint, name)
+        if value is not None:
+            return str(value)
+    return ""
+
+
 def describe(rebar):
     """What this bar's handles are tied to, as plain text.
 
@@ -110,26 +167,61 @@ def describe(rebar):
             lines.append("  {0}: unconstrained".format(name or "?"))
             continue
         to_cover, _e = _call(constraint, "IsToCover")
-        face, _e2 = _call(constraint, "GetRebarConstraintTargetHostFaceType")
-        lines.append("  {0}: {1}{2}".format(
+        face = target_face(constraint)
+        gap = distance_to_cover_mm(constraint)
+        lines.append("  {0}: {1}{2}{3}".format(
             name or "?", "cover" if to_cover else "face",
-            " ({0})".format(face) if face is not None else ""))
+            " ({0})".format(face) if face else "",
+            " at {0:+.1f} mm".format(gap) if gap is not None else ""))
     return "\n".join(lines)
 
 
-def constrain_to_cover(rebar, host, handle_names=INTERESTING_HANDLES):
-    """Point every interesting handle at the host's cover.
+def _nearest_cover_candidate(candidates):
+    """The cover candidate this handle is actually at. ``(constraint, gap_mm)``.
 
-    ``(applied, notes)``. Never raises.
+    Nearest by absolute distance. Taking the first one that answers
+    ``IsToCover()`` instead is what tied the gable-end bars of a tapered pad to
+    a square face and left the varying set with nothing to vary along.
+    """
+    best = None
+    best_gap = None
+    unranked = None
+    for candidate in candidates:
+        to_cover, _error = _call(candidate, "IsToCover")
+        if not to_cover:
+            continue
+        gap = distance_to_cover_mm(candidate)
+        if gap is None:
+            if unranked is None:
+                unranked = candidate
+            continue
+        if best_gap is None or abs(gap) < abs(best_gap):
+            best, best_gap = candidate, gap
+    if best is not None:
+        return best, best_gap
+    return unranked, None
+
+
+def constrain_to_cover(rebar, host, handle_names=None,
+                       snap_tolerance_mm=SNAP_TOLERANCE_MM):
+    """Tie every handle to the cover face it already sits on.
+
+    *handle_names* filters by handle type when the caller wants only some of
+    them; the default is all of them, which is what **Edit Constraints ->
+    constrain to cover** does by hand and what a footing bar wants.
+
+    ``(applied, notes, faces)``. *faces* is ``[(handle, face, gap_mm)]`` for
+    what was tied to what, so the report can show it. Never raises.
     """
     manager = manager_for(rebar)
     if manager is None:
-        return 0, ["no constraints manager on this build"]
+        return 0, ["no constraints manager on this build"], []
     if not is_shape_driven(rebar):
-        return 0, ["this bar is free-form; it needs the other constraint API"]
+        return 0, ["this bar is free-form; it needs the other constraint API"], []
 
     applied = 0
     notes = []
+    faces = []
     for name, handle in handles(manager):
         if name and handle_names and not any(word in name
                                              for word in handle_names):
@@ -144,30 +236,52 @@ def constrain_to_cover(rebar, host, handle_names=INTERESTING_HANDLES):
                          .format(name or "?"))
             continue
 
-        # Prefer a candidate that follows the cover; a bare face is the
-        # fallback, because a bar tied to the face ignores a cover change.
-        chosen = None
-        for candidate in candidates:
-            to_cover, _error = _call(candidate, "IsToCover")
-            if to_cover:
-                chosen = candidate
-                break
+        chosen, gap = _nearest_cover_candidate(candidates)
         if chosen is None:
             chosen = list(candidates)[0]
             notes.append("{0}: no cover candidate; tied to a face instead"
                          .format(name or "?"))
+        elif gap is not None and abs(gap) <= snap_tolerance_mm:
+            # Already on the cover: say so exactly, rather than leaving a
+            # fraction of a millimetre in a parameter someone has to read.
+            _value, _snap_error = _call(chosen, "SetDistanceToTargetCover",
+                                        mm_to_ft(0.0))
+            gap = 0.0
 
-        _value, set_error = _call(manager, "SetPreferredConstraint", chosen)
-        if set_error:
-            notes.append("{0}: {1}".format(name or "?", set_error))
+        if not _prefer(manager, handle, chosen, notes, name):
             continue
         applied += 1
+        faces.append((_short(name), target_face(chosen), gap))
 
-    if applied:
-        _value, apply_error = _call(manager, "ApplyRebarConstraints")
-        if apply_error:
-            notes.append(apply_error)
-    return applied, notes
+    return applied, notes, faces
+
+
+def _prefer(manager, handle, constraint, notes, name):
+    """Make *constraint* the one the handle uses. True when it took.
+
+    ``SetPreferredConstraintForHandle`` is the call that works on every build
+    this tool targets. It is marked obsolete from 2025 in favour of the
+    handle-less ``SetPreferredConstraint``, so that is tried first -- but only
+    accepted if it does not report an error, because on the build a real run
+    used it reported none and changed nothing, which is why the newer call is
+    verified rather than trusted.
+    """
+    _value, error = _call(manager, "SetPreferredConstraintForHandle",
+                          handle, constraint)
+    if error is None:
+        return True
+    _value, fallback_error = _call(manager, "SetPreferredConstraint",
+                                   constraint)
+    if fallback_error is None:
+        return True
+    notes.append("{0}: {1}".format(name or "?", error))
+    return False
+
+
+def _short(handle_name):
+    """``RebarConstrainedHandleType.EndOfBar`` -> ``EndOfBar``."""
+    text = str(handle_name or "?")
+    return text.rsplit(".", 1)[-1]
 
 
 def set_varying(rebar, varying=True):
@@ -200,32 +314,48 @@ def array_length_mm(rebar):
     if accessor is None:
         return None
     try:
-        from anongee_toolkit.revit.units import ft_to_mm
         return ft_to_mm(accessor.ArrayLength)
     except Exception:
         return None
 
 
-def apply_to_all(rebar_ids, doc, host, varying=False):
+def apply_to_all(rebar_ids, doc, host, varying=False, label=""):
     """Constrain a run's worth of bars, optionally as varying sets.
 
-    ``(applied, notes)``. Notes are collapsed to one line per distinct reason,
-    because four hundred copies of one sentence is not a report.
+    ``(applied, notes, faces)``. *notes* are what went wrong, collapsed to one
+    line per distinct reason, because four hundred copies of one sentence is not
+    a report. *faces* is what went **right** for a varying set: which cover face
+    each end found. It is reported separately and always, because "the varying
+    set did not vary" and "the varying set was tied to the wrong face" look
+    identical in a model and are the same bug.
     """
     applied = 0
     reasons = {}
+    faces = []
     for rebar_id in rebar_ids:
         rebar = doc.GetElement(rebar_id)
         if rebar is None:
             continue
-        count, notes = constrain_to_cover(rebar, host)
+        count, notes, found = constrain_to_cover(rebar, host)
         applied += count
-        if varying and count:
-            ok, note = set_varying(rebar, True)
-            if not ok and note:
-                notes.append(note)
+        if varying:
+            if count:
+                ok, note = set_varying(rebar, True)
+                if not ok and note:
+                    notes.append(note)
+            line = "{0}: {1}".format(
+                label or "varying set",
+                ", ".join("{0}→{1}{2}".format(
+                    handle, face or "face",
+                    "" if gap is None else " ({0:+.0f} mm)".format(gap))
+                    for handle, face, gap in found)
+                or "Revit offered no cover face to vary along")
+            if line not in faces:
+                faces.append(line)
         for note in notes:
             reasons[note] = reasons.get(note, 0) + 1
 
-    return applied, ["{0}x {1}".format(count, note)
-                     for note, count in sorted(reasons.items())]
+    return (applied,
+            ["{0}x {1}".format(count, note)
+             for note, count in sorted(reasons.items())],
+            faces)

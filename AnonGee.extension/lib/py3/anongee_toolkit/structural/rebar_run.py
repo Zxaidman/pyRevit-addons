@@ -25,6 +25,7 @@ must not double the steel, so a host carrying reinforcement is reported and left
 alone unless the caller explicitly asks to replace what this tool placed before.
 """
 
+from anongee_toolkit.rc_automation import identity
 from anongee_toolkit.rc_automation import rebar_spec
 from anongee_toolkit.revit.units import mm_to_ft
 from anongee_toolkit.structural import rebar_factory
@@ -48,7 +49,7 @@ class HostPlan(object):
     """One element, what it would get, and whether it is going to get it."""
 
     __slots__ = ("key", "type_mark", "category", "element_id", "status",
-                 "reason", "bars", "elements", "layers", "level")
+                 "reason", "bars", "elements", "layers", "level", "identity")
 
     def __init__(self, key, type_mark, category, element_id=None,
                  status=STATUS_CREATE, reason="", bars=0, elements=0,
@@ -63,6 +64,10 @@ class HostPlan(object):
         self.elements = elements
         self.layers = layers or []
         self.level = level
+        #: The host's own ID/ID_LIC/ID_V/ITEM/LEVEL_V, which every bar placed
+        #: into it inherits. Read off the model rather than the workbook where
+        #: the two could differ: this footing is what is being reinforced.
+        self.identity = {}
 
     @property
     def will_create(self):
@@ -132,6 +137,10 @@ def _plan_one_footing(doc, workbook, key, element, placement_by_mark, replace):
                     level=rebar_hosts.level_name(element))
 
     footing = workbook.footing_type(type_mark)
+    plan.identity = identity.host_values(
+        key, type_mark, plan.level,
+        identity.footing_item(footing, getattr(placement, "outline", None)),
+        getattr(placement, "grid_x", ""), getattr(placement, "grid_y", ""))
     if footing is None:
         plan.status = STATUS_SKIP
         plan.reason = "no footing type {0!r} in the workbook".format(type_mark)
@@ -209,7 +218,8 @@ def resolve_bar_types(doc, workbook):
     return resolved, missing
 
 
-def place_footing(doc, plan, workbook, bar_type_ids, view=None, replace=False):
+def place_footing(doc, plan, workbook, bar_type_ids, view=None, replace=False,
+                  write_identity=True):
     """Place one footing's reinforcement. **Requires an open transaction.**"""
     result = rebar_factory.PlacementResult()
     element = doc.GetElement(plan.element_id)
@@ -243,7 +253,8 @@ def place_footing(doc, plan, workbook, bar_type_ids, view=None, replace=False):
                 plan.key, layer.row.layer, layer.row.diameter_mm or 0))
             continue
         result.merge(rebar_factory.place_layer(
-            doc, element, layer, bar_type_id, origin, 0.0, view))
+            doc, element, layer, bar_type_id, origin, 0.0, view,
+            identity=plan.identity if write_identity else None))
     return result
 
 

@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.6.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.7.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -32,6 +32,27 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.8.0
+
+**Changed**
+
+- **RC Automation 0.7.0** — bends stay inside the rebar cover, a varying set is
+  tied to the sloping face its bars actually end on, each footing face gets its
+  own cover type instead of the top face's, and the project's own identity
+  parameters (`ID`, `ID_LIC`, `ID_V`, `ITEM`, `LEVEL_V`, plus `Host Category`
+  and `Host Mark` on bars) are filled in — with a Parameters box choosing
+  whether missing ones are created as shared parameters or left alone. See
+  [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md).
+
+**Added**
+
+- `anongee_toolkit.rc_automation.identity` — what goes in the schedule's
+  identity fields, derived from the workbook and testable without Revit.
+- `anongee_toolkit.structural.element_params` — reading, creating and writing
+  those fields against a document.
 
 ---
 

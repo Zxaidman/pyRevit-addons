@@ -62,10 +62,11 @@ signature.
 | `GetConstraintCandidatesForHandle(handle, Reference)` | narrower: candidates against one face |
 | `GetCurrentConstraintOnHandle(handle)` | what is acting now |
 | `GetPreferredConstraintOnHandle(handle)` | what we asked for |
-| `SetPreferredConstraint(constraint)` | override Revit's default pick |
+| `SetPreferredConstraintForHandle(handle, constraint)` | **the one that works.** Obsolete from 2025 in favour of the handle-less form, and still the only one that takes |
+| `SetPreferredConstraint(constraint)` | the 2025 replacement. Reported success and changed nothing on the build a real run used, so it is tried and verified rather than trusted |
 | `SetPreferredConstraintsToSurfaceForHandles(...)` | bulk form, worth trying for a whole face |
 | `RemovePreferredConstraintFromHandle(handle)` | back to Revit's own choice |
-| `ApplyRebarConstraints()` | commit the picks |
+| `ApplyRebarConstraints(...)` | **not parameterless.** Calling it as `ApplyRebarConstraints()` raises *"No method matches given arguments"*. Setting the preferred constraint on the handle is itself the commit, so nothing needs it |
 | `HasValidRebar()` | the bar survived whatever else happened |
 | `HighlightHandleConstraintPairInAllViews(...)` | **diagnostic gold** — shows on screen what a handle is tied to |
 
@@ -77,8 +78,9 @@ signature.
 | `IsToHostFaceOrCover()` / `IsFixedDistanceToHostFace()` | the weaker alternatives |
 | `GetTargetCoverType()` | which `RebarCoverType` it follows — lets us verify we tied to the cover we set |
 | `GetTargetElement()` | confirm it is our footing and not a neighbour |
-| `GetRebarConstraintTargetHostFaceType()` | Top / Bottom / Side, so ends and plane can be told apart |
-| `SetDistanceToTargetCover(d)` | an offset from the cover, for a layer that sits behind another |
+| `GetRebarConstraintTargetHostFaceType()` | Top / Bottom / Side, so ends and plane can be told apart. For the report; not reliable enough to *choose* on |
+| `GetDistanceToTargetCover()` | **how the right candidate is chosen.** A pad offers a cover candidate for every face, so `IsToCover()` narrows the list and does not pick from it; the handle's own face is the one it is nearest. **Signed** — compare absolute values, or the most negative wins and that is the face furthest behind the handle |
+| `SetDistanceToTargetCover(d)` | an offset from the cover, for a layer that sits behind another. Set to 0 for a handle already on its cover, so the model carries a round number rather than a rounding artefact — never for one with a real offset, which would move the steel |
 | `GetConstraintType()` | the enum, for reporting |
 | `IsValid()` | before relying on any of it |
 
@@ -130,7 +132,7 @@ The sequence a detailer follows by hand, and what each step is in code:
 | --- | --- | --- |
 | 1 | Sketch the foundation to the schedule | `Floor.Create(doc, loops, typeId, levelId)`, then `FLOOR_PARAM_IS_STRUCTURAL = 1` |
 | 2 | Create the cover, apply it to the footing | `RebarCoverType.Create(doc, name, distance)`; set `CLEAR_COVER_TOP` / `_BOTTOM` / `_OTHER` |
-| 3 | Model the bar in section, constrain each face to its cover line | `CreateFromCurves`, then candidates → `IsToCover()` → `SetPreferredConstraint` |
+| 3 | Model the bar in section, constrain each face to its cover line | `CreateFromCurves`, then candidates → `IsToCover()` → nearest by `abs(GetDistanceToTargetCover())` → `SetPreferredConstraintForHandle` |
 | 4 | Set the set to maximum spacing; Revit fills the span cover to cover | `SetLayoutAsMaximumSpacing`; `ArrayLength` reads back what it filled |
 | 5 | Turn on obscured rebar in all views | `SetSolidInView(view, True)` / `SetUnobscuredInView(view, True)` per view |
 
@@ -183,6 +185,34 @@ with yet has no parameters and no handles.
 
 ---
 
+## 4b. Cover measures the steel, and the API is given centrelines
+
+`Rebar.CreateFromCurves` takes the **centreline**. Cover is measured to the
+outside of the bar. The two differ by half a diameter, and which way depends on
+what the bar presents to the face:
+
+| At | What faces the cover | Where the centreline goes |
+| --- | --- | --- |
+| A straight end | the bar's **end face** | on the cover plane |
+| A turned-up leg | the bar's **barrel** | half a diameter inside the cover plane |
+
+The inset at a bend is `d/2` and is independent of the bend radius. For a 90°
+bend of centreline radius `r`, the arc centre sits `r` in from the corner and
+the outer surface is `r + d/2` from that centre, so the outermost steel is
+always `d/2` outside the corner point handed to the API.
+
+This is what put every U-bar's legs outside the cover while the bars themselves
+were inside the concrete: the corner was placed on the cover plane, so the
+outside of each leg was half a bar past it. Neither an error nor a warning —
+just wrong on a drawing.
+
+The same reasoning fixes the leg's top. Top cover measures the leg's **end
+face**, so the leg stops exactly on the cover plane and the constraint that
+holds it there carries a distance of zero. Stopping half a bar short is safe
+steel with an offset nobody scheduled and nobody can read off a drawing.
+
+---
+
 ## 5. Other API worth having in the toolkit
 
 Found while reading, useful beyond the immediate bugs:
@@ -211,14 +241,25 @@ is built.
 
 ## 6. What this changes in RC Automation
 
-1. **Constraints**: stop calling `RebarConstraint.Create`; ask for candidates,
-   pick `IsToCover()`, `SetPreferredConstraint`, `ApplyRebarConstraints`.
-2. **Varying sets**: set `UseRebarConstraintsToProduceVaryingBars` after
-   constraining, per distribution region.
+1. **Constraints** *(done, 0.5.0 and 0.7.0)*: stop calling
+   `RebarConstraint.Create`; ask for candidates, narrow with `IsToCover()`,
+   pick the **nearest by `abs(GetDistanceToTargetCover())`**, then
+   `SetPreferredConstraintForHandle`. There is no `ApplyRebarConstraints()` to
+   follow it with.
+2. **Varying sets** *(done, 0.6.0)*: set
+   `UseRebarConstraintsToProduceVaryingBars` after constraining, per
+   distribution region.
 3. **Layout**: prefer `SetLayoutAsMaximumSpacing` and let Revit fill between the
    constrained ends, rather than computing the span ourselves.
-4. **Cover**: use `RebarHostData` for get/set instead of per-category built-ins.
-5. **Regions**: cut a varying layer into one set per region of constant
-   behaviour.
-6. **Verification**: read `ArrayLength` and `GetBarPositionTransform` back after
-   writing, so a run can check itself rather than reporting what it intended.
+4. **Cover** *(partly done, 0.6.0 and 0.7.0)*: the built-in parameters are the
+   route that works today, with `SetCommonCoverType` as the fallback; one cover
+   type **per face**, keyed and matched by face as well as by value.
+   `RebarHostData.SetCoverType` still wants a face `Reference`, which is worth
+   revisiting.
+5. **Regions** *(done, 0.6.0)*: cut a varying layer into one set per region of
+   constant behaviour.
+6. **Verification** *(partly done, 0.6.0)*: `ArrayLength` is read back;
+   `GetBarPositionTransform` is not yet.
+7. **Geometry** *(done, 0.7.0)*: the API takes centrelines and cover measures
+   steel — a bend goes half a diameter inside the cover plane, a straight end on
+   it. See §4b.

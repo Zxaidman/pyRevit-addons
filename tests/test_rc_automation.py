@@ -38,6 +38,7 @@ validation = _rc.validation
 reconcile = _rc.reconcile
 rebar_spec = _rc.rebar_spec
 naming = _rc.naming
+identity = _rc.identity
 
 _FIXTURES = os.path.join(_ROOT, "tests", "fixtures", "rc_automation")
 #: Saved by Excel, not by this repository. The genuine legacy format for the
@@ -1111,14 +1112,17 @@ class FootingLayerTests(unittest.TestCase):
         self.assertTrue(all(p.uniform for p in plans), [p.notes for p in plans])
         self.assertTrue(all(p.element_count == 1 for p in plans))
 
-    def test_the_run_between_the_bends_is_the_pad_less_cover_both_ends(self):
+    def test_the_run_between_the_bends_is_the_pad_less_cover_and_two_bends(self):
         data = self.footing()
         plan = rebar_spec.plan_footing(
             data.footing_type("F1"), data.footing_rebar_for("F1"))[0]
-        # F1 is 3000 x 3000 with 50 side cover, so the horizontal run is 2900.
+        # F1 is 3000 x 3000 with 50 side cover, so the cover plane spans 2900.
+        # The centreline run is that less half a T16 at each bend -- and the
+        # steel it stands for is 2884 + 8 + 8 = 2900, exactly filling it.
         bar = plan.bars[0]
         run = abs(bar.points[-2][0] - bar.points[1][0])
-        self.assertAlmostEqual(run, 2900.0)
+        self.assertAlmostEqual(run, 2884.0)
+        self.assertAlmostEqual(run + 16.0, 2900.0)
 
     def test_a_top_mat_straight_bar_is_just_the_run(self):
         data = self.footing()
@@ -1486,15 +1490,52 @@ class BarShapeTests(unittest.TestCase):
         # the layer says why.
         self.assertEqual(len(self.points("21", leg=10.0)), 2)
 
-    def test_leg_height_stops_under_the_top_cover(self):
-        # 900 thick, 50 top cover, 16 mm bar: the leg reaches 842, and a bar
-        # whose centreline sits at 83 turns up 759.
+    def test_leg_height_stops_on_the_top_cover(self):
+        # 900 thick, 50 top cover: the cover plane is at 850, and a bar whose
+        # centreline sits at 83 turns up 767 to reach it. Exactly on the plane,
+        # so the constraint that holds it there carries no offset.
         self.assertAlmostEqual(
-            rebar_spec.leg_height_mm(83.0, 900.0, 50.0, 16.0), 759.0)
+            rebar_spec.leg_height_mm(83.0, 900.0, 50.0), 767.0)
 
     def test_a_top_layer_has_no_room_to_turn_up(self):
         self.assertAlmostEqual(
-            rebar_spec.leg_height_mm(842.0, 900.0, 50.0, 16.0), 0.0)
+            rebar_spec.leg_height_mm(850.0, 900.0, 50.0), 0.0)
+
+    def test_a_bend_sits_half_a_bar_inside_the_cover_plane(self):
+        # Cover measures the steel. A straight end shows its end face and stops
+        # on the plane; a turned-up leg shows its barrel, so its centreline has
+        # to stop half a diameter short or the outside of the leg is past the
+        # cover -- which is what a real run put in the model.
+        self.assertAlmostEqual(rebar_spec.bend_inset_mm(16.0), 8.0)
+        points = rebar_spec.bar_points("21", 0.0, 3000.0, 500.0, 100.0, "X",
+                                       600.0, rebar_spec.bend_inset_mm(16.0))
+        self.assertAlmostEqual(points[0][0], 8.0)
+        self.assertAlmostEqual(points[1][0], 8.0)
+        self.assertAlmostEqual(points[2][0], 2992.0)
+        self.assertAlmostEqual(points[3][0], 2992.0)
+
+    def test_only_the_bent_end_of_a_one_bend_bar_moves_in(self):
+        points = rebar_spec.bar_points("11", 0.0, 3000.0, 500.0, 100.0, "X",
+                                       600.0, 8.0)
+        self.assertAlmostEqual(points[0][0], 0.0)      # straight end face
+        self.assertAlmostEqual(points[-1][0], 2992.0)  # bend barrel
+
+    def test_a_short_bar_keeps_its_length_rather_than_its_inset(self):
+        points = rebar_spec.bar_points("21", 0.0, 120.0, 0.0, 0.0, "X",
+                                       600.0, 40.0)
+        self.assertAlmostEqual(points[1][0], 0.0)
+        self.assertAlmostEqual(points[2][0], 120.0)
+
+    def test_a_placed_u_bar_keeps_its_legs_inside_the_side_cover(self):
+        # 3000 square pad, 50 side cover, T16: the cover plane is 1450 from the
+        # centre, and the outside of the leg has to land on it -- not 8 mm past.
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        plans = rebar_spec.plan_footing(data.footing_type("F1"),
+                                        data.footing_rebar_for("F1"))
+        bottom = [p for p in plans if p.row.layer == "B1"][0]
+        along = [point[0] for point in bottom.bars[0].points]
+        self.assertAlmostEqual(max(along) + 16.0 / 2.0, 1450.0)
+        self.assertAlmostEqual(min(along) - 16.0 / 2.0, -1450.0)
 
     def test_the_scheduled_shape_reaches_the_bar(self):
         data, _ = excel_engine.parse_grid(fixture_grids())
@@ -1515,6 +1556,91 @@ class BarShapeTests(unittest.TestCase):
         self.assertEqual(len(plan.bars[0].points), 2)
         self.assertTrue(any("placed straight" in n for n in plan.notes),
                         plan.notes)
+
+
+class IdentityFieldTests(unittest.TestCase):
+    """The project's own schedule fields, worked out from the workbook.
+
+    None of ID, ID_LIC, ID_V, ITEM or LEVEL_V is stated in the workbook, and a
+    footing that arrives without them is in the model and in none of the
+    drawings. The conventions that fill them are conventions rather than facts,
+    which is exactly why they are pinned here.
+    """
+
+    def placement(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        return dict((p.mark, p) for p in data.footing_placement), data
+
+    def test_a_mark_gives_up_its_type_prefix(self):
+        self.assertEqual(identity.mark_suffix("F2-C1", "F2"), "C1")
+        self.assertEqual(identity.mark_suffix("F2_C1", "F2"), "C1")
+
+    def test_a_mark_that_is_not_prefixed_is_kept_whole(self):
+        # A project that marks its pads some other way has still told us
+        # something; inventing a rule for it would not.
+        self.assertEqual(identity.mark_suffix("PAD-7", "F2"), "PAD-7")
+
+    def test_the_grid_intersection_wins_over_the_mark(self):
+        # C-1 is what somebody standing on site can find.
+        self.assertEqual(identity.location_code("F2-C1", "F2", "C", "1"),
+                         "C-1")
+
+    def test_a_pad_placed_by_coordinate_falls_back_to_its_mark(self):
+        self.assertEqual(identity.location_code("F3-P1", "F3"), "P1")
+
+    def test_a_pad_reads_as_its_three_dimensions(self):
+        _by_mark, data = self.placement()
+        self.assertEqual(
+            identity.footing_item(data.footing_type("F2")), "2400x2400x750")
+
+    def test_an_outline_pad_is_measured_across_its_own_shape(self):
+        by_mark, data = self.placement()
+        outline = by_mark["F3-P1"].outline
+        self.assertEqual(
+            identity.footing_item(data.footing_type("F3"), outline),
+            "4500x4200x1050")
+
+    def test_a_run_of_bars_reads_the_way_a_schedule_prints_it(self):
+        self.assertEqual(identity.bar_item(12, "16T", 200.0), "#12-16T@200")
+        self.assertEqual(identity.bar_item(0, "16T", 200.0), "16T@200")
+        self.assertEqual(identity.bar_item(12, "16T"), "#12-16T")
+
+    def test_a_footing_carries_all_five_fields(self):
+        by_mark, data = self.placement()
+        values = identity.from_placement(
+            by_mark["F2-C1"], data.footing_type("F2"), "00 FOUNDATION LVL.")
+        self.assertEqual(values, {
+            "ID": "F2",
+            "ID_LIC": "C-1",
+            "ID_V": "F2-C1",
+            "ITEM": "2400x2400x750",
+            "LEVEL_V": "00 FOUNDATION LVL.",
+        })
+
+    def test_a_bar_inherits_its_host_rather_than_re_deriving_it(self):
+        # The bug this prevents: a bar and the pad it sits in disagreeing about
+        # which level or which grid they are on, because each worked it out.
+        by_mark, data = self.placement()
+        host = identity.from_placement(by_mark["F2-C1"],
+                                       data.footing_type("F2"),
+                                       "00 FOUNDATION LVL.")
+        row = [r for r in data.footing_rebar_for("F2") if r.layer == "B1"][0]
+        values = identity.rebar_values(host, row, "16T", 12)
+        self.assertEqual(values["ID"], host["ID"])
+        self.assertEqual(values["ID_LIC"], host["ID_LIC"])
+        self.assertEqual(values["LEVEL_V"], host["LEVEL_V"])
+        self.assertEqual(values["Host Mark"], host["ID_V"])
+        self.assertEqual(values["ID_V"], "B1-X")
+        self.assertEqual(values["ITEM"], "#12-16T@200")
+        self.assertEqual(values["Host Category"], "Structural Foundations")
+
+    def test_the_model_name_of_the_bar_type_is_what_gets_printed(self):
+        # The workbook says T16 and the model's type is called 16T. A schedule
+        # that prints the workbook's name describes a bar nobody can find.
+        _by_mark, data = self.placement()
+        row = [r for r in data.footing_rebar_for("F2") if r.layer == "B1"][0]
+        self.assertEqual(row.bar_type, "T16")
+        self.assertIn("16T", identity.rebar_values({}, row, "16T", 12)["ITEM"])
 
 
 class DistributionRegionTests(unittest.TestCase):

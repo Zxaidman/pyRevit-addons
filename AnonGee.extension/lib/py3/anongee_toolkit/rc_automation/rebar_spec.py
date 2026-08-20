@@ -336,25 +336,58 @@ def layer_elevation(row, rows, thickness_mm, cover_top_mm, cover_bottom_mm):
     return thickness_mm - cover_top_mm - beneath - own / 2.0
 
 
-def leg_height_mm(z_mm, thickness_mm, cover_top_mm, diameter_mm):
+def leg_height_mm(z_mm, thickness_mm, cover_top_mm):
     """How far a footing bar's end leg turns up, from its own centreline.
 
-    Up to the underside of the top cover, less half a bar so the leg's own
-    steel stays inside the concrete. A bar in the top mat has nowhere to go and
-    gets nothing, which is why this can return zero and the caller has to cope.
+    Up to the top cover plane and not past it. What top cover measures on a
+    turned-up leg is the **end face** of the bar, so a leg that stops exactly
+    on that plane is a leg Revit can hold at *distance to cover = 0* -- which
+    is what :mod:`~anongee_toolkit.structural.rebar_constraints` then asks for.
+    An earlier version stopped half a bar short of it, which is safe steel but
+    leaves every leg carrying an offset nobody scheduled and nobody can read
+    off a drawing.
+
+    A bar already in the top mat has nowhere to go, which is why this can
+    return zero and the caller has to cope.
     """
-    top = (thickness_mm or 0.0) - (cover_top_mm or 0.0) - (diameter_mm or 0.0) / 2.0
+    top = (thickness_mm or 0.0) - (cover_top_mm or 0.0)
     return max(0.0, top - z_mm)
 
 
+def bend_inset_mm(diameter_mm):
+    """How much further in a **bend** sits than a plain bar end.
+
+    Cover is measured to the steel, not to the centreline the API is given, and
+    the two parts of a bent bar present different faces to it:
+
+    * a straight end presents its **end face**, so the centreline stops on the
+      cover plane;
+    * a turned-up leg presents its **barrel**, which is half a diameter wide
+      either side of the centreline. Put the bend on the cover plane and the
+      outside of the leg sits half a bar *beyond* it.
+
+    Half a diameter, and -- usefully -- independent of the bend radius: for a
+    90 degree bend of centreline radius ``r`` the arc centre is ``r`` in from
+    the corner and the outer surface is ``r + d/2`` from that centre, so the
+    outermost steel is always ``d/2`` outside the corner.
+    """
+    return (diameter_mm or 0.0) / 2.0
+
+
 def bar_points(shape_code, start_mm, end_mm, position_mm, z_mm, axis="X",
-               leg_mm=0.0):
+               leg_mm=0.0, inset_mm=0.0):
     """The centreline of one footing bar, bent according to its shape code.
 
     ``00`` is a straight run. ``11`` turns one end up, ``21`` turns both -- a
     U-bar, which is what a footing bottom mat is detailed as almost everywhere,
     and which was being placed as a straight bar because the shape code was
     carried as a label and never used to build anything.
+
+    *start_mm* and *end_mm* are where the **cover plane** is. A bent end is
+    pulled back from it by *inset_mm* (see :func:`bend_inset_mm`) so the outside
+    of the leg lands on that plane rather than half a bar past it; a straight
+    end stays on it. The inset is dropped rather than allowed to eat the bar
+    when the run is too short to give it up.
     """
     def point(along, height):
         return ((along, position_mm, height) if axis == "X"
@@ -363,11 +396,18 @@ def bar_points(shape_code, start_mm, end_mm, position_mm, z_mm, axis="X",
     if leg_mm < MIN_LEG_MM or shape_code not in BENT_SHAPE_CODES:
         return [point(start_mm, z_mm), point(end_mm, z_mm)]
 
+    inset = max(0.0, inset_mm or 0.0)
+    bends = 2 if shape_code == SHAPE_U_BAR else 1
+    if (end_mm - start_mm) - bends * inset < MIN_BAR_LENGTH_MM:
+        inset = 0.0
+
     if shape_code == SHAPE_U_BAR:
-        return [point(start_mm, z_mm + leg_mm), point(start_mm, z_mm),
-                point(end_mm, z_mm), point(end_mm, z_mm + leg_mm)]
-    return [point(start_mm, z_mm), point(end_mm, z_mm),
-            point(end_mm, z_mm + leg_mm)]
+        low, high = start_mm + inset, end_mm - inset
+        return [point(low, z_mm + leg_mm), point(low, z_mm),
+                point(high, z_mm), point(high, z_mm + leg_mm)]
+    high = end_mm - inset
+    return [point(start_mm, z_mm), point(high, z_mm),
+            point(high, z_mm + leg_mm)]
 
 
 def region_breaks(outline, axis="X"):
@@ -467,12 +507,24 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                         cover_top_mm, cover_bottom_mm)
     positions = bar_positions(span[0], span[1], row.count, row.spacing_mm)
 
-    leg = leg_height_mm(z, thickness_mm, cover_top_mm, row.diameter_mm)
-    if row.shape_code in BENT_SHAPE_CODES and leg < MIN_LEG_MM:
-        notes.append(
-            "shape {0} asks for end legs, but only {1:.0f} mm is available "
-            "between this layer and the top cover — placed straight".format(
-                row.shape_code, leg))
+    leg = leg_height_mm(z, thickness_mm, cover_top_mm)
+    inset = bend_inset_mm(row.diameter_mm)
+    if row.shape_code in BENT_SHAPE_CODES:
+        if leg < MIN_LEG_MM:
+            notes.append(
+                "shape {0} asks for end legs, but only {1:.0f} mm is available "
+                "between this layer and the top cover — placed straight".format(
+                    row.shape_code, leg))
+        else:
+            notes.append(
+                "shape {0}: {1:.0f} mm end legs, turned up {2:.0f} mm inside "
+                "the side cover so the outside of the bend lands on it".format(
+                    row.shape_code, leg, inset))
+            if row.is_bottom and any(other.is_top for other in sibling_rows):
+                notes.append(
+                    "these legs reach the top cover, where the top mat also "
+                    "sits — check the top layer's end cover if the two should "
+                    "not cross")
 
     breaks = region_breaks(outline, axis)
     across_vector = (0.0, 1.0, 0.0) if axis == "X" else (1.0, 0.0, 0.0)
@@ -488,7 +540,7 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                     skipped += 1
                     continue
                 points = bar_points(row.shape_code, extent[0], extent[1],
-                                    position, z, axis, leg)
+                                    position, z, axis, leg, inset)
                 bars.append(BarSpec(
                     points, row.diameter_mm, row.bar_type, row.shape_code,
                     ROLE_FOOTING_LAYER,
