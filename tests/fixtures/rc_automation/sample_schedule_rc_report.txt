@@ -1,0 +1,44 @@
+AnonGee RC Automation 0.4.0
+Workbook: D:\ZAID\Advance AI\pyRevit-addons\tests\fixtures\rc_automation\sample_schedule.xlsx
+Mode: Create structure and reinforcement
+
+0 errors, 0 warnings, 2 notes
+
+[Info] The LEVELS sheet maps 2 level name(s) onto the model's.
+[Info] Read 3 footing types with 10 bar rows, and 3 column types with 7 bar rows. Placing 6 footings and 5 columns.
+
+Model: R25_REBAR_AUTOMATION
+
+Levels (3)
+  00 FOUNDATION LVL.
+  01 GROUND LVL.
+  02 1ST FLOOR LVL.
+
+Rebar bar types (8)
+  10T
+  12T
+  16T
+  20T
+  25T
+  32T
+  40T
+  8T
+
+Levels the workbook asks for
+  Foundation → 00 FOUNDATION LVL.
+  Level 1 → 01 GROUND LVL.
+  Foundation: mapped to '00 Ground Lvl.', which this model does not have; matched '00 FOUNDATION LVL.' instead
+  Level 1: mapped to '01 1st Floor Lvl.', which this model does not have; matched '01 GROUND LVL.' instead
+
+Structural foundations: 0 (0 can host rebar)
+Structural columns: 0 (0 can host rebar)
+
+Footing marks: 0 of 6 scheduled marks are in the model
+  not in the model: F1-A1, F1-A2, F1-B1, F2-C1, F3-B2, F3-P1
+
+Rebar constraints on this build
+no rebar in the model yet to read constraints from
+
+This model has no footings or columns yet — which is what this mode is for. Plan, and it will say what it would build.
+
+Reinforcement was placed. Ctrl+Z reverses the run.
