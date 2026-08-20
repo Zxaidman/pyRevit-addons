@@ -203,16 +203,18 @@ class BarSetSpec(object):
     """One bar, repeated -- a single Revit element standing for a whole run."""
 
     __slots__ = ("bar", "count", "spacing_mm", "layout_rule", "array_vector",
-                 "array_length_mm")
+                 "array_length_mm", "varying")
 
     def __init__(self, bar, count, spacing_mm, layout_rule, array_vector,
-                 array_length_mm):
+                 array_length_mm, varying=False):
         self.bar = bar
         self.count = count
         self.spacing_mm = spacing_mm
         self.layout_rule = layout_rule
         self.array_vector = array_vector
         self.array_length_mm = array_length_mm
+        #: Whether Revit should length each bar from its constraints.
+        self.varying = varying
 
     def __repr__(self):
         return "<BarSetSpec {0} x {1} @ {2}>".format(
@@ -240,20 +242,39 @@ class LayerPlan(object):
 
     @property
     def element_count(self):
-        """How many Revit elements this becomes -- one if it is a set, else N.
+        """How many Revit elements this becomes: one set, either way.
 
-        The difference between 2,000 elements and 50,000 at the stated scale,
-        which is why uniformity is worth working out rather than assuming.
+        The difference between 2,000 elements and 50,000 at the stated scale.
+        A varying run is still one set -- what varies is the length of the bars
+        inside it, which is Revit's job once the ends are constrained.
         """
-        return 1 if (self.uniform and self.bars) else len(self.bars)
+        return 1 if self.bars else 0
+
+    @property
+    def varying(self):
+        """True when this run needs Revit's varying-length behaviour.
+
+        A run whose bars differ in length is one distribution region of varying
+        depth, which is what the ribbon's **Varying Rebar Set** is for: one set,
+        constrained to the host cover, letting Revit length each bar. Placing
+        the same run as N individual bars gives the right steel today and
+        nothing that follows an edit tomorrow.
+        """
+        return bool(self.bars) and not self.uniform
 
     def as_set(self):
-        """A :class:`BarSetSpec`, or ``None`` when the bars are not identical."""
-        if not (self.uniform and self.bars):
+        """A :class:`BarSetSpec` for the whole run, uniform or not.
+
+        Always a set. The first bar carries the shape and Revit repeats it; a
+        varying run then leans on its constraints to length each copy, which is
+        why :attr:`varying` travels with it.
+        """
+        if not self.bars:
             return None
         return BarSetSpec(self.bars[0], len(self.bars),
                           self.row.spacing_mm, self.row.layout_rule(),
-                          self.array_vector, self.array_length_mm)
+                          self.array_vector, self.array_length_mm,
+                          self.varying)
 
     def __repr__(self):
         return "<LayerPlan {0} bars, {1}>".format(

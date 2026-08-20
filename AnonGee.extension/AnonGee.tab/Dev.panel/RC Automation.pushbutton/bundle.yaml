@@ -39,10 +39,13 @@ tooltip: |
       straight. A layer with no room to bend is placed straight and says so.
     • The scheduled cover is written onto the footing itself, as cover types,
       created if the project has none.
-    • Placed bars are constrained to that cover, so editing a footing updates
-      its reinforcement rather than leaving it behind. A constraint that cannot
-      be made is reported — the bars are still in the right place, what is lost
-      is the updating.
+    • Placed bars are constrained to the host's cover, so editing a footing
+      updates its reinforcement rather than leaving it behind.
+    • A varied area is placed as ONE set with Varying Rebar Set turned on, so
+      Revit lengths each bar from its constraints. Orthogonal areas get their
+      own set with it off.
+    • Bars are shown unobscured in the active view, the way step five of the
+      manual workflow leaves them.
 
   Creating footings
     • Pads are floors, so an Outline in the placement sheet is sketched as
@@ -96,4 +99,4 @@ tooltip: |
     • Every control has a tooltip. Export report writes the findings and the
       probe beside the workbook.
 
-  Version: 0.4.0
+  Version: 0.5.0

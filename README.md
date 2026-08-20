@@ -98,6 +98,13 @@ Generators, the design system, and the reference patterns new tools are built fr
 
 ---
 
+## 🔬 Revit API notes
+
+[`REVIT_API_RESEARCH.md`](REVIT_API_RESEARCH.md) records what the 2025/2026
+reinforcement API offers and where each finding came from — the shape-driven
+versus free-form constraint split, varying rebar sets, and the calls worth
+adopting next.
+
 ## 🏷️ Versioning
 
 The extension carries one version in `extension.json`, recorded in the [root changelog](CHANGELOG.md).

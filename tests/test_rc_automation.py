@@ -1138,18 +1138,34 @@ class FootingLayerTests(unittest.TestCase):
         self.assertEqual(bar_set.spacing_mm, 200.0)
         self.assertEqual(bar_set.layout_rule, models.LAYOUT_NUMBER_WITH_SPACING)
 
-    def test_a_non_rectangular_pad_needs_individual_bars(self):
-        # The five-sided pad in the sample: a set repeats one shape, so bars of
-        # different lengths cannot be one element.
+    def test_a_non_rectangular_pad_becomes_a_varying_set(self):
+        """One set per region of varying depth, with varying turned on.
+
+        The five-sided pad's bars differ in length. Placed as N single bars
+        that is the right steel today and nothing that follows an edit
+        tomorrow; placed as one set constrained to the cover, Revit lengths
+        each bar itself — which is what the ribbon's Varying Rebar Set does.
+        """
         data = self.footing()
         shaped = [p for p in data.footing_placement if p.has_outline][0]
         plans = rebar_spec.plan_footing(
             data.footing_type(shaped.type_mark),
             data.footing_rebar_for(shaped.type_mark), placement=shaped)
-        varying = [p for p in plans if not p.uniform]
-        self.assertTrue(varying, "the tapered pad should not be uniform")
-        self.assertGreater(varying[0].element_count, 1)
+        varying = [p for p in plans if p.varying]
+        self.assertTrue(varying, "the tapered pad should vary")
+        self.assertEqual(varying[0].element_count, 1)
+        self.assertTrue(varying[0].as_set().varying)
         self.assertTrue(any("vary in length" in n for n in varying[0].notes))
+
+    def test_a_rectangular_pad_is_a_set_that_does_not_vary(self):
+        # Orthogonal areas get their own set too, but varying stays off.
+        data = self.footing()
+        plan = rebar_spec.plan_footing(
+            data.footing_type("F1"), data.footing_rebar_for("F1"))[0]
+        self.assertTrue(plan.uniform)
+        self.assertFalse(plan.varying)
+        self.assertFalse(plan.as_set().varying)
+        self.assertEqual(plan.element_count, 1)
 
     def test_layers_stack_by_the_diameter_below_them(self):
         # B2 clears the cover, then B1's whole diameter, then half its own --

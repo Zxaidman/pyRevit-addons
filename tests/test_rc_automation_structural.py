@@ -258,18 +258,43 @@ class PlacementContractTests(unittest.TestCase):
             self.assertNotIn(forbidden, source, forbidden)
         self.assertIn("RebarCoverType.Create", _read("rebar_factory"))
 
-    def test_constraints_are_probed_before_they_are_called(self):
-        """Written without a Revit to try it against, so nothing is assumed.
+    def test_shape_driven_bars_use_the_shape_driven_constraint_api(self):
+        """The first version called the free-form one and could never work.
 
-        The shape of the constraints API moves between releases. Every call is
-        reached through a probe, and describe() exists so a report from a real
-        model can replace the guessing with knowing.
+        ``RebarConstraint.Create`` is free-form only. Against a bar from
+        ``CreateFromCurves`` it raises "Constrained rebar isn't a free form
+        rebar element", which is what a real run reported. Shape-driven bars
+        ask Revit for candidates and pick one.
         """
         source = _read("rebar_constraints")
-        self.assertIn("getattr(rebar, \"GetRebarConstraintsManager\", None)",
-                      source)
+        # Below the module docstring, which explains the mistake and so names
+        # the call it is warning about.
+        code = source.split('"""', 2)[-1]
+        self.assertNotIn("RebarConstraint.Create", code)
+        self.assertIn("GetConstraintCandidatesForHandle", code)
+        self.assertIn("SetPreferredConstraint", source)
+        self.assertIn("ApplyRebarConstraints", source)
+        # The cover is the point; a bare face ignores a cover change.
+        self.assertIn("IsToCover", source)
+
+    def test_varying_sets_are_the_accessor_flag(self):
+        """The ribbon's Varying Rebar Set is one property, set after
+        constraining — the constraints are what produce the variation."""
+        source = _read("rebar_constraints")
+        self.assertIn("UseRebarConstraintsToProduceVaryingBars", source)
+        body = source.split("def set_varying")[1].split("\ndef ")[0]
+        self.assertIn("after", body.lower())
+
+    def test_every_constraint_call_is_probed(self):
+        """Written without a Revit to try it against, so nothing is assumed."""
+        source = _read("rebar_constraints")
+        self.assertIn("def _call(owner, name, *args)", source)
+        self.assertIn("getattr(owner, name, None)", source)
         self.assertIn("def describe", source)
-        self.assertIn("def is_available", source)
+
+    def test_what_revit_actually_did_is_read_back(self):
+        # A set told to fill between constrained ends decides its own length.
+        self.assertIn("def array_length_mm", _read("rebar_constraints"))
 
 
 class RunContractTests(unittest.TestCase):

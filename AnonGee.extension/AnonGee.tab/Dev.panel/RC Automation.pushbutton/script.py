@@ -75,7 +75,7 @@ from System.Windows.Markup import XamlReader                  # noqa: E402
 from System.Windows.Media import Color, SolidColorBrush       # noqa: E402
 from System.Windows.Threading import DispatcherPriority       # noqa: E402
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 LOCAL_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -525,6 +525,7 @@ if _state.handler_cls is None:
 
             view = doc.ActiveView
             type_cache = {}
+            cover_cache = {}
             made = []
             errors = []
             skipped = []
@@ -544,7 +545,8 @@ if _state.handler_cls is None:
                         for item in chunk:
                             try:
                                 element, item_notes = structure_run.create_one(
-                                    doc, item, base_type_id, type_cache)
+                                    doc, item, base_type_id, type_cache,
+                                    cover_cache)
                                 made.append((item, element.Id))
                                 notes.extend(item_notes)
                             except Exception as pad_error:
@@ -720,6 +722,7 @@ class RCAutomationApp(object):
         self.probe = None
         self.plan = None
         self.created_anything = False
+        self.last_result = None
         self._queue = []
         self._busy = False
 
@@ -1004,6 +1007,10 @@ class RCAutomationApp(object):
     def _on_create_done(self, result):
         self.plan = None
         self.created_anything = True
+        # Kept so Export report carries what the panel said. Constraint
+        # failures were being shown in the window and left out of the file,
+        # which is the one place they would be read later.
+        self.last_result = result
         parts = [
             "Created {0} footing(s) with {1} element(s) — {2} bar(s).".format(
                 result["footings"], result["elements"], result["bars"])
@@ -1016,37 +1023,48 @@ class RCAutomationApp(object):
             parts.append("{0} failed.".format(len(result["errors"])))
         self.set_status(" ".join(parts), bool(result["errors"]))
 
-        lines = [("Created {0} footing(s), and {1} element(s) — {2} bar(s) — "
-                  "in them.".format(result["footings"], result["elements"],
-                                    result["bars"])
+        self.SidePanelTitle.Text = "Result"
+        self.ProbeText.Text = "\n".join(self._result_lines(result))
+
+    def _result_lines(self, result):
+        """What the run did, as the panel and the report both show it.
+
+        One builder, because a failure the window mentions and the exported
+        file leaves out is a failure nobody reads twice.
+        """
+        lines = [("Created {0} footing(s), and {1} set(s) — {2} bar(s) — "
+                  "in them.".format(result.get("footings", 0),
+                                    result.get("elements", 0),
+                                    result.get("bars", 0))
                   if result.get("structure") else
-                  "Created {0} element(s), {1} bar(s), across {2} footing(s)."
-                  .format(result["elements"], result["bars"],
-                          result["hosts"])),
+                  "Placed {0} set(s) — {1} bar(s) — into {2} footing(s)."
+                  .format(result.get("elements", 0), result.get("bars", 0),
+                          result.get("hosts", 0))),
                  "", "One undo step — Ctrl+Z reverses the whole run.", ""]
+
         constrained = result.get("constrained")
         if constrained:
             lines.append("{0} bar handle(s) tied to the host's cover — editing "
                          "a footing updates its reinforcement.".format(
                              constrained))
             lines.append("")
-        for note in result.get("constraint_notes") or []:
-            lines.append("Not constrained — " + note)
+        for label, entries in (
+                ("Not constrained", result.get("constraint_notes") or []),
+                ("Notes", result.get("notes") or []),
+                ("Skipped", result.get("skipped") or []),
+                ("Failed", result.get("errors") or [])):
+            if not entries:
+                continue
+            lines.append("{0} ({1})".format(label, len(entries)))
+            for entry in entries[:20]:
+                lines.append("  " + str(entry))
+            if len(entries) > 20:
+                lines.append("  ... and {0} more".format(len(entries) - 20))
+            lines.append("")
         if result.get("constraint_notes"):
             lines.append("The bars are placed correctly either way; what is "
                          "lost is the automatic updating.")
-            lines.append("")
-        for label, entries in (("Skipped", result["skipped"]),
-                               ("Failed", result["errors"])):
-            if entries:
-                lines.append("{0} ({1})".format(label, len(entries)))
-                for entry in entries[:20]:
-                    lines.append("  " + entry)
-                if len(entries) > 20:
-                    lines.append("  ... and {0} more".format(len(entries) - 20))
-                lines.append("")
-        self.SidePanelTitle.Text = "Result"
-        self.ProbeText.Text = "\n".join(lines)
+        return lines
 
     def _show_plan_rows(self, rows):
         """The plan in the grid, worst first — what needs attention is on top."""
@@ -1300,6 +1318,11 @@ class RCAutomationApp(object):
         lines.append("")
         for issue in self.issues:
             lines.append("[{0}] {1}".format(issue.severity, issue))
+        if self.last_result:
+            lines.append("")
+            lines.append("What the run did")
+            for entry in self._result_lines(self.last_result):
+                lines.append(entry)
         if self.probe:
             lines.append("")
             lines.append(self._probe_text(self.probe))

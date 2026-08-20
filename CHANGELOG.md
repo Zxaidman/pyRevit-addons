@@ -22,7 +22,7 @@ number is wrong.
 | Tool | Version | Changelog |
 | ---- | ------- | --------- |
 | Auto Level Manager | 2.0.0 | [`AutoLevel.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Essential.panel/AutoLevel.pushbutton/CHANGELOG.md) |
-| RC Automation | 0.4.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
+| RC Automation | 0.5.0 | [`RC Automation.pushbutton/CHANGELOG.md`](AnonGee.extension/AnonGee.tab/Dev.panel/RC%20Automation.pushbutton/CHANGELOG.md) |
 
 Both levels use [semantic versioning](https://semver.org), read from the point
 of view of someone using the thing rather than someone reading the diff:
@@ -32,6 +32,26 @@ of view of someone using the thing rather than someone reading the diff:
 | **MAJOR** | A tool was removed or renamed, the tab was reorganised, or an installation step changed.          | The tool behaves differently on purpose — a workflow moved, or what it writes to the model changed shape. |
 | **MINOR** | A tool was added, or an existing one gained a capability.                                          | A new capability. Everything you already did still works.                        |
 | **PATCH** | Fixes only.                                                                                        | A fix. Nothing new to learn.                                                     |
+
+---
+
+## 1.6.0
+
+**Added**
+
+- **`REVIT_API_RESEARCH.md`** at the repository root — what the Revit 2025/2026
+  reinforcement API actually offers, written after a real run's error message
+  showed the constraint code was aimed at free-form rebar while every bar this
+  tool places is shape-driven. Covers the shape-driven constraint flow, varying
+  sets, how the manual detailing workflow maps onto the API, and a dozen other
+  calls worth having — including one that may overturn the phase 3 plan.
+
+**Changed**
+
+- **RC Automation 0.5.0** constrains bars through the shape-driven API, places a
+  varied area as one varying set, names cover types for the element and creates
+  them once, shows placed bars instead of hiding them, and puts the run's
+  failures in the exported report as well as the window.
 
 ---
 

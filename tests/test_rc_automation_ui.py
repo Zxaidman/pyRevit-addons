@@ -662,6 +662,32 @@ class ReportingTests(unittest.TestCase):
     def setUp(self):
         self.source = _read(_SCRIPT)
 
+    def test_the_report_carries_what_the_panel_showed(self):
+        """A failure the window mentions and the file leaves out is a failure
+        nobody reads twice — and constraint errors were exactly that."""
+        self.assertIn("def _result_lines", self.source)
+        report = self.source.split("def _report_text")[1].split("\n    def ")[0]
+        self.assertIn("_result_lines", report)
+        panel = self.source.split("def _on_create_done")[1]\
+            .split("\n    def ")[0]
+        self.assertIn("_result_lines", panel)
+        self.assertIn("self.last_result = result", panel)
+
+    def test_placed_bars_are_shown_not_hidden(self):
+        """Step five of the manual workflow turns obscured rebar ON.
+
+        The first version set both flags to False, hiding every bar it had just
+        placed — the opposite of the intent, and a good way to conclude nothing
+        was created.
+        """
+        factory = _read(os.path.join(
+            _ROOT, "AnonGee.extension", "lib", "py3", "anongee_toolkit",
+            "structural", "rebar_factory.py"))
+        self.assertIn("def show_in_view", factory)
+        body = factory.split("def show_in_view")[1].split("\ndef ")[0]
+        self.assertIn("SetUnobscuredInView(view, bool(unobscured))", body)
+        self.assertNotIn("def _hide_solid", factory)
+
     def test_the_report_is_written_as_utf8(self):
         # open() without an encoding writes cp1252 on Windows, which mangles
         # every dash and makes the file undecodable.

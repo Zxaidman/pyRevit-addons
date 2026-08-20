@@ -84,39 +84,56 @@ class PlacementResult(object):
 # ---------------------------------------------------------------------------
 # Cover
 # ---------------------------------------------------------------------------
-#: How a cover type this tool has to invent is named. The value leads because
-#: that is the only thing that distinguishes one from another.
-COVER_TYPE_NAME = "RC {0} mm"
+#: What a cover type this tool has to invent is called, per face. Named for the
+#: element and the face rather than the number, because that is how a project
+#: names them -- "FOOTING BOTTOM", not "RC 75 mm" -- and a schedule full of
+#: RC-something tells a reader nothing about where it applies.
+COVER_TYPE_NAMES = {
+    "top": "FOOTING TOP",
+    "bottom": "FOOTING BOTTOM",
+    "side": "FOOTING ALL SIDE",
+}
 
 
-def ensure_cover_type(doc, cover_mm):
-    """A ``RebarCoverType`` of this distance, matched or created.
+def ensure_cover_type(doc, cover_mm, face="side", cache=None):
+    """A ``RebarCoverType`` of this distance, matched or created once.
 
     Cover in Revit is an element reference, not a number, which is what turns
-    "50 mm cover" into something that can simply be absent from a project. A
-    bar type is not invented when it is missing -- a wrongly named one would go
-    into the bending schedule -- but a cover type carries no such baggage: it is
-    a distance with a name, and creating it is the difference between the tool
-    working on a fresh template and not.
+    "50 mm cover" into something that can simply be absent from a project.
 
-    Requires a transaction when it has to create. Returns ``(id, created)``.
+    *cache* is not an optimisation. A type created inside an open transaction is
+    not visible to a fresh ``FilteredElementCollector`` until the document
+    regenerates, so without it the second and third face each create another
+    50 mm type -- which is exactly what a real run produced: three identical
+    cover types, none of them used.
+
+    ``(ElementId, created)``. Requires a transaction when it has to create.
     """
     if not cover_mm:
         return None, False
+    cache = cache if cache is not None else {}
+    key = int(round(cover_mm))
+    if key in cache:
+        return cache[key], False
+
     existing = rebar_types.match_cover_type(doc, cover_mm)
     if existing is not None:
+        cache[key] = existing
         return existing, False
+
     try:
         cover_type = RebarCoverType.Create(
-            doc, COVER_TYPE_NAME.format(int(round(cover_mm))),
+            doc, COVER_TYPE_NAMES.get(face, "RC COVER {0}".format(key)),
             mm_to_ft(cover_mm))
+        cache[key] = cover_type.Id
         return cover_type.Id, True
     except Exception:
         return None, False
 
 
-#: Which host parameter holds which face's cover. Floors and foundations carry
-#: three; most other categories carry one, so the fallback matters.
+#: Which host parameter holds which face's cover, when the host data route is
+#: not available. Floors and foundations carry three; most other categories
+#: carry one, so the fallback matters.
 _COVER_PARAMETERS = {
     "top": (BuiltInParameter.CLEAR_COVER_TOP, BuiltInParameter.CLEAR_COVER),
     "bottom": (BuiltInParameter.CLEAR_COVER_BOTTOM,
@@ -125,14 +142,52 @@ _COVER_PARAMETERS = {
 }
 
 
-def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None):
+def _set_cover_parameter(host, face, cover_id):
+    """Write one face's cover, host data first, built-in parameter second.
+
+    ``RebarHostData.SetCoverType`` is the route that works for a floor, a wall
+    and a family instance alike; the parameters are the fallback for a build or
+    a category where it does not.
+    """
+    try:
+        from Autodesk.Revit.DB.Structure import RebarHostData
+        from Autodesk.Revit.DB.Structure import RebarCoverFaceType
+        host_data = RebarHostData.GetRebarHostData(host)
+        if host_data is not None:
+            face_type = {"top": "Top", "bottom": "Bottom",
+                         "side": "Other"}.get(face)
+            enum_value = getattr(RebarCoverFaceType, face_type or "", None)
+            if enum_value is not None:
+                host_data.SetCoverType(enum_value, cover_id)
+                return True
+    except Exception:
+        pass
+
+    for builtin in _COVER_PARAMETERS[face]:
+        try:
+            parameter = host.get_Parameter(builtin)
+        except Exception:
+            parameter = None
+        if parameter is not None and not parameter.IsReadOnly:
+            try:
+                parameter.Set(cover_id)
+                return True
+            except Exception:
+                continue
+    return False
+
+
+def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None,
+                   cache=None):
     """Write the scheduled cover onto the element itself.
 
-    So the model carries the number, not just the bars. Reinforcement
-    constrained to cover then has something real to follow, and anyone opening
-    the footing sees what it was detailed to rather than having to measure a
-    bar. ``(applied, created, notes)``. Requires a transaction.
+    So the model carries the number, not just the bars: reinforcement
+    constrained to cover has something real to follow, and anyone opening the
+    footing sees what it was detailed to rather than measuring a bar.
+
+    ``(applied, created, notes)``. Requires a transaction.
     """
+    cache = cache if cache is not None else {}
     applied = []
     created = []
     notes = []
@@ -140,24 +195,18 @@ def set_host_cover(doc, host, top_mm=None, bottom_mm=None, side_mm=None):
                         ("side", side_mm)):
         if not value:
             continue
-        cover_id, was_created = ensure_cover_type(doc, value)
+        cover_id, was_created = ensure_cover_type(doc, value, face, cache)
         if cover_id is None:
             notes.append("no cover type for {0:g} mm ({1})".format(value, face))
             continue
         if was_created:
-            created.append(value)
-        for builtin in _COVER_PARAMETERS[face]:
-            try:
-                parameter = host.get_Parameter(builtin)
-            except Exception:
-                parameter = None
-            if parameter is not None and not parameter.IsReadOnly:
-                try:
-                    parameter.Set(cover_id)
-                    applied.append(face)
-                    break
-                except Exception:
-                    continue
+            created.append("{0} ({1:g} mm)".format(
+                COVER_TYPE_NAMES.get(face, "cover"), value))
+        if _set_cover_parameter(host, face, cover_id):
+            applied.append(face)
+        else:
+            notes.append("{0} cover could not be applied to the element"
+                         .format(face))
     return applied, created, notes
 
 
@@ -181,15 +230,32 @@ def _stamp(rebar):
         pass
 
 
-def _hide_solid(rebar, view):
-    """Keep the model workable: an unobscured solid bar per bar is unusable."""
+def show_in_view(rebar, view, solid=True, unobscured=True):
+    """Make the bar visible the way a detailer expects to find it.
+
+    Step five of the manual workflow is turning obscured rebar **on**, so the
+    steel reads through the concrete instead of disappearing into it. The first
+    version of this set both flags to ``False`` — hiding every bar it had just
+    placed, which is the opposite of the intent and a good way to conclude that
+    nothing was created.
+
+    Revit stores both flags **per view**, so this is what the active view sees;
+    other views keep their own answer.
+    """
     if view is None:
-        return
+        return False
+    applied = False
     try:
-        rebar.SetSolidInView(view, False)
-        rebar.SetUnobscuredInView(view, False)
+        rebar.SetSolidInView(view, bool(solid))
+        applied = True
     except Exception:
         pass
+    try:
+        rebar.SetUnobscuredInView(view, bool(unobscured))
+        applied = True
+    except Exception:
+        pass
+    return applied
 
 
 def create_bar(doc, host, bar, bar_type_id, origin_ft=None, rotation_deg=0.0,
@@ -227,7 +293,7 @@ def create_bar(doc, host, bar, bar_type_id, origin_ft=None, rotation_deg=0.0,
         True,      # but let Revit add one when nothing matches
     )
     _stamp(rebar)
-    _hide_solid(rebar, view)
+    show_in_view(rebar, view)
     return rebar, skipped
 
 
@@ -267,11 +333,11 @@ def apply_layout(rebar, bar_set):
     return True
 
 
-def _constrain(doc, host, result, offset_mm=0.0):
+def _constrain(doc, host, result, varying=False):
     """Tie what was just placed to the host's cover, and note what happened."""
     from anongee_toolkit.structural import rebar_constraints
     applied, notes = rebar_constraints.apply_to_all(
-        result.created, doc, host, offset_mm)
+        result.created, doc, host, varying)
     result.constrained += applied
     for note in notes:
         if note not in result.constraint_notes:
@@ -293,31 +359,26 @@ def place_layer(doc, host, plan, bar_type_id, origin_ft=None,
             "; ".join(plan.notes) or "no bar positions"))
         return result
 
+    # One set, whether the bars are identical or not. A run of differing
+    # lengths is one distribution region of varying depth -- which is what a
+    # varying set is for -- and placing it as N single bars gives the right
+    # steel today and nothing that follows an edit tomorrow.
     bar_set = plan.as_set()
-    if bar_set is not None:
-        try:
-            rebar, _skipped = create_bar(
-                doc, host, bar_set.bar, bar_type_id, origin_ft, rotation_deg,
-                view=view, array_vector=bar_set.array_vector)
-            apply_layout(rebar, bar_set)
-            result.created.append(rebar.Id)
-            result.elements += 1
-            result.bars += bar_set.count
-        except Exception as error:
-            result.errors.append("{0}: {1}".format(bar_set.bar.label, error))
-        return _constrain(doc, host, result) if constrain else result
+    try:
+        rebar, _skipped = create_bar(
+            doc, host, bar_set.bar, bar_type_id, origin_ft, rotation_deg,
+            view=view, array_vector=bar_set.array_vector)
+        apply_layout(rebar, bar_set)
+        result.created.append(rebar.Id)
+        result.elements += 1
+        result.bars += bar_set.count
+    except Exception as error:
+        result.errors.append("{0}: {1}".format(bar_set.bar.label, error))
+        return result
 
-    for bar in plan.bars:
-        try:
-            rebar, _skipped = create_bar(
-                doc, host, bar, bar_type_id, origin_ft, rotation_deg, view=view,
-                array_vector=plan.array_vector)
-            result.created.append(rebar.Id)
-            result.elements += 1
-            result.bars += 1
-        except Exception as error:
-            result.errors.append("{0}: {1}".format(bar.label, error))
-    return _constrain(doc, host, result) if constrain else result
+    if constrain:
+        _constrain(doc, host, result, bar_set.varying)
+    return result
 
 
 def place_set(doc, host, bar_set, bar_type_id, origin_ft=None,

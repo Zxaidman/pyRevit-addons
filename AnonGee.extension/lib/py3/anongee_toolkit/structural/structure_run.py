@@ -183,7 +183,8 @@ def _position_mm(placement, doc_grids):
     return None, "no grid reference and no coordinates"
 
 
-def create_one(doc, item, base_type_id, type_cache=None):
+def create_one(doc, item, base_type_id, type_cache=None,
+               cover_cache=None):
     """Place one pad. **Requires a transaction the caller opened.**
 
     ``(element, notes)``. Raises only on something that stops the pad existing;
@@ -208,11 +209,14 @@ def create_one(doc, item, base_type_id, type_cache=None):
     # than only the bars, and anything constrained to cover has something real
     # to follow.
     from anongee_toolkit.structural import rebar_factory
-    _applied, created, cover_notes = rebar_factory.set_host_cover(
+    applied, created, cover_notes = rebar_factory.set_host_cover(
         doc, element, item.cover_top_mm, item.cover_bottom_mm,
-        item.cover_side_mm)
-    for value in created:
-        notes.append("created a {0:g} mm cover type".format(value))
+        item.cover_side_mm, cover_cache)
+    for name in created:
+        notes.append("created cover type {0}".format(name))
+    if not applied and (item.cover_top_mm or item.cover_bottom_mm):
+        notes.append("{0}: no cover could be written onto the element".format(
+            item.mark))
     notes.extend(cover_notes)
     return element, notes
 

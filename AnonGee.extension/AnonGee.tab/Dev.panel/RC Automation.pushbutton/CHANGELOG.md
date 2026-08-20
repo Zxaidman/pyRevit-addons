@@ -1,5 +1,39 @@
 # RC Automation — changelog
 
+## 0.5.0 — 2026-08-19
+
+The constraint error from a real run named the mistake exactly: *"Constrained
+rebar isn't a free form rebar element."*
+
+- **Constraints use the shape-driven API.** `RebarConstraint.Create` is
+  free-form only, so against a bar from `CreateFromCurves` it could never have
+  worked. Shape-driven bars ask Revit for **candidates** and pick one:
+  `GetConstraintCandidatesForHandle` → `IsToCover()` → `SetPreferredConstraint`
+  → `ApplyRebarConstraints`. A cover candidate is preferred over a bare face,
+  because a bar tied to a face ignores a cover change.
+- **A varied area is one varying set, not loose bars.** The ribbon's Varying
+  Rebar Set is one property — `UseRebarConstraintsToProduceVaryingBars` — set
+  after constraining, because the constraints are what produce the variation.
+  Orthogonal areas get their own set with it off. The tapered pad went from 71
+  single bars to 4 sets.
+- **Cover types are named for the element, not the number.** `FOOTING TOP`,
+  `FOOTING BOTTOM`, `FOOTING ALL SIDE` — the way a project names them. And they
+  are created **once**: a type made inside an open transaction is invisible to a
+  fresh collector until the document regenerates, which is why a run produced
+  three identical 50 mm types and used none of them.
+- **Cover is applied through `RebarHostData.SetCoverType`**, with the built-in
+  parameters as fallback — one route that works for a floor, a wall and a family
+  instance alike.
+- **Placed bars are shown, not hidden.** Step five of the manual workflow turns
+  obscured rebar *on*; the first version set both view flags to `False` and hid
+  every bar it had just placed.
+- **The report carries what the window said.** Constraint failures were being
+  shown in a dialog and left out of the exported file — the one place they would
+  be read later. Panel and report now share one builder.
+
+`REVIT_API_RESEARCH.md` in the repository root records where all of this comes
+from, and what else in the reinforcement API is worth having.
+
 ## 0.4.0 — 2026-08-19
 
 The first build that placed steel placed it straight, and some of it outside
