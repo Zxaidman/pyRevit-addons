@@ -52,6 +52,16 @@ project's own schedule fields filled in.
   Foundations and Structural Rebar, inside the run's own undo step so one
   Ctrl+Z takes the bindings back out too; *Skip* touches none of them. Probe the
   model to see which are there before choosing.
+- **A set is told the span its own bars cover.** The 0.6.0 report said *"F3
+  B1X from 3000: asked for a 1200 mm distribution, Revit made it 1000 mm"* —
+  and the disagreement was ours. The length was measured across every position
+  the region considered, including one whose scan line fell outside the pad
+  once side cover came off and so produced no bar; one phantom position
+  stretched the distribution by a whole spacing.
+- **A run that does not fit the pad says so.** F3 schedules 22 bars at 200 mm,
+  which need 4200 mm across a pad offering 4100 between its side cover. Revit
+  lays the set out past the cover anyway and nothing about the model looks
+  wrong, so the plan now names the overhang.
 - **The report collapses repeated lines.** Six footings of one type produced the
   same six notes six times, burying the one line that was different.
 

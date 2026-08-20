@@ -507,6 +507,20 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                         cover_top_mm, cover_bottom_mm)
     positions = bar_positions(span[0], span[1], row.count, row.spacing_mm)
 
+    # A count and a spacing that together need more room than the pad has.
+    # Revit will still lay the set out, past the cover and out of the concrete,
+    # and nothing about the model will look wrong -- so the schedule is what
+    # has to say so.
+    if positions and (positions[0] < span[0] - 0.5
+                      or positions[-1] > span[1] + 0.5):
+        notes.append(
+            "{0:g} bars at {1:g} mm need {2:.0f} mm, and only {3:.0f} mm is "
+            "available between the side cover — the run overhangs it by "
+            "{4:.0f} mm at each end".format(
+                len(positions), row.spacing_mm or 0.0,
+                positions[-1] - positions[0], span[1] - span[0],
+                max(span[0] - positions[0], positions[-1] - span[1])))
+
     leg = leg_height_mm(z, thickness_mm, cover_top_mm)
     inset = bend_inset_mm(row.diameter_mm)
     if row.shape_code in BENT_SHAPE_CODES:
@@ -533,6 +547,7 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
     skipped = 0
     for label, region_positions in split_into_regions(positions, breaks):
         bars = []
+        used = []
         for position in region_positions:
             for start, end in scan_segments(outline, position, axis=axis):
                 extent = inset_segment(start, end, cover_side_mm)
@@ -547,6 +562,7 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
                     "{0} {1}{2}{3}".format(
                         row.type_mark, row.layer, row.direction,
                         " " + label if label else "")))
+                used.append(position)
         if not bars:
             continue
         region_notes = list(notes)
@@ -555,8 +571,12 @@ def plan_footing_layer(row, outline, thickness_mm, cover_top_mm,
             region_notes.append(
                 "bars vary across this region — placed as a varying set so "
                 "Revit lengths each one from its constraints")
-        length = (region_positions[-1] - region_positions[0]) or (
-            span[1] - span[0])
+        # Across the positions that produced a bar, not the ones considered.
+        # A position whose scan line falls outside the pad once side cover is
+        # taken off yields nothing, and counting it stretched the distribution
+        # by a whole spacing -- which Revit then declined to make, and the
+        # read-back reported as a disagreement that was ours.
+        length = (used[-1] - used[0]) or (span[1] - span[0])
         plans.append(LayerPlan(row, bars, uniform, across_vector, length,
                                region_notes, label))
 

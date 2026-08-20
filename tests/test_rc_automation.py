@@ -1558,6 +1558,51 @@ class BarShapeTests(unittest.TestCase):
                         plan.notes)
 
 
+class DistributionLengthTests(unittest.TestCase):
+    """What a set is told to fill has to be what its bars actually span.
+
+    A real run reported *"asked for a 1200 mm distribution, Revit made it
+    1000 mm"* and the disagreement was ours: the length was measured across
+    every position the region considered, including one whose scan line fell
+    outside the pad once side cover came off and so produced no bar. One
+    phantom position stretched the distribution by a whole spacing.
+    """
+
+    def plans(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        placement = dict((p.mark, p) for p in data.footing_placement)["F3-P1"]
+        return rebar_spec.plan_footing(data.footing_type("F3"),
+                                       data.footing_rebar_for("F3"),
+                                       outline=placement.outline), data
+
+    def test_every_set_is_told_the_span_its_own_bars_cover(self):
+        plans, _data = self.plans()
+        for plan in plans:
+            across = 1 if plan.row.direction == "X" else 0
+            positions = [bar.points[0][across] for bar in plan.bars]
+            self.assertAlmostEqual(
+                plan.as_set().array_length_mm,
+                positions[-1] - positions[0],
+                msg="{0}{1} {2}".format(plan.row.layer, plan.row.direction,
+                                        plan.region))
+
+    def test_a_run_that_does_not_fit_the_pad_says_so(self):
+        # 22 bars at 200 need 4200 mm across a pad that offers 4100 between
+        # its side cover. Revit lays the set out past the cover regardless and
+        # nothing about the model looks wrong, so the schedule has to say it.
+        plans, _data = self.plans()
+        bottom = [p for p in plans if p.row.layer == "B1"][0]
+        self.assertTrue(any("overhangs" in note for note in bottom.notes),
+                        bottom.notes)
+
+    def test_a_run_that_fits_says_nothing(self):
+        data, _ = excel_engine.parse_grid(fixture_grids())
+        for plan in rebar_spec.plan_footing(data.footing_type("F1"),
+                                            data.footing_rebar_for("F1")):
+            self.assertFalse(any("overhangs" in note for note in plan.notes),
+                             plan.notes)
+
+
 class IdentityFieldTests(unittest.TestCase):
     """The project's own schedule fields, worked out from the workbook.
 
