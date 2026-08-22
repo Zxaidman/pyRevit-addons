@@ -33,6 +33,18 @@ does. Nothing is deleted to make the list look shorter.
 before it is built, argued about, or written into any other document. Standing instruction from the
 project owner, and it is what keeps this list the queue rather than a summary of one.
 
+### This is the module queue
+
+RC Automation is one module of the **AnonGee Bridge** programme, whose queue is the `todo-list.md`
+at the repository root. This file stays where the tool is and covers the tool only.
+
+**An ID is unique within its file.** A reference across files is written in full — *Bridge ·
+FEAT-17*, which is where RC Automation grows to cover beams, columns and walls. Same rules, same
+phases, both files.
+
+Two items here are the deepest technical risk in the whole programme, because *Bridge · FEAT-17*
+is built on them: **CRIT-1** and **CRIT-2** below.
+
 **Verified means one thing here:** the project owner ran it in Revit and the report or the screenshot
 says so. A green test suite is not verification — every bug in §2 that reached a model passed the
 suite on the way there.
