@@ -35,6 +35,32 @@ of view of someone using the thing rather than someone reading the diff:
 
 ---
 
+## 1.9.0
+
+**Added**
+
+- **The bridge — one `.xlsm` driving a whole RCC job.** The design is in
+  [`docs/specs/2026-08-22-excel-revit-platform-prd.md`](docs/specs/2026-08-22-excel-revit-platform-prd.md)
+  and [`…-architecture.md`](docs/specs/2026-08-22-excel-revit-platform-architecture.md);
+  the queue is [`todo-list.md`](todo-list.md). What ships here is the **spike**
+  and nothing above it, because every estimate in the PRD is conditional on it.
+- `AnonGee.extension/startup.py` — two HTTP routes pyRevit serves from inside
+  the Revit process. `/anongee/ping` takes no Revit argument and answers even
+  while Revit is busy; `/anongee/status` declares `uiapp`, so pyRevit runs it as
+  an External Event. **Two routes on purpose:** ping answering while status does
+  not says the server is up and the marshalling is not, which one route cannot
+  tell you. Nothing in the file may raise — a startup script that throws takes
+  pyRevit's load with it.
+- **Bridge Check** pushbutton — calls the same two URLs from inside Revit, so
+  when Excel gets no answer the network is out of the question. Reaches the wire
+  through `System.Net` before `urllib`, because the CPython 3 engine ships a
+  partial standard library and the diagnostic tool should not bet on it.
+- `bridge/excel/modAnonGeeBridge.bas` — the Excel end, and deliberately small.
+  The command envelope carries *which sheet*, not the data, so the macro
+  marshals nothing and cannot get the data model wrong.
+
+---
+
 ## 1.8.0
 
 **Changed**

@@ -54,7 +54,7 @@ model.
 
 ## 1. Critical
 
-### CRIT-1 — the Excel → Revit round trip is unproven · `pending`
+### CRIT-1 — the Excel → Revit round trip is unproven · `testing`
 
 **Every estimate in the PRD is conditional on this, and nothing above it starts until it answers.**
 
@@ -63,13 +63,28 @@ handler that declares `uiapp`, `uidoc` or `doc` is executed as an External Event
 the marshalling problem the modeless window already solves by hand. On paper it is the whole
 transport. It has never been run on the owner's machine.
 
-**The spike, half a day:**
+**Built and waiting on a Revit run** (extension 1.9.0). Three pieces, and the running instructions
+are in [`bridge/README.md`](bridge/README.md):
 
-1. `AnonGee.extension/startup.py` with one route — `GET /anongee/ping`, returning the document title.
-2. A three-line VBA sub that calls it and puts the answer in a cell.
+| | |
+| --- | --- |
+| `AnonGee.extension/startup.py` | Two routes. `/anongee/ping` takes **no** Revit argument and answers even while Revit is busy; `/anongee/status` declares `uiapp`, so pyRevit runs it as an External Event. |
+| **Bridge Check** pushbutton | Calls the same two URLs from inside Revit, so when Excel gets no answer the network is out of the question. |
+| `bridge/excel/modAnonGeeBridge.bas` | The Excel end. Import once, `Alt+F8`, run. |
 
-**What it settles:** the server starts; the port is reachable from Excel; a handler receives a real
-`doc`; the External Event marshalling is real rather than documented.
+**Two routes rather than one, deliberately.** If ping answers and status hangs, the server is fine
+and the marshalling is not. One route cannot tell you that, and the difference is a day.
+
+**What it settles:** the server starts; the port is reachable from Excel; a handler declaring
+`uiapp` really is marshalled; and — the answer that matters most — **which Python engine runs a
+pyRevit startup script, and whether it can see the toolkit**. `/ping` reports `engine.version`,
+`engine.implementation` and `toolkit.importable`. pyRevit's core engine is IronPython and the
+toolkit is CPython 3 in `lib/py3`; if those do not meet, commands have to be dispatched to a CPython
+script rather than handled in the route, and that is a fork in the architecture far better known now
+than during stage 1.
+
+**To close it:** run the four steps in `bridge/README.md` and push both raw responses. Also try it
+with no document open, and with a modal dialog up — the second is the one a real user hits first.
 
 **If it fails**, the file drop (CRIT-3) becomes the primary transport and the programme continues —
 slower at the edge, identical everywhere else. Which is the reason for two transports behind one
@@ -112,7 +127,8 @@ writes. Nothing hard-codes a command name anywhere else.
 
 ## 2. Errors and bugs
 
-Nothing here yet — the programme has shipped nothing to be wrong.
+Nothing here yet — the programme has shipped nothing to be wrong. `CRIT-1` is built but unrun, so
+anything it turns up lands here with an ID rather than being fixed in passing.
 
 Nine open bugs live in *RC Automation · §2*, and two of them (`CRIT-1`, `CRIT-2` there — constraints
 never confirmed applied, varying sets not varying) are the deepest technical risk in the whole
@@ -129,7 +145,7 @@ Each carries the verdict from the PRD, so the queue and the estimate cannot drif
 | ID | What | Verdict | Phase |
 | --- | --- | --- | --- |
 | FEAT-1 | `CONTROL` sheet — a button per operation, with mode, dry-run, last-run status and findings count | Straightforward | `pending` |
-| FEAT-2 | VBA: post a job, poll for the result, write the `LOG` row, colour the source rows | Straightforward — and it must stay small. Anything it knows has to be kept in step with Python | `pending` |
+| FEAT-2 | VBA: post a job, poll for the result, write the `LOG` row, colour the source rows | Straightforward — and it must stay small. Anything it knows has to be kept in step with Python. **VBA has no JSON parser**, so one has to be written; the spike module ships a deliberately-named `JsonValue` that is *not* one, so nobody mistakes it for the real thing | `pending` |
 | FEAT-3 | **Build Template** pyRevit tool, and the written `.rvt` specification | Medium. The specification is the harder half | `pending` |
 | FEAT-4 | `template.xlsm` build script — sheets, tables, named ranges, validation, `keep_vba=True` | Straightforward | `pending` |
 
@@ -196,7 +212,7 @@ confirmed in a model.
 
 | Stage | Ships | Items |
 | --- | --- | --- |
-| 0 · Bridge spike | `ping`, end to end | CRIT-1, CRIT-3 |
+| 0 · Bridge spike | `ping` and `status`, end to end | CRIT-1 `testing` · CRIT-3 |
 | 1 · Datum | Both templates; levels; grids | CRIT-2, FEAT-1..6 |
 | 2 · Setup | Types, views, sheets | FEAT-7, 8, 9 |
 | 3 · Structure | Columns, beams, walls, slabs | FEAT-10..13 |
@@ -238,5 +254,10 @@ the sheet — has not been asked.
 Reserved for what the project owner sends next, and everything after. Nothing is written here by
 anybody else.
 
-> Open, from the last message: the sequencing decision (§5 SCOPE-1) is the owner's, and so is
-> whether RC Automation's `testing` items are confirmed before stage 0 starts or alongside it.
+> **Settled.** Check `CRIT-1` first, then build the `.xlsm` control sheet and the templates.
+> Both templates minimal and datum-only. The owner has an existing project `.rvt` and will describe
+> it, with what needs adding — so `CRIT-2`'s template specification waits for that rather than being
+> guessed at, and `FEAT-3` starts from a real template instead of an out-of-the-box one.
+>
+> **Waiting on:** the `CRIT-1` run (`bridge/README.md`), and the RC Automation 0.7.0 bugs the owner
+> found but has not sent.

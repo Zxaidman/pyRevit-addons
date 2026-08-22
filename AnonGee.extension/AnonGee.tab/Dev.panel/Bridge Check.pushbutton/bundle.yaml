@@ -1,0 +1,24 @@
+title: Bridge\nCheck
+author: AnonGee
+tooltip: |
+  Ask the AnonGee Bridge whether it is running, from inside Revit.
+
+  The bridge serves HTTP routes from inside this Revit process, and an Excel
+  button calls them. When Excel gets no answer there are five reasons and they
+  look identical from Excel: the Routes server is off, the startup script did
+  not register, Revit is busy, no document is open, or a local port is blocked.
+
+  This calls the same two URLs from the machine Revit is on and shows exactly
+  what came back — which takes the network out of the question.
+
+    ping    the Routes server. Answers even while Revit is busy.
+    status  the open model. Answers only once Revit is idle, because it runs
+            as an External Event — which is the thing being proven.
+
+  Ping answers and status does not: the server is up, the marshalling is not.
+  Neither answers: the Routes server is off. Turn it on in pyRevit Settings and
+  restart Revit.
+
+  Read-only. No transaction, nothing written to the model, no undo step.
+
+  Version: 0.1.0
